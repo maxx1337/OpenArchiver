@@ -181,6 +181,17 @@ veränderbar, wer `ALTER TABLE` darf. Beides ist kombinierbar.
 
 Zu beachten: die Migrationsrolle braucht genug Rechte, um die Einschränkung überhaupt anzulegen.
 
+**Konkretes Argument aus der Praxis — Befund F1** (siehe `09-befunde-bestandscode.md`): Über
+Policy-Condition-Keys lässt sich heute rohes SQL in die `WHERE`-Klausel jeder gescopeten Abfrage
+injizieren. Voraussetzung ist Super-Admin, es ist also keine unauthentifizierte Lücke — aber es ist
+eine Eskalation von „Anwendungsadministrator" zu „beliebiges SQL". Ein solcher Akteur könnte
+`journal_ledger` direkt manipulieren und jede anwendungsseitige Append-Only-Disziplin umgehen.
+
+Daraus folgt für diese ADR: **Anwendungscode-Disziplin allein genügt nicht.** Die Einschränkung muss
+auf Datenbank-Rechteebene wirken, und die Rolle, mit der die Anwendung verbindet, darf sie nicht
+selbst aufheben können. Das spricht dafür, Rechteentzug **und** Trigger zu kombinieren, statt sich
+für eines zu entscheiden.
+
 ## ADR-010 — `processEmail` erweitern oder eigener Journaling-Pfad
 
 **Status:** **offen** — zu entscheiden in E6 (`JR-602`)
