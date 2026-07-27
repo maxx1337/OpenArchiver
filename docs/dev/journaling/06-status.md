@@ -39,7 +39,7 @@ Agent-Infrastruktur geliefert (ADR-001).
 | --- | --------------------------------------------------------------------- | ------------------------- |
 | [x] | Codebase-Analyse und Gap-Analyse gegen den RFC                        | `01-gap-analyse.md`       |
 | [x] | Zielarchitektur inkl. Prozess- und Credential-Topologie               | `02-architektur.md`       |
-| [x] | Backlog E1–E12 mit 101 Tasks, Rollen, Akzeptanzkriterien              | `03-backlog.md`           |
+| [x] | Backlog E1–E12 mit 102 Tasks, Rollen, Akzeptanzkriterien              | `03-backlog.md`           |
 | [x] | Testplan mit RFC-§12-Mapping und CI/Nightly/Manual-Einteilung         | `04-testplan.md`          |
 | [x] | ADR-Log: 6 entschieden, 6 offen, 1 verworfen                          | `05-entscheidungen.md`    |
 | [x] | Agent-Infrastruktur: `CLAUDE.md`, 2 Subagent-Rollen, 3 Projekt-Skills | `CLAUDE.md`, `.claude/**` |
@@ -103,4 +103,4 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 | Datum      | Ergebnis                                                                                                                                                | Nächster Schritt        |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (101 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001). | E1 starten mit `JR-101` |
+| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001). | E1 starten mit `JR-101` |
