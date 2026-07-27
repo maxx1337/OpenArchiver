@@ -11,3 +11,7 @@ packages/frontend/src/lib/components/ui/
 
 # Ignore logs
 *.log
+
+## Verbatim archived source document — must stay byte-identical to the original RFC.
+## Prettier rewrites emphasis markers and quotes inside its embedded YAML example.
+docs/dev/journaling/00-rfc.md
