@@ -41,7 +41,7 @@ Agent-Infrastruktur geliefert (ADR-001).
 | [x] | Zielarchitektur inkl. Prozess- und Credential-Topologie               | `02-architektur.md`       |
 | [x] | Backlog E1–E12 mit 102 Tasks, Rollen, Akzeptanzkriterien              | `03-backlog.md`           |
 | [x] | Testplan mit RFC-§12-Mapping und CI/Nightly/Manual-Einteilung         | `04-testplan.md`          |
-| [x] | ADR-Log: 6 entschieden, 6 offen, 1 verworfen                          | `05-entscheidungen.md`    |
+| [x] | ADR-Log: 7 entschieden, 6 offen, 1 verworfen                          | `05-entscheidungen.md`    |
 | [x] | Agent-Infrastruktur: `CLAUDE.md`, 2 Subagent-Rollen, 3 Projekt-Skills | `CLAUDE.md`, `.claude/**` |
 
 ### Zentrale Befunde aus E0
@@ -57,6 +57,13 @@ Agent-Infrastruktur geliefert (ADR-001).
    `iam-policy/policy-validator.ts` enthalten beide `export`. Behebung in `JR-1103`.
 5. Kein CLI im Repository — `verify` (E9) baut die Basis mit `node:util` `parseArgs`, ohne neue
    Dependency.
+6. **ADR-004 war falsch und hätte die internen Dokumente veröffentlicht.** VitePress baut ohne
+   `srcExclude` jede `.md` unter `docs/` zu einer Seite, und `search.provider: 'local'` indexiert
+   sie — die Sidebar hat damit nichts zu tun. Behoben durch `srcExclude: ['dev/**']` in
+   `docs/.vitepress/config.mts`. Nie wirksam geworden, weil nichts auf `main` liegt.
+   **Nachweis erbracht:** `pnpm docs:build` läuft durch, `dist/dev/` existiert nicht, kein Satz aus
+   `08-risiken.md` im Suchindex; Gegenkontrolle über `dist/SUMMARY.html` (nicht in der Sidebar, aber
+   30 KB gebaut und indexiert) belegt den Mechanismus.
 
 ---
 
@@ -72,12 +79,12 @@ Agent-Infrastruktur geliefert (ADR-001).
 | [ ] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests                         | DEV   |
 | [ ] | JR-106 Abnahme E1                                                              | PO    |
 
-**Vorprüfung erledigt (2026-07-27):** `pnpm lint` schlägt auf dem heutigen Bestand **fehl** — neun
-Dateien sind nicht Prettier-konform (Liste in `03-backlog.md` unter E1). Deshalb ist `JR-105a` als
-reiner Formatierungs-Commit vorgeschaltet. Die Prüfung lief ohne die Prettier-Plugins (keine
-`node_modules` im Container), `.svelte` ist daher noch ungeprüft; fünf der Dateien sind von
-drizzle-kit generierte Snapshots und gehören möglicherweise in `.prettierignore` statt in den
-Formatierungs-Commit.
+**Vorprüfung erledigt (2026-07-27), vollständig mit allen Prettier-Plugins:** `pnpm lint` schlägt auf
+dem heutigen Bestand **fehl** — **13** Dateien sind nicht Prettier-konform, davon **6 generierte**
+(`docs/api/openapi.json` und fünf `migrations/meta/*.json`). Vollständige Liste in `03-backlog.md`
+unter E1. Deshalb ist `JR-105a` als reiner Formatierungs-Commit vorgeschaltet; vorher ist zu
+entscheiden, ob die generierten Dateien formatiert oder in `.prettierignore` aufgenommen werden —
+sonst wird der CI-Job bei jeder Schema- oder API-Änderung grundlos rot.
 
 ---
 
@@ -101,6 +108,7 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 ## Sessionprotokoll
 
-| Datum      | Ergebnis                                                                                                                                                | Nächster Schritt        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001). | E1 starten mit `JR-101` |
+| Datum      | Ergebnis                                                                                                                                                                                                                                                  | Nächster Schritt                                                |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                   | E1 starten mit `JR-101`                                         |
+| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich). | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101` |

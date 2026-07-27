@@ -206,10 +206,28 @@ auth-injecting wrapper `src/lib/server/api.ts` (base `/api/v1`).
 
 ## 7. Git
 
-- **Work on `claude/enterprise-product-implementation-cxmmqe`.** Never push to `main`.
+`claude/enterprise-product-implementation-cxmmqe` is the **integration branch** for the journaling
+project — not a working branch. Each epic gets its own branch off it. Full rules in
+`docs/dev/journaling/05-entscheidungen.md` (ADR-014).
+
+|                                               |                                                                                                                         |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Epic work                                     | branch off the integration branch as `claude/journaling-e<N>-<shortname>` (e.g. `claude/journaling-e1-test-foundation`) |
+| Groundwork (docs, ADRs, agent infrastructure) | commit directly on the integration branch                                                                               |
+| Merge back                                    | into the integration branch, only after the `tester` role has independently accepted the epic                           |
+| Upstream drift                                | merge `main` into the **integration branch** only, never into an epic branch                                            |
+| `main`                                        | **do not touch until E12 is accepted.** Never push to it                                                                |
+| Pull requests                                 | none unless explicitly asked                                                                                            |
+
 - `git push -u origin <branch>`; retry network failures with backoff.
-- Do not open a pull request unless explicitly asked.
-- Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`.
+- Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. Note that
+  `pnpm lint` currently **fails** on nine pre-existing files; `JR-105a` fixes that in one
+  formatting-only commit. Don't mix that cleanup into a feature commit.
+
+> **Do not remove `srcExclude: ['dev/**']`from`docs/.vitepress/config.mts`.** VitePress turns every
+`.md`file under`docs/`into a published page and the local search provider indexes it — leaving a
+page out of the`sidebar` only makes it unlinked, not unpublished. That entry is what keeps the
+> internal planning documents, gap analysis, and risk list off the public docs site.
 
 ## 8. Agent infrastructure in this repo
 

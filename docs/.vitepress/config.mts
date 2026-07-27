@@ -16,6 +16,12 @@ export default defineConfig({
 	],
 	title: 'Open Archiver Docs',
 	description: 'Official documentation for the Open Archiver project.',
+	// Internal development documentation — kept in the repository for versioning, but never
+	// published. Do NOT remove this entry: VitePress turns every .md file under docs/ into a page
+	// by default, and the local search provider indexes it. Omitting a page from the `sidebar`
+	// below only makes it unlinked, not unpublished. See docs/dev/journaling/05-entscheidungen.md
+	// (ADR-004).
+	srcExclude: ['dev/**'],
 	themeConfig: {
 		search: {
 			provider: 'local',

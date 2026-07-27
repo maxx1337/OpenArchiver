@@ -59,17 +59,51 @@ Referenzdokument ist das nicht akzeptabel — es bleibt unangetastet.
 
 ## ADR-004 — Ablage: `docs/dev/journaling/`, nicht publiziert
 
-**Status:** entschieden (2026-07-27) · **Entscheider:** Auftraggeber
+**Status:** entschieden (2026-07-27), **Begründung korrigiert am 2026-07-27** ·
+**Entscheider:** Auftraggeber
 
-Die Planungsdokumente liegen versioniert unter `docs/dev/journaling/`, werden aber **nicht** in
-`docs/.vitepress/config.mts` registriert.
+Die Planungsdokumente liegen versioniert unter `docs/dev/journaling/` und werden **nicht**
+veröffentlicht. Der Ausschluss erfolgt über `srcExclude: ['dev/**']` in
+`docs/.vitepress/config.mts`.
 
-**Begründung:** Versionierung im Repository ist die Bedingung dafür, dass jede Session sie vorfindet.
-Die VitePress-Sidebar ist explizit — was nicht registriert ist, wird nicht publiziert. Interne
-Planung, Risikoliste und Gap-Analyse gehören nicht auf die öffentliche Produktseite.
+**Begründung:** Versionierung im Repository ist die Bedingung dafür, dass jede Session die Unterlagen
+vorfindet. Interne Planung, Risikoliste und Gap-Analyse gehören aber nicht auf die öffentliche
+Produktseite — die Risikoliste benennt Schwächen des Produkts ungeschminkt, und die Gap-Analyse
+dokumentiert unter anderem, dass das Repository keinerlei Tests hat.
 
-**Konsequenz:** `docs/.vitepress/config.mts` wird nicht angefasst. Wer künftig Sidebar-Einträge
-ergänzt, darf `dev/**` nicht mit aufnehmen.
+### Korrektur der ursprünglichen Begründung
+
+Die erste Fassung dieser ADR begründete die Nicht-Veröffentlichung damit, dass die
+VitePress-Sidebar explizit sei und „was nicht registriert ist, nicht publiziert wird". **Das war
+falsch** und hätte zu einem Datenabfluss geführt:
+
+- VitePress baut ohne `srcExclude` **jede** `.md`-Datei unter `docs/` zu einer Seite. Ein Fehlen in
+  der `sidebar` bedeutet nur „nicht verlinkt", nicht „nicht publiziert" — die Seite ist per URL
+  erreichbar.
+- `themeConfig.search.provider` ist `'local'`. Die Seiten landen damit zusätzlich im **Suchindex**
+  der Website und wären dort auffindbar gewesen, nicht nur durch Raten der URL.
+- `.github/workflows/deploy-docs.yml` deployt bei jedem Push auf `main`, der `docs/**` berührt.
+
+**Empirischer Beleg** (Build vom 2026-07-27): `docs/SUMMARY.md` ist in `config.mts` nirgends
+registriert — `grep -c SUMMARY docs/.vitepress/config.mts` ergibt `0`. Trotzdem existiert nach
+`pnpm docs:build` die Datei `docs/.vitepress/dist/SUMMARY.html` mit 30 KB, und der String erscheint
+in `dist/assets/chunks/@localSearchIndexroot.*.js`. Genau das wäre mit den Planungsdokumenten
+passiert.
+
+Die Fehlannahme ist nie wirksam geworden, weil die Dokumente ausschließlich auf dem Feature-Branch
+liegen und `main` bis zur Abnahme von E12 nicht angefasst wird (ADR-014). Sie steht hier bewusst
+weiterhin dokumentiert: ein Entscheidungslog, das eigene Irrtümer stillschweigend überschreibt,
+verliert genau den Wert, für den es geführt wird.
+
+**Konsequenz:** Der `srcExclude`-Eintrag ist eine Schutzmaßnahme und darf nicht entfernt werden; er
+trägt im Code einen entsprechenden Kommentar, und `CLAUDE.md` §7 weist darauf hin. Wer künftig
+Sidebar-Einträge ergänzt, darf `dev/**` nicht mit aufnehmen.
+
+**Nachweis erbracht** (2026-07-27): nach `pnpm docs:build` existiert `docs/.vitepress/dist/dev/`
+nicht, keine `journaling`-Planungsdatei liegt im Build, und kein charakteristischer Satz aus
+`08-risiken.md` findet sich im Suchindex. Gegenkontrolle: die reguläre Doku ist vollständig gebaut
+(`dist/user-guides/installation.html`, `dist/enterprise/journaling/guide.html`) — der Build ist also
+nicht einfach leer. Diese Prüfung ist bei jeder Änderung an der Doku-Config zu wiederholen.
 
 ## ADR-005 — Eigenes Ledger, `audit_logs` wird nicht erweitert
 
@@ -192,6 +226,42 @@ Rollout-Pfad steht.
 Ein Merkle-Baum erlaubt schnellere partielle Verifikation bei großen Installationen. Für v1 nicht
 umgesetzt — die lineare Kette ist einfacher korrekt zu bekommen, und Korrektheit ist hier wichtiger
 als Verifikationsgeschwindigkeit. Wiederaufgreifen, wenn `verify`-Laufzeiten real zum Problem werden.
+
+## ADR-014 — Branch-Strategie: Epic-Branches über einem Integrationsbranch
+
+**Status:** entschieden (2026-07-27) · **Entscheider:** Auftraggeber
+
+`claude/enterprise-product-implementation-cxmmqe` ist **Integrationsbranch**, kein Arbeitsbranch. Pro
+Epic wird davon ein eigener Zweig abgezweigt und nach Abnahme zurückgemergt.
+
+| Regel          | Festlegung                                                                            |
+| -------------- | ------------------------------------------------------------------------------------- |
+| Namensschema   | `claude/journaling-e<N>-<kurzname>`, z. B. `claude/journaling-e1-test-foundation`     |
+| Abzweigpunkt   | immer der Integrationsbranch, nie `main`, nie ein anderer Epic-Branch                 |
+| Rückmerge      | erst nach unabhängiger Abnahme durch die Rolle `TEST` (siehe `04-testplan.md` §6)     |
+| Upstream-Drift | `main` regelmäßig in den **Integrationsbranch** mergen, nie in einzelne Epic-Branches |
+| `main`         | wird **erst nach Abnahme von E12** angefasst. Kein früher E1-Merge                    |
+| Pull Requests  | keine ohne ausdrückliche Aufforderung des Auftraggebers                               |
+
+**Begründung:** 102 Tasks über 12 Epics in einem einzigen Branch ergäben einen Diff, der nicht mehr
+reviewbar ist, und ein schiefgelaufenes Epic ließe sich nicht isoliert verwerfen. Gerade bei E3/E4
+(Durability-Semantik, Risiko „sehr hoch") ist die Möglichkeit, einen Stand wegzuwerfen, der
+eigentliche Wert. `main` bekommt gesquashte Release-Commits aus dem Upstream
+`LogicLabs-OU/OpenArchiver` (V0.5.0 → V0.5.1 → V0.5.2); die Drift wird über die Projektlaufzeit
+relevant und soll an genau einer Stelle aufgelöst werden, nicht zwölfmal.
+
+**Warum kein früher Merge von E1 nach `main`:** Das Test- und CI-Fundament wäre isoliert nützlich und
+risikoarm — der Auftraggeber hat sich dennoch für vollständige Isolation entschieden. Preis: `main`
+bekommt bis zur Abnahme von E12 keine CI, und die Upstream-Drift wächst länger. Bewusst akzeptiert.
+
+**Verworfene Alternative:** Epic-Branches direkt gegen `main` mit PRs. Die Epics hängen linear
+voneinander ab (E2 braucht E1, E3 braucht E2); jedes müsste gemergt sein, bevor das nächste starten
+kann — ein liegengebliebenes Review blockiert das Projekt.
+
+**Konsequenz:** Die ursprüngliche Sessionvorgabe „alle Entwicklung und alle Pushes auf
+`claude/enterprise-product-implementation-cxmmqe`" ist damit ausdrücklich aufgehoben. Arbeit, die die
+Projektgrundlage betrifft (Dokumentation, ADRs, Agent-Infrastruktur), gehört weiterhin direkt auf den
+Integrationsbranch.
 
 ---
 

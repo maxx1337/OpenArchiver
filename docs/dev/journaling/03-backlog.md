@@ -46,33 +46,41 @@ und Tests ausführt. Ohne das ist RFC §12 nicht umsetzbar und jede Durability-A
 | JR-106 | Abnahme E1                                                                                                                                                                                                                                | PO    | —   | `pnpm test` und CI grün; JR-101…104, JR-105a und JR-105 erfüllt; `06-status.md` aktualisiert                                                                       |
 
 **Achtung — bereits geprüft, `pnpm lint` schlägt heute fehl.** `pnpm lint` ist Prettier `--check`
-über das gesamte Repository. Der Bestand ist **nicht** sauber: neun Dateien werden beanstandet.
+über das gesamte Repository. Der Bestand ist **nicht** sauber: **13** Dateien werden beanstandet,
+davon **6 generierte** (vollständige Prüfung mit allen Plugins, `npx prettier --list-different .`,
+2026-07-27):
 
 ```
 packages/backend/src/api/controllers/index-admin.controller.ts
 packages/backend/src/api/routes/ingestion.routes.ts
 packages/backend/src/config/search.ts
-packages/backend/src/database/migrations/meta/_journal.json
-packages/backend/src/database/migrations/meta/0037_snapshot.json
-packages/backend/src/database/migrations/meta/0038_snapshot.json
-packages/backend/src/database/migrations/meta/0039_snapshot.json
-packages/backend/src/database/migrations/meta/0040_snapshot.json
+packages/frontend/src/routes/dashboard/admin/index/+page.svelte
+packages/frontend/src/routes/dashboard/ingestions/+page.svelte
+packages/frontend/src/routes/dashboard/ingestions/[id]/+page.svelte
 docs/user-guides/installation.md
+docs/api/openapi.json                                  ← generiert
+packages/backend/src/database/migrations/meta/_journal.json          ← generiert
+packages/backend/src/database/migrations/meta/0037_snapshot.json     ← generiert
+packages/backend/src/database/migrations/meta/0038_snapshot.json     ← generiert
+packages/backend/src/database/migrations/meta/0039_snapshot.json     ← generiert
+packages/backend/src/database/migrations/meta/0040_snapshot.json     ← generiert
 ```
 
 Deshalb wird **`JR-105a`** vorgeschaltet: ein separater, reiner Formatierungs-Commit
 (`pnpm format`), sonst ist der CI-Job aus `JR-105` von der ersten Minute an rot und blockiert jeden
 künftigen Pull Request.
 
-Zwei Einschränkungen der Vorprüfung, die vor `JR-105a` zu klären sind:
+**Vor `JR-105a` zu entscheiden — die generierten Dateien.** Sechs der 13 Treffer werden von Generatoren
+geschrieben: `docs/api/openapi.json` durch `pnpm docs:gen-spec` (läuft bei jedem `docs:build` und
+`docs:dev`) und die fünf `migrations/meta/*.json` durch `pnpm db:generate`. Prüfen, ob die Generatoren
+sie unformatiert zurückschreiben. Falls ja, gehören sie in `.prettierignore` statt in den
+Formatierungs-Commit — sonst entsteht eine Endlosschleife zwischen Generator und Formatierer, und der
+CI-Job wird bei jeder Schema- oder API-Änderung grundlos rot.
 
-1. Sie lief **ohne** `prettier-plugin-svelte` und `prettier-plugin-tailwindcss` (keine
-   `node_modules` im Container). `.svelte`-Dateien sind daher **ungeprüft** — nach `pnpm install`
-   erneut vollständig prüfen.
-2. Die fünf `migrations/meta/*.json` sind **von drizzle-kit generiert**. Prüfen, ob `pnpm db:generate`
-   sie beim nächsten Lauf wieder unformatiert schreibt. Falls ja, gehören sie in `.prettierignore`
-   statt in den Formatierungs-Commit — sonst entsteht eine Endlosschleife zwischen Generator und
-   Formatierer.
+> Historische Notiz: eine erste Prüfung nannte nur neun Dateien. Sie lief ohne
+> `prettier-plugin-svelte` und `prettier-plugin-tailwindcss`, weil im Container keine `node_modules`
+> lagen — die drei `.svelte`-Dateien und `openapi.json` waren dadurch unsichtbar. Lehre: eine
+> Lint-Aussage ohne installierte Plugins ist unvollständig, und das muss dazugesagt werden.
 
 | ID      | Task                                                                                                                             | Rolle | Akzeptanzkriterien                                                                                                                                                                            |
 | ------- | -------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

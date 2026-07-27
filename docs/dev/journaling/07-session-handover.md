@@ -1,8 +1,58 @@
 # Session-Handover
 
-Diese Datei beantwortet genau eine Frage: **Was ist der nächste konkrete Schritt, und welche Dateien
-betrifft er?** Sie wird am Ende jeder Session überschrieben (nicht angehängt — die Historie steht im
-Sessionprotokoll in `06-status.md`).
+Diese Datei beantwortet zwei Fragen: **wie startet man eine Session**, und **was ist der nächste
+konkrete Schritt?** Der untere Teil wird am Ende jeder Session überschrieben (nicht angehängt — die
+Historie steht im Sessionprotokoll in `06-status.md`).
+
+---
+
+## Wie eine Session gestartet wird
+
+Es muss nichts erklärt werden. `CLAUDE.md` wird automatisch gelesen und verweist auf
+`docs/dev/journaling/README.md`; die Subagents `senior-dev` und `tester` sowie die Skills
+`journal-ledger`, `oa-migration` und `oa-i18n` sind registriert und greifen von allein. Ein Einzeiler
+genügt.
+
+**Arbeitsstart (der Normalfall):**
+
+```
+Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
+und arbeite den nächsten Schritt ab.
+```
+
+**Gezielte Tasks:**
+
+```
+Arbeite JR-101 bis JR-104 aus docs/dev/journaling/03-backlog.md ab.
+```
+
+**Unabhängige Abnahme:**
+
+```
+Nimm Epic 1 unabhängig ab — Rolle Tester, Kriterien aus 03-backlog.md.
+```
+
+**Sessionende** (die Rolle `senior-dev` macht die Statuspflege laut Definition of Done selbst; dieser
+Prompt ist für den Fall, dass eine Session abrupt endet):
+
+```
+Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
+```
+
+### Immer zuerst
+
+1. **`pnpm install`** — der Container ist flüchtig, `node_modules` fehlt in jeder neuen Session.
+   Ohne das läuft weder `pnpm lint` noch ein Build noch `pnpm test`.
+2. **Auf den richtigen Branch wechseln.** Epic-Arbeit läuft nie direkt auf dem Integrationsbranch:
+
+    ```bash
+    git fetch origin claude/enterprise-product-implementation-cxmmqe
+    git checkout -b claude/journaling-e<N>-<kurzname> \
+        origin/claude/enterprise-product-implementation-cxmmqe
+    ```
+
+    Regeln in `05-entscheidungen.md` (ADR-014) und `CLAUDE.md` §7. Grundlagenarbeit (Doku, ADRs,
+    Agent-Infrastruktur) gehört direkt auf den Integrationsbranch.
 
 ---
 
@@ -12,20 +62,25 @@ Sessionprotokoll in `06-status.md`).
 
 ### Was zuletzt passiert ist
 
-Epic 0 abgeschlossen: Codebase-Analyse, Gap-Analyse gegen den RFC, Zielarchitektur, Backlog mit 101
+Epic 0 abgeschlossen: Codebase-Analyse, Gap-Analyse gegen den RFC, Zielarchitektur, Backlog mit 102
 Tasks über 12 Epics, Testplan, ADR-Log und die Agent-Infrastruktur (`CLAUDE.md`, Subagents
 `senior-dev` und `tester`, Skills `journal-ledger`, `oa-migration`, `oa-i18n`).
+
+Danach ein Nachtrag: **ADR-004 war sachlich falsch.** Die Planungsdokumente wären veröffentlicht
+worden, weil VitePress ohne `srcExclude` jede `.md` unter `docs/` zu einer Seite baut und der lokale
+Suchindex sie erfasst — die Sidebar hat damit nichts zu tun. Behoben durch `srcExclude: ['dev/**']`.
+Zusätzlich ADR-014 (Branch-Strategie) ergänzt.
 
 **Kein Produktionscode** — so entschieden in ADR-001.
 
 ### Nächster konkreter Schritt
 
 **`JR-101` — vitest im Monorepo einrichten.** Rolle: `TEST` (Subagent `tester`).
+Branch: `claude/journaling-e1-test-foundation`, abgezweigt vom Integrationsbranch.
 
 Vorher, in dieser Reihenfolge:
 
-1. `pnpm install` — im Container fehlen die `node_modules` vollständig. Ohne sie läuft weder
-   `pnpm lint` noch ein Build.
+1. `pnpm install` (siehe „Immer zuerst" oben).
 2. Prüfen, ob Postgres/Valkey/Meilisearch erreichbar sind (`docker-compose.yml`), denn `JR-104`
    braucht eine echte Datenbank.
 3. **`JR-105a` erledigen, bevor `JR-105` beginnt.** Bereits geprüft: `pnpm lint` schlägt auf dem
