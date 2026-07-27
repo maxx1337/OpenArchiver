@@ -15,7 +15,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 | Epic | Titel                              | Status     | Fertig / Gesamt |
 | ---- | ---------------------------------- | ---------- | --------------- |
 | E0   | Planung, Doku, Agent-Infrastruktur | **fertig** | 6 / 6           |
-| E1   | Test- und CI-Fundament             | in Arbeit  | 1 / 7           |
+| E1   | Test- und CI-Fundament             | in Arbeit  | 4 / 7           |
 | E2   | Ledger und Hash-Chain              | offen      | 0 / 10          |
 | E3   | Spool und Acceptance-Contract      | offen      | 0 / 8           |
 | E4   | `smtp-ingress`-Service             | offen      | 0 / 13          |
@@ -69,15 +69,15 @@ Agent-Infrastruktur geliefert (ADR-001).
 
 ## E1 — Test- und CI-Fundament (in Arbeit)
 
-|     | Task                                                                           | Rolle |
-| --- | ------------------------------------------------------------------------------ | ----- |
-| [ ] | JR-101 vitest im Monorepo einrichten                                           | TEST  |
-| [ ] | JR-102 Testkonventionen festlegen und dokumentieren                            | TEST  |
-| [ ] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` / `FilterBuilder` | TEST  |
-| [ ] | JR-104 Integrationstest-Basis mit isolierter Postgres-Instanz                  | TEST  |
-| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**     | DEV   |
-| [ ] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests                         | DEV   |
-| [ ] | JR-106 Abnahme E1                                                              | PO    |
+|     | Task                                                                                       | Rolle |
+| --- | ------------------------------------------------------------------------------------------ | ----- |
+| [x] | JR-101 vitest im Monorepo einrichten                                                       | TEST  |
+| [x] | JR-102 Testkonventionen festlegen und dokumentieren                                        | TEST  |
+| [x] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` (ohne `FilterBuilder`, s. u.) | TEST  |
+| [ ] | JR-104 Integrationstest-Basis mit isolierter Postgres-Instanz                              | TEST  |
+| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**                 | DEV   |
+| [ ] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests                                     | DEV   |
+| [ ] | JR-106 Abnahme E1                                                                          | PO    |
 
 **`JR-105a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
 beanstandeten Dateien wurden die **7 handgeschriebenen** formatiert (1 `.md`, 3 `.ts`, 3 `.svelte`);
@@ -96,6 +96,115 @@ kein Postgres). Der drizzle-Nachweis lief über einen direkten `drizzle-kit gene
 Dummy-`DATABASE_URL`; Details und Bewertung in ADR-015.
 
 Formal offen: die Abnahme von `JR-105a` gehört zu `JR-106` (Rolle PO).
+
+### JR-101 erledigt (2026-07-27) — vitest im Monorepo
+
+`vitest@3.2.7` als Root-devDependency, dazu `vite@^5.4.19` **explizit** deklariert. Grund: das
+zunächst installierte `vitest@4` verlangt `vite >= 6` und band sich still an die aus `vitepress`
+gehoistete `vite@5.4.19` (unmet peer). `vitest@3.2` unterstützt `vite ^5 || ^6` und braucht keinen
+zweiten Vite-Major im Repo. Der Peer ist jetzt deklariert statt geerbt.
+
+Eine Konfigurationsdatei: `vitest.config.ts` in der Wurzel mit `test.projects` = drei Suites
+`unit` / `integration` / `adversarial`. **Abweichung von der Task-Formulierung** („Workspace-Configs
+für `packages/backend`, `packages/types`"): kein Config-File pro Paket. Die Suite-Trennung ist
+global; pro Paket eigene Projects zu definieren würde eindeutige Projektnamen je Paket erzwingen
+(`backend:unit`, …) und die DB-Gate-Logik vervielfachen. Die Include-Globs zeigen auf `packages/*`,
+`packages/types` und ein späteres `packages/journaling` werden also ohne Config-Änderung gefunden.
+`test`-Scripts: Wurzel (`test`, `test:unit`, `test:integration`, `test:adversarial`, `test:nightly`,
+`test:manual`, `test:watch`) und `packages/backend` (`test`, `test:watch`, `test:types`).
+
+Nachweise:
+
+- `pnpm test` von der Wurzel: **4 Dateien grün, 1 übersprungen; 149 Tests grün, 5 übersprungen**,
+  Exit-Code `0`.
+- Exit-Code bei Fehlschlag **aktiv geprüft**, nicht behauptet: eine Assertion invertiert
+  (`export` sei ungültig) ⇒ `1 failed | 148 passed`, `EXIT=1`; danach zurückgebaut, wieder `0`.
+- `pnpm --filter @open-archiver/backend test` findet nur die Backend-Tests (154).
+- `integration` ohne Postgres: `↓ … (3 tests | 3 skipped)` plus
+  `[TEST-COVERAGE NOTICE] SKIPPED SUITE [ci] Postgres reachability …: DATABASE_URL is not set (no .env
+in this environment)`. Übersprungen mit sichtbarem Grund, nicht als grün getarnt.
+- Kein bestehender Produktionscode geändert. Angefasst wurden nur `package.json` (Scripts),
+  `packages/backend/package.json` (Scripts + `vitest` als devDependency) und
+  `packages/backend/tsconfig.json` — dort ein `exclude` für `src/**/*.test.ts` und `tests`, damit
+  Testdateien nicht nach `dist` gelangen. Gegenprobe: `pnpm --filter @open-archiver/backend build`
+  grün, `find packages/backend/dist -name '*.test.*'` leer.
+- Typprüfung der Tests über das neue `packages/backend/tsconfig.test.json`
+  (`pnpm --filter @open-archiver/backend test:types`, grün).
+
+### JR-102 erledigt (2026-07-27) — Konventionen
+
+`04-testplan.md` §2 ist von einer Tabelle auf fünf Unterabschnitte erweitert (§2.1 Orte,
+§2.2 Suites, §2.3 Klassifizierung, §2.4 Seeds, §2.5 Coverage-Hinweise), jede Zeile mit einem
+lauffähigen Beispiel im Repo. Die Klassifizierung ist **im Test sichtbar**: `suite('ci', …)` aus
+`@oa-test/classification` präfigiert den berichteten Suite-Namen mit `[ci]`/`[nightly]`/`[manual]`.
+
+Zwei Konventionen aus dem Entwurf wurden geändert, weil sie beim Bauen nicht trugen:
+
+1. **`tests/support/` ergänzt** (Wurzel für paketübergreifende Helfer, Alias `@oa-test/*`; Paket für
+   paketspezifische). Ohne gemeinsamen Ort wird Klassifizierung, Seed-Pflicht und Infrastruktur-Probe
+   pro Datei neu erfunden. Die Zweiteilung ist erzwungen: pnpm ist strikt, ein Wurzel-Helfer kann
+   `drizzle-orm` nicht auflösen.
+2. **Bestandsfixtures bleiben, wo sie sind.** `src/iam-policy/test-policies/*.json` wandern nicht
+   nach `tests/fixtures/`; die Regel gilt für neue Fixtures.
+
+Nachweise je Kategorie — alle drei Klassen **ausgeführt**, nicht nur konfiguriert:
+
+- `ci` (Default): `pnpm test` ⇒ 149 grün.
+- `nightly`: `pnpm test:nightly --project adversarial` ⇒ `[nightly] … 25000 seeded trees` grün in
+  19,3 s; `[manual]` mit Begründung übersprungen.
+- `manual`: `pnpm test:manual --project adversarial` ⇒ 33 750 Bäume in 30 s, `[ci]` und `[nightly]`
+  mit Begründung übersprungen.
+- Seed: `OA_TEST_SEED=12345 vitest run --project adversarial` ⇒
+  `[TEST-COVERAGE NOTICE] SEED …: 12345 (pinned via OA_TEST_SEED)`. Ohne Pin wird der gezogene Seed
+  samt Replay-Kommando ausgegeben.
+- Stichprobe wird benannt: `ran 300 of 25000 iterations (sampled). The full run is the separate
+variant "[nightly] …"` — Grundregel 6 maschinell umgesetzt.
+
+### JR-103 erledigt (2026-07-27) — erste Unit-Tests
+
+Drei Dateien, alle Klasse `ci`: `packages/backend/src/iam-policy/policy-validator.test.ts` (53
+Fälle), `…/ability.test.ts` (38 Fälle), `packages/backend/src/helpers/mongoToDrizzle.test.ts` (55
+Fälle). Zusammen **146 Testfälle**, davon 91 fixture-getrieben; 108 `expect()`-Aufrufstellen in den
+beiden Fixture-Suites, zur Laufzeit durch `it.each` mehr.
+
+**Die Fixtures werden tatsächlich von der Platte gelesen** — belegt, nicht behauptet:
+`auditor-specific-sources.json` temporär umbenannt ⇒ `2 failed | 1 passed`, Exit `1`, Meldung
+`IAM policy fixture "auditor-specific-sources" could not be read from …/test-policies/auditor-specific-sources.json`;
+danach zurückbenannt, wieder grün. Der Loader wirft absichtlich hart statt zu überspringen.
+
+Inhaltlich abgedeckt: `export` wird als Action **akzeptiert** (Ist-Zustand eingefroren, stützt
+`JR-1103`); `manage` ist ein echtes Wildcard und deckt `export` mit; `admin.json` erlaubt alles;
+`read-only-all.json` verweigert `create`/`update`/`delete`/`export`/`sync`/`manage` auf allen fünf
+Subjects **und** auf konkreten Objekten; beide `auditor-*.json` greifen nur im Scope, jede
+Schreibaktion abgewiesen; `mongoToDrizzle` mit Golden File über 26 Fälle plus Operator-, Logik- und
+Spaltennamen-Suites.
+
+**Nicht Teil von JR-103:** `FilterBuilder` und `mongoToMeli`. Beide hängen über `IamService` am
+`db`-Singleton, das beim Import wirft — sie gehören zu `JR-104`. Der Task-Text von JR-103 nennt
+`FilterBuilder`; das ist hier bewusst nicht erfüllt und in `JR-104` zu erledigen.
+
+### Befunde aus E1 (an DEV, nicht im Test-Epic behoben)
+
+| Nr. | Ort                                              | Befund                                                                                                                                                                                                                                                                   | Schwere  |
+| --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| F1  | `helpers/mongoToDrizzle.ts` `getDrizzleColumn()` | Condition-**Keys** werden nicht escaped. `escapeName` in drizzle ist `` `"${name}"` `` ohne Verdopplung, der Relations-Pfad nutzt `sql.raw`. Key `id" or 1=1 --` ⇒ `"id" or 1=1 --" = $1`. Keys kommen aus `roles.policies`; `PolicyValidator` prüft `conditions` nicht. | **hoch** |
+| F2  | `iam-policy/ability.ts`                          | `AppAbility` deklariert nur Strings als Subject, ein CASL-getaggtes Objekt ist nicht zuweisbar. `AuthorizationService.can()` castet deshalb (`as AppSubjects`) — der Typ schützt die Row-Level-Prüfung nicht.                                                            | mittel   |
+| F3  | `helpers/mongoToDrizzle.ts`                      | Unbekannter Operator, leeres `$or`/`$and`, leeres Query ⇒ **kein** Filter. Für `FilterBuilder` heißt „kein Filter" „unbeschränkt". Caller müssen `undefined` als deny behandeln.                                                                                         | mittel   |
+| F4  | `helpers/mongoToDrizzle.ts`                      | Nur `Object.keys(value)[0]` wird gelesen: `{ $gte: 1, $lte: 5 }` verliert `$lte` still.                                                                                                                                                                                  | mittel   |
+| F5  | `helpers/mongoToDrizzle.ts`                      | `{ feld: null }` wird zu `"feld" = NULL` und trifft nie eine Zeile. `$exists: false` ist die funktionierende Form.                                                                                                                                                       | niedrig  |
+| F6  | `iam-policy/policy-validator.ts`                 | `{ action: [], subject: 'x' }` gilt als valide (`[]` ist truthy, Schleife läuft nullmal). Keine Rechteausweitung, aber auch keine Prüfung.                                                                                                                               | niedrig  |
+
+F1 ist im Test durch `it.fails` markiert: der Test wird **rot**, sobald das Escaping korrigiert wird
+— dann sind die Erwartungen dort zu invertieren. Alle sechs Befunde stehen in existierendem
+IAM-Code, nicht im Journaling-Pfad; ein Fix ist DEV-Arbeit und gehört nicht in ein Test-Epic.
+
+### Was in E1 bisher nicht prüfbar war
+
+- **Alles, was Postgres braucht.** Kein Docker, kein Postgres (5432 zu), kein Valkey, kein
+  Meilisearch, keine `.env`. Die `integration`-Suite existiert und überspringt sichtbar; ob sie
+  gegen eine echte Instanz grün ist, ist offen und Teil von `JR-104`/`JR-105`.
+- **`FilterBuilder` und `mongoToMeli`** (s. o.).
+- **Der CI-Workflow** (`JR-105`) — ob GitHub Actions den Lauf reproduziert, ist hier nicht prüfbar.
 
 ---
 
@@ -119,8 +228,9 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 ## Sessionprotokoll
 
-| Datum      | Ergebnis                                                                                                                                                                                                                                                    | Nächster Schritt                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                     | E1 starten mit `JR-101`                                         |
-| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).   | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101` |
-| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1). | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)     |
+| Datum      | Ergebnis                                                                                                                                                                                                                                                                                                                                                                       | Nächster Schritt                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                                                                                                                                        | E1 starten mit `JR-101`                                            |
+| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).                                                                                                                      | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101`    |
+| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1).                                                                                                                    | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)        |
+| 2026-07-27 | `JR-101`/`JR-102`/`JR-103` erledigt: vitest 3.2 mit drei Projects (`unit`/`integration`/`adversarial`), Harness in `tests/support/` (Klassifizierung, Seeds, Infra-Probe, Coverage-Hinweise), 146 Testfälle grün, Exit-Code beider Richtungen aktiv verifiziert, Fixture-Ladung durch Umbenennen belegt. Sechs IAM-Befunde (F1–F6) an DEV gemeldet, keiner behoben. Kein Push. | `JR-104` (isolierte Postgres-Basis), danach `JR-105` (CI-Workflow) |

@@ -1,0 +1,35 @@
+{
+	"_comment": [
+		"Frozen snapshot of the IAM authorization vocabulary as of 2026-07-27.",
+		"Source of truth: packages/types/src/iam.types.ts (AppActions, AppSubjects).",
+		"Mirrored by: packages/backend/src/iam-policy/policy-validator.ts (validActions / validSubjects).",
+		"CLAUDE.md section 5.4 documents that these two agree and that",
+		"docs/services/iam-service/iam-policy.md is stale -- it omits 'export'.",
+		"This fixture exists so a change to the vocabulary makes a test fail loudly instead of",
+		"silently drifting from the docs. JR-1103 is the task that fixes the documentation;",
+		"until then this file records the actual behaviour, not the documented one."
+	],
+	"actions": ["manage", "create", "read", "update", "delete", "search", "export", "sync"],
+	"subjects": ["archive", "ingestion", "settings", "users", "roles", "dashboard", "all"],
+	"rejectedActions": [
+		"destroy",
+		"list",
+		"Read",
+		"READ",
+		"manage ",
+		"",
+		"read,search",
+		"journal",
+		"verify"
+	],
+	"rejectedSubjects": [
+		"mailbox",
+		"archives",
+		"Ingestion",
+		"journaling",
+		"ledger",
+		"",
+		"user",
+		"role"
+	]
+}
