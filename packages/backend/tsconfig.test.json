@@ -1,0 +1,28 @@
+{
+	// Type-checks the test files that tsconfig.json deliberately excludes from the build (JR-101).
+	// `pnpm --filter @open-archiver/backend test:types`. noEmit + composite:false, so this never
+	// interferes with the incremental build outputs of tsconfig.json.
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"composite": false,
+		// Tests are executed by vitest, i.e. by a bundler in ESM mode. The production build uses
+		// `module: nodenext` and the package has no `"type": "module"`, so tsc would classify the
+		// test files as CommonJS and reject `import.meta.url` and top-level `await` -- both of
+		// which vitest handles natively. Type-check them the way they are actually executed.
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"types": ["node"],
+		"paths": {
+			"@oa-test/*": ["../../tests/support/*"]
+		}
+	},
+	// Only the test files plus whatever they import. Deliberately not all of `src`: under
+	// `moduleResolution: bundler` one pre-existing production file (src/api/server.ts, the
+	// `i18next-http-middleware` default import) does not type-check, and fixing production code is
+	// out of scope for a test epic.
+	"include": ["src/**/*.test.ts", "tests/**/*.ts"],
+	"exclude": ["node_modules", "dist"]
+}

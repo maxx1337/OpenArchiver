@@ -30,21 +30,99 @@ Happy-Path-Tests."_
 
 ## 2. Konventionen
 
-| Art                      | Ort                                      | Namensschema          |
-| ------------------------ | ---------------------------------------- | --------------------- |
-| Unit                     | neben dem Code                           | `<name>.test.ts`      |
-| Integration              | `tests/integration/` im jeweiligen Paket | `<thema>.int.test.ts` |
-| Adversarial / Durability | `tests/adversarial/`                     | `<thema>.adv.test.ts` |
-| Fixtures                 | `tests/fixtures/`                        | sprechende Dateinamen |
+> Umgesetzt in JR-101/JR-102 (2026-07-27). Die Tabelle unten ist nicht mehr Entwurf, sondern
+> beschreibt den Ist-Zustand; jede Zeile hat ein lauffähiges Beispiel im Repository.
 
-**Jeder Test wird klassifiziert** — `ci`, `nightly` oder `manual` — und die Klassifizierung ist im
-Test selbst sichtbar (Tag/Describe-Präfix), nicht nur in diesem Dokument.
+### 2.1 Orte und Namen
+
+| Art                        | Ort                                                     | Namensschema          | Beispiel                                                               |
+| -------------------------- | ------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------- |
+| Unit                       | neben dem Code                                          | `<name>.test.ts`      | `packages/backend/src/iam-policy/policy-validator.test.ts`             |
+| Integration                | `tests/integration/` im jeweiligen Paket                | `<thema>.int.test.ts` | `packages/backend/tests/integration/postgres-availability.int.test.ts` |
+| Adversarial / Durability   | `tests/adversarial/` im jeweiligen Paket                | `<thema>.adv.test.ts` | `packages/backend/tests/adversarial/mongo-to-drizzle.adv.test.ts`      |
+| Fixtures                   | `tests/fixtures/` im jeweiligen Paket                   | sprechende Dateinamen | `packages/backend/tests/fixtures/mongo-to-drizzle-golden.json`         |
+| Harness, paketübergreifend | `tests/support/` in der Repo-Wurzel, Alias `@oa-test/*` | `<thema>.ts`          | `tests/support/classification.ts`                                      |
+| Harness, paketspezifisch   | `tests/support/` im jeweiligen Paket                    | `<thema>.ts`          | `packages/backend/tests/support/render-sql.ts`                         |
+
+Zwei Abweichungen vom ersten Entwurf, beide bewusst:
+
+- **`tests/support/`** war nicht vorgesehen. Ohne einen gemeinsamen Ort für Klassifizierung, Seeds,
+  Infrastruktur-Probes und Coverage-Hinweise wird jede dieser Regeln pro Testdatei neu und
+  unterschiedlich erfunden. Paketübergreifendes liegt in der Wurzel (importierbar als
+  `@oa-test/…`), paketspezifisches im Paket — Wurzel-Helfer dürfen keine Paket-Dependencies
+  auflösen (pnpm ist strikt), `drizzle-orm`-nahe Helfer müssen deshalb im Backend liegen.
+- **Bereits vorhandene Fixtures bleiben, wo sie sind.** `packages/backend/src/iam-policy/test-policies/*.json`
+  wandern **nicht** nach `tests/fixtures/`. Sie sind Repo-Bestand; ein Verschieben wäre eine
+  Änderung im Produktionsbaum aus kosmetischem Grund. Die Regel gilt für **neue** Fixtures.
+
+### 2.2 Zwei Suites, und warum das keine Geschmacksfrage ist
+
+`packages/backend/src/database/index.ts` wirft **beim Import**, wenn `DATABASE_URL` fehlt. Jede
+Testdatei, die transitiv `../database` importiert, lässt sich in einer Umgebung ohne Konfiguration
+nicht einmal einsammeln. Daraus folgt die Trennung in vitest-**Projects** (= Suites):
+
+| Project       | Include-Glob                                                        | Braucht Infrastruktur                                |
+| ------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
+| `unit`        | `packages/*/src/**/*.test.ts`, `packages/*/tests/unit/**/*.test.ts` | nein — importiert nichts, was an `../database` hängt |
+| `integration` | `packages/*/tests/integration/**/*.int.test.ts`                     | Postgres                                             |
+| `adversarial` | `packages/*/tests/adversarial/**/*.adv.test.ts`                     | fallweise, je Test deklariert                        |
+
+Konfiguration: **eine** Datei, `vitest.config.ts` in der Wurzel, mit `test.projects`. Kein
+Config-File pro Paket — die Suite-Trennung ist global, und pro Paket eigene Projects zu definieren
+würde eindeutige Projektnamen je Paket erzwingen und die DB-Gate-Logik vervielfachen. Die
+Include-Globs zeigen auf `packages/*`, ein Paket mit neuen Tests (`packages/types`, später
+`packages/journaling`) wird also ohne Config-Änderung gefunden.
+
+Kommandos:
+
+| Kommando                                          | Wirkung                      |
+| ------------------------------------------------- | ---------------------------- |
+| `pnpm test`                                       | alle Projects, Klasse `ci`   |
+| `pnpm test:unit`                                  | nur `unit`                   |
+| `pnpm test:integration`                           | nur `integration`            |
+| `pnpm test:adversarial`                           | nur `adversarial`            |
+| `pnpm test:nightly`                               | `OA_TEST_CLASSES=ci,nightly` |
+| `pnpm test:manual`                                | `OA_TEST_CLASSES=manual`     |
+| `pnpm --filter @open-archiver/backend test`       | nur die Tests dieses Pakets  |
+| `pnpm --filter @open-archiver/backend test:types` | `tsc` über die Testdateien   |
+
+Testdateien sind aus `packages/backend/tsconfig.json` **ausgeschlossen** — sie dürfen nicht nach
+`dist` gelangen. Typgeprüft werden sie über `packages/backend/tsconfig.test.json` (`noEmit`,
+`module: esnext`, `moduleResolution: bundler` — so wie vitest sie ausführt).
+
+### 2.3 Klassifizierung
+
+**Jeder Test wird klassifiziert** — `ci`, `nightly` oder `manual`. Die Klassifizierung steht im Test
+selbst und im berichteten Suite-Namen, nicht nur in diesem Dokument. Umgesetzt durch
+`suite(klasse, name, fn)` aus `@oa-test/classification`; der Suite-Name wird mit `[ci]` /
+`[nightly]` / `[manual]` präfigiert.
 
 | Klasse    | Läuft                          | Zeitbudget           |
 | --------- | ------------------------------ | -------------------- |
 | `ci`      | jeder Pull Request und Push    | Gesamtsuite < 10 Min |
 | `nightly` | einmal täglich                 | unbegrenzt           |
 | `manual`  | auf Anforderung, mit Protokoll | —                    |
+
+Auswahl über `OA_TEST_CLASSES` (Kommaliste oder `all`), Default `ci`. Ein nicht ausgewählter Test
+wird als **skipped** berichtet, mit dem Grund im Suite-Namen, plus Coverage-Hinweis in der Ausgabe.
+Ein Tippfehler in `OA_TEST_CLASSES` bricht den Lauf ab, statt stillschweigend nichts zu laufen.
+
+`suiteRequiring(klasse, name, probe, fn)` ergänzt das um Infrastruktur: ist die Probe negativ, wird
+mit dem Grund der Probe übersprungen — „`DATABASE_URL` is not set" liest sich anders als „skipped".
+
+### 2.4 Seeds
+
+`resolveSeed(name)` und `seededRng(seed)` aus `@oa-test/seed`. Der Seed kommt aus `OA_TEST_SEED`
+oder wird gezogen; in **beiden** Fällen wird er ausgegeben, zusammen mit dem Replay-Kommando. Jede
+Assertion in einem randomisierten Test hängt `rng.context({ iteration })` an ihre Meldung, damit ein
+Fehlschlag exakt wiederholbar ist. `Math.random()` kommt im Generatorpfad nicht vor.
+
+### 2.5 Sichtbare Coverage-Hinweise
+
+`coverageNotice(text)` und `announceSampling(...)` aus `@oa-test/notice` schreiben nach stderr
+(`[TEST-COVERAGE NOTICE] …`), überleben also jeden Reporter. Pflicht bei: übersprungener Klasse,
+fehlender Infrastruktur, Stichprobe statt Vollauf, übersprungener Plattform. Grundregel 6 ist damit
+maschinell umgesetzt und nicht nur Absicht.
 
 ## 3. RFC §12 → konkrete Testfälle
 
