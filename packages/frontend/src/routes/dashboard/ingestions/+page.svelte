@@ -604,10 +604,12 @@
 												{:else if indexHealth[source.id] === 'error'}
 													{$t('app.ingestions.index_health_error')}
 												{:else}
-													{@const h = indexHealth[source.id] as IndexHealth}
+													{@const h = indexHealth[
+														source.id
+													] as IndexHealth}
 													{$t('app.ingestions.index_health_summary', {
 														indexed: h.indexedCount,
-														total: h.archivedCount
+														total: h.archivedCount,
 													} as any)}
 												{/if}
 											</p>
@@ -643,7 +645,8 @@
 											>{$t('app.ingestions.actions')}</DropdownMenu.Label
 										>
 										<DropdownMenu.Item
-											onclick={() => goto(`/dashboard/ingestions/${source.id}`)}
+											onclick={() =>
+												goto(`/dashboard/ingestions/${source.id}`)}
 											>{$t('app.ingestions.view_stats')}</DropdownMenu.Item
 										>
 										<DropdownMenu.Item onclick={() => openEditDialog(source)}
@@ -751,7 +754,8 @@
 													)}</DropdownMenu.Label
 												>
 												<DropdownMenu.Item
-													onclick={() => goto(`/dashboard/ingestions/${child.id}`)}
+													onclick={() =>
+														goto(`/dashboard/ingestions/${child.id}`)}
 													>{$t(
 														'app.ingestions.view_stats'
 													)}</DropdownMenu.Item

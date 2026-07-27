@@ -15,3 +15,12 @@ packages/frontend/src/lib/components/ui/
 ## Verbatim archived source document — must stay byte-identical to the original RFC.
 ## Prettier rewrites emphasis markers and quotes inside its embedded YAML example.
 docs/dev/journaling/00-rfc.md
+
+## Generated files — the generator writes them with JSON.stringify(…, null, 2) and would
+## immediately undo any Prettier formatting. Formatting them would make the lint job go red on
+## every schema or API change. See ADR-015 in docs/dev/journaling/05-entscheidungen.md.
+##
+## Written by `pnpm docs:gen-spec` (runs on every docs:dev / docs:build):
+docs/api/openapi.json
+## Written by `pnpm db:generate` (drizzle-kit rewrites _journal.json and adds a snapshot each time):
+packages/backend/src/database/migrations/meta/

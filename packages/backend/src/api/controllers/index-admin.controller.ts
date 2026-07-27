@@ -25,7 +25,8 @@ export class IndexAdminController {
 			const limitRaw = parseInt(String(req.query.limit ?? '20'), 10);
 			const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 20;
 
-			const fromRaw = req.query.from !== undefined ? parseInt(String(req.query.from), 10) : NaN;
+			const fromRaw =
+				req.query.from !== undefined ? parseInt(String(req.query.from), 10) : NaN;
 			const from = Number.isFinite(fromRaw) ? fromRaw : undefined;
 
 			const parseList = (v: unknown): string[] | undefined => {

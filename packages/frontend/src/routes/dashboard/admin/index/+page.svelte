@@ -110,11 +110,15 @@
 
 		<Card.Root>
 			<Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-				<Card.Title class="text-sm font-medium">{$t('app.index_admin.database_size')}</Card.Title>
+				<Card.Title class="text-sm font-medium"
+					>{$t('app.index_admin.database_size')}</Card.Title
+				>
 				<HardDrive class="text-muted-foreground h-4 w-4" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-primary text-2xl font-bold">{formatBytes(overview.databaseSize)}</div>
+				<div class="text-primary text-2xl font-bold">
+					{formatBytes(overview.databaseSize)}
+				</div>
 				<p class="text-muted-foreground mt-1 text-xs">
 					{$t('app.index_admin.used')}: {formatBytes(overview.usedDatabaseSize)}
 				</p>
@@ -123,7 +127,9 @@
 
 		<Card.Root>
 			<Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-				<Card.Title class="text-sm font-medium">{$t('app.index_admin.last_update')}</Card.Title>
+				<Card.Title class="text-sm font-medium"
+					>{$t('app.index_admin.last_update')}</Card.Title
+				>
 				<Clock class="text-muted-foreground h-4 w-4" />
 			</Card.Header>
 			<Card.Content>
@@ -144,23 +150,33 @@
 			{#if overview.index}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					<div>
-						<p class="text-muted-foreground text-xs">{$t('app.index_admin.documents')}</p>
+						<p class="text-muted-foreground text-xs">
+							{$t('app.index_admin.documents')}
+						</p>
 						<p class="text-primary text-2xl font-bold">
 							{overview.index.numberOfDocuments.toLocaleString()}
 						</p>
 					</div>
 					<div>
-						<p class="text-muted-foreground text-xs">{$t('app.index_admin.primary_key')}</p>
+						<p class="text-muted-foreground text-xs">
+							{$t('app.index_admin.primary_key')}
+						</p>
 						<p class="font-mono text-sm">{overview.index.primaryKey ?? '—'}</p>
 					</div>
 					<div>
-						<p class="text-muted-foreground text-xs">{$t('app.index_admin.indexing')}</p>
+						<p class="text-muted-foreground text-xs">
+							{$t('app.index_admin.indexing')}
+						</p>
 						<Badge variant={overview.index.isIndexing ? 'secondary' : 'outline'}>
-							{overview.index.isIndexing ? $t('app.index_admin.yes') : $t('app.index_admin.no')}
+							{overview.index.isIndexing
+								? $t('app.index_admin.yes')
+								: $t('app.index_admin.no')}
 						</Badge>
 					</div>
 					<div>
-						<p class="text-muted-foreground text-xs">{$t('app.index_admin.updated_at')}</p>
+						<p class="text-muted-foreground text-xs">
+							{$t('app.index_admin.updated_at')}
+						</p>
 						<p class="text-sm">{relative(overview.index.updatedAt)}</p>
 					</div>
 				</div>
@@ -200,7 +216,9 @@
 						<Table.Header>
 							<Table.Row>
 								<Table.Head>{$t('app.index_admin.source')}</Table.Head>
-								<Table.Head class="text-right">{$t('app.index_admin.documents')}</Table.Head>
+								<Table.Head class="text-right"
+									>{$t('app.index_admin.documents')}</Table.Head
+								>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
@@ -208,13 +226,17 @@
 								<Table.Row>
 									<Table.Cell>
 										{#if row.name}
-											<a class="link" href="/dashboard/ingestions/{row.ingestionSourceId}"
+											<a
+												class="link"
+												href="/dashboard/ingestions/{row.ingestionSourceId}"
 												>{row.name}</a
 											>
 										{:else}
 											<span class="text-muted-foreground font-mono text-xs"
 												>{row.ingestionSourceId}
-												<span class="italic">({$t('app.index_admin.deleted_source')})</span></span
+												<span class="italic"
+													>({$t('app.index_admin.deleted_source')})</span
+												></span
 											>
 										{/if}
 									</Table.Cell>
@@ -258,7 +280,9 @@
 							<Table.Head>{$t('app.index_admin.task_uid')}</Table.Head>
 							<Table.Head>{$t('app.index_admin.task_type')}</Table.Head>
 							<Table.Head>{$t('app.index_admin.status')}</Table.Head>
-							<Table.Head class="text-right">{$t('app.index_admin.documents')}</Table.Head>
+							<Table.Head class="text-right"
+								>{$t('app.index_admin.documents')}</Table.Head
+							>
 							<Table.Head>{$t('app.index_admin.duration')}</Table.Head>
 							<Table.Head>{$t('app.index_admin.enqueued_at')}</Table.Head>
 							<Table.Head>{$t('app.index_admin.finished_at')}</Table.Head>
@@ -276,14 +300,19 @@
 											size="sm"
 											class="capitalize"
 											onclick={() => {
-												const el = document.getElementById(`task-error-${task.uid}`);
+												const el = document.getElementById(
+													`task-error-${task.uid}`
+												);
 												if (el) el.classList.toggle('hidden');
 											}}
 										>
 											{task.status}
 										</Button>
 									{:else}
-										<Badge variant={statusVariant(task.status)} class="capitalize">
+										<Badge
+											variant={statusVariant(task.status)}
+											class="capitalize"
+										>
 											{task.status}
 										</Badge>
 									{/if}
@@ -296,7 +325,9 @@
 										—
 									{/if}
 								</Table.Cell>
-								<Table.Cell class="font-mono text-sm">{task.duration ?? '—'}</Table.Cell>
+								<Table.Cell class="font-mono text-sm"
+									>{task.duration ?? '—'}</Table.Cell
+								>
 								<Table.Cell class="text-sm" title={task.enqueuedAt}>
 									{relative(task.enqueuedAt)}
 								</Table.Cell>
@@ -308,8 +339,9 @@
 								<Table.Row id={`task-error-${task.uid}`} class="hidden">
 									<Table.Cell colspan={7} class="p-0">
 										<pre
-											class="bg-muted max-w-full text-wrap rounded-md p-4 text-xs">{task.error
-												.message ?? JSON.stringify(task.error, null, 2)}</pre>
+											class="bg-muted max-w-full text-wrap rounded-md p-4 text-xs">{task
+												.error.message ??
+												JSON.stringify(task.error, null, 2)}</pre>
 									</Table.Cell>
 								</Table.Row>
 							{/if}
@@ -330,10 +362,20 @@
 				{$t('app.index_admin.total')}: {tasks.total.toLocaleString()}
 			</div>
 			<div class="flex gap-2">
-				<Button variant="outline" size="sm" onclick={pageLatest} disabled={!data.filters.from}>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={pageLatest}
+					disabled={!data.filters.from}
+				>
 					{$t('app.index_admin.latest')}
 				</Button>
-				<Button variant="outline" size="sm" onclick={pageOlder} disabled={tasks.next == null}>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={pageOlder}
+					disabled={tasks.next == null}
+				>
 					{$t('app.index_admin.older')}
 					<ChevronRight class="ml-1 h-4 w-4" />
 				</Button>

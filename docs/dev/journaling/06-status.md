@@ -6,7 +6,7 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-27 · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
+**Letzte Aktualisierung:** 2026-07-27 · **Branch:** `claude/journaling-e1-test-foundation`
 
 ---
 
@@ -15,7 +15,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 | Epic | Titel                              | Status     | Fertig / Gesamt |
 | ---- | ---------------------------------- | ---------- | --------------- |
 | E0   | Planung, Doku, Agent-Infrastruktur | **fertig** | 6 / 6           |
-| E1   | Test- und CI-Fundament             | offen      | 0 / 7           |
+| E1   | Test- und CI-Fundament             | in Arbeit  | 1 / 7           |
 | E2   | Ledger und Hash-Chain              | offen      | 0 / 10          |
 | E3   | Spool und Acceptance-Contract      | offen      | 0 / 8           |
 | E4   | `smtp-ingress`-Service             | offen      | 0 / 13          |
@@ -67,7 +67,7 @@ Agent-Infrastruktur geliefert (ADR-001).
 
 ---
 
-## E1 — Test- und CI-Fundament (offen, **als Nächstes**)
+## E1 — Test- und CI-Fundament (in Arbeit)
 
 |     | Task                                                                           | Rolle |
 | --- | ------------------------------------------------------------------------------ | ----- |
@@ -75,16 +75,27 @@ Agent-Infrastruktur geliefert (ADR-001).
 | [ ] | JR-102 Testkonventionen festlegen und dokumentieren                            | TEST  |
 | [ ] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` / `FilterBuilder` | TEST  |
 | [ ] | JR-104 Integrationstest-Basis mit isolierter Postgres-Instanz                  | TEST  |
-| [ ] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**     | DEV   |
+| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**     | DEV   |
 | [ ] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests                         | DEV   |
 | [ ] | JR-106 Abnahme E1                                                              | PO    |
 
-**Vorprüfung erledigt (2026-07-27), vollständig mit allen Prettier-Plugins:** `pnpm lint` schlägt auf
-dem heutigen Bestand **fehl** — **13** Dateien sind nicht Prettier-konform, davon **6 generierte**
-(`docs/api/openapi.json` und fünf `migrations/meta/*.json`). Vollständige Liste in `03-backlog.md`
-unter E1. Deshalb ist `JR-105a` als reiner Formatierungs-Commit vorgeschaltet; vorher ist zu
-entscheiden, ob die generierten Dateien formatiert oder in `.prettierignore` aufgenommen werden —
-sonst wird der CI-Job bei jeder Schema- oder API-Änderung grundlos rot.
+**`JR-105a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
+beanstandeten Dateien wurden die **7 handgeschriebenen** formatiert (1 `.md`, 3 `.ts`, 3 `.svelte`);
+die **6 generierten** gingen laut **ADR-015** in `.prettierignore` statt in den Commit, weil beide
+Generatoren empirisch belegt mit `JSON.stringify(…, null, 2)` zurückschreiben und jede Formatierung
+sofort überschreiben. Gegenprobe: nach `docs:gen-spec` **und** einem erzwungenen
+`drizzle-kit generate` bleibt `pnpm lint` grün — das Akzeptanzkriterium ist damit erfüllt.
+
+Nachweise: `pnpm lint` grün · `pnpm --filter @open-archiver/frontend check` 0 Fehler / 0 Warnungen ·
+`pnpm --filter @open-archiver/backend build` erfolgreich · Token-Stream-Vergleich der drei `.ts`-Dateien
+vor/nach Formatierung identisch (nur Whitespace, Quotes, `es5`-Trailing-Commas), Diffs der drei
+`.svelte`-Dateien und der `.md`-Tabelle manuell geprüft — keine Logikänderung.
+
+Einschränkung: `pnpm db:generate` ist im Container nicht lauffähig (kein `DATABASE_URL`, keine `.env`,
+kein Postgres). Der drizzle-Nachweis lief über einen direkten `drizzle-kit generate`-Aufruf mit
+Dummy-`DATABASE_URL`; Details und Bewertung in ADR-015.
+
+Formal offen: die Abnahme von `JR-105a` gehört zu `JR-106` (Rolle PO).
 
 ---
 
@@ -108,7 +119,8 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 ## Sessionprotokoll
 
-| Datum      | Ergebnis                                                                                                                                                                                                                                                  | Nächster Schritt                                                |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                   | E1 starten mit `JR-101`                                         |
-| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich). | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101` |
+| Datum      | Ergebnis                                                                                                                                                                                                                                                    | Nächster Schritt                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                     | E1 starten mit `JR-101`                                         |
+| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).   | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101` |
+| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1). | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)     |

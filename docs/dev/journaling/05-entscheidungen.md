@@ -263,6 +263,62 @@ kann — ein liegengebliebenes Review blockiert das Projekt.
 Projektgrundlage betrifft (Dokumentation, ADRs, Agent-Infrastruktur), gehört weiterhin direkt auf den
 Integrationsbranch.
 
+## ADR-015 — Generierte Dateien werden von Prettier ausgenommen, nicht formatiert
+
+**Status:** entschieden (2026-07-27) · **Entscheider:** DEV (im Rahmen von `JR-105a`)
+
+Die sechs generierten Dateien unter den 13 Prettier-Beanstandungen werden **nicht** mitformatiert,
+sondern in `.prettierignore` aufgenommen. Nur die sieben handgeschriebenen Dateien gehen in den
+Formatierungs-Commit.
+
+| Eintrag in `.prettierignore`                     | Generator            | Läuft bei                         |
+| ------------------------------------------------ | -------------------- | --------------------------------- |
+| `docs/api/openapi.json`                          | `pnpm docs:gen-spec` | jedem `docs:dev` und `docs:build` |
+| `packages/backend/src/database/migrations/meta/` | `pnpm db:generate`   | jeder Schemaänderung              |
+
+**Begründung — empirisch belegt:** Beide Generatoren schreiben ihre Ausgabe mit
+`JSON.stringify(…, null, 2)`, also mit zwei Leerzeichen Einrückung. Das Repo-Prettier ist auf
+`useTabs: true` konfiguriert. Formatieren und Generieren widersprechen sich damit dauerhaft.
+
+Belege:
+
+- `docs/api/openapi.json`: Datei mit `prettier --write` formatiert (`--check` danach grün), dann
+  `pnpm docs:gen-spec` ausgeführt → `--check` sofort wieder rot, Inhalt byteidentisch zum
+  ursprünglich committeten Stand. Schreibstelle: `packages/backend/scripts/generate-openapi-spec.mjs`
+  Zeile 732, `writeFileSync(outputPath, JSON.stringify(spec, null, 2))`.
+- `migrations/meta/`: alle `meta/*.json` formatiert (`--check` grün), dann eine Wegwerf-Spalte ins
+  Schema gesetzt und `drizzle-kit generate` ausgeführt → drizzle-kit hat `_journal.json`
+  unformatiert zurückgeschrieben und ein ebenfalls unformatiertes `0041_snapshot.json` angelegt.
+  Bestätigt in `drizzle-kit@0.31.4` (`bin.cjs`): `JSON.stringify(journal, null, 2)`. Wegwerf-Änderung
+  vollständig zurückgenommen.
+
+Gegenprobe nach der Änderung: beide Generatoren erneut ausgeführt → `pnpm lint` bleibt grün. Damit
+ist das Akzeptanzkriterium „`pnpm db:generate` erzeugt danach keine erneute Lint-Verletzung" erfüllt.
+
+**Verworfene Alternative:** die generierten Dateien mitformatieren und nach jedem Generatorlauf
+`pnpm format` nachziehen. Das macht den künftigen CI-Job aus `JR-105` bei jeder Schema- oder
+API-Änderung grundlos rot und verlagert die Reparatur auf den Entwickler, der zufällig die nächste
+Migration schreibt.
+
+**Umfang der Ausnahme:** bewusst der ganze Ordner `migrations/meta/`, nicht einzelne Snapshots — jede
+künftige Migration legt eine weitere `NNNN_snapshot.json` an, eine Dateiliste wäre sofort veraltet.
+Die `migrations/*.sql` brauchen keinen Eintrag: Prettier hat keinen SQL-Parser und lässt sie
+ohnehin unangetastet.
+
+**Nicht verifiziert:** `pnpm db:generate` selbst ist in diesem Container nicht lauffähig —
+`packages/backend/drizzle.config.ts` wirft beim Import, wenn `DATABASE_URL` fehlt, und es gibt weder
+`.env` noch einen Postgres auf Port 5432. Der Nachweis lief deshalb über einen direkten
+`drizzle-kit generate`-Aufruf mit gesetztem Dummy-`DATABASE_URL`. Das ist zulässig, weil `generate`
+rein aus dem Schema arbeitet und keine Verbindung aufbaut (die Ausführung bestätigt das: 22 Tabellen
+gelesen, Migration geschrieben, kein Verbindungsfehler) — die **Wrapper-Kette**
+`dotenv -- pnpm --filter … drizzle-kit generate` ist damit aber nicht end-to-end getestet. Sie
+beeinflusst das Ausgabeformat nicht.
+
+**Konsequenz:** Wer `docs/api/openapi.json` oder einen drizzle-Snapshot künftig doch formatiert
+sehen will, braucht eine neue ADR, die diese ersetzt. Der Review von Snapshots (Skill
+`oa-migration`) bleibt unverändert Pflicht — „von Prettier ignoriert" heißt nicht „nicht
+reviewpflichtig".
+
 ---
 
 ## Nicht verhandelbar (keine ADR nötig)

@@ -92,17 +92,17 @@ Here is a complete list of environment variables available for configuration:
 
 #### Application Settings
 
-| Variable                | Description                                                                                                                                                  | Default Value           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
-| `NODE_ENV`              | The application environment.                                                                                                                                 | `development`           |
-| `PORT_BACKEND`          | The port for the backend service.                                                                                                                            | `4000`                  |
-| `PORT_FRONTEND`         | The port for the frontend service.                                                                                                                           | `3000`                  |
-| `APP_URL`               | The public-facing URL of your application. This is used by the backend to configure CORS.                                                                    | `http://localhost:3000` |
-| `ORIGIN`                | Used by the SvelteKit Node adapter to determine the server's public-facing URL. It should always be set to the value of `APP_URL` (e.g., `ORIGIN=$APP_URL`). | `http://localhost:3000` |
-| `SYNC_FREQUENCY`        | The frequency of continuous email syncing. See [cron syntax](https://crontab.guru/) for more details.                                                        | `* * * * *`             |
-| `ALL_INCLUSIVE_ARCHIVE` | Set to `true` to include all emails, including Junk and Trash folders, in the email archive.                                                                 | `false`                 |
+| Variable                | Description                                                                                                                                                                                    | Default Value           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `NODE_ENV`              | The application environment.                                                                                                                                                                   | `development`           |
+| `PORT_BACKEND`          | The port for the backend service.                                                                                                                                                              | `4000`                  |
+| `PORT_FRONTEND`         | The port for the frontend service.                                                                                                                                                             | `3000`                  |
+| `APP_URL`               | The public-facing URL of your application. This is used by the backend to configure CORS.                                                                                                      | `http://localhost:3000` |
+| `ORIGIN`                | Used by the SvelteKit Node adapter to determine the server's public-facing URL. It should always be set to the value of `APP_URL` (e.g., `ORIGIN=$APP_URL`).                                   | `http://localhost:3000` |
+| `SYNC_FREQUENCY`        | The frequency of continuous email syncing. See [cron syntax](https://crontab.guru/) for more details.                                                                                          | `* * * * *`             |
+| `ALL_INCLUSIVE_ARCHIVE` | Set to `true` to include all emails, including Junk and Trash folders, in the email archive.                                                                                                   | `false`                 |
 | `PDF_PARSE_TIMEOUT_MS`  | Timeout (in ms) for the built-in PDF text extractor during indexing. A malformed PDF is given up on after this so it can't stall the indexing worker. Only applies when `TIKA_URL` is not set. | `20000`                 |
-| `LOG_LEVEL`             | Minimum severity of logs to emit. Set to `debug` for verbose per-tick scheduler and per-message ingestion logs; routine logs are quiet at `info`.            | `info`                  |
+| `LOG_LEVEL`             | Minimum severity of logs to emit. Set to `debug` for verbose per-tick scheduler and per-message ingestion logs; routine logs are quiet at `info`.                                              | `info`                  |
 
 #### Docker Compose Service Configuration
 
