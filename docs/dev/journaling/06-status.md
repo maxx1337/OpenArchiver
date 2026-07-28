@@ -6,16 +6,26 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-28 (Abnahme `JR-106a`) · **Branch:**
-`claude/journaling-e1-test-foundation`
+**Letzte Aktualisierung:** 2026-07-28 (nach dem Rückmerge von E1) · **Branch:**
+`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch), `HEAD` = `b4ae8f7`
 
-> **E1 ist abgenommen (`JR-106a`, 2026-07-28).** Alle 15 Kriterien aus `JR-106` sowie die Kriterien
-> von `JR-104a` und `JR-105b` sind erneut und unabhängig geprüft: **alle erfüllt**, keines nur
-> übernommen. F12 ist als behoben bestätigt (10 nebenläufige Runden, 0 Rückstände). **F13 bleibt
-> offen** (Entscheidung des Auftraggebers). Drei **neue** Befunde am Messinstrument sind eröffnet:
-> **F14** (Klassen-Umetikettierung umgeht die Inventurprüfung), **F15** (`minimumFiles`-Spiel
-> verdeckt eine gelöschte Testdatei) und **F16** (Rückstand nach Modul-Throw wird lokal nicht
-> angekündigt). Keiner bricht ein Akzeptanzkriterium; alle drei gehören nach `JR-1305`.
+> **E1 ist abgenommen (`JR-106a`, 2026-07-28) und in den Integrationsbranch gemergt** (`efb769c`,
+> `--no-ff`). Alle 15 Kriterien aus `JR-106` sowie die Kriterien von `JR-104a` und `JR-105b` sind
+> erneut und unabhängig geprüft: **alle erfüllt**, keines nur übernommen. F12 ist als behoben
+> bestätigt (10 nebenläufige Runden, 0 Rückstände). **F13 bleibt offen** (Entscheidung des
+> Auftraggebers).
+>
+> Drei **neue** Befunde am Messinstrument sind eröffnet: **F14** (Klassen-Umetikettierung umgeht die
+> Inventurprüfung), **F15** (`minimumFiles`-Spiel verdeckt eine gelöschte Testdatei) und **F16**
+> (Rückstand nach Modul-Throw wird lokal nicht angekündigt). Keiner bricht ein Akzeptanzkriterium.
+> Sie gehören nach **`JR-105c`** — nicht nach `JR-1305`, das ist E13s Task für F8; der Verweis in der
+> ersten Fassung dieses Abschnitts war falsch.
+>
+> **`JR-105c` ist vor E2 fällig.** Der Wächter zählt **Dateien statt ausgeführter Tests**: wer die
+> vier Integrationsdateien auf `nightly` umklassifiziert, schaltet die Suite ab, und beide Wächter
+> melden grün. Solange das offen ist, belegt ein grüner CI-Lauf **nicht**, dass die Integration-Suite
+> gelaufen ist — und auf genau diesen Tests ruht jede Durability-Aussage in E2/E3.
+>
 > Nächster Schritt: **`JR-1301`** (E13, Branch `claude/journaling-e13-iam-hardening`).
 
 ---
@@ -25,22 +35,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                             | Fertig / Gesamt |
-| ----------- | ---- | ---------------------------------- | ---------------------------------- | --------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                         | 6 / 6           |
-| 1           | E1   | Test- und CI-Fundament             | **fertig** (abgenommen 2026-07-28) | 9 / 9           |
-| 2           | E13  | IAM-Autorisierung härten           | offen                              | 0 / 9           |
-| 3           | E2   | Ledger und Hash-Chain              | offen                              | 0 / 10          |
-| 4           | E3   | Spool und Acceptance-Contract      | offen                              | 0 / 8           |
-| 5           | E4   | `smtp-ingress`-Service             | offen                              | 0 / 13          |
-| 6           | E5   | Journal-Report-Parser              | offen                              | 0 / 9           |
-| 7           | E6   | Phase-B-Worker                     | offen                              | 0 / 8           |
-| 8           | E7   | WORM-Storage                       | offen                              | 0 / 6           |
-| 9           | E8   | Anchoring                          | offen                              | 0 / 6           |
-| 10          | E9   | `verify`-CLI                       | offen                              | 0 / 8           |
-| 11          | E10  | Completeness-Monitoring            | offen                              | 0 / 8           |
-| 12          | E11  | Compliance-Features                | offen                              | 0 / 10          |
-| 13          | E12  | Rollout und Dokumentation          | offen                              | 0 / 9           |
+| Reihenfolge | Epic | Titel                              | Status                                                           | Fertig / Gesamt |
+| ----------- | ---- | ---------------------------------- | ---------------------------------------------------------------- | --------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                       | 6 / 6           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2) | 9 / 10          |
+| 2           | E13  | IAM-Autorisierung härten           | offen                                                            | 0 / 9           |
+| 3           | E2   | Ledger und Hash-Chain              | offen                                                            | 0 / 10          |
+| 4           | E3   | Spool und Acceptance-Contract      | offen                                                            | 0 / 8           |
+| 5           | E4   | `smtp-ingress`-Service             | offen                                                            | 0 / 13          |
+| 6           | E5   | Journal-Report-Parser              | offen                                                            | 0 / 9           |
+| 7           | E6   | Phase-B-Worker                     | offen                                                            | 0 / 8           |
+| 8           | E7   | WORM-Storage                       | offen                                                            | 0 / 6           |
+| 9           | E8   | Anchoring                          | offen                                                            | 0 / 6           |
+| 10          | E9   | `verify`-CLI                       | offen                                                            | 0 / 8           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                            | 0 / 8           |
+| 12          | E11  | Compliance-Features                | offen                                                            | 0 / 10          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                            | 0 / 9           |
 
 111 Tasks gesamt (E0 lieferte 102; E13 kam mit 9 hinzu).
 
@@ -97,6 +107,22 @@ Bestandscode korrigieren — der Receiver selbst beginnt erst mit E2.
 | [x] | JR-104a F12 beheben — **abgenommen 2026-07-28 in `JR-106a`** (10 nebenläufige Runden, 0 Rückstände) | TEST  |
 | [x] | JR-105b Lücken der CI-Nachlaufprüfung schließen — **abgenommen 2026-07-28 in `JR-106a`**            | TEST  |
 | [x] | JR-106a Erneute Abnahme E1 — **durchgeführt 2026-07-28; Ergebnis: E1 abgenommen**                   | TEST  |
+| [ ] | JR-105c Wächter auf **ausgeführte Tests** statt Dateien umstellen (F14–F16) — **fällig vor E2**     | TEST  |
+
+**Nach der Abnahme in den Integrationsbranch gemergt** (`efb769c`, `--no-ff`, gepusht). ADR-014 gibt
+den Rückmerge nach unabhängiger Abnahme frei; `main` bleibt bis E12 unangetastet. Die aufgeräumte
+Sicht liefert `git log --first-parent origin/main..HEAD` — ein Merge-Commit je Epic, die granulare
+Historie darunter erhalten. **Kein Squash:** er würde `cab0e38` („five tasks accepted, JR-104
+rejected") tilgen und `JR-105a` seine mechanisch beweisbare Formatierungs-Reinheit nehmen.
+
+**`JR-105c` bleibt offen und ist vor E2 fällig** — Begründung im Kasten oben. Er gehört formal zu E1,
+wurde aber erst durch die Abnahme sichtbar; E1 ist trotzdem abgenommen, weil F14–F16 kein
+Akzeptanzkriterium brechen.
+
+**F13-Zwischenregel jetzt am Ort der Benutzung.** Sie stand nur in Testplan §2.6, im Befund und in
+einem Quelldatei-Header — an keiner Stelle, die jemand liest, der einen 100k-Soak schreibt. Sie steht
+jetzt in den **Akzeptanzkriterien von `JR-208` und `JR-607`**: `OA_TEST_PG_STALE_MS` über die erwartete
+Laufzeit heben, sichtbar begründet.
 
 **`JR-105a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
 beanstandeten Dateien wurden die **7 handgeschriebenen** formatiert (1 `.md`, 3 `.ts`, 3 `.svelte`);
@@ -779,3 +805,4 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 | 2026-07-28 | `JR-106` (Abnahme E1) **durchgeführt, Ergebnis: E1 nicht abgenommen.** 15 Kriterien einzeln gegen `03-backlog.md` geprüft, 14 erfüllt: `JR-101`, `JR-102`, `JR-103`, `JR-105a` und `JR-105` abgenommen. `JR-104` **abgelehnt** — neuer Befund **F12**: der Test `sweeps a stale database…` legt seine Fixture-DB unter dem festen Namen `oa_test_1609459200000_999999_deadaa_sweeptest` an, zwei gleichzeitige Läufe gegen dasselbe Postgres kollidieren daher reproduzierbar (4/4) mit `duplicate key … pg_database_datname_index`; der bisherige Nachweis „zwei Läufe gleichzeitig grün" ist widerlegt. CI unberührt (eigener Service-Container je Job) und weiterhin grün. Zusätzlich belegt: die grün aussehende Fehlerform ohne `DATABASE_URL` (Exit 0 bei „149 passed \| 34 skipped") wird von Nachlaufprüfung 1 in allen drei Nichtverfügbarkeits-Modi rot gemacht, legitime `nightly`/`manual`-Skips lösen sie nicht aus; zwei Lücken derselben Prüfung gefunden (abwesende statt übersprungene Suite; falsch benannte `*.test.ts` unter `tests/integration/` wird von keinem Project eingesammelt). Kein Produktionscode geändert, kein Befund behoben. Dokumentenhygiene: **F11 nach `09-befunde-bestandscode.md` verschoben**, F-Nummerierung liegt jetzt in einer Datei.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Entscheidung des Auftraggebers zu **F12**; danach Nacharbeit `JR-104`, erneute Teilabnahme, dann `JR-1301` |
 | 2026-07-28 | `JR-104a` und `JR-105b` **erledigt** (Nacharbeit aus der Ablehnung von E1). **F12 behoben**, dreiteilig: prozessspezifische Fixture-Namen über `buildForeignFixtureName()`, `sweepStaleHarnessDatabases({ staleMs, restrictTo })` mit SQL-seitiger Einschränkung und konstruktiver Verweigerung eines gesenkten Schwellwerts ohne `restrictTo`, plus Fixture-Alter unter die Standardfrist gezogen (der 2021er Zeitstempel war ein drittes, in der Abnahme nicht genanntes Teilproblem). Reproduktion vorher 3/3 rot, dabei der bis dahin nur hergeleitete zweite Pfad **beobachtet** (ein Lauf verlor seine eigene Datenbank an den Sweeper des anderen). Nachher: **5 Doppelläufe grün**, plus 3 Tripel- und 3 versetzte Runden, 0 Rückstände, keine Runde unsauber. `JR-105b`: beide Lücken der CI-Nachlaufprüfung mit **positiven** Erwartungen geschlossen — `tests/support/suite-inventory.ts` als einzige Quelle der Include-Globs prüft in `globalSetup` Mindestdateizahlen je Suite und verbietet testartig benannte Dateien ohne Project; `OA_TEST_REQUIRE_INFRA=1` macht fehlende Infrastruktur in der CI zum Fehlschlag statt zum Skip; die Log-Suche ist ersetzt durch eine Report-Datei, deren Fehlen den Job rot macht. Beide Richtungen und alle vier Proben belegt und zurückgebaut. Neuer Befund **F13** (verbleibende Sweeper-Lücke bei Läufen > 2 h, für die E2/E3-Soaks relevant), kein Produktionscode berührt, F1–F11 unangetastet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **`JR-106a`** (erneute Abnahme E1) — muss unabhängig von dieser Session laufen                             |
 | 2026-07-28 | `JR-106a` (erneute Abnahme E1) **durchgeführt, Ergebnis: E1 abgenommen.** HEAD `0a94308` zuerst gegen `origin` abgeglichen (identisch — kein Container-Rollback). Alle 20 Kriterien einzeln geprüft und alle erfüllt, keines übernommen: `pnpm test` ⇒ `10 passed`, `197 passed \| 2 skipped`, Exit `0`; Sonden in `packages/types/` und `packages/frontend/` ohne Config-Änderung eingesammelt, dieselbe Sonde fehlschlagend ⇒ Exit `1`; **F12 bestätigt behoben** über 10 nebenläufige Runden (5 Doppel-, 3 versetzte, 2 Dreifachläufe), alle Teilläufe Exit `0`, 0 Rückstände; alle acht IAM-Fixtures einzeln umbenannt ⇒ jedes Mal Exit `1`; CI-Run **30368442950** auf HEAD grün, 14/14 Schritte `success`, `starting PostgreSQL 17.10`, alle vier `integration`-Dateien mit `✓` und Testzahlen, `Suite inventory verified: … integration 4/4`, „No `oa_test_*` databases left behind."; vier Bestandsworkflows blob-identisch in Merge-Base/HEAD/Worktree; genau **ein** `permissions: contents: read` ohne Job-Override; `pnpm lint` grün, erzwungener `pnpm db:generate` (⇒ `0041_whole_sally_floyd.sql`) lässt ihn grün; Produktionscode unberührt (echter Pre-E1-Build vs. HEAD-Build: **233** `dist`-Dateien, Listen identisch, 1 Datei nur im Zeilenumbruch verschieden, md5 nach Whitespace-Strip gleich); `JR-105b` beidseitig belegt, zusätzlich der von der alten Prüfung nicht erfasste **Lösch**-Fall; `00-rfc.md` seit `6d6564c` unverändert, `srcExclude: ['dev/**']` intakt. **Neun Angriffe auf die neue Inventurprüfung**, sechs hielten, drei nicht ⇒ neue Befunde **F14** (Datei- statt Testebene: `ci` → `nightly` schaltet die Suite ab und bleibt grün), **F15** (`minimumFiles`-Spiel verdeckt eine Löschung), **F16** (Rückstand nach Modul-Throw lokal nicht angekündigt) — keiner bricht ein Kriterium, alle drei nach `JR-1305`. Die lazy-Guard-Fehlerklasse ist geschlossen (`OA_TEST_REQUIRE_INFRA=yes` bricht auch bei laufender DB ab). **F13** nachgeprüft und als schwach bestätigt: die Zwischenregel steht in keiner Backlog-Zeile von `JR-208`/`JR-607`/`JR-410` und nicht in §12.6, und es gibt keine Laufzeitprüfung. Kein Produktionscode geändert, kein Befund behoben, kein Rückmerge, kein PR angefasst; PostgreSQL-16.13-Cluster restlos entfernt (Versionslücke zur CI-17.10 bleibt bestehen und ist benannt). | `JR-1301` (E13, Branch `claude/journaling-e13-iam-hardening`)                                              |
+| 2026-07-28 | **Rückmerge E1 in den Integrationsbranch** (`efb769c`, `--no-ff`, gepusht als `b4ae8f7`). ADR-014 gibt ihn nach unabhängiger Abnahme frei; `main` bleibt bis E12 unangetastet. **Kein Squash** — die aufgeräumte Sicht liefert bereits `git log --first-parent` (ein Merge-Commit je Epic), und ein Squash würde die dokumentierte Ablehnung von E1 (`cab0e38`) sowie die beweisbare Formatierungs-Reinheit von `JR-105a` (ADR-015) vernichten. Zusätzlich: **`JR-105c`** für F14–F16 angelegt (fällig vor E2; der Wächter zählt Dateien statt ausgeführter Tests), die **F13-Zwischenregel** in die Akzeptanzkriterien von `JR-208`/`JR-607` übernommen, und der falsche Verweis „F14–F16 → `JR-1305`" korrigiert (`JR-1305` ist E13s Task für F8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `JR-1301` (E13) auf `claude/journaling-e13-iam-hardening`                                                  |

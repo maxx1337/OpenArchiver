@@ -4,6 +4,14 @@ Diese Datei beantwortet zwei Fragen: **wie startet man eine Session**, und **was
 konkrete Schritt?** Der untere Teil wird am Ende jeder Session überschrieben (nicht angehängt — die
 Historie steht im Sessionprotokoll in `06-status.md`).
 
+> **Wer nach dem Schreiben dieses Handovers noch committet, aktualisiert ihn im selben Zug.** Der
+> Handover ist das **letzte** Artefakt einer Session, nicht ein mittleres. Am 2026-07-28 ist genau das
+> schiefgegangen: der Tester schrieb ihn in `69f7d68`, danach kamen Merge und ein neuer Task — und der
+> Handover führte den längst vollzogenen Rückmerge weiter als „offene Entscheidung des
+> Auftraggebers". Eine Folge-Session hätte auf falscher Grundlage gearbeitet. Gegenprobe vor dem
+> Sessionende: lässt sich „was ist der nächste Schritt und welche Dateien betrifft er?" **allein** aus
+> `README.md` → `06-status.md` → dieser Datei beantworten?
+
 ---
 
 ## Wie eine Session gestartet wird
@@ -77,7 +85,8 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-28 (nach Abnahme `JR-106a`) · **Branch:** `claude/journaling-e1-test-foundation`
+**Stand:** 2026-07-28 (nach Abnahme `JR-106a` **und** Rückmerge von E1) · **Branch:**
+`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch), `HEAD` = `b4ae8f7`
 
 ### Was zuletzt passiert ist
 
@@ -125,8 +134,24 @@ dort, wo jemand nachschlägt, der einen Soak schreibt. Es gibt auch keine Laufze
 die Regel in die Akzeptanzkriterien von `JR-208` und `JR-607` aufnehmen, unabhängig von der Wahl des
 F13-Entwurfs.
 
-**Kein Produktionscode geändert, kein Befund F1–F13 behoben, kein Rückmerge, kein PR angefasst.**
+**Kein Produktionscode geändert, kein Befund F1–F13 behoben, kein PR angefasst.**
 Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
+
+**Danach, durch den PO (nicht mehr durch den Tester):**
+
+- **E1 ist in den Integrationsbranch gemergt** — `efb769c`, `--no-ff`, gepusht als `b4ae8f7`. ADR-014
+  gibt den Rückmerge nach unabhängiger Abnahme frei; **`main` bleibt bis E12 unangetastet.** Der
+  Integrationsbranch enthält damit den Test-Harness, weshalb E13 von dort abzweigen kann.
+  **Kein Squash**, bewusst: die aufgeräumte Sicht liefert schon
+  `git log --first-parent origin/main..HEAD` (ein Merge-Commit je Epic), und ein Squash würde
+  `cab0e38` („five tasks accepted, JR-104 rejected") tilgen sowie `JR-105a` seine mechanisch
+  beweisbare Formatierungs-Reinheit nehmen (ADR-015). Ob beim späteren Merge nach `main` gesquasht
+  wird, ist dort zu entscheiden.
+- **`JR-105c` angelegt** für F14–F16, fällig **vor E2**.
+- **F13-Zwischenregel in die Akzeptanzkriterien von `JR-208` und `JR-607`** übernommen — genau die
+  Empfehlung des Testers, weil sie vorher an keiner Stelle stand, die jemand liest.
+- Korrigiert: die erste Fassung von `06-status.md` verwies F14–F16 auf `JR-1305`. Das ist E13s Task
+  für F8; richtig ist `JR-105c`.
 
 ### Nächster konkreter Schritt
 
@@ -170,7 +195,7 @@ steht und warum E11 ohne E13 nicht abnehmbar ist. **ADR-017 muss vor `JR-1302` e
 | Punkt                                     | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Zwei offene Pull Requests nach `main`** | **PR #1** (`claude/enterprise-product-implementation-cxmmqe` → `main`) und **PR #2** (`claude/journaling-e1-test-foundation` → `main`) sind offen. Beide **widersprechen ADR-014**: `main` wird bis zur Abnahme von E12 nicht angefasst, und Epic-Branches mergen in den Integrationsbranch, nicht nach `main`. Nebenwirkung: jeder Push löst seitdem **zwei** CI-Läufe aus (`push` und `pull_request` auf demselben SHA) und verdoppelt die Laufzeitkosten. **Die Entscheidung liegt beim Auftraggeber. Kein Agent schließt oder merged sie eigenmächtig.** |
-| **Rückmerge E1**                          | `claude/journaling-e1-test-foundation` ist nach `origin` gepusht und mit `JR-106a` **abgenommen** — die Bedingung, auf die der Merge warten sollte, ist erfüllt. Der Rückmerge in `claude/enterprise-product-implementation-cxmmqe` ist Sache des Auftraggebers; kein Agent führt ihn eigenmächtig aus.                                                                                                                                                                                                                                                      |
+| **`JR-105c`** (F14–F16)                   | **Fällig vor E2, kein Entscheidungsbedarf — nur Arbeit.** Der Inventar-Wächter zählt **Dateien statt ausgeführter Tests**: wer die vier Integrationsdateien auf `nightly` umklassifiziert, schaltet die Suite ab und **beide** Wächter melden grün. Solange das offen ist, belegt ein grüner CI-Lauf nicht, dass die Integration-Suite gelaufen ist. Details in `03-backlog.md` unter „Nach der Abnahme aufgetreten".                                                                                                                                        |
 
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
