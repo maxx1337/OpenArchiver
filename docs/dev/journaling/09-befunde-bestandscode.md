@@ -150,6 +150,24 @@ eine **ungefilterte** Suche über das gesamte Archiv. Dasselbe `undefined` errei
 
 Das ist F3 an der Stelle, an der es Folgen hat.
 
+**Unabhängig verifiziert (PO, 2026-07-28).** Nachgeprüft am Code, nicht am Testbericht:
+`FilterBuilder.ts:49–51` lautet `if (query === null) { return { drizzleFilter: undefined,
+searchFilter: undefined }; // Full access }`, während der unmittelbar folgende Zweig für das **leere**
+Query korrekt `sql`1=0``liefert. Der Autor kannte den „kein Zugriff"-Fall also — der`null`-Fall ist
+genau verkehrt herum. `auditor-specific-mailbox.json`enthält für`archive`tatsächlich **nur** eine`inverted`-Regel und kein `can`; eine Policy, deren einziger Zweck das Verbot ist, erteilt damit
+Vollzugriff. Der Action-Versatz zwischen `search.routes.ts:158` (`'search'`) und
+`SearchService.ts:311`/`:423` (`'read'`) ist ebenfalls bestätigt.
+
+**Bewertung des PO:** Das ist der schwerste Befund dieser Session — schwerer als F1. F1 setzt
+Super-Admin voraus; F7 ist von einer **eingeschränkten** Rolle aus erreichbar und kehrt die Wirkung
+einer restriktiven Policy ins Gegenteil. Betroffen ist die released Version 0.5.2.
+
+**Direkte Projektrelevanz:** Die Auditor-Rolle aus `JR-1101` ist auf genau diesen Mechanismus
+gebaut. `read-only-all.json` wäre unkritisch (es erteilt `can`), aber jede scope-einschränkende
+Auditor-Policy im Stil von `auditor-specific-mailbox.json` wäre wirkungslos. **E11 kann nicht
+abgenommen werden, solange F7 offen ist** — ein „read-only"-Auditor, der unbeschränkt liest, ist
+keine Auditor-Rolle.
+
 **Empfehlung:** `null` von `rulesToQuery` als **deny** behandeln (`sql`1=0``, wie es der bereits
 vorhandene „No access"-Zweig für das leere Query tut), und die unbeschränkte Rückgabe auf den Fall
 „nachweislich unbedingtes `can`" beschränken. Zusätzlich Action-Angleichung zwischen Route-Gate und
