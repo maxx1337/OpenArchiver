@@ -365,8 +365,11 @@ hält.
 
 - **`pnpm test` unter PostgreSQL 16** ist nur lokal belegt (16.13), CI läuft 17.10. Beide grün, aber
   nie dieselbe Version in beiden Umgebungen.
-- **Der Cache-Nutzen**, nicht nur das Speichern: Lauf 3 meldete `pnpm cache is not found` und hat den
-  Store erstmals angelegt. Dass ein Folgelauf ihn wiederverwendet, zeigt erst Lauf 4.
+- ~~**Der Cache-Nutzen**~~ — aufgelöst durch Lauf 5 (`6d6fd2c`, ebenfalls grün): Lauf 3 meldete noch
+  `pnpm cache is not found` und legte den Store an, Lauf 5 dann
+  `Cache hit for: node-cache-Linux-x64-pnpm-d4b263d4…` · `Cache restored successfully` ·
+  `Cache Size: ~143 MB`. `pnpm install` fiel von 8 s auf 5 s. Auch Lauf 5: 181 grün, beide
+  Nachlaufprüfungen positiv — der grüne Lauf ist also reproduzierbar und nicht einmalig.
 - **Teardown nach `SIGKILL`** des vitest-Workers — unverändert offen aus `JR-104`, deckt nur der
   Sweeper ab.
 - **`pull_request`-Trigger**: er feuert (Lauf 2 auf demselben SHA, wegen des offenen PR #2 nach
