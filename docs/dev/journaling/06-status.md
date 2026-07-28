@@ -12,24 +12,30 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 
 ## Gesamtübersicht
 
-| Epic | Titel                              | Status     | Fertig / Gesamt |
-| ---- | ---------------------------------- | ---------- | --------------- |
-| E0   | Planung, Doku, Agent-Infrastruktur | **fertig** | 6 / 6           |
-| E1   | Test- und CI-Fundament             | in Arbeit  | 4 / 7           |
-| E2   | Ledger und Hash-Chain              | offen      | 0 / 10          |
-| E3   | Spool und Acceptance-Contract      | offen      | 0 / 8           |
-| E4   | `smtp-ingress`-Service             | offen      | 0 / 13          |
-| E5   | Journal-Report-Parser              | offen      | 0 / 9           |
-| E6   | Phase-B-Worker                     | offen      | 0 / 8           |
-| E7   | WORM-Storage                       | offen      | 0 / 6           |
-| E8   | Anchoring                          | offen      | 0 / 6           |
-| E9   | `verify`-CLI                       | offen      | 0 / 8           |
-| E10  | Completeness-Monitoring            | offen      | 0 / 8           |
-| E11  | Compliance-Features                | offen      | 0 / 10          |
-| E12  | Rollout und Dokumentation          | offen      | 0 / 9           |
+Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
+eingeschoben (siehe `03-backlog.md`).
 
-**Produktionscode für den Receiver: keiner.** E0 hat ausschließlich Dokumentation und
-Agent-Infrastruktur geliefert (ADR-001).
+| Reihenfolge | Epic | Titel                              | Status     | Fertig / Gesamt |
+| ----------- | ---- | ---------------------------------- | ---------- | --------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig** | 6 / 6           |
+| 1           | E1   | Test- und CI-Fundament             | in Arbeit  | 4 / 7           |
+| 2           | E13  | IAM-Autorisierung härten           | offen      | 0 / 9           |
+| 3           | E2   | Ledger und Hash-Chain              | offen      | 0 / 10          |
+| 4           | E3   | Spool und Acceptance-Contract      | offen      | 0 / 8           |
+| 5           | E4   | `smtp-ingress`-Service             | offen      | 0 / 13          |
+| 6           | E5   | Journal-Report-Parser              | offen      | 0 / 9           |
+| 7           | E6   | Phase-B-Worker                     | offen      | 0 / 8           |
+| 8           | E7   | WORM-Storage                       | offen      | 0 / 6           |
+| 9           | E8   | Anchoring                          | offen      | 0 / 6           |
+| 10          | E9   | `verify`-CLI                       | offen      | 0 / 8           |
+| 11          | E10  | Completeness-Monitoring            | offen      | 0 / 8           |
+| 12          | E11  | Compliance-Features                | offen      | 0 / 10          |
+| 13          | E12  | Rollout und Dokumentation          | offen      | 0 / 9           |
+
+111 Tasks gesamt (E0 lieferte 102; E13 kam mit 9 hinzu).
+
+**Produktionscode für den Receiver: keiner.** E1 hat Testinfrastruktur geliefert, E13 wird
+Bestandscode korrigieren — der Receiver selbst beginnt erst mit E2.
 
 ---
 

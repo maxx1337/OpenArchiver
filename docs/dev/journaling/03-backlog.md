@@ -6,26 +6,38 @@ Epic 2, Task 3. Abgeschlossene Tasks werden nicht gelöscht, sondern in `06-stat
 **Rollen:** `DEV` = Subagent `senior-dev` · `TEST` = Subagent `tester` · `PO` = Hauptthread
 (Priorisierung, ADRs, Abnahme). Der PO implementiert nicht.
 
-**Reihenfolge = Abhängigkeitsreihenfolge.** Jedes Epic endet in einem demonstrierbaren, testbaren
-Zustand. Ein Epic gilt erst als fertig, wenn `TEST` unabhängig abgenommen hat.
+Jedes Epic endet in einem demonstrierbaren, testbaren Zustand. Ein Epic gilt erst als fertig, wenn
+`TEST` unabhängig abgenommen hat.
 
-| Epic | Titel                         | Abhängig von | Risiko                  |
-| ---- | ----------------------------- | ------------ | ----------------------- |
-| E1   | Test- und CI-Fundament        | —            | niedrig                 |
-| E2   | Ledger und Hash-Chain         | E1           | hoch                    |
-| E3   | Spool und Acceptance-Contract | E2           | **sehr hoch**           |
-| E4   | `smtp-ingress`-Service        | E3           | **sehr hoch**           |
-| E5   | Journal-Report-Parser         | E4           | mittel                  |
-| E6   | Phase-B-Worker                | E5           | mittel                  |
-| E7   | WORM-Storage                  | E6           | **hoch** (irreversibel) |
-| E8   | Anchoring                     | E2, E7       | mittel                  |
-| E9   | `verify`-CLI                  | E8           | mittel                  |
-| E10  | Completeness-Monitoring       | E6, E9       | niedrig                 |
-| E11  | Compliance-Features           | E9           | mittel                  |
-| E12  | Rollout und Dokumentation     | E10, E11     | niedrig                 |
+**Die Epic-Nummer sagt nichts über die Reihenfolge.** Task-IDs sind stabil, deshalb wird beim
+Einschieben eines Epics nicht umnummeriert — E13 steht als zweites in der Abarbeitung. Verbindlich
+sind die Spalten „Reihenfolge" und „Abhängig von", nicht die Nummer.
+
+| Reihenfolge | Epic | Titel                         | Abhängig von | Risiko                  |
+| ----------- | ---- | ----------------------------- | ------------ | ----------------------- |
+| 1           | E1   | Test- und CI-Fundament        | —            | niedrig                 |
+| 2           | E13  | IAM-Autorisierung härten      | E1           | mittel                  |
+| 3           | E2   | Ledger und Hash-Chain         | E13          | hoch                    |
+| 4           | E3   | Spool und Acceptance-Contract | E2           | **sehr hoch**           |
+| 5           | E4   | `smtp-ingress`-Service        | E3           | **sehr hoch**           |
+| 6           | E5   | Journal-Report-Parser         | E4           | mittel                  |
+| 7           | E6   | Phase-B-Worker                | E5           | mittel                  |
+| 8           | E7   | WORM-Storage                  | E6           | **hoch** (irreversibel) |
+| 9           | E8   | Anchoring                     | E2, E7       | mittel                  |
+| 10          | E9   | `verify`-CLI                  | E8           | mittel                  |
+| 11          | E10  | Completeness-Monitoring       | E6, E9       | niedrig                 |
+| 12          | E11  | Compliance-Features           | E9, **E13**  | mittel                  |
+| 13          | E12  | Rollout und Dokumentation     | E10, E11     | niedrig                 |
 
 Parallelisierbar: E1 ist unabhängig · E8 kann parallel zu E5/E6 laufen (hängt nur an E2 und E7) ·
 E11 weitgehend parallel zu E10.
+
+**E13 wurde nachträglich eingeschoben** (2026-07-28), weil `JR-103`/`JR-104` vier Befunde mit
+Autorisierungswirkung im Bestandscode aufgedeckt haben — darunter **F7**, ein fail-open in
+`FilterBuilder`, das die released Version 0.5.2 betrifft und von einer eingeschränkten Rolle aus
+erreichbar ist. **E11 kann nicht abgenommen werden, solange F7 offen ist:** die dort geplante
+Auditor-Rolle baut genau auf diesem Mechanismus auf, und ein „read-only"-Auditor, der unbeschränkt
+liest, ist keine Auditor-Rolle. Details in `09-befunde-bestandscode.md`.
 
 ---
 
@@ -294,6 +306,43 @@ nicht als Skriptübung.
 | JR-1207 | Pull-Ingestion umdokumentieren: geeignet für Backfill und Reconciliation, nicht als primärer Pfad für Compliance-Installationen                                                                                                                                          | DEV   | §14     | Betroffene Doku-Seiten angepasst                                                                                     |
 | JR-1208 | Ende-zu-Ende gegen einen echten Exchange-Online-Tenant: Journal-Rule für intern und extern; DL-Expansions-Mitglieder und Bcc-Empfänger erscheinen in den Metadaten; Receiver offline ⇒ Ausweichpostfach fängt auf; Reconciliation holt nach. Klassifizierung **manuell** | TEST  | §12.8   | Vollständig durchgeführt und protokolliert; ohne echten Tenant nicht abnehmbar — kein Ersatz durch Mocks             |
 | JR-1209 | Abnahme E12 und Projektabnahme                                                                                                                                                                                                                                           | PO    | §13     | Alle Epics abgenommen; `06-status.md` vollständig; keine unzulässige Compliance-Behauptung im Repository             |
+
+---
+
+## E13 — IAM-Autorisierung härten
+
+> **Position in der Reihenfolge: direkt nach E1, vor E2.** Die Nummer 13 ist nur eine ID, keine
+> Reihenfolgeangabe — siehe die Epic-Tabelle oben. Nachträglich eingeschoben am 2026-07-28.
+
+**Ziel:** Die Autorisierungsschicht ist fail-closed. Solange sie es nicht ist, ist die Auditor-Rolle
+aus E11 nicht baubar und jede Zugriffsaussage über das Archiv unbelegt.
+
+**Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch.
+
+**Umfang: vier Befunde mit Autorisierungswirkung.** F7, F3, F8, F1 aus
+`09-befunde-bestandscode.md`, plus die Auflösung des Action-Versatzes. **Nicht** in E13: F2, F4, F5,
+F6, F9, F10 — sie bleiben dort mit Status offen dokumentiert.
+
+| ID      | Task                                                                                                                                                                                                                                      | Rolle     | Befund   | Akzeptanzkriterien                                                                                                                                            |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JR-1301 | **Fehlschlagende Tests zuerst.** Die vorhandenen `it.fails`-Marker zu F1/F3/F7/F8 in echte Regressionstests umbauen, die den **gewünschten** Zustand fordern und deshalb jetzt rot sind                                                   | TEST      | F1,3,7,8 | Jeder Test ist **vor** dem Fix rot und **nach** dem Fix grün, beides protokolliert. Ein Test, der nie rot war, belegt nichts                                  |
+| JR-1303 | Action-Versatz auflösen: Route-Gate prüft `('search','archive')`, `FilterBuilder` wird mit `('read','archive')` aufgerufen. **Erst entscheiden, dann ändern** — beide Richtungen verändern Bestandsrollen unterschiedlich                 | PO → DEV  | F7       | **ADR-017** festgeschrieben, mit Begründung und Auswirkung auf Bestandsrollen; Code stimmt danach mit der ADR überein                                         |
+| JR-1302 | `FilterBuilder`: `null` von `rulesToQuery` als **deny** behandeln (`sql`1=0``, wie der bereits vorhandene „No access"-Zweig). Unbeschränkte Rückgabe nur noch bei nachweislich **unbedingtem `can`\*\*                                    | DEV       | F7       | `auditor-specific-mailbox.json` liefert **keine** Zeile für `dev@openarchiver.com`; Nutzer ohne Rolle bekommt `1=0`, nicht `undefined`. Gegen echtes Postgres |
+| JR-1304 | `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen statt verwerfen. Kein stilles Erweitern eines `$or`, kein Verlust einer `$not`-Negation. Aufrufer behandeln `undefined` als deny                                       | DEV       | F3       | Ein unbekannter Operator führt zu Verweigerung, nicht zu unbeschränktem Zugriff; der `$or`-Fall aus F3 erweitert die Disjunktion nicht mehr                   |
+| JR-1305 | `cannot`-Ausschluss korrekt bauen, wenn der Wert ein Operator-Objekt ist — heute wird `{ $in: […] }` zu `{ $ne: { $in: […] } }`, der Ausschluss findet nicht statt                                                                        | DEV       | F8       | `cannot … { $in: [...] }` schließt tatsächlich aus, in Drizzle **und** im Meili-Filter                                                                        |
+| JR-1306 | Condition-Keys gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen — ein unbekannter Key ist ohnehin ein Fehler und gehört fail-closed behandelt. Gilt auch für den `sql.raw`-Relationszweig                               | DEV       | F1       | Ein Key mit `"` wird **abgewiesen**, nicht escaped-durchgelassen; Relationszweig ebenso; `PolicyValidator` weist solche Policies beim Anlegen ab              |
+| JR-1307 | Verhaltensänderung dokumentieren: Nutzer ohne `read archive` sehen künftig **nichts** statt alles. Release-Hinweis **plus** Prüfanleitung für Bestandsinstallationen. Als **ADR-016** festhalten, dass fail-closed den Bruch rechtfertigt | DEV       | —        | Ein Betreiber kann **vor** dem Update feststellen, welche seiner Rollen betroffen sind. Ohne das ist ein sicherheitsrichtiger Fix in der Praxis ein Ausfall   |
+| JR-1308 | Upstream-Meldung vorbereiten: Beschreibung, Reproduktion, Fix-Vorschlag, betroffene Versionen. **Nicht selbst versenden** — Kanal und Zeitpunkt entscheidet der Auftraggeber                                                              | PO        | F7       | Entwurf liegt vor und ist **nicht** versendet                                                                                                                 |
+| JR-1309 | Abnahme E13                                                                                                                                                                                                                               | TEST → PO | —        | Negative Assertions je Rolle; Nachweis, dass F2/F4/F5/F6/F9/F10 unverändert offen dokumentiert sind und nicht stillschweigend mitverändert wurden             |
+
+**Reihenfolge innerhalb E13:** `JR-1301` zuerst, dann `JR-1303` (Entscheidung), dann die Fixes
+`JR-1302`/`JR-1304`/`JR-1305`/`JR-1306`, dann `JR-1307`/`JR-1308`, dann `JR-1309`.
+
+**Wiederverwendung:** der Harness aus E1 —
+`packages/backend/tests/support/{pg-harness,iam-seed,policy-fixtures,render-sql}.ts` und die Helfer
+unter `tests/support/` (`@oa-test/*`). Die acht Fixtures in `src/iam-policy/test-policies/`,
+besonders `auditor-specific-mailbox.json` (belegt F7b) und `read-only-all.json` als Gegenprobe. Der
+vorhandene „No access"-Zweig in `FilterBuilder.create()` ist die Vorlage für den Deny-Fall.
 
 ---
 
