@@ -91,6 +91,16 @@ const DB_NAME_PREFIX = 'oa_test_';
 const DB_NAME_PATTERN = /^oa_test_(\d{13})_(\d+)_/;
 const MAX_IDENTIFIER_BYTES = 63;
 
+/**
+ * The pid field the sweeper's own fixtures carry (F12/JR-104a).
+ *
+ * It must not be this process's pid: guard 1 of the sweeper skips databases created by the running
+ * process, so a fixture named with our own pid could never be observed being swept, and the test
+ * would assert nothing. It is not otherwise special -- uniqueness of the fixture name comes from
+ * `buildForeignFixtureName()`, not from this number.
+ */
+export const FOREIGN_FIXTURE_PID = 999999;
+
 function maintenanceDatabase(): string {
 	return process.env.OA_TEST_PG_MAINTENANCE_DB?.trim() || 'postgres';
 }
@@ -145,6 +155,54 @@ function buildDatabaseName(label: string): string {
 	const name = `${DB_NAME_PREFIX}${epoch}_${process.pid}_${random}_${sanitiseLabel(label)}`;
 	if (Buffer.byteLength(name, 'utf8') > MAX_IDENTIFIER_BYTES) {
 		return name.slice(0, MAX_IDENTIFIER_BYTES);
+	}
+	return name;
+}
+
+/**
+ * Build a database name that looks like residue left behind by a **different**, already-dead run.
+ * Used only by the sweeper's own tests, which need a database the sweeper is willing to consider.
+ *
+ * Two properties pull in opposite directions and both have to hold (F12, JR-104a):
+ *
+ *   - the pid field must **not** be this process's pid, or guard 1 skips the fixture and the test
+ *     could never observe a sweep at all;
+ *   - the name as a whole must still be unique **per process**, or two integration runs against the
+ *     same server collide on `pg_database_datname_index` -- which is exactly what F12 was.
+ *
+ * So the pid field carries the fixed foreign marker and the uniqueness lives in the tag: this
+ * process's real pid plus random bytes, placed in the part of the name the sweeper does not
+ * interpret.
+ *
+ * `createdAtMs` is the age the fixture should pretend to have. Callers must keep it **well inside**
+ * the default `OA_TEST_PG_STALE_MS` window (2 h): a fixture that looks older than the default
+ * threshold is indistinguishable from real residue, and a concurrently running foreign process's
+ * `acquireTestDatabase()` sweep would legitimately drop it out from under the test.
+ */
+export function buildForeignFixtureName(label: string, createdAtMs: number): string {
+	if (FOREIGN_FIXTURE_PID === process.pid) {
+		// Astronomically unlikely, but a silent skip here would turn the sweeper test into a
+		// tautology, so it fails loudly instead.
+		throw new Error(
+			`This process's pid is ${process.pid}, which equals FOREIGN_FIXTURE_PID. The sweeper ` +
+				`fixture would be protected by the own-pid guard and the test would assert nothing.`
+		);
+	}
+	const epoch = String(createdAtMs).padStart(13, '0').slice(0, 13);
+	if (epoch.length !== 13) {
+		throw new Error(`createdAtMs=${createdAtMs} does not render as a 13-digit epoch.`);
+	}
+	const tag = `${process.pid}${randomBytes(4).toString('hex')}`;
+	const name = `${DB_NAME_PREFIX}${epoch}_${FOREIGN_FIXTURE_PID}_${tag}_${sanitiseLabel(label)}`;
+	if (Buffer.byteLength(name, 'utf8') > MAX_IDENTIFIER_BYTES) {
+		// Never truncate: truncation is what would reintroduce collisions between processes.
+		throw new Error(
+			`Fixture name "${name}" is ${Buffer.byteLength(name, 'utf8')} bytes, over the ` +
+				`${MAX_IDENTIFIER_BYTES}-byte identifier limit. Use a shorter label.`
+		);
+	}
+	if (!DB_NAME_PATTERN.test(name)) {
+		throw new Error(`Fixture name "${name}" is not one the sweeper would parse.`);
 	}
 	return name;
 }
@@ -231,22 +289,61 @@ async function dropDatabase(sql: Sql, name: string): Promise<void> {
  * Guard 3 is the only protection against a *different* process's live run, because postgres-js
  * closes idle connections after a few seconds and guard 2 then sees zero backends. Setting
  * `OA_TEST_PG_STALE_MS` below the longest possible suite runtime therefore *can* drop a concurrent
- * run's database -- observed while verifying this module with the threshold at 1000 ms. Leave the
- * default alone unless you know no other run is active.
+ * run's database -- observed while verifying this module with the threshold at 1000 ms, and observed
+ * again as the second half of F12. Leave the default alone unless you know no other run is active;
+ * tests that need a lower threshold must pass `staleMs` **together with** `restrictTo`, which bounds
+ * the damage to names the caller itself created.
  *
  * Anything dropped is announced: residue disappearing silently would hide the fact that an earlier
  * run died.
  */
-export async function sweepStaleHarnessDatabases(): Promise<string[]> {
-	const threshold = staleThresholdMs();
+export interface SweepOptions {
+	/**
+	 * Threshold for this call only, in milliseconds. Explicit argument rather than a temporary
+	 * `process.env.OA_TEST_PG_STALE_MS` mutation: the env var is process-global, so a test lowering
+	 * it also lowered it for every other sweep running concurrently in the same process (JR-104a).
+	 */
+	readonly staleMs?: number;
+	/**
+	 * Consider **only** these exact database names. Anything else on the server is not "skipped by a
+	 * guard" -- it is filtered out in the SQL and never looked at.
+	 *
+	 * This is what makes a low `staleMs` safe: with `restrictTo` the call cannot reach a foreign,
+	 * concurrently running process's databases even in principle, which is the second half of F12.
+	 */
+	readonly restrictTo?: readonly string[];
+}
+
+export async function sweepStaleHarnessDatabases(options: SweepOptions = {}): Promise<string[]> {
+	const threshold = options.staleMs ?? staleThresholdMs();
+	if (!Number.isFinite(threshold) || threshold <= 0) {
+		throw new Error(`sweepStaleHarnessDatabases: staleMs must be positive, got ${threshold}.`);
+	}
+	if (options.staleMs !== undefined && options.restrictTo === undefined) {
+		// Refuse the one combination that can eat a foreign live run. Structural, not advisory.
+		throw new Error(
+			'sweepStaleHarnessDatabases: staleMs must be combined with restrictTo. An unrestricted ' +
+				'sweep at a lowered threshold can drop the live databases of a concurrently running ' +
+				'process (F12).'
+		);
+	}
+	const restrictTo = options.restrictTo ? [...options.restrictTo] : undefined;
 	const now = Date.now();
 	return withAdminConnection(async (sql) => {
-		const rows = await sql<{ datname: string; backends: number }[]>`
-			select d.datname, coalesce(s.numbackends, 0) as backends
-			from pg_database d
-			left join pg_stat_database s on s.datname = d.datname
-			where d.datname like ${DB_NAME_PREFIX + '%'}
-		`;
+		const rows = restrictTo
+			? await sql<{ datname: string; backends: number }[]>`
+					select d.datname, coalesce(s.numbackends, 0) as backends
+					from pg_database d
+					left join pg_stat_database s on s.datname = d.datname
+					where d.datname like ${DB_NAME_PREFIX + '%'}
+					  and d.datname = any(${restrictTo})
+				`
+			: await sql<{ datname: string; backends: number }[]>`
+					select d.datname, coalesce(s.numbackends, 0) as backends
+					from pg_database d
+					left join pg_stat_database s on s.datname = d.datname
+					where d.datname like ${DB_NAME_PREFIX + '%'}
+				`;
 		const dropped: string[] = [];
 		const skippedBusy: string[] = [];
 		for (const { datname, backends } of rows) {

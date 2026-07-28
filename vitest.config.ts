@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import { suiteInclude } from './tests/support/suite-inventory';
 
 /**
  * Root vitest configuration for the Open Archiver monorepo (JR-101).
@@ -14,6 +15,13 @@ import { fileURLToPath } from 'node:url';
  * unset, so anything that transitively imports `../database` cannot even be loaded without a
  * configured database. The `unit` suite must therefore stay free of that import chain.
  * See docs/dev/journaling/04-testplan.md section 2.
+ *
+ * The include globs are **not** literals here: they come from `tests/support/suite-inventory.ts`,
+ * which also enforces them in `globalSetup` (JR-105b). A suite that matches too few files, and a
+ * test-looking file that no glob reaches, both fail the run before the first test executes. Two
+ * silent failure modes found during the JR-106 acceptance -- an absent `integration` directory and a
+ * `*.test.ts` file under `tests/integration/` -- are closed by that check rather than by inspecting
+ * the log afterwards.
  */
 
 const supportDir = fileURLToPath(new URL('./tests/support', import.meta.url));
@@ -26,13 +34,16 @@ const resolve = {
 
 export default defineConfig({
 	test: {
+		// Positive, unconditional expectations about which test files exist and which project
+		// collects them. See tests/support/suite-inventory.ts.
+		globalSetup: ['./tests/support/global-setup.ts'],
 		projects: [
 			{
 				resolve,
 				test: {
 					name: 'unit',
 					// Units live next to the code they test.
-					include: ['packages/*/src/**/*.test.ts', 'packages/*/tests/unit/**/*.test.ts'],
+					include: suiteInclude('unit'),
 					environment: 'node',
 					// A unit test that needs a network socket or a database is not a unit test.
 					testTimeout: 5_000,
@@ -42,7 +53,7 @@ export default defineConfig({
 				resolve,
 				test: {
 					name: 'integration',
-					include: ['packages/*/tests/integration/**/*.int.test.ts'],
+					include: suiteInclude('integration'),
 					environment: 'node',
 					// Creating a database and applying 41 migrations happens in a hook; on a cold
 					// Postgres that is comfortably slower than the 10s default.
@@ -64,7 +75,7 @@ export default defineConfig({
 				resolve,
 				test: {
 					name: 'adversarial',
-					include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
+					include: suiteInclude('adversarial'),
 					environment: 'node',
 					testTimeout: 120_000,
 					hookTimeout: 120_000,

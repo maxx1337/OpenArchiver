@@ -45,6 +45,23 @@ Happy-Path-Tests."_
 | Harness, paketübergreifend | `tests/support/` in der Repo-Wurzel, Alias `@oa-test/*` | `<thema>.ts`          | `tests/support/classification.ts`                                      |
 | Harness, paketspezifisch   | `tests/support/` im jeweiligen Paket                    | `<thema>.ts`          | `packages/backend/tests/support/render-sql.ts`                         |
 
+**Diese Namensschemata sind ab `JR-105b` erzwungen, nicht empfohlen.** Die Include-Globs der drei
+Projects stehen in `tests/support/suite-inventory.ts`; `vitest.config.ts` importiert sie von dort, es
+gibt sie also nur einmal. Derselbe Modul prüft in `globalSetup` — vor dem ersten Test, in **jedem**
+Lauf und in jeder Umgebung — zwei positive Erwartungen:
+
+1. **Jede Suite trifft mindestens `minimumFiles` Dateien.** Null Dateien ist ein Fehlschlag. Eine
+   umbenannte oder gelöschte Suite macht damit rot, statt als „grün, weil nichts zu tun" zu gelten.
+2. **Keine testartig benannte Datei ohne Project.** Alles, was `*.test.ts` / `*.spec.ts` (und die
+   `.js`/`.mjs`/`.tsx`-Varianten) heißt und von keinem Include-Glob getroffen wird, bricht den Lauf
+   mit Pfadangabe ab. Eine Datei `foo.test.ts` unter `tests/integration/` läuft also nicht bloß nicht
+   — sie fällt auf.
+
+Die Zahlen werden auf **jedem** Lauf gemeldet, auch auf einem grünen:
+`[TEST-INVENTORY] unit: 5 file(s) (min 5) · integration: 4 file(s) (min 4) · adversarial: 1 file(s) (min 1) · unclassified: 0`.
+Wer eine Suite absichtlich verkleinert, senkt `minimumFiles` im selben Commit — sichtbar im Diff,
+statt unbemerkt.
+
 Zwei Abweichungen vom ersten Entwurf, beide bewusst:
 
 - **`tests/support/`** war nicht vorgesehen. Ohne einen gemeinsamen Ort für Klassifizierung, Seeds,
@@ -111,6 +128,15 @@ Ein Tippfehler in `OA_TEST_CLASSES` bricht den Lauf ab, statt stillschweigend ni
 `suiteRequiring(klasse, name, probe, fn)` ergänzt das um Infrastruktur: ist die Probe negativ, wird
 mit dem Grund der Probe übersprungen — „`DATABASE_URL` is not set" liest sich anders als „skipped".
 
+**`OA_TEST_REQUIRE_INFRA=1` dreht das um** (`JR-105b`). In einer Umgebung, die die Infrastruktur
+selbst bereitstellt — die CI mit ihrem Postgres-Service-Container — ist ein Skip wegen fehlender
+Infrastruktur kein legitimer Skip, sondern ein defekter Job, der grün meldet. Mit gesetzter Variable
+erzeugt `suiteRequiring` in diesem Fall einen **fehlschlagenden** Test mit dem Grund der Probe. Die
+Klassenauswahl bleibt unberührt: `nightly` und `manual` dürfen in einem `ci`-Lauf weiter überspringen.
+Ein Wert außerhalb von `1`/`true`/`0`/`false` bricht ab — beim Import geprüft, nicht erst dann, wenn
+zufällig eine Probe negativ ausfällt. Der CI-Job setzt die Variable; sie ersetzt die frühere
+Log-Suche nach dem **Fehlen** eines Skip-Hinweises, die eine _abwesende_ Suite nicht erkannte.
+
 ### 2.4 Seeds
 
 `resolveSeed(name)` und `seededRng(seed)` aus `@oa-test/seed`. Der Seed kommt aus `OA_TEST_SEED`
@@ -154,6 +180,8 @@ ausgeschlossen (CLAUDE.md 5.2). In einer frischen Datenbank ist `"public"` dageg
 | `DATABASE_URL`              | —          | Server **und** Zugangsdaten. Ohne sie überspringt die Suite sichtbar      |
 | `OA_TEST_PG_MAINTENANCE_DB` | `postgres` | Datenbank für `CREATE`/`DROP DATABASE`                                    |
 | `OA_TEST_PG_STALE_MS`       | `7200000`  | Ab welchem Alter ein `oa_test_*`-Rest als verwaist gilt und gelöscht wird |
+| `OA_TEST_REQUIRE_INFRA`     | `0`        | `1` ⇒ fehlende Infrastruktur **schlägt fehl**, statt sichtbar zu skippen  |
+| `OA_TEST_INVENTORY_REPORT`  | —          | Pfad, unter dem `globalSetup` die Suite-Inventur als JSON ablegt          |
 
 **Rechteanforderung (relevant für ADR-009).** Die Rolle in `DATABASE_URL` braucht `CREATEDB` sowie
 das Recht, in der neuen Datenbank DDL auszuführen. Das ist die **Bootstrap**-Rolle der Tests, nicht
@@ -177,7 +205,20 @@ gerade der Fall ist, den die Isolation aushalten muss.
 Rest darf nicht lautlos verschwinden, sonst verbirgt er, dass ein Lauf gestorben ist. `(c)` ist die
 einzige Absicherung gegen einen **fremden** laufenden Prozess: `OA_TEST_PG_STALE_MS` unter die
 längste Suite-Laufzeit zu setzen kann dessen Datenbank löschen (beim Verifizieren mit 1000 ms
-beobachtet). Default nicht absenken.
+beobachtet, und in **F12** noch einmal unfreiwillig). Default nicht absenken.
+
+**Seit `JR-104a` ist das strukturell abgesichert, nicht nur eine Bitte.** `sweepStaleHarnessDatabases()`
+nimmt `{ staleMs?, restrictTo? }`; `restrictTo` filtert im SQL, ein gesenkter `staleMs` **ohne**
+`restrictTo` wirft. Wer eine kurze Frist braucht, muss also benennen, welche Datenbanken er meint —
+fremde sind damit nicht „verschont", sondern unerreichbar. Fixture-Namen für die Sweeper-Tests kommen
+aus `buildForeignFixtureName()`: fremdes PID-Feld (sonst greift der Eigen-PID-Wächter und der Test
+prüft nichts), Eindeutigkeit über `process.pid` + Zufallsbytes im Tag.
+
+**Verbleibende Lücke — `F13`, für E2/E3 relevant.** Der unbeschränkte Sweep aus `acquireTestDatabase()`
+läuft weiter mit der Standardfrist. Ein fremder Lauf, der **länger als die Frist** dauert, ist für ihn
+nicht von echtem Rückstand zu unterscheiden. Regel bis zur Behebung: **jeder Lauf, der länger als 2 h
+dauern kann — jeder Soak in E2/E3 — hebt `OA_TEST_PG_STALE_MS` über seine erwartete Laufzeit.** Die CI
+ist unberührt, ein Job hat seinen eigenen Service-Container.
 
 ## 3. RFC §12 → konkrete Testfälle
 

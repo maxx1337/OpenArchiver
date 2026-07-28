@@ -14,14 +14,14 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde |
-| -------------------------- | -------------------------------------------------------------------------------------- | ------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10  |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11     |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12     |
+| Kategorie                  | Bedeutung                                                                              | Befunde  |
+| -------------------------- | -------------------------------------------------------------------------------------- | -------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10   |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11      |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12, F13 |
 
-Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11) und die Abnahme `JR-106` (F12), Rolle
-`tester`, 2026-07-27/28. Die Bestandscode-Befunde sind im Testcode markiert, teils mit `it.fails` —
+Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12) und die
+Nacharbeit `JR-104a` (F13), Rolle `tester`, 2026-07-27/28. Die Bestandscode-Befunde sind im Testcode markiert, teils mit `it.fails` —
 dort schlägt der Marker fehl, sobald jemand den Defekt behebt, und die Erwartung muss dann
 invertiert werden.
 
@@ -287,7 +287,8 @@ Fakt. Sie gilt erst als lauffähig, wenn sie ohne vorhandene Build-Artefakte dur
 **Kategorie:** Testharness — unsere eigene E1-Arbeit, **kein Bestandsproblem** ·
 **Schwere:** mittel (Harness-Defekt; kein Durability- oder Autorisierungsrisiko, CI unberührt) ·
 **Ort:** `packages/backend/tests/integration/pg-harness.int.test.ts`, Zeile 212 ·
-**Status:** **offen, nicht behoben** · **Herkunft:** `JR-106` (Abnahme E1), 2026-07-28
+**Status:** **behoben in `JR-104a`, 2026-07-28** (Nachweis unten) ·
+**Herkunft:** `JR-106` (Abnahme E1), 2026-07-28
 
 Der Test `sweeps a stale database from a dead run but leaves a fresh one alone` legt seine
 Fixture-Datenbanken unter **festen** Namen an:
@@ -321,13 +322,33 @@ Laufs hält es (4 Dateien parallel, 32 Tests grün, plus der eigene Testfall
 **widerlegt** — er nennt 30 Tests, die Datei hat 32; der Nachweis kann nur gegen einen früheren
 Zwischenstand gelaufen sein.
 
-**Zweiter, latenter Kollisionspfad — aus dem Code gelesen, nicht beobachtet.** Der Sweeper schützt
+**Zweiter Kollisionspfad — bei der Nacharbeit dann doch beobachtet.** Der Sweeper schützt
 eigene Datenbanken über `Number(match[2]) === process.pid` (`tests/support/pg-harness.ts:257`). Die
 Fixtures tragen die **Fremd**-PID `999999`. Der Folgetest `never sweeps a database this process
 created` setzt `OA_TEST_PG_STALE_MS = '1'` und ruft `sweepStaleHarnessDatabases()` — er darf damit
 die `fresh`-Fixture eines **gleichzeitig** laufenden fremden Prozesses löschen (fremde PID, keine
-offenen Verbindungen, Alter > 1 ms). Beobachtet wurde das nicht, weil der Duplicate-Key-Fehler
-vorher zuschlägt. Ein Fix, der nur den festen Namen ändert, lässt diesen Pfad offen.
+offenen Verbindungen, Alter > 1 ms). Ein Fix, der nur den festen Namen ändert, lässt diesen Pfad
+offen.
+
+Bei der Reproduktion für `JR-104a` ist der Pfad **eingetreten**, nicht nur hergeleitet. Runde 2 von
+drei Doppelläufen gegen den unveränderten Stand `d2441fb` machte **beide** Läufe rot, mit zwei
+verschiedenen Fehlern:
+
+```
+Lauf B:  PostgresError: duplicate key value violates unique constraint "pg_database_datname_index"
+         → sweeps a stale database from a dead run but leaves a fresh one alone
+
+Lauf A:  Error: Failed query: CREATE SCHEMA IF NOT EXISTS "drizzle"
+         Caused by: PostgresError: database "oa_test_1785229665275_8980_dc2823_own_not_swept"
+                    does not exist        detail: 'It seems to have just been dropped or renamed.'
+         → never sweeps a database this process created, whatever the threshold
+```
+
+Lauf A hat also seine **eigene, gerade angelegte** Datenbank verloren, weil Lauf B mit
+`OA_TEST_PG_STALE_MS = '1'` global gesweept hat. Das ist genau der beschriebene Pfad, und er ist
+schlimmer als der Duplicate-Key: die Fehlermeldung zeigt auf `CREATE SCHEMA`, also auf einen
+Migrationsschritt, und nicht auf die Ursache. Wer nur den Namen repariert hätte, hätte diesen Lauf
+später als Flake abgetan.
 
 **Kein Einfluss auf die CI.** Ein GitHub-Actions-Job fährt einen Lauf gegen einen eigenen
 Service-Container; zwei gleichzeitige Jobs haben je eigenes Postgres. Die grünen Läufe sind echt.
@@ -341,6 +362,101 @@ Alterskennzeichen behalten. Für den zweiten Pfad zusätzlich das Fixture-Paar �
 Label kenntlich machen und den Sweeper im Test auf dieses Label einschränken, statt ihn global mit
 `STALE_MS=1` laufen zu lassen. Danach die prozessübergreifende Parallelität erneut belegen, und
 zwar mehrfach — ein einzelner grüner Doppellauf ist bei einem Zeitfensterdefekt kein Nachweis.
+**Behoben in `JR-104a` (2026-07-28).** Beide Teile, wie in der Abnahme gefordert:
+
+1. **Namen prozessspezifisch.** Neu `buildForeignFixtureName(label, createdAtMs)` in
+   `tests/support/pg-harness.ts`. Das PID-Feld des Namens trägt weiter die Fremd-PID
+   (`FOREIGN_FIXTURE_PID = 999999`) — es **muss** fremd sein, sonst greift Wächter 1 und der Test
+   könnte einen Sweep nie beobachten. Die Eindeutigkeit liegt deshalb im Tag: `process.pid` plus vier
+   Zufallsbytes, in dem Namensteil, den der Sweeper nicht interpretiert. Über 63 Byte wird
+   **geworfen**, nicht abgeschnitten — Abschneiden würde die Kollision wieder einführen.
+2. **Sweeper-Aufruf eingeschränkt.** `sweepStaleHarnessDatabases()` nimmt jetzt
+   `{ staleMs?, restrictTo? }`. `restrictTo` filtert **im SQL** (`and d.datname = any($1)`), fremde
+   Datenbanken werden also nicht „von einem Wächter verschont", sondern nie gelesen. Und die eine
+   gefährliche Kombination ist konstruktiv ausgeschlossen: ein gesenkter `staleMs` **ohne**
+   `restrictTo` wirft, statt zu sweepen. Ein eigener Testfall belegt das
+   (`refuses a lowered threshold without a restriction`).
+3. **Drittes, in der Abnahme nicht genanntes Teilproblem** — der 2021er Zeitstempel der
+   `stale`-Fixture. Er liegt jenseits der Standardfrist von 2 h, also hätte der **legitime**,
+   unbeschränkte Sweep aus `acquireTestDatabase()` eines fremden Laufs sie weiterhin löschen dürfen,
+   auch bei eindeutigem Namen. Die Fixture ist jetzt 60 s alt und der Testsweep benutzt eine Frist von
+   10 s — beides weit unter der Standardfrist, damit ein fremder Lauf sie nicht anfassen kann. Das
+   `process.env.OA_TEST_PG_STALE_MS`-Setzen im Test ist damit ersatzlos weg; es war prozessglobal und
+   hat jeden gleichzeitigen Sweep im selben Prozess mitgesenkt.
+
+Neuer Testfall `cannot touch a database outside restrictTo, however sweepable it looks`: eine
+Bystander-Fixture erfüllt **alle drei** Wächter (fremde PID, keine Verbindungen, über der Frist) und
+muss trotzdem überleben, weil sie nicht in der Liste steht. Damit ist der Schutz selbst geprüft und
+nicht nur benutzt.
+
+**Nachweis (2026-07-28, PostgreSQL 16.13 lokal, Code-Stand des `JR-104a`-Commits).** Ein einzelner
+grüner Doppellauf ist bei einem Zeitfensterdefekt kein Nachweis, deshalb wiederholt:
+
+```bash
+for i in 1 2 3 4 5; do
+    ( vitest run --project integration ) & ( vitest run --project integration ) & wait
+done
+```
+
+| Runde                       | Lauf A            | Lauf B            | `oa_test_*` danach |
+| --------------------------- | ----------------- | ----------------- | ------------------ |
+| 1                           | `exit=0`, 34 grün | `exit=0`, 34 grün | 0 Zeilen           |
+| 2                           | `exit=0`, 34 grün | `exit=0`, 34 grün | 0 Zeilen           |
+| 3                           | `exit=0`, 34 grün | `exit=0`, 34 grün | 0 Zeilen           |
+| 4                           | `exit=0`, 34 grün | `exit=0`, 34 grün | 0 Zeilen           |
+| 5                           | `exit=0`, 34 grün | `exit=0`, 34 grün | 0 Zeilen           |
+| 6 (`pnpm test` vollständig) | `exit=0`, 197/2   | `exit=0`, 197/2   | 0 Zeilen           |
+| 7 (`pnpm test` vollständig) | `exit=0`, 197/2   | `exit=0`, 197/2   | 0 Zeilen           |
+
+Zusätzlich, gegen einen Zwischenstand desselben Fixes: **drei** gleichzeitige Läufe × 3 Runden und
+zwei um 1,5 s versetzte Läufe × 3 Runden, alle 15 Prozesse `exit=0`, keine Rückstände. Am Ende
+enthielt der Cluster nur `postgres`, `template0`, `template1`. Zum Vergleich der Ausgangsstand
+`d2441fb`: 3 von 3 Runden rot (Runde 2 beidseitig).
+
+**Nicht behoben, weil nicht Teil von F12:** der unbeschränkte Sweep mit der Standardfrist kann
+weiterhin die Datenbanken eines fremden Laufs löschen, der **länger als 2 h** läuft. Für die heutige
+Suite (5 s) unerreichbar, für die geplanten Soaks in E2/E3 nicht — siehe **F13**.
+
+---
+
+## F13 — Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft
+
+**Kategorie:** Testharness — unsere eigene E1-Arbeit ·
+**Schwere:** niedrig heute, **mittel ab E2/E3** (latent; wird erst durch lange Läufe erreichbar) ·
+**Ort:** `packages/backend/tests/support/pg-harness.ts`, `sweepStaleHarnessDatabases()` und
+`acquireTestDatabase()` · **Status:** **offen** — Regel dokumentiert, konstruktiv nicht ausgeschlossen ·
+**Herkunft:** `JR-104a`, 2026-07-28
+
+`acquireTestDatabase()` ruft bei **jedem** Aufruf `sweepStaleHarnessDatabases()` ohne `restrictTo`
+und mit der Standardfrist von 2 h (`OA_TEST_PG_STALE_MS`). Die einzige Absicherung gegen einen
+**fremden** laufenden Prozess ist damit das Alter im Namen: dessen Datenbanken sind jünger als die
+Frist. Läuft ein fremder Prozess **länger als die Frist**, sind seine noch benutzten Datenbanken für
+diesen Sweep nicht mehr von echtem Rückstand zu unterscheiden — offene Verbindungen schützen sie
+nicht, weil `postgres-js` nach `idle_timeout` schließt und Wächter 2 dann null Backends sieht.
+
+Das ist keine Neuentdeckung des Mechanismus — er steht seit `JR-104` im Kopfkommentar des Moduls und
+in `04-testplan.md` §2.6. Neu ist die Einordnung: mit `JR-104a` sind alle anderen
+prozessübergreifenden Pfade geschlossen, dieser ist der letzte, und die in E2/E3 geplanten Soaks
+(`JR-208` 20 × 500 Appends, die 100k-Nachrichten-Nachtläufe) sind der erste Anlass, bei dem ein Lauf
+die 2 h überhaupt erreichen kann. Eine bekannte Schwäche im Messinstrument nur in einem Docstring zu
+führen, widerspricht Grundregel 6 des Testplans — deshalb steht sie jetzt hier mit einer Nummer.
+
+**Warum nicht in `JR-104a` mitbehoben:** die Behebung ist keine Testkorrektur, sondern eine
+Verhaltensänderung des Sweepers, und sie hat mindestens drei plausible Formen, zwischen denen der PO
+entscheiden sollte:
+
+1. **Lauf-Registry** — jeder Lauf schreibt eine Zeile in eine gemeinsame Tabelle in der
+   Maintenance-DB und aktualisiert einen Heartbeat; gesweept wird nur, wessen Heartbeat alt ist.
+   Löst es vollständig, führt aber gemeinsamen Zustand in den Harness ein.
+2. **Lebenszeichen per PID** — `process.kill(pid, 0)` auf die im Namen kodierte PID; lebt der
+   Besitzer, nicht anfassen. Billig, aber nur gültig, wenn alle Läufe auf demselben Host laufen — in
+   CI-Matrizen mit gemeinsamem Service-Container gilt das nicht.
+3. **Sweepen nur beim ersten `acquire` eines Laufs** plus eine Frist, die aus der erwarteten
+   Suite-Laufzeit hergeleitet wird. Reduziert das Fenster, schließt es nicht.
+
+**Zwischenregel bis dahin (in `04-testplan.md` festgehalten):** wer einen Lauf startet, der länger als
+`OA_TEST_PG_STALE_MS` dauern kann — jeder Soak in E2/E3 — muss die Variable über die erwartete
+Laufzeit heben. Die CI ist unberührt: ein Job hat seinen eigenen Service-Container.
 
 ---
 

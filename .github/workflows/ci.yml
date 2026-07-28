@@ -22,8 +22,9 @@ jobs:
 
         # `packages/backend/src/database/index.ts` builds its `db` singleton **at import time** and
         # throws without `DATABASE_URL`. The `integration` suite therefore needs a real Postgres;
-        # without one it skips *visibly* (which is green, and exactly the false comfort we do not
-        # want in CI). Mirrors docker-compose.yml.
+        # without one it would skip *visibly*, which is still green and exactly the false comfort we
+        # do not want in CI -- hence `OA_TEST_REQUIRE_INFRA` below, which turns that skip into a
+        # failure. Mirrors docker-compose.yml.
         services:
             postgres:
                 image: postgres:17-alpine
@@ -49,6 +50,11 @@ jobs:
             # integration suite never touches `config/storage.ts`.
             DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
             PGPASSWORD: postgres
+            # JR-105b. This job *provisions* Postgres, so a suite skipping because Postgres is
+            # unreachable is a broken job, not a legitimate skip. With this set, `suiteRequiring()`
+            # emits a failing test instead of a visible skip. Positive expectation, in the suite --
+            # it replaces the log grep that used to look for the absence of a skip notice.
+            OA_TEST_REQUIRE_INFRA: '1'
 
         steps:
             - name: Checkout repository
@@ -95,35 +101,40 @@ jobs:
             - name: Test
               id: test
               shell: bash
+              env:
+                  # vitest's globalSetup writes the suite inventory here (JR-105b). Under RUNNER_TEMP
+                  # like the log: this workflow writes nothing into the checkout.
+                  OA_TEST_INVENTORY_REPORT: ${{ runner.temp }}/suite-inventory.json
               run: |
                   set -o pipefail
                   # The log goes to RUNNER_TEMP, not the workspace: this workflow writes nothing
                   # into the checkout.
                   pnpm test 2>&1 | tee "$RUNNER_TEMP/test-output.log"
 
-            # A skipped suite is green. The harness skips `integration` with a coverage notice on
-            # stderr when Postgres is unreachable, so a broken service container would otherwise
-            # look like a passing run. Turn that specific notice into a failure.
-            - name: Assert the integration suite actually ran
+            # A suite that does not exist is green, and so is a `*.test.ts` file under
+            # `tests/integration/` that matches no project glob -- both were found during the JR-106
+            # acceptance, and both were invisible to the log grep this step used to be.
+            #
+            # The replacement is a positive expectation: the run has to have produced an inventory
+            # report in which every suite matched at least its declared minimum number of files and
+            # no test-looking file was left uncollected. A missing report fails the step, so removing
+            # the `globalSetup` entry from `vitest.config.ts` cannot silently disable the guard
+            # either. The minimums live in `tests/support/suite-inventory.ts` only.
+            #
+            # The "suite was skipped" case is covered separately and earlier, by
+            # `OA_TEST_REQUIRE_INFRA` in this job's `env`: an unreachable Postgres now fails the test
+            # step itself.
+            - name: Assert the expected suites actually existed and ran
               if: always() && steps.test.conclusion != 'skipped'
               shell: bash
-              run: |
-                  log="$RUNNER_TEMP/test-output.log"
-                  if [ ! -f "$log" ]; then
-                      echo "::error::$log is missing -- the test step did not produce output."
-                      exit 1
-                  fi
-                  if grep -q 'SKIPPED SUITE .*integration suite' "$log"; then
-                      echo "::error::The integration suite was skipped instead of run. A skipped suite is not a passing suite."
-                      grep 'SKIPPED SUITE .*integration suite' "$log"
-                      exit 1
-                  fi
-                  echo "No integration-suite skip notice found."
+              run: node tests/support/assert-inventory-report.mjs "$RUNNER_TEMP/suite-inventory.json"
 
             # `release()` drops the per-run database, and `sweepStaleHarnessDatabases()` cleans up
             # after a killed worker. A leftover here is a harness defect and must fail the job
             # rather than accumulate silently. `OA_TEST_PG_STALE_MS` is deliberately left at its
-            # default -- lowering it lets the sweeper delete a *foreign* running job's database.
+            # default -- lowering it lets the sweeper delete a *foreign* running job's database
+            # (F12). Since JR-104a the harness refuses a lowered threshold that is not paired with an
+            # explicit list of names, so this is enforced there too, not only by this comment.
             - name: Assert no leftover test databases
               if: always() && steps.test.conclusion != 'skipped'
               shell: bash

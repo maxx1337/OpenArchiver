@@ -4,6 +4,7 @@ import { probePostgres } from '@oa-test/infra';
 import { coverageNotice } from '@oa-test/notice';
 import {
 	acquireTestDatabase,
+	buildForeignFixtureName,
 	databaseExists,
 	expectedMigrationCount,
 	listHarnessDatabases,
@@ -34,6 +35,11 @@ import {
  * test files in parallel with `isolate: true`, and `filter-builder.int.test.ts` /
  * `mongo-to-meli.int.test.ts` each acquire their own harness at the same time as this file. A
  * collision between them would fail the run.
+ *
+ * Cross-*process* parallelism -- two whole runs against the same server -- is what F12 broke and
+ * JR-104a repaired. Nothing in this file may use a name, or a sweep scope, that a second concurrent
+ * run of this very file could also produce or reach. Every fixture name goes through
+ * `buildForeignFixtureName()` and every lowered-threshold sweep passes `restrictTo`.
  *
  * Classification: `ci`. Without Postgres the whole suite reports as skipped with the probe's
  * reason -- never as passed.
@@ -206,18 +212,39 @@ suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', pos
 		expect(await databaseExists(doomedDatabaseName)).toBe(false);
 	});
 
+	/**
+	 * Fixture ages for the sweeper tests (JR-104a).
+	 *
+	 * `FIXTURE_STALE_AGE_MS` must stay far **below** the default threshold of 2 h: a fixture that
+	 * looks older than the default is indistinguishable from real residue, and a concurrently
+	 * running foreign process's `acquireTestDatabase()` sweep -- which legitimately runs
+	 * unrestricted at the default threshold -- would drop it before this test gets to it. The old
+	 * fixture was dated 2021 and had exactly that problem on top of its fixed name.
+	 *
+	 * The sweep threshold is then passed per call instead of through `process.env`.
+	 */
+	const FIXTURE_STALE_AGE_MS = 60_000;
+	const FIXTURE_SWEEP_THRESHOLD_MS = 10_000;
+
 	it('sweeps a stale database from a dead run but leaves a fresh one alone', async () => {
-		// Names crafted the way a hard-killed run would have left them: another pid, no open
-		// backends. One dated 2021 (stale), one dated now (a hypothetical concurrent run).
-		const stale = 'oa_test_1609459200000_999999_deadaa_sweeptest';
-		const fresh = `oa_test_${Date.now()}_999999_deadbb_sweeptest`;
+		// Names crafted the way a hard-killed run would have left them: a foreign pid, no open
+		// backends. One aged past the threshold used below, one created now (a stand-in for a
+		// concurrent run). Both names carry *this* process's pid in the tag, so two runs against the
+		// same server cannot collide on them -- that collision was F12.
+		const stale = buildForeignFixtureName('sweepstale', Date.now() - FIXTURE_STALE_AGE_MS);
+		const fresh = buildForeignFixtureName('sweepfresh', Date.now());
+		expect(stale).not.toBe(fresh);
+		expect(stale).toContain(`_${process.pid}`);
 		await withAdminConnection(async (sql) => {
 			await sql.unsafe(`create database "${stale}"`);
 			await sql.unsafe(`create database "${fresh}"`);
 		});
 
 		try {
-			const dropped = await sweepStaleHarnessDatabases();
+			const dropped = await sweepStaleHarnessDatabases({
+				staleMs: FIXTURE_SWEEP_THRESHOLD_MS,
+				restrictTo: [stale, fresh],
+			});
 			expect(dropped).toContain(stale);
 			expect(dropped).not.toContain(fresh);
 			expect(await databaseExists(stale)).toBe(false);
@@ -230,23 +257,61 @@ suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', pos
 		}
 	});
 
-	it('never sweeps a database this process created, whatever the threshold', async () => {
-		// The regression this pins: with OA_TEST_PG_STALE_MS set low, an earlier version of the
-		// sweeper dropped its own run's live databases mid-suite.
-		const own = await acquireTestDatabase('own-not-swept', { autoRelease: false });
-		const previous = process.env.OA_TEST_PG_STALE_MS;
-		process.env.OA_TEST_PG_STALE_MS = '1';
+	it('cannot touch a database outside restrictTo, however sweepable it looks', async () => {
+		// The guard JR-104a adds. `bystander` qualifies on *every* one of the sweeper's three guards
+		// -- foreign pid, no backends, older than the threshold -- and stands in for the fixture of
+		// another process running this same test at the same time. It must survive, because it is not
+		// in the list.
+		const target = buildForeignFixtureName('restrtarget', Date.now() - FIXTURE_STALE_AGE_MS);
+		const bystander = buildForeignFixtureName(
+			'restrbystand',
+			Date.now() - FIXTURE_STALE_AGE_MS
+		);
+		await withAdminConnection(async (sql) => {
+			await sql.unsafe(`create database "${target}"`);
+			await sql.unsafe(`create database "${bystander}"`);
+		});
+
 		try {
-			const dropped = await sweepStaleHarnessDatabases();
+			const dropped = await sweepStaleHarnessDatabases({
+				staleMs: FIXTURE_SWEEP_THRESHOLD_MS,
+				restrictTo: [target],
+			});
+			expect(dropped).toEqual([target]);
+			expect(await databaseExists(target)).toBe(false);
+			expect(await databaseExists(bystander)).toBe(true);
+		} finally {
+			await withAdminConnection(async (sql) => {
+				await sql.unsafe(`drop database if exists "${target}" with (force)`);
+				await sql.unsafe(`drop database if exists "${bystander}" with (force)`);
+			});
+		}
+	});
+
+	it('refuses a lowered threshold without a restriction', async () => {
+		// The combination that caused the second half of F12: threshold down, scope wide open. It is
+		// now impossible to express rather than merely discouraged.
+		await expect(sweepStaleHarnessDatabases({ staleMs: 1 })).rejects.toThrow(
+			/must be combined with restrictTo/
+		);
+	});
+
+	it('never sweeps a database this process created, whatever the threshold', async () => {
+		// The regression this pins: with the threshold set low, an earlier version of the sweeper
+		// dropped its own run's live databases mid-suite. `restrictTo` narrows the blast radius to
+		// this run's own names, so the own-pid guard is the only thing that can save them -- which is
+		// precisely what is under test.
+		const own = await acquireTestDatabase('own-not-swept', { autoRelease: false });
+		try {
+			const dropped = await sweepStaleHarnessDatabases({
+				staleMs: 1,
+				restrictTo: [own.databaseName, primary.databaseName],
+			});
 			expect(dropped).not.toContain(own.databaseName);
 			expect(dropped).not.toContain(primary.databaseName);
 			expect(await databaseExists(own.databaseName)).toBe(true);
+			expect(await databaseExists(primary.databaseName)).toBe(true);
 		} finally {
-			if (previous === undefined) {
-				delete process.env.OA_TEST_PG_STALE_MS;
-			} else {
-				process.env.OA_TEST_PG_STALE_MS = previous;
-			}
 			await own.release();
 		}
 	});

@@ -1,4 +1,4 @@
-import { describe } from 'vitest';
+import { describe, it } from 'vitest';
 import { coverageNotice } from './notice';
 
 /**
@@ -54,6 +54,48 @@ function selectionLabel(): string {
 	return process.env[ENV_VAR]?.trim() || 'ci (default)';
 }
 
+/* -------------------------------------------------------------------------------------------- */
+/* Environments where a skip is not acceptable (JR-105b)                                        */
+/* -------------------------------------------------------------------------------------------- */
+
+const REQUIRE_INFRA_VAR = 'OA_TEST_REQUIRE_INFRA';
+
+/**
+ * In an environment that *provisions* the infrastructure -- CI, with its Postgres service container
+ * -- a suite skipping because the infrastructure is unreachable is not a legitimate skip, it is a
+ * broken job reporting green. Setting `OA_TEST_REQUIRE_INFRA=1` turns that skip into a failing test.
+ *
+ * This replaces the CI step that grepped the log for the *absence* of a skip notice. That check was
+ * blind to a suite that was absent rather than skipped -- a missing suite prints no notice -- and a
+ * check keyed on a missing log line is the very construction that let the hole through. The
+ * expectation now lives in the suite: with the variable set, the only way to be green is for the
+ * requirement to have been satisfied.
+ *
+ * It deliberately does **not** affect class selection: `nightly` and `manual` suites skipping in a
+ * `ci` run is by design and stays a skip.
+ */
+export function isInfraRequired(): boolean {
+	const raw = process.env[REQUIRE_INFRA_VAR]?.trim().toLowerCase();
+	if (!raw) {
+		return false;
+	}
+	if (raw === '1' || raw === 'true') {
+		return true;
+	}
+	if (raw === '0' || raw === 'false') {
+		return false;
+	}
+	// A typo must not silently mean "skipping is fine again".
+	throw new Error(
+		`${REQUIRE_INFRA_VAR} must be one of 1, true, 0, false (or unset), got "${raw}".`
+	);
+}
+
+// Validated eagerly, the same way OA_TEST_CLASSES is. Otherwise a typo in the variable is only
+// noticed on the runs where a requirement happens to be unavailable -- i.e. it would look like a
+// working guard for as long as the infrastructure is up, and stop guarding the moment it matters.
+isInfraRequired();
+
 /**
  * Declare a classified suite.
  *
@@ -79,6 +121,9 @@ export function suite(cls: TestClass, name: string, fn: () => void): void {
  *
  * `requirement.available === false` skips the suite with the probe's own reason in the suite
  * name, so the output states *why* it was skipped rather than just that it was.
+ *
+ * With `OA_TEST_REQUIRE_INFRA=1` the unavailable case **fails** instead of skipping. See
+ * `isInfraRequired()`.
  */
 export function suiteRequiring(
 	cls: TestClass,
@@ -93,6 +138,20 @@ export function suiteRequiring(
 	}
 	if (requirement.available) {
 		describe(label, fn);
+		return;
+	}
+	if (isInfraRequired()) {
+		// One loud failing test rather than a skipped suite. `fn` is not registered: its tests cannot
+		// run, and pretending otherwise by declaring them would only produce a second error each.
+		describe(label, () => {
+			it(`requires infrastructure that is not available (${REQUIRE_INFRA_VAR} is set)`, () => {
+				throw new Error(
+					`${label} needs infrastructure that is not reachable: ${requirement.reason}. ` +
+						`${REQUIRE_INFRA_VAR} is set, so this counts as a failure rather than a skip -- ` +
+						`the environment promised to provide it.`
+				);
+			});
+		});
 		return;
 	}
 	coverageNotice(`SKIPPED SUITE ${label}: ${requirement.reason}`);
