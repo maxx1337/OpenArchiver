@@ -104,12 +104,40 @@ CI-Nachlaufprüfung 1 sind belegt: sie erkennt eine _übersprungene_, nicht eine
 `integration`-Suite, und eine Datei in `tests/integration/` mit der Endung `*.test.ts` statt
 `*.int.test.ts` wird von **keinem** Project eingesammelt und bleibt trotzdem grün.
 
-**Kein Produktionscode geändert, kein Befund F1–F12 behoben.** Das ist E13-Arbeit.
+**Danach die Nacharbeit `JR-104a` + `JR-105b` (`653dd1c`), erledigt:**
+
+- **F12 behoben.** Beide Fixture-Namen prozessspezifisch, der Sweeper-Aufruf im Test auf ein eigenes
+  Label eingeschränkt. Der Tester hat den Defekt **zuerst reproduziert** (3/3 rot auf dem
+  unveränderten Stand) und dabei einen **dritten Teil** gefunden, den der Befund nicht genannt hatte:
+  der Zeitstempel der Fixture aus 2021 liegt jenseits der Standardfrist, ein legitimer fremder Sweep
+  hätte sie auch mit eindeutigem Namen gelöscht. Nachweis: 5 Doppelläufe plus 15 Prozesse in
+  gestaffelten Runden, alle grün, keine DB-Rückstände.
+- **Beide CI-Lücken geschlossen**, an der Wurzel statt nur im Workflow: **jede** `*.test.ts` im
+  Repository, die auf kein Project-Glob passt, lässt den Lauf scheitern, und je Suite gilt eine
+  Mindestdateizahl, geprüft im `globalSetup` vor dem ersten Test — eine positive Erwartung statt einer
+  Negativsuche im Log.
+- **Neuer Befund F13** (offen, Testharness): siehe die Entscheidungstabelle unten.
+
+**Kein Produktionscode geändert, kein Befund F1–F11 behoben.** Das ist E13-Arbeit.
 
 ### Nächster konkreter Schritt
 
-**`JR-1301` — Epic E13 (IAM-Autorisierung härten).** Rolle: `DEV` (Subagent `senior-dev`).
-Branch: `claude/journaling-e13-iam-hardening`, abgezweigt vom **Integrationsbranch**:
+**`JR-106a` — die erneute Abnahme von E1.** Rolle: `TEST` (Subagent `tester`), auf dem aktuellen
+Branch `claude/journaling-e1-test-foundation`.
+
+Der erste Versuch wurde vom **Session-Limit** abgebrochen, bevor er über die Vorbereitung hinauskam —
+es liegt **kein** Abnahmeergebnis vor, E1 bleibt formal abgelehnt. Zu prüfen sind **alle**
+`JR-106`-Kriterien erneut (die Nacharbeit hat `vitest.config.ts`, `classification.ts`,
+`pg-harness.ts` und `ci.yml` angefasst, damit sind die Aussagen von `JR-101`/`JR-102`/`JR-105` nicht
+mehr automatisch gültig) plus die Kriterien von `JR-104a` und `JR-105b`. Auftragsdetails im Backlog
+unter „Nacharbeit aus der Abnahme `JR-106`".
+
+Besonders: **die neue Inventarprüfung selbst angreifen.** Sie ist jetzt Teil des Messinstruments —
+lässt sie sich umgehen, erkennt sie eine _gelöschte_ Testdatei, und existiert die lazy-Guard-Fehlerklasse
+(die der Tester in seiner eigenen ersten Fassung fand) noch woanders?
+
+**Danach:** `JR-1301` — Epic E13 (IAM-Autorisierung härten), Branch
+`claude/journaling-e13-iam-hardening`, abgezweigt vom **Integrationsbranch**:
 
 ```bash
 git fetch origin claude/enterprise-product-implementation-cxmmqe
@@ -117,25 +145,10 @@ git checkout -b claude/journaling-e13-iam-hardening \
     origin/claude/enterprise-product-implementation-cxmmqe
 ```
 
-Vorher, in dieser Reihenfolge:
-
-1. `pnpm install` (siehe „Immer zuerst" oben).
-2. **Entscheidung des Auftraggebers zu F12 einholen.** Zwei Wege: (a) F12 als kleine Nacharbeit an
-   `JR-104` vorziehen (Fixture-Namen aus `process.pid` + Zufallssuffix bilden, Sweeper-Aufruf im Test
-   auf ein eigenes Label einschränken), danach prozessübergreifende Parallelität **mehrfach** neu
-   belegen und E1 abnehmen; oder (b) F12 bewusst als Harness-Einschränkung akzeptieren und im
-   Testplan festhalten, dass parallele Läufe gegen dasselbe Postgres nicht unterstützt sind.
-   Empfehlung des Testers: (a) — der Aufwand ist gering und der Harness ist die Grundlage jeder
-   Durability-Aussage in E2/E3.
-3. Der Rückmerge von `claude/journaling-e1-test-foundation` in den Integrationsbranch liegt beim
-   Auftraggeber und ist noch nicht erfolgt.
-
-E13 hängt an E1, nicht an der Abnahme von E1 im formalen Sinn — der Harness ist benutzbar und
-`FilterBuilder` ist über `tests/integration/filter-builder.int.test.ts` abgedeckt, was `JR-1301` als
-Regressionsnetz braucht. F12 betrifft nur den **gleichzeitigen** Doppellauf.
-
-Danach `JR-1302` … `JR-1309` gemäß `03-backlog.md`. **F7** ist der Grund, warum E13 vor E2 steht und
-warum E11 ohne E13 nicht abnehmbar ist.
+E13 hängt an E1, nicht an dessen formaler Abnahme — der Harness ist benutzbar und `FilterBuilder` ist
+über `tests/integration/filter-builder.int.test.ts` abgedeckt, was `JR-1301` als Regressionsnetz
+braucht. Danach `JR-1302` … `JR-1309` gemäß `03-backlog.md`. **F7** ist der Grund, warum E13 vor E2
+steht und warum E11 ohne E13 nicht abnehmbar ist. **ADR-017 muss vor `JR-1302` entschieden sein.**
 
 ### Was ein neuer Agent zuerst lesen muss
 
