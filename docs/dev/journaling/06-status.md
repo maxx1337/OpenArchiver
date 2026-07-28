@@ -249,8 +249,9 @@ Eine neue Datei: `.github/workflows/ci.yml`, Job `verify` auf `ubuntu-latest`, T
 Datei.
 
 Schritte in dieser Reihenfolge: `pnpm install --frozen-lockfile` → `pnpm lint` →
-`pnpm --filter @open-archiver/backend build` → `pnpm --filter @open-archiver/frontend check` →
-`pnpm --filter @open-archiver/backend test:types` → `pnpm test` → zwei Nachlaufprüfungen.
+**`pnpm --filter @open-archiver/types build`** → `pnpm --filter @open-archiver/backend build` →
+`pnpm --filter @open-archiver/frontend check` → `pnpm --filter @open-archiver/backend test:types` →
+`pnpm test` → zwei Nachlaufprüfungen.
 Node `22`, pnpm `10.13.1` — beide aus `engines`/`packageManager` der Wurzel-`package.json`
 übernommen, nicht neu gewählt; `actions/setup-node@v4` mit `cache: 'pnpm'` cacht den pnpm-Store.
 Setup-Muster ist das von `deploy-docs.yml`.
@@ -285,6 +286,7 @@ die Schrittfolge des Workflows verbatim durchgespielt; danach wurde der Cluster 
 | ------------------------------------------------- | ------------------------------------------------------------------------- |
 | `pnpm install --frozen-lockfile`                  | Exit 0 — der Lockfile ist mit den `vitest`-Änderungen konsistent          |
 | `pnpm lint`                                       | „All matched files use Prettier code style!" (inkl. der neuen `ci.yml`)   |
+| `pnpm --filter @open-archiver/types build`        | Exit 0, `packages/types/dist/index.d.ts` vorhanden                        |
 | `pnpm --filter @open-archiver/backend build`      | Exit 0                                                                    |
 | `pnpm --filter @open-archiver/frontend check`     | „svelte-check found 0 errors and 0 warnings"                              |
 | `pnpm --filter @open-archiver/backend test:types` | Exit 0                                                                    |
@@ -305,12 +307,42 @@ sind:
 - Prüfung 2 schlägt bei einer künstlich angelegten `oa_test_leftover_probe` an; eine Lookalike-DB
   `oaXtestXnotours` wird dagegen **nicht** erfasst — die `\_`-Escapes im `LIKE` sind also wirksam.
 
+**F11 — der erste echte CI-Lauf fand einen Defekt, den kein lokaler Lauf finden konnte.** Lauf 1
+(`d0bb792`, Push) wurde bei „Build backend" rot: **54 × `TS2307: Cannot find module
+'@open-archiver/types'`**. Ursache: `@open-archiver/types` wird über `main: dist/index.js` /
+`types: dist/index.d.ts` aufgelöst, und `dist` steht in `.gitignore`. Auf einem frischen Checkout
+existiert es also nicht, und `pnpm --filter @open-archiver/backend build` zieht die
+Workspace-Dependency **nicht** mit — nur `pnpm build:oss` tut das, weil es `./packages/*` filtert
+und pnpm topologisch ordnet. Betroffen sind drei der fünf Schritte: Backend-Build, `svelte-check`
+und `test:types`.
+
+Das ist **kein CI-Fehler, sondern eine Lücke der im Task vorgegebenen Schrittfolge** — sie ist auf
+einem frischen Checkout nicht lauffähig. Kleinste Korrektur: ein vorgeschalteter Schritt
+`pnpm --filter @open-archiver/types build`. Die vorgegebenen Kommandos bleiben damit wörtlich
+erhalten; im Job-Log ist sichtbar, welches Paket bricht, wenn eines bricht.
+
+Warum die lokalen Läufe das verdeckten: `packages/types/dist` lag im Container aus früheren
+Sessions bereits gebaut vor. **Lokal nachgestellt und beidseitig belegt** — nach
+`rm -rf packages/types/dist packages/backend/dist packages/*/tsconfig.tsbuildinfo` (beide untracked,
+auf einem frischen Checkout also ohnehin nicht vorhanden):
+
+- ohne den neuen Schritt: `pnpm --filter @open-archiver/backend build` ⇒ 54 × `TS2307`, Exit 2 —
+  identisch zum CI-Log;
+- mit dem neuen Schritt: Types-Build, Backend-Build, `svelte-check` (0/0) und `test:types` alle grün.
+
+Der `tsbuildinfo`-Hinweis ist keine Nebensache: `packages/types/tsconfig.json` hat
+`composite: true`, ein bloßes Löschen von `dist` lässt `tsc` also wegen der stehengebliebenen
+Build-Info **nichts** emittieren. Wer das lokal nachstellen will, muss beides löschen.
+
 **Nicht verifizierbar in dieser Umgebung, ausdrücklich offen:**
 
-- **Der GitHub-Actions-Lauf selbst.** Kein Docker, keine Runner-Umgebung. Ob `actions/setup-node`
-  den pnpm-Store cacht, ob der Service-Container hochkommt und ob `psql` im Runner-Image vorhanden
-  ist (laut Image-Doku ja), zeigt erst der erste Lauf.
-- **PostgreSQL 17.** Lokal lief 16.13, CI-Ziel ist `postgres:17-alpine`.
+- **PostgreSQL 17** war es dann doch nicht mehr: Lauf 1 belegt im Service-Container-Log
+  `starting PostgreSQL 17.10 … max_connections … 100`. Der Container kommt hoch und ist gesund; nur
+  die Suite hat ihn noch nicht erreicht, weil der Build vorher brach. Lokal geprüft wurde 16.13.
+- **Ob die Schritte 3–7 in GitHub Actions grün sind.** Nach Lauf 1 ist bewiesen: Setup, Cache-Pfad,
+  `pnpm install --frozen-lockfile` und `pnpm lint` laufen dort. Alles ab „Build shared types" wartet
+  auf den nächsten Lauf — insbesondere `pnpm test` gegen PostgreSQL 17, beide Nachlaufprüfungen und
+  die Frage, ob `psql` im Runner-Image liegt.
 - **`localhost` statt `127.0.0.1`.** Im Workflow adressieren `DATABASE_URL` und `psql` `localhost`
   (so wird der Service-Port gemappt); lokal wurde `127.0.0.1` verwendet.
 

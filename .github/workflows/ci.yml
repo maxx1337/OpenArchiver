@@ -72,6 +72,17 @@ jobs:
             - name: Lint
               run: pnpm lint
 
+            # Prerequisite, not scope creep. `@open-archiver/types` resolves through
+            # `main: dist/index.js` / `types: dist/index.d.ts`, and `dist` is gitignored, so on a
+            # fresh checkout nothing downstream can resolve it: the backend build, the frontend
+            # `check` and `test:types` all fail with 54x TS2307 until this has run. `pnpm --filter
+            # @open-archiver/backend build` does *not* pull it in -- only the repo's own
+            # `build:oss` (which filters `./packages/*` and lets pnpm order topologically) does.
+            # Kept as its own step rather than folded into the filter, so the log says which
+            # package failed.
+            - name: Build shared types
+              run: pnpm --filter @open-archiver/types build
+
             - name: Build backend
               run: pnpm --filter @open-archiver/backend build
 
