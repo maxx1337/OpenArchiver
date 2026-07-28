@@ -38,7 +38,5 @@ export const indexingConfig = {
 		? parseInt(process.env.INDEX_RECONCILE_BACKPRESSURE)
 		: 100,
 	/** Stop retrying an email after this many failed indexing attempts (poison-pill guard). */
-	maxIndexAttempts: process.env.MAX_INDEX_ATTEMPTS
-		? parseInt(process.env.MAX_INDEX_ATTEMPTS)
-		: 5,
+	maxIndexAttempts: process.env.MAX_INDEX_ATTEMPTS ? parseInt(process.env.MAX_INDEX_ATTEMPTS) : 5,
 };

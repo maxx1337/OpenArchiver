@@ -219,6 +219,14 @@ project — not a working branch. Each epic gets its own branch off it. Full rul
 | `main`                                        | **do not touch until E12 is accepted.** Never push to it                                                                |
 | Pull requests                                 | none unless explicitly asked                                                                                            |
 
+> **Check your local state against the remote before you start.** This container has been rolled back
+> to an older commit at least once while looking entirely normal — clean worktree, `node_modules`
+> present, recent files on disk — and the **reflog did not show the missing commits**, because they
+> never existed locally. Run `git log --oneline -1` and compare with
+> `git ls-remote origin refs/heads/<branch>`. If they differ, `git merge --ff-only origin/<branch>`
+> before doing anything else. Use `--ff-only`, not `reset --hard`: it fails loudly if the history has
+> genuinely diverged instead of silently discarding work.
+
 - `git push -u origin <branch>`; retry network failures with backoff.
 - Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. Note that
   `pnpm lint` currently **fails** on nine pre-existing files; `JR-105a` fixes that in one

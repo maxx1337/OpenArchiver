@@ -361,7 +361,11 @@ export const createIngestionRouter = (
 	 *       '404':
 	 *         $ref: '#/components/responses/NotFound'
 	 */
-	router.post('/:id/reindex', requirePermission('sync', 'ingestion'), ingestionController.reindex);
+	router.post(
+		'/:id/reindex',
+		requirePermission('sync', 'ingestion'),
+		ingestionController.reindex
+	);
 
 	/**
 	 * @openapi

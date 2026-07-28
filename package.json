@@ -24,7 +24,14 @@
 		"docs:build": "pnpm docs:gen-spec && vitepress build docs",
 		"docs:preview": "vitepress preview docs",
 		"format": "prettier --write .",
-		"lint": "prettier --check ."
+		"lint": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:unit": "vitest run --project unit",
+		"test:integration": "vitest run --project integration",
+		"test:adversarial": "vitest run --project adversarial",
+		"test:nightly": "cross-env OA_TEST_CLASSES=ci,nightly vitest run",
+		"test:manual": "cross-env OA_TEST_CLASSES=manual vitest run"
 	},
 	"dependencies": {
 		"concurrently": "^9.2.0",
@@ -36,8 +43,10 @@
 		"prettier-plugin-svelte": "^3.4.0",
 		"prettier-plugin-tailwindcss": "^0.6.14",
 		"typescript": "5.8.3",
+		"vite": "^5.4.19",
 		"vitepress": "^1.6.4",
-		"vitepress-openapi": "^0.1.18"
+		"vitepress-openapi": "^0.1.18",
+		"vitest": "^3.2.7"
 	},
 	"packageManager": "pnpm@10.13.1",
 	"engines": {

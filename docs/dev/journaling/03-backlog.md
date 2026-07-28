@@ -6,26 +6,38 @@ Epic 2, Task 3. Abgeschlossene Tasks werden nicht gelöscht, sondern in `06-stat
 **Rollen:** `DEV` = Subagent `senior-dev` · `TEST` = Subagent `tester` · `PO` = Hauptthread
 (Priorisierung, ADRs, Abnahme). Der PO implementiert nicht.
 
-**Reihenfolge = Abhängigkeitsreihenfolge.** Jedes Epic endet in einem demonstrierbaren, testbaren
-Zustand. Ein Epic gilt erst als fertig, wenn `TEST` unabhängig abgenommen hat.
+Jedes Epic endet in einem demonstrierbaren, testbaren Zustand. Ein Epic gilt erst als fertig, wenn
+`TEST` unabhängig abgenommen hat.
 
-| Epic | Titel                         | Abhängig von | Risiko                  |
-| ---- | ----------------------------- | ------------ | ----------------------- |
-| E1   | Test- und CI-Fundament        | —            | niedrig                 |
-| E2   | Ledger und Hash-Chain         | E1           | hoch                    |
-| E3   | Spool und Acceptance-Contract | E2           | **sehr hoch**           |
-| E4   | `smtp-ingress`-Service        | E3           | **sehr hoch**           |
-| E5   | Journal-Report-Parser         | E4           | mittel                  |
-| E6   | Phase-B-Worker                | E5           | mittel                  |
-| E7   | WORM-Storage                  | E6           | **hoch** (irreversibel) |
-| E8   | Anchoring                     | E2, E7       | mittel                  |
-| E9   | `verify`-CLI                  | E8           | mittel                  |
-| E10  | Completeness-Monitoring       | E6, E9       | niedrig                 |
-| E11  | Compliance-Features           | E9           | mittel                  |
-| E12  | Rollout und Dokumentation     | E10, E11     | niedrig                 |
+**Die Epic-Nummer sagt nichts über die Reihenfolge.** Task-IDs sind stabil, deshalb wird beim
+Einschieben eines Epics nicht umnummeriert — E13 steht als zweites in der Abarbeitung. Verbindlich
+sind die Spalten „Reihenfolge" und „Abhängig von", nicht die Nummer.
+
+| Reihenfolge | Epic | Titel                         | Abhängig von | Risiko                  |
+| ----------- | ---- | ----------------------------- | ------------ | ----------------------- |
+| 1           | E1   | Test- und CI-Fundament        | —            | niedrig                 |
+| 2           | E13  | IAM-Autorisierung härten      | E1           | mittel                  |
+| 3           | E2   | Ledger und Hash-Chain         | E13          | hoch                    |
+| 4           | E3   | Spool und Acceptance-Contract | E2           | **sehr hoch**           |
+| 5           | E4   | `smtp-ingress`-Service        | E3           | **sehr hoch**           |
+| 6           | E5   | Journal-Report-Parser         | E4           | mittel                  |
+| 7           | E6   | Phase-B-Worker                | E5           | mittel                  |
+| 8           | E7   | WORM-Storage                  | E6           | **hoch** (irreversibel) |
+| 9           | E8   | Anchoring                     | E2, E7       | mittel                  |
+| 10          | E9   | `verify`-CLI                  | E8           | mittel                  |
+| 11          | E10  | Completeness-Monitoring       | E6, E9       | niedrig                 |
+| 12          | E11  | Compliance-Features           | E9, **E13**  | mittel                  |
+| 13          | E12  | Rollout und Dokumentation     | E10, E11     | niedrig                 |
 
 Parallelisierbar: E1 ist unabhängig · E8 kann parallel zu E5/E6 laufen (hängt nur an E2 und E7) ·
 E11 weitgehend parallel zu E10.
+
+**E13 wurde nachträglich eingeschoben** (2026-07-28), weil `JR-103`/`JR-104` vier Befunde mit
+Autorisierungswirkung im Bestandscode aufgedeckt haben — darunter **F7**, ein fail-open in
+`FilterBuilder`, das die released Version 0.5.2 betrifft und von einer eingeschränkten Rolle aus
+erreichbar ist. **E11 kann nicht abgenommen werden, solange F7 offen ist:** die dort geplante
+Auditor-Rolle baut genau auf diesem Mechanismus auf, und ein „read-only"-Auditor, der unbeschränkt
+liest, ist keine Auditor-Rolle. Details in `09-befunde-bestandscode.md`.
 
 ---
 
@@ -36,14 +48,32 @@ und Tests ausführt. Ohne das ist RFC §12 nicht umsetzbar und jede Durability-A
 
 **Warum zuerst:** Es gibt heute **null Tests und keinen Test-Runner** im gesamten Repository.
 
-| ID     | Task                                                                                                                                                                                                                                      | Rolle | RFC | Akzeptanzkriterien                                                                                                                                                 |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| JR-101 | vitest im Monorepo einrichten: Root-Konfiguration + Workspace-Configs für `packages/backend`, `packages/types`, `packages/journaling` (sobald vorhanden). `test`-Script auf Root- und Paketebene                                          | TEST  | §12 | `pnpm test` läuft von der Repo-Wurzel, findet Tests in allen Paketen, Exit-Code 0 bei Erfolg und ≠ 0 bei Fehlschlag. Keine Änderung an bestehendem Produktionscode |
-| JR-102 | Testkonventionen festlegen und dokumentieren: `*.test.ts` neben dem Code für Units, `tests/` für Integration/adversarial, Klassifizierung `ci`/`nightly`/`manual`, Seed-Pflicht bei Randomisierung                                        | TEST  | §12 | Konventionen stehen in `04-testplan.md`; ein Beispiel je Kategorie existiert                                                                                       |
-| JR-103 | Erste Unit-Tests auf die reinen Funktionen: `PolicyValidator.isValid()`, `createAbilityFor()`, `FilterBuilder`. Die bestehenden, bisher unbenutzten Fixtures `packages/backend/src/iam-policy/test-policies/*.json` als Eingabe verwenden | TEST  | —   | ≥ 20 Assertions über die Fixtures; alle grün; die Fixtures werden erstmals tatsächlich geladen                                                                     |
-| JR-104 | Integrationstest-Basis: isolierte Postgres-Instanz je Testlauf (eigenes Schema oder eigene Datenbank), Migrationen automatisch anwenden, Teardown garantiert                                                                              | TEST  | §12 | Zwei Integrationstests können parallel laufen, ohne sich zu beeinflussen; kein Rückstand in der DB nach dem Lauf                                                   |
-| JR-105 | GitHub-Workflow `.github/workflows/ci.yml`: `pnpm lint`, `pnpm --filter @open-archiver/backend build`, `pnpm --filter @open-archiver/frontend check`, `pnpm test` — auf Pull Request und Push                                             | DEV   | §12 | Workflow läuft auf dem Branch grün. Bestehende Workflows (`cla`, `deploy-docs`, `docker-deployment`, `release-tag`) unverändert                                    |
-| JR-106 | Abnahme E1                                                                                                                                                                                                                                | PO    | —   | `pnpm test` und CI grün; JR-101…104, JR-105a und JR-105 erfüllt; `06-status.md` aktualisiert                                                                       |
+| ID     | Task                                                                                                                                                                                                                                                                                                                                                                                 | Rolle | RFC | Akzeptanzkriterien                                                                                                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JR-101 | vitest im Monorepo einrichten: Root-Konfiguration + Workspace-Configs für `packages/backend`, `packages/types`, `packages/journaling` (sobald vorhanden). `test`-Script auf Root- und Paketebene                                                                                                                                                                                     | TEST  | §12 | `pnpm test` läuft von der Repo-Wurzel, findet Tests in allen Paketen, Exit-Code 0 bei Erfolg und ≠ 0 bei Fehlschlag. Keine Änderung an bestehendem Produktionscode                   |
+| JR-102 | Testkonventionen festlegen und dokumentieren: `*.test.ts` neben dem Code für Units, `tests/` für Integration/adversarial, Klassifizierung `ci`/`nightly`/`manual`, Seed-Pflicht bei Randomisierung                                                                                                                                                                                   | TEST  | §12 | Konventionen stehen in `04-testplan.md`; ein Beispiel je Kategorie existiert                                                                                                         |
+| JR-103 | Erste Unit-Tests auf die reinen Funktionen: `PolicyValidator.isValid()`, `createAbilityFor()`, `FilterBuilder`. Die bestehenden, bisher unbenutzten Fixtures `packages/backend/src/iam-policy/test-policies/*.json` als Eingabe verwenden                                                                                                                                            | TEST  | —   | ≥ 20 Assertions über die Fixtures; alle grün; die Fixtures werden erstmals tatsächlich geladen                                                                                       |
+| JR-104 | Integrationstest-Basis: isolierte Postgres-Instanz je Testlauf (eigenes Schema oder eigene Datenbank), Migrationen automatisch anwenden, Teardown garantiert                                                                                                                                                                                                                         | TEST  | §12 | Zwei Integrationstests können parallel laufen, ohne sich zu beeinflussen; kein Rückstand in der DB nach dem Lauf                                                                     |
+| JR-105 | GitHub-Workflow `.github/workflows/ci.yml`: `pnpm lint`, `pnpm --filter @open-archiver/backend build`, `pnpm --filter @open-archiver/frontend check`, `pnpm test` — auf Pull Request und Push. Postgres als Service-Container für die `integration`-Suite. **Nur prüfen (`prettier --check` via `pnpm lint`), niemals `pnpm format` ausführen und niemals auto-committen** (ADR-015) | DEV   | §12 | Workflow läuft auf dem Branch grün. Bestehende Workflows (`cla`, `deploy-docs`, `docker-deployment`, `release-tag`) unverändert. Kein Schritt schreibt Dateien ins Repository zurück |
+| JR-106 | Abnahme E1                                                                                                                                                                                                                                                                                                                                                                           | PO    | —   | `pnpm test` und CI grün; JR-101…104, JR-105a und JR-105 erfüllt; `06-status.md` aktualisiert                                                                                         |
+
+### Nacharbeit aus der Abnahme `JR-106` (2026-07-28)
+
+Die Abnahme hat E1 **abgelehnt** und drei Defekte im **eigenen** Testfundament gefunden. Der PO hat
+entschieden, sie nachzuarbeiten statt sie zu akzeptieren: eine bekannte Schwäche im Messinstrument
+widerspricht Grundregel 6 des Testplans („keine stillen Kürzungen"), und auf diesem Harness ruht jede
+Durability-Aussage in E2/E3.
+
+| ID      | Task                                                                                                                                                                                                                                                                                                                   | Rolle | Befund | Akzeptanzkriterien                                                                                                                                                                         |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JR-104a | **F12 beheben.** Beide Fixture-Namen in `pg-harness.int.test.ts` prozessspezifisch bilden (`process.pid` + Zufallssuffix), **und** den `sweepStaleHarnessDatabases()`-Aufruf im Test auf ein eigenes Label einschränken — die Fremd-PID `999999` lässt ihn heute fremde Fixtures löschen                               | TEST  | F12    | Prozessübergreifender Doppellauf **mehrfach** grün (≥ 5 Wiederholungen, alle protokolliert) — bei einem Zeitfensterdefekt ist ein einzelner grüner Lauf kein Nachweis. Keine DB-Rückstände |
+| JR-105b | **Die zwei Lücken der CI-Nachlaufprüfung schließen**, mit einer **positiven** Erwartung statt einer Negativsuche im Log: (a) eine _abwesende_ `integration`-Suite muss rot machen, nicht nur eine übersprungene; (b) eine Datei in `tests/integration/`, die auf kein Project-Glob passt, darf nicht unbemerkt bleiben | TEST  | —      | Verzeichnis umbenennen ⇒ rot. Datei `foo.test.ts` in `tests/integration/` mit fehlschlagender Assertion ⇒ rot. Beide Fälle auch in der Gegenrichtung geprüft (legitimer Zustand ⇒ grün)    |
+| JR-106a | Erneute Abnahme E1 nach der Nacharbeit                                                                                                                                                                                                                                                                                 | TEST  | —      | Alle Kriterien aus `JR-106` erneut, plus die Kriterien von `JR-104a` und `JR-105b`                                                                                                         |
+
+> `JR-105b` überschreitet bewusst die DEV/TEST-Grenze: die Prüfung liegt in
+> `.github/workflows/ci.yml` (DEV-Territorium laut `JR-105`), ist aber inhaltlich
+> Test-Verifikationslogik. Sie zusammen mit `JR-104a` an eine Rolle zu geben vermeidet zwei Agenten
+> auf demselben Branch.
 
 **Achtung — bereits geprüft, `pnpm lint` schlägt heute fehl.** `pnpm lint` ist Prettier `--check`
 über das gesamte Repository. Der Bestand ist **nicht** sauber: **13** Dateien werden beanstandet,
@@ -70,12 +100,17 @@ Deshalb wird **`JR-105a`** vorgeschaltet: ein separater, reiner Formatierungs-Co
 (`pnpm format`), sonst ist der CI-Job aus `JR-105` von der ersten Minute an rot und blockiert jeden
 künftigen Pull Request.
 
-**Vor `JR-105a` zu entscheiden — die generierten Dateien.** Sechs der 13 Treffer werden von Generatoren
-geschrieben: `docs/api/openapi.json` durch `pnpm docs:gen-spec` (läuft bei jedem `docs:build` und
-`docs:dev`) und die fünf `migrations/meta/*.json` durch `pnpm db:generate`. Prüfen, ob die Generatoren
-sie unformatiert zurückschreiben. Falls ja, gehören sie in `.prettierignore` statt in den
-Formatierungs-Commit — sonst entsteht eine Endlosschleife zwischen Generator und Formatierer, und der
-CI-Job wird bei jeder Schema- oder API-Änderung grundlos rot.
+**Entschieden — die generierten Dateien gehen in `.prettierignore` (ADR-015, 2026-07-27).** Sechs der
+13 Treffer werden von Generatoren geschrieben: `docs/api/openapi.json` durch `pnpm docs:gen-spec`
+(läuft bei jedem `docs:build` und `docs:dev`) und die fünf `migrations/meta/*.json` durch
+`pnpm db:generate`. Beide schreiben empirisch belegt mit `JSON.stringify(…, null, 2)` — also zwei
+Leerzeichen, während das Repo `useTabs: true` verwendet. Sie stehen dauerhaft im Konflikt mit dem
+Formatierer und überschreiben jede Formatierung sofort wieder.
+
+Formatiert wurden daher nur die **7 handgeschriebenen** Dateien. Ausgeschlossen wurde das gesamte
+Verzeichnis `migrations/meta/`, nicht einzelne Snapshots — jede künftige Migration legt einen neuen an.
+`migrations/*.sql` braucht keinen Eintrag, Prettier hat keinen SQL-Parser. Vollständige Begründung,
+Belege und die nicht verifizierbare Restlücke in **ADR-015**.
 
 > Historische Notiz: eine erste Prüfung nannte nur neun Dateien. Sie lief ohne
 > `prettier-plugin-svelte` und `prettier-plugin-tailwindcss`, weil im Container keine `node_modules`
@@ -289,6 +324,43 @@ nicht als Skriptübung.
 | JR-1207 | Pull-Ingestion umdokumentieren: geeignet für Backfill und Reconciliation, nicht als primärer Pfad für Compliance-Installationen                                                                                                                                          | DEV   | §14     | Betroffene Doku-Seiten angepasst                                                                                     |
 | JR-1208 | Ende-zu-Ende gegen einen echten Exchange-Online-Tenant: Journal-Rule für intern und extern; DL-Expansions-Mitglieder und Bcc-Empfänger erscheinen in den Metadaten; Receiver offline ⇒ Ausweichpostfach fängt auf; Reconciliation holt nach. Klassifizierung **manuell** | TEST  | §12.8   | Vollständig durchgeführt und protokolliert; ohne echten Tenant nicht abnehmbar — kein Ersatz durch Mocks             |
 | JR-1209 | Abnahme E12 und Projektabnahme                                                                                                                                                                                                                                           | PO    | §13     | Alle Epics abgenommen; `06-status.md` vollständig; keine unzulässige Compliance-Behauptung im Repository             |
+
+---
+
+## E13 — IAM-Autorisierung härten
+
+> **Position in der Reihenfolge: direkt nach E1, vor E2.** Die Nummer 13 ist nur eine ID, keine
+> Reihenfolgeangabe — siehe die Epic-Tabelle oben. Nachträglich eingeschoben am 2026-07-28.
+
+**Ziel:** Die Autorisierungsschicht ist fail-closed. Solange sie es nicht ist, ist die Auditor-Rolle
+aus E11 nicht baubar und jede Zugriffsaussage über das Archiv unbelegt.
+
+**Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch.
+
+**Umfang: vier Befunde mit Autorisierungswirkung.** F7, F3, F8, F1 aus
+`09-befunde-bestandscode.md`, plus die Auflösung des Action-Versatzes. **Nicht** in E13: F2, F4, F5,
+F6, F9, F10 — sie bleiben dort mit Status offen dokumentiert.
+
+| ID      | Task                                                                                                                                                                                                                                      | Rolle     | Befund   | Akzeptanzkriterien                                                                                                                                            |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JR-1301 | **Fehlschlagende Tests zuerst.** Die vorhandenen `it.fails`-Marker zu F1/F3/F7/F8 in echte Regressionstests umbauen, die den **gewünschten** Zustand fordern und deshalb jetzt rot sind                                                   | TEST      | F1,3,7,8 | Jeder Test ist **vor** dem Fix rot und **nach** dem Fix grün, beides protokolliert. Ein Test, der nie rot war, belegt nichts                                  |
+| JR-1303 | Action-Versatz auflösen: Route-Gate prüft `('search','archive')`, `FilterBuilder` wird mit `('read','archive')` aufgerufen. **Erst entscheiden, dann ändern** — beide Richtungen verändern Bestandsrollen unterschiedlich                 | PO → DEV  | F7       | **ADR-017** festgeschrieben, mit Begründung und Auswirkung auf Bestandsrollen; Code stimmt danach mit der ADR überein                                         |
+| JR-1302 | `FilterBuilder`: `null` von `rulesToQuery` als **deny** behandeln (`sql`1=0``, wie der bereits vorhandene „No access"-Zweig). Unbeschränkte Rückgabe nur noch bei nachweislich **unbedingtem `can`\*\*                                    | DEV       | F7       | `auditor-specific-mailbox.json` liefert **keine** Zeile für `dev@openarchiver.com`; Nutzer ohne Rolle bekommt `1=0`, nicht `undefined`. Gegen echtes Postgres |
+| JR-1304 | `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen statt verwerfen. Kein stilles Erweitern eines `$or`, kein Verlust einer `$not`-Negation. Aufrufer behandeln `undefined` als deny                                       | DEV       | F3       | Ein unbekannter Operator führt zu Verweigerung, nicht zu unbeschränktem Zugriff; der `$or`-Fall aus F3 erweitert die Disjunktion nicht mehr                   |
+| JR-1305 | `cannot`-Ausschluss korrekt bauen, wenn der Wert ein Operator-Objekt ist — heute wird `{ $in: […] }` zu `{ $ne: { $in: […] } }`, der Ausschluss findet nicht statt                                                                        | DEV       | F8       | `cannot … { $in: [...] }` schließt tatsächlich aus, in Drizzle **und** im Meili-Filter                                                                        |
+| JR-1306 | Condition-Keys gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen — ein unbekannter Key ist ohnehin ein Fehler und gehört fail-closed behandelt. Gilt auch für den `sql.raw`-Relationszweig                               | DEV       | F1       | Ein Key mit `"` wird **abgewiesen**, nicht escaped-durchgelassen; Relationszweig ebenso; `PolicyValidator` weist solche Policies beim Anlegen ab              |
+| JR-1307 | Verhaltensänderung dokumentieren: Nutzer ohne `read archive` sehen künftig **nichts** statt alles. Release-Hinweis **plus** Prüfanleitung für Bestandsinstallationen. Als **ADR-016** festhalten, dass fail-closed den Bruch rechtfertigt | DEV       | —        | Ein Betreiber kann **vor** dem Update feststellen, welche seiner Rollen betroffen sind. Ohne das ist ein sicherheitsrichtiger Fix in der Praxis ein Ausfall   |
+| JR-1308 | Upstream-Meldung vorbereiten: Beschreibung, Reproduktion, Fix-Vorschlag, betroffene Versionen. **Nicht selbst versenden** — Kanal und Zeitpunkt entscheidet der Auftraggeber                                                              | PO        | F7       | Entwurf liegt vor und ist **nicht** versendet                                                                                                                 |
+| JR-1309 | Abnahme E13                                                                                                                                                                                                                               | TEST → PO | —        | Negative Assertions je Rolle; Nachweis, dass F2/F4/F5/F6/F9/F10 unverändert offen dokumentiert sind und nicht stillschweigend mitverändert wurden             |
+
+**Reihenfolge innerhalb E13:** `JR-1301` zuerst, dann `JR-1303` (Entscheidung), dann die Fixes
+`JR-1302`/`JR-1304`/`JR-1305`/`JR-1306`, dann `JR-1307`/`JR-1308`, dann `JR-1309`.
+
+**Wiederverwendung:** der Harness aus E1 —
+`packages/backend/tests/support/{pg-harness,iam-seed,policy-fixtures,render-sql}.ts` und die Helfer
+unter `tests/support/` (`@oa-test/*`). Die acht Fixtures in `src/iam-policy/test-policies/`,
+besonders `auditor-specific-mailbox.json` (belegt F7b) und `read-only-all.json` als Gegenprobe. Der
+vorhandene „No access"-Zweig in `FilterBuilder.create()` ist die Vorlage für den Deny-Fall.
 
 ---
 

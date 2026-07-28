@@ -18,8 +18,9 @@ Happy-Path-Tests."_
 3. **Determinismus durch Seeds.** Jede Randomisierung wird geseedet und der Seed geloggt. Ein
    flakiger adversarialer Test ist wertlos, weil seinen Fehlschlägen niemand glaubt. Der Seed muss
    eine exakte Wiederholung erlauben.
-4. **Isolation.** Integrationstests bekommen eigenes Postgres-Schema und eigenes Spool-Verzeichnis.
-   Nie von einem sauberen gemeinsamen Zustand ausgehen.
+4. **Isolation.** Integrationstests bekommen eigenen Postgres-Namensraum und eigenes
+   Spool-Verzeichnis. Nie von einem sauberen gemeinsamen Zustand ausgehen. Konkret ist es eine eigene
+   **Datenbank** je Aufruf, nicht ein Schema — warum, steht in §2.6.
 5. **Echte Infrastruktur bei Durability.** Ein gemockter `fsync` beweist nichts. Fault Injection
    läuft über eine schmale, explizit injizierte Dateisystem-Schnittstelle — kein Monkey-Patching
    globaler `fs`-Funktionen.
@@ -30,21 +31,194 @@ Happy-Path-Tests."_
 
 ## 2. Konventionen
 
-| Art                      | Ort                                      | Namensschema          |
-| ------------------------ | ---------------------------------------- | --------------------- |
-| Unit                     | neben dem Code                           | `<name>.test.ts`      |
-| Integration              | `tests/integration/` im jeweiligen Paket | `<thema>.int.test.ts` |
-| Adversarial / Durability | `tests/adversarial/`                     | `<thema>.adv.test.ts` |
-| Fixtures                 | `tests/fixtures/`                        | sprechende Dateinamen |
+> Umgesetzt in JR-101/JR-102 (2026-07-27). Die Tabelle unten ist nicht mehr Entwurf, sondern
+> beschreibt den Ist-Zustand; jede Zeile hat ein lauffähiges Beispiel im Repository.
 
-**Jeder Test wird klassifiziert** — `ci`, `nightly` oder `manual` — und die Klassifizierung ist im
-Test selbst sichtbar (Tag/Describe-Präfix), nicht nur in diesem Dokument.
+### 2.1 Orte und Namen
+
+| Art                        | Ort                                                     | Namensschema          | Beispiel                                                               |
+| -------------------------- | ------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------- |
+| Unit                       | neben dem Code                                          | `<name>.test.ts`      | `packages/backend/src/iam-policy/policy-validator.test.ts`             |
+| Integration                | `tests/integration/` im jeweiligen Paket                | `<thema>.int.test.ts` | `packages/backend/tests/integration/postgres-availability.int.test.ts` |
+| Adversarial / Durability   | `tests/adversarial/` im jeweiligen Paket                | `<thema>.adv.test.ts` | `packages/backend/tests/adversarial/mongo-to-drizzle.adv.test.ts`      |
+| Fixtures                   | `tests/fixtures/` im jeweiligen Paket                   | sprechende Dateinamen | `packages/backend/tests/fixtures/mongo-to-drizzle-golden.json`         |
+| Harness, paketübergreifend | `tests/support/` in der Repo-Wurzel, Alias `@oa-test/*` | `<thema>.ts`          | `tests/support/classification.ts`                                      |
+| Harness, paketspezifisch   | `tests/support/` im jeweiligen Paket                    | `<thema>.ts`          | `packages/backend/tests/support/render-sql.ts`                         |
+
+**Diese Namensschemata sind ab `JR-105b` erzwungen, nicht empfohlen.** Die Include-Globs der drei
+Projects stehen in `tests/support/suite-inventory.ts`; `vitest.config.ts` importiert sie von dort, es
+gibt sie also nur einmal. Derselbe Modul prüft in `globalSetup` — vor dem ersten Test, in **jedem**
+Lauf und in jeder Umgebung — zwei positive Erwartungen:
+
+1. **Jede Suite trifft mindestens `minimumFiles` Dateien.** Null Dateien ist ein Fehlschlag. Eine
+   umbenannte oder gelöschte Suite macht damit rot, statt als „grün, weil nichts zu tun" zu gelten.
+2. **Keine testartig benannte Datei ohne Project.** Alles, was `*.test.ts` / `*.spec.ts` (und die
+   `.js`/`.mjs`/`.tsx`-Varianten) heißt und von keinem Include-Glob getroffen wird, bricht den Lauf
+   mit Pfadangabe ab. Eine Datei `foo.test.ts` unter `tests/integration/` läuft also nicht bloß nicht
+   — sie fällt auf.
+
+Die Zahlen werden auf **jedem** Lauf gemeldet, auch auf einem grünen:
+`[TEST-INVENTORY] unit: 5 file(s) (min 5) · integration: 4 file(s) (min 4) · adversarial: 1 file(s) (min 1) · unclassified: 0`.
+Wer eine Suite absichtlich verkleinert, senkt `minimumFiles` im selben Commit — sichtbar im Diff,
+statt unbemerkt.
+
+Zwei Abweichungen vom ersten Entwurf, beide bewusst:
+
+- **`tests/support/`** war nicht vorgesehen. Ohne einen gemeinsamen Ort für Klassifizierung, Seeds,
+  Infrastruktur-Probes und Coverage-Hinweise wird jede dieser Regeln pro Testdatei neu und
+  unterschiedlich erfunden. Paketübergreifendes liegt in der Wurzel (importierbar als
+  `@oa-test/…`), paketspezifisches im Paket — Wurzel-Helfer dürfen keine Paket-Dependencies
+  auflösen (pnpm ist strikt), `drizzle-orm`-nahe Helfer müssen deshalb im Backend liegen.
+- **Bereits vorhandene Fixtures bleiben, wo sie sind.** `packages/backend/src/iam-policy/test-policies/*.json`
+  wandern **nicht** nach `tests/fixtures/`. Sie sind Repo-Bestand; ein Verschieben wäre eine
+  Änderung im Produktionsbaum aus kosmetischem Grund. Die Regel gilt für **neue** Fixtures.
+
+### 2.2 Zwei Suites, und warum das keine Geschmacksfrage ist
+
+`packages/backend/src/database/index.ts` wirft **beim Import**, wenn `DATABASE_URL` fehlt. Jede
+Testdatei, die transitiv `../database` importiert, lässt sich in einer Umgebung ohne Konfiguration
+nicht einmal einsammeln. Daraus folgt die Trennung in vitest-**Projects** (= Suites):
+
+| Project       | Include-Glob                                                        | Braucht Infrastruktur                                |
+| ------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
+| `unit`        | `packages/*/src/**/*.test.ts`, `packages/*/tests/unit/**/*.test.ts` | nein — importiert nichts, was an `../database` hängt |
+| `integration` | `packages/*/tests/integration/**/*.int.test.ts`                     | Postgres                                             |
+| `adversarial` | `packages/*/tests/adversarial/**/*.adv.test.ts`                     | fallweise, je Test deklariert                        |
+
+Konfiguration: **eine** Datei, `vitest.config.ts` in der Wurzel, mit `test.projects`. Kein
+Config-File pro Paket — die Suite-Trennung ist global, und pro Paket eigene Projects zu definieren
+würde eindeutige Projektnamen je Paket erzwingen und die DB-Gate-Logik vervielfachen. Die
+Include-Globs zeigen auf `packages/*`, ein Paket mit neuen Tests (`packages/types`, später
+`packages/journaling`) wird also ohne Config-Änderung gefunden.
+
+Kommandos:
+
+| Kommando                                          | Wirkung                      |
+| ------------------------------------------------- | ---------------------------- |
+| `pnpm test`                                       | alle Projects, Klasse `ci`   |
+| `pnpm test:unit`                                  | nur `unit`                   |
+| `pnpm test:integration`                           | nur `integration`            |
+| `pnpm test:adversarial`                           | nur `adversarial`            |
+| `pnpm test:nightly`                               | `OA_TEST_CLASSES=ci,nightly` |
+| `pnpm test:manual`                                | `OA_TEST_CLASSES=manual`     |
+| `pnpm --filter @open-archiver/backend test`       | nur die Tests dieses Pakets  |
+| `pnpm --filter @open-archiver/backend test:types` | `tsc` über die Testdateien   |
+
+Testdateien sind aus `packages/backend/tsconfig.json` **ausgeschlossen** — sie dürfen nicht nach
+`dist` gelangen. Typgeprüft werden sie über `packages/backend/tsconfig.test.json` (`noEmit`,
+`module: esnext`, `moduleResolution: bundler` — so wie vitest sie ausführt).
+
+### 2.3 Klassifizierung
+
+**Jeder Test wird klassifiziert** — `ci`, `nightly` oder `manual`. Die Klassifizierung steht im Test
+selbst und im berichteten Suite-Namen, nicht nur in diesem Dokument. Umgesetzt durch
+`suite(klasse, name, fn)` aus `@oa-test/classification`; der Suite-Name wird mit `[ci]` /
+`[nightly]` / `[manual]` präfigiert.
 
 | Klasse    | Läuft                          | Zeitbudget           |
 | --------- | ------------------------------ | -------------------- |
 | `ci`      | jeder Pull Request und Push    | Gesamtsuite < 10 Min |
 | `nightly` | einmal täglich                 | unbegrenzt           |
 | `manual`  | auf Anforderung, mit Protokoll | —                    |
+
+Auswahl über `OA_TEST_CLASSES` (Kommaliste oder `all`), Default `ci`. Ein nicht ausgewählter Test
+wird als **skipped** berichtet, mit dem Grund im Suite-Namen, plus Coverage-Hinweis in der Ausgabe.
+Ein Tippfehler in `OA_TEST_CLASSES` bricht den Lauf ab, statt stillschweigend nichts zu laufen.
+
+`suiteRequiring(klasse, name, probe, fn)` ergänzt das um Infrastruktur: ist die Probe negativ, wird
+mit dem Grund der Probe übersprungen — „`DATABASE_URL` is not set" liest sich anders als „skipped".
+
+**`OA_TEST_REQUIRE_INFRA=1` dreht das um** (`JR-105b`). In einer Umgebung, die die Infrastruktur
+selbst bereitstellt — die CI mit ihrem Postgres-Service-Container — ist ein Skip wegen fehlender
+Infrastruktur kein legitimer Skip, sondern ein defekter Job, der grün meldet. Mit gesetzter Variable
+erzeugt `suiteRequiring` in diesem Fall einen **fehlschlagenden** Test mit dem Grund der Probe. Die
+Klassenauswahl bleibt unberührt: `nightly` und `manual` dürfen in einem `ci`-Lauf weiter überspringen.
+Ein Wert außerhalb von `1`/`true`/`0`/`false` bricht ab — beim Import geprüft, nicht erst dann, wenn
+zufällig eine Probe negativ ausfällt. Der CI-Job setzt die Variable; sie ersetzt die frühere
+Log-Suche nach dem **Fehlen** eines Skip-Hinweises, die eine _abwesende_ Suite nicht erkannte.
+
+### 2.4 Seeds
+
+`resolveSeed(name)` und `seededRng(seed)` aus `@oa-test/seed`. Der Seed kommt aus `OA_TEST_SEED`
+oder wird gezogen; in **beiden** Fällen wird er ausgegeben, zusammen mit dem Replay-Kommando. Jede
+Assertion in einem randomisierten Test hängt `rng.context({ iteration })` an ihre Meldung, damit ein
+Fehlschlag exakt wiederholbar ist. `Math.random()` kommt im Generatorpfad nicht vor.
+
+### 2.5 Sichtbare Coverage-Hinweise
+
+`coverageNotice(text)` und `announceSampling(...)` aus `@oa-test/notice` schreiben nach stderr
+(`[TEST-COVERAGE NOTICE] …`), überleben also jeden Reporter. Pflicht bei: übersprungener Klasse,
+fehlender Infrastruktur, Stichprobe statt Vollauf, übersprungener Plattform. Grundregel 6 ist damit
+maschinell umgesetzt und nicht nur Absicht.
+
+### 2.6 Die Postgres-Basis der `integration`-Suite
+
+> Umgesetzt in JR-104 (2026-07-28): `packages/backend/tests/support/pg-harness.ts`.
+
+`acquireTestDatabase(label)` legt **eine eigene Datenbank je Aufruf** an, wendet die Migrationen des
+Repositorys darauf an und gibt einen postgres-js-Client plus ein Drizzle-Handle zurück.
+`release()` schließt die Verbindungen und löscht die Datenbank; die Registrierung als `afterAll`
+läuft auch dann, wenn ein Test geworfen hat.
+
+**Eigene Datenbank, nicht eigenes Schema — und das ist keine Wahl.** `search_path`-Isolation wäre
+billiger und bräuchte kein `CREATEDB`. Sie funktioniert gegen **diese** Migrationen nicht, weil
+drizzle-kit Enums und Fremdschlüsselziele schema-qualifiziert ausgibt, `CREATE TABLE` aber nicht:
+
+```
+migrations/0000_amusing_namora.sql:1    CREATE TYPE "public"."retention_action" AS ENUM(...)
+migrations/0000_amusing_namora.sql:120  ... REFERENCES "public"."custodians"("id") ...
+```
+
+Unter `search_path = oa_test_x` entstünden die Tabellen in `oa_test_x`, die Fremdschlüssel zeigten
+auf `public.custodians`, und ein zweiter paralleler Lauf kollidierte auf `CREATE TYPE "public"…`,
+weil `CREATE TYPE` mit explizitem Schema `search_path` ignoriert. Migrationen dafür zu ändern ist
+ausgeschlossen (CLAUDE.md 5.2). In einer frischen Datenbank ist `"public"` dagegen deren eigenes
+`public`, und das Problem verschwindet.
+
+| Env-Variable                | Default    | Zweck                                                                     |
+| --------------------------- | ---------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`              | —          | Server **und** Zugangsdaten. Ohne sie überspringt die Suite sichtbar      |
+| `OA_TEST_PG_MAINTENANCE_DB` | `postgres` | Datenbank für `CREATE`/`DROP DATABASE`                                    |
+| `OA_TEST_PG_STALE_MS`       | `7200000`  | Ab welchem Alter ein `oa_test_*`-Rest als verwaist gilt und gelöscht wird |
+| `OA_TEST_REQUIRE_INFRA`     | `0`        | `1` ⇒ fehlende Infrastruktur **schlägt fehl**, statt sichtbar zu skippen  |
+| `OA_TEST_INVENTORY_REPORT`  | —          | Pfad, unter dem `globalSetup` die Suite-Inventur als JSON ablegt          |
+
+**Rechteanforderung (relevant für ADR-009).** Die Rolle in `DATABASE_URL` braucht `CREATEDB` sowie
+das Recht, in der neuen Datenbank DDL auszuführen. Das ist die **Bootstrap**-Rolle der Tests, nicht
+die Anwendungsrolle: sobald `JR-205` Append-Only über Rechteentzug erzwingt, muss der Test die
+eingeschränkte Anwendungsrolle **zusätzlich** anlegen und sich für die Append-Only-Prüfungen mit ihr
+verbinden. Eine einzige allmächtige Rolle für beides würde `JR-205` unprüfbar machen.
+
+**`DATABASE_URL` und der Import-Throw.** `src/database/index.ts` baut sein `db`-Singleton **beim
+Import** und wirft ohne `DATABASE_URL`. Wer `FilterBuilder` oder `mongoToMeli` testet, muss daher in
+dieser Reihenfolge arbeiten: Harness holen → `harness.bindAsProcessDatabaseUrl()` →
+`await import(...)`. `bindAsProcessDatabaseUrl()` verweigert den Dienst, wenn das Singleton schon
+existiert — der Fehler wird laut, statt still gegen die falsche Datenbank zu testen. Damit diese
+`process.env`-Mutation nicht in eine andere Testdatei ausläuft, ist das Project `integration` auf
+`pool: 'forks'` und `isolate: true` festgelegt; `fileParallelism` bleibt an, weil paralleles Laufen
+gerade der Fall ist, den die Isolation aushalten muss.
+
+**Rückstände.** Ein hart abgeschossener Worker (`SIGKILL`) führt kein Teardown aus.
+`sweepStaleHarnessDatabases()` löscht solche Reste beim nächsten `acquire`, aber nur wenn sie
+(a) nicht vom eigenen Prozess stammen, (b) keine offenen Verbindungen haben und (c) älter als
+`OA_TEST_PG_STALE_MS` sind. Jede Löschung wird als Coverage-Hinweis ausgegeben — ein verschwindender
+Rest darf nicht lautlos verschwinden, sonst verbirgt er, dass ein Lauf gestorben ist. `(c)` ist die
+einzige Absicherung gegen einen **fremden** laufenden Prozess: `OA_TEST_PG_STALE_MS` unter die
+längste Suite-Laufzeit zu setzen kann dessen Datenbank löschen (beim Verifizieren mit 1000 ms
+beobachtet, und in **F12** noch einmal unfreiwillig). Default nicht absenken.
+
+**Seit `JR-104a` ist das strukturell abgesichert, nicht nur eine Bitte.** `sweepStaleHarnessDatabases()`
+nimmt `{ staleMs?, restrictTo? }`; `restrictTo` filtert im SQL, ein gesenkter `staleMs` **ohne**
+`restrictTo` wirft. Wer eine kurze Frist braucht, muss also benennen, welche Datenbanken er meint —
+fremde sind damit nicht „verschont", sondern unerreichbar. Fixture-Namen für die Sweeper-Tests kommen
+aus `buildForeignFixtureName()`: fremdes PID-Feld (sonst greift der Eigen-PID-Wächter und der Test
+prüft nichts), Eindeutigkeit über `process.pid` + Zufallsbytes im Tag.
+
+**Verbleibende Lücke — `F13`, für E2/E3 relevant.** Der unbeschränkte Sweep aus `acquireTestDatabase()`
+läuft weiter mit der Standardfrist. Ein fremder Lauf, der **länger als die Frist** dauert, ist für ihn
+nicht von echtem Rückstand zu unterscheiden. Regel bis zur Behebung: **jeder Lauf, der länger als 2 h
+dauern kann — jeder Soak in E2/E3 — hebt `OA_TEST_PG_STALE_MS` über seine erwartete Laufzeit.** Die CI
+ist unberührt, ein Job hat seinen eigenen Service-Container.
 
 ## 3. RFC §12 → konkrete Testfälle
 

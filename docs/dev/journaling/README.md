@@ -29,18 +29,19 @@ SEC 17a-4, FINRA 4511, MiFID II).
 
 ## Lesereihenfolge
 
-| #   | Datei                    | Inhalt                                                             | Wann lesen                          |
-| --- | ------------------------ | ------------------------------------------------------------------ | ----------------------------------- |
-| —   | `README.md`              | dieses Dokument                                                    | immer zuerst                        |
-| 00  | `00-rfc.md`              | Der RFC im Original (EN), **byteidentisch** (in `.prettierignore`) | vor jeder Design-Entscheidung       |
-| 01  | `01-gap-analyse.md`      | Ist-Zustand der Codebase vs. RFC-Forderungen                       | einmal, dann bei Bedarf             |
-| 02  | `02-architektur.md`      | Zielarchitektur, Prozess- und Credential-Topologie, Ledger-Design  | vor Implementierungsarbeit          |
-| 03  | `03-backlog.md`          | Epics E1–E12 mit Tasks, Akzeptanzkriterien, Abhängigkeiten         | vor jeder Task                      |
-| 04  | `04-testplan.md`         | RFC §12 → konkrete Testfälle, Einteilung CI/Nightly/manuell        | vor Testarbeit                      |
-| 05  | `05-entscheidungen.md`   | ADR-Log: getroffene und bewusst offene Entscheidungen              | bei Design-Konflikten               |
-| 06  | `06-status.md`           | Fortschritt je Epic und Task                                       | **immer zuerst nach diesem README** |
-| 07  | `07-session-handover.md` | Was ist der nächste konkrete Schritt                               | am Anfang und Ende jeder Session    |
-| 08  | `08-risiken.md`          | Risiken mit Gegenmaßnahme                                          | bei Planungsänderungen              |
+| #   | Datei                        | Inhalt                                                             | Wann lesen                              |
+| --- | ---------------------------- | ------------------------------------------------------------------ | --------------------------------------- |
+| —   | `README.md`                  | dieses Dokument                                                    | immer zuerst                            |
+| 00  | `00-rfc.md`                  | Der RFC im Original (EN), **byteidentisch** (in `.prettierignore`) | vor jeder Design-Entscheidung           |
+| 01  | `01-gap-analyse.md`          | Ist-Zustand der Codebase vs. RFC-Forderungen                       | einmal, dann bei Bedarf                 |
+| 02  | `02-architektur.md`          | Zielarchitektur, Prozess- und Credential-Topologie, Ledger-Design  | vor Implementierungsarbeit              |
+| 03  | `03-backlog.md`              | Epics E1–E12 mit Tasks, Akzeptanzkriterien, Abhängigkeiten         | vor jeder Task                          |
+| 04  | `04-testplan.md`             | RFC §12 → konkrete Testfälle, Einteilung CI/Nightly/manuell        | vor Testarbeit                          |
+| 05  | `05-entscheidungen.md`       | ADR-Log: getroffene und bewusst offene Entscheidungen              | bei Design-Konflikten                   |
+| 06  | `06-status.md`               | Fortschritt je Epic und Task                                       | **immer zuerst nach diesem README**     |
+| 07  | `07-session-handover.md`     | Was ist der nächste konkrete Schritt                               | am Anfang und Ende jeder Session        |
+| 08  | `08-risiken.md`              | Risiken mit Gegenmaßnahme                                          | bei Planungsänderungen                  |
+| 09  | `09-befunde-bestandscode.md` | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes          | bevor man einen davon „nebenbei" behebt |
 
 ## Team und Rollen
 
@@ -80,13 +81,16 @@ Auditor-Artefakte ab E9/E11.
 
 ## Aktueller Stand (Kurzfassung)
 
-Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. Es existiert noch **kein**
-Produktionscode für den Receiver. Nächster Schritt ist **E1 — Test- und CI-Fundament**, weil das
-Repository heute keinerlei Testinfrastruktur hat und RFC §12 adversariale Tests verlangt.
+Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 läuft:** vitest steht,
+149 Unit-Tests sind grün, `pnpm lint` ist repo-weit sauber. Offen in E1 sind `JR-104`
+(Integrationstest-Basis) und `JR-105` (CI-Workflow). Es existiert noch **kein** Produktionscode für
+den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 
 ## Branch
 
-Alle Arbeit läuft auf `claude/enterprise-product-implementation-cxmmqe`. Kein Push auf `main`,
-kein Pull Request ohne ausdrückliche Aufforderung.
+`claude/enterprise-product-implementation-cxmmqe` ist **Integrationsbranch**, kein Arbeitsbranch.
+Jedes Epic bekommt einen eigenen Zweig davon (`claude/journaling-e<N>-<kurzname>`), Rückmerge erst
+nach unabhängiger Abnahme. `main` wird bis zur Abnahme von E12 nicht angefasst. Kein Pull Request
+ohne ausdrückliche Aufforderung. Vollständige Regeln: **ADR-014** in `05-entscheidungen.md`.
