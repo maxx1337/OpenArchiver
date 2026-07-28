@@ -57,6 +57,24 @@ und Tests ausführt. Ohne das ist RFC §12 nicht umsetzbar und jede Durability-A
 | JR-105 | GitHub-Workflow `.github/workflows/ci.yml`: `pnpm lint`, `pnpm --filter @open-archiver/backend build`, `pnpm --filter @open-archiver/frontend check`, `pnpm test` — auf Pull Request und Push. Postgres als Service-Container für die `integration`-Suite. **Nur prüfen (`prettier --check` via `pnpm lint`), niemals `pnpm format` ausführen und niemals auto-committen** (ADR-015) | DEV   | §12 | Workflow läuft auf dem Branch grün. Bestehende Workflows (`cla`, `deploy-docs`, `docker-deployment`, `release-tag`) unverändert. Kein Schritt schreibt Dateien ins Repository zurück |
 | JR-106 | Abnahme E1                                                                                                                                                                                                                                                                                                                                                                           | PO    | —   | `pnpm test` und CI grün; JR-101…104, JR-105a und JR-105 erfüllt; `06-status.md` aktualisiert                                                                                         |
 
+### Nacharbeit aus der Abnahme `JR-106` (2026-07-28)
+
+Die Abnahme hat E1 **abgelehnt** und drei Defekte im **eigenen** Testfundament gefunden. Der PO hat
+entschieden, sie nachzuarbeiten statt sie zu akzeptieren: eine bekannte Schwäche im Messinstrument
+widerspricht Grundregel 6 des Testplans („keine stillen Kürzungen"), und auf diesem Harness ruht jede
+Durability-Aussage in E2/E3.
+
+| ID      | Task                                                                                                                                                                                                                                                                                                                   | Rolle | Befund | Akzeptanzkriterien                                                                                                                                                                         |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JR-104a | **F12 beheben.** Beide Fixture-Namen in `pg-harness.int.test.ts` prozessspezifisch bilden (`process.pid` + Zufallssuffix), **und** den `sweepStaleHarnessDatabases()`-Aufruf im Test auf ein eigenes Label einschränken — die Fremd-PID `999999` lässt ihn heute fremde Fixtures löschen                               | TEST  | F12    | Prozessübergreifender Doppellauf **mehrfach** grün (≥ 5 Wiederholungen, alle protokolliert) — bei einem Zeitfensterdefekt ist ein einzelner grüner Lauf kein Nachweis. Keine DB-Rückstände |
+| JR-105b | **Die zwei Lücken der CI-Nachlaufprüfung schließen**, mit einer **positiven** Erwartung statt einer Negativsuche im Log: (a) eine _abwesende_ `integration`-Suite muss rot machen, nicht nur eine übersprungene; (b) eine Datei in `tests/integration/`, die auf kein Project-Glob passt, darf nicht unbemerkt bleiben | TEST  | —      | Verzeichnis umbenennen ⇒ rot. Datei `foo.test.ts` in `tests/integration/` mit fehlschlagender Assertion ⇒ rot. Beide Fälle auch in der Gegenrichtung geprüft (legitimer Zustand ⇒ grün)    |
+| JR-106a | Erneute Abnahme E1 nach der Nacharbeit                                                                                                                                                                                                                                                                                 | TEST  | —      | Alle Kriterien aus `JR-106` erneut, plus die Kriterien von `JR-104a` und `JR-105b`                                                                                                         |
+
+> `JR-105b` überschreitet bewusst die DEV/TEST-Grenze: die Prüfung liegt in
+> `.github/workflows/ci.yml` (DEV-Territorium laut `JR-105`), ist aber inhaltlich
+> Test-Verifikationslogik. Sie zusammen mit `JR-104a` an eine Rolle zu geben vermeidet zwei Agenten
+> auf demselben Branch.
+
 **Achtung — bereits geprüft, `pnpm lint` schlägt heute fehl.** `pnpm lint` ist Prettier `--check`
 über das gesamte Repository. Der Bestand ist **nicht** sauber: **13** Dateien werden beanstandet,
 davon **6 generierte** (vollständige Prüfung mit allen Plugins, `npx prettier --list-different .`,
