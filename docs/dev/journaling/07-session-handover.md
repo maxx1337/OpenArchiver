@@ -41,9 +41,28 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ### Immer zuerst
 
-1. **`pnpm install`** — der Container ist flüchtig, `node_modules` fehlt in jeder neuen Session.
+1. **Gegen das Remote abgleichen — vor allem anderen.** Der Container kann auf einen **älteren Stand
+   zurückgesetzt** worden sein, während alles unverdächtig aussieht: Arbeitsbaum sauber,
+   `node_modules` inklusive `vitest` vorhanden, die Dateien der letzten Epics scheinbar da. Der
+   **Reflog zeigt die verlorenen Commits dann nicht** — sie existieren im Container gar nicht.
+
+    ```bash
+    git fetch origin <branch>
+    git log --oneline -1                      # lokaler Stand
+    git ls-remote origin refs/heads/<branch>  # tatsächlicher Remote-Stand
+    ```
+
+    Weichen sie ab: `git merge --ff-only origin/<branch>`. Bewusst `--ff-only` und **nicht**
+    `reset --hard` — es schlägt fehl, falls der Stand wirklich divergiert, statt stillschweigend etwas
+    zu verwerfen.
+
+    Am 2026-07-28 ist genau das passiert: lokal `36cf6bd`, remote `653dd1c`, drei Commits fehlten.
+    Wer das nicht prüft, arbeitet gegen eine veraltete Basis — damals gegen die **unbehobene**
+    F12-Version des Test-Harness.
+
+2. **`pnpm install`** — der Container ist flüchtig, `node_modules` fehlt in jeder neuen Session.
    Ohne das läuft weder `pnpm lint` noch ein Build noch `pnpm test`.
-2. **Auf den richtigen Branch wechseln.** Epic-Arbeit läuft nie direkt auf dem Integrationsbranch:
+3. **Auf den richtigen Branch wechseln.** Epic-Arbeit läuft nie direkt auf dem Integrationsbranch:
 
     ```bash
     git fetch origin claude/enterprise-product-implementation-cxmmqe
@@ -128,18 +147,26 @@ warum E11 ohne E13 nicht abnehmbar ist.
 
 ### Offene Fragen an den Auftraggeber
 
-**Blockierend für die Abnahme von E1:**
+**F12 ist erledigt und braucht keine Entscheidung mehr.** Der PO hat am 2026-07-28 entschieden
+nachzuarbeiten statt zu akzeptieren — eine bekannte Schwäche im Messinstrument widerspricht
+Grundregel 6 des Testplans, und auf diesem Harness ruht jede Durability-Aussage in E2/E3. Behoben in
+`JR-104a` (`653dd1c`), zusammen mit `JR-105b` (die zwei Lücken der CI-Nachlaufprüfung).
 
-| Punkt   | Frage                                                                                                                                                                                                 |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F12** | Nacharbeiten (Fixture-Namen prozessspezifisch machen) und E1 danach abnehmen, oder die Einschränkung „keine parallelen Läufe gegen dasselbe Postgres" bewusst akzeptieren und im Testplan festhalten? |
+**Blockierend für die Abnahme von E1: nichts Inhaltliches mehr** — es fehlt nur die Durchführung von
+`JR-106a`. Der erste Versuch wurde vom Session-Limit abgebrochen, bevor er über die Vorbereitung
+hinauskam; es liegt **kein** Abnahmeergebnis vor.
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
+
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.** |
+| **ADR-017** | Action-Versatz: `search.routes.ts:158` prüft `('search','archive')`, `SearchService.ts:311`/`:423` bauen den Filter für `('read','archive')`. Beide Angleichungsrichtungen treffen Bestandsrollen unterschiedlich. **Vor `JR-1302` zu entscheiden**, nicht der Rolle DEV zu überlassen.                                                                                                                                                                                                                                                       |
 
 | Punkt                                     | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Zwei offene Pull Requests nach `main`** | **PR #1** (`claude/enterprise-product-implementation-cxmmqe` → `main`) und **PR #2** (`claude/journaling-e1-test-foundation` → `main`) sind offen. Beide **widersprechen ADR-014**: `main` wird bis zur Abnahme von E12 nicht angefasst, und Epic-Branches mergen in den Integrationsbranch, nicht nach `main`. Nebenwirkung: jeder Push löst seitdem **zwei** CI-Läufe aus (`push` und `pull_request` auf demselben SHA) und verdoppelt die Laufzeitkosten. **Die Entscheidung liegt beim Auftraggeber. Kein Agent schließt oder merged sie eigenmächtig.** |
-| **Rückmerge E1**                          | `claude/journaling-e1-test-foundation` ist nach `origin` gepusht, aber nicht in den Integrationsbranch gemergt. Der Merge ist Sache des Auftraggebers und sollte auf die F12-Entscheidung warten.                                                                                                                                                                                                                                                                                                                                                            |
+| **Rückmerge E1**                          | `claude/journaling-e1-test-foundation` ist nach `origin` gepusht (`653dd1c`), aber nicht in den Integrationsbranch gemergt. Der Merge ist Sache des Auftraggebers und sollte auf das Ergebnis von `JR-106a` warten.                                                                                                                                                                                                                                                                                                                                          |
 
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
