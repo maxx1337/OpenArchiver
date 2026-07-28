@@ -1,16 +1,29 @@
 # Befunde im Bestandscode
 
-Defekte, die beim Arbeiten am Journaling-Projekt **im vorhandenen Code** gefunden wurden. Sie sind
-**nicht** Teil des RFC-Scopes und wurden bewusst **nicht** nebenbei behoben — eine Testaufgabe ist
-nicht der Ort für stille Produktionsänderungen. Dieses Dokument existiert, damit sie nicht verloren
-gehen.
+Defekte, die beim Arbeiten am Journaling-Projekt gefunden wurden, aber **nicht** Teil des
+RFC-Scopes sind. Sie wurden bewusst **nicht** nebenbei behoben — eine Testaufgabe ist nicht der Ort
+für stille Produktionsänderungen. Dieses Dokument existiert, damit sie nicht verloren gehen.
 
 Jeder Befund braucht eine Entscheidung des Auftraggebers: **jetzt beheben**, **in ein Epic
 einplanen**, oder **bewusst akzeptieren**.
 
-Herkunft: `JR-103` (F1–F6) und `JR-104` (F7–F10), Rolle `tester`, 2026-07-27/28. Die Befunde sind im
-Testcode markiert, teils mit `it.fails` — dort schlägt der Marker fehl, sobald jemand den Defekt
-behebt, und die Erwartung muss dann invertiert werden.
+**Die `F`-Nummerierung ist fortlaufend und liegt ausschließlich in dieser Datei.** Andere Dokumente
+verweisen auf `F<N>`, führen aber keine eigenen Befunde — eine über zwei Dateien verteilte
+Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-status.md`, verschoben am
+2026-07-28 im Rahmen von `JR-106`).
+
+Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
+
+| Kategorie                  | Bedeutung                                                                              | Befunde |
+| -------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10  |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11     |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12     |
+
+Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11) und die Abnahme `JR-106` (F12), Rolle
+`tester`, 2026-07-27/28. Die Bestandscode-Befunde sind im Testcode markiert, teils mit `it.fails` —
+dort schlägt der Marker fehl, sobald jemand den Defekt behebt, und die Erwartung muss dann
+invertiert werden.
 
 ---
 
@@ -228,6 +241,106 @@ aber die Funktion ist damit als Cache-Key unbrauchbar und gegen ein Golden File 
 F4 war gegen `mongoToDrizzle` gemeldet. `mongoToMeli` hat dieselbe Form (`Object.keys(value)[0]`),
 verliert also ebenfalls die zweite Grenze: `{ timestamp: { $gte: 1, $lte: 5 } }` → `timestamp >= 1`.
 Eine bereichsbeschränkende Policy wird damit auf **beiden** Pfaden zu still erweiterten Rechten.
+
+---
+
+## F11 — Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig
+
+**Kategorie:** vorgegebenes Verfahren — **kein Defekt im Produktionscode** ·
+**Schwere:** mittel (blockierte jeden CI-Lauf, bis der Schritt ergänzt war) ·
+**Ort:** die Schrittfolge in `03-backlog.md`, Task `JR-105`; behoben in `.github/workflows/ci.yml` ·
+**Status:** **behoben** (2026-07-28, `1bad10c`) · **Herkunft:** `JR-105`, erster echter CI-Lauf
+
+Lauf 1 des neuen Workflows (`d0bb792`, Push) wurde bei „Build backend" rot:
+**54 × `TS2307: Cannot find module '@open-archiver/types'`**.
+
+Ursache: `@open-archiver/types` wird über `main: dist/index.js` / `types: dist/index.d.ts`
+aufgelöst, und `dist` steht in `.gitignore`. Auf einem frischen Checkout existiert es also nicht, und
+`pnpm --filter @open-archiver/backend build` zieht die Workspace-Dependency **nicht** mit — nur
+`pnpm build:oss` tut das, weil es `./packages/*` filtert und pnpm topologisch ordnet. Betroffen sind
+drei der fünf im Task genannten Schritte: Backend-Build, `svelte-check` und `test:types`.
+
+Das ist damit **kein CI-Fehler, sondern eine Lücke der im Task vorgegebenen Schrittfolge.** Kleinste
+Korrektur: ein vorgeschalteter Schritt `pnpm --filter @open-archiver/types build`. Die vorgegebenen
+Kommandos bleiben wörtlich erhalten; im Job-Log ist sichtbar, welches Paket bricht, wenn eines
+bricht.
+
+Warum die lokalen Läufe das verdeckten: `packages/types/dist` lag im Container aus früheren Sessions
+bereits gebaut vor. **Lokal beidseitig belegt**, zuletzt in der Abnahme `JR-106` (2026-07-28) nach
+`rm -rf` **aller** gitignorierten Build-Artefakte (`packages/types/dist`, `packages/backend/dist`,
+`packages/frontend/.svelte-kit`, beide `tsconfig.tsbuildinfo`):
+
+- ohne den Schritt: `pnpm --filter @open-archiver/backend build` ⇒ 54 × `TS2307`, Exit 2 — identisch
+  zum CI-Log;
+- mit dem Schritt: Types-Build, Backend-Build, `svelte-check` (0/0), `test:types` und `pnpm test`
+  (181 grün) alle grün.
+
+Der `tsbuildinfo`-Hinweis ist keine Nebensache: `packages/types/tsconfig.json` hat
+`composite: true`, ein bloßes Löschen von `dist` lässt `tsc` also wegen der stehengebliebenen
+Build-Info **nichts** emittieren. Wer das nachstellen will, muss beides löschen.
+
+**Lehre für künftige Epics:** eine im Backlog vorgegebene Kommandofolge ist eine Annahme, kein
+Fakt. Sie gilt erst als lauffähig, wenn sie ohne vorhandene Build-Artefakte durchgelaufen ist.
+
+## F12 — Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen
+
+**Kategorie:** Testharness — unsere eigene E1-Arbeit, **kein Bestandsproblem** ·
+**Schwere:** mittel (Harness-Defekt; kein Durability- oder Autorisierungsrisiko, CI unberührt) ·
+**Ort:** `packages/backend/tests/integration/pg-harness.int.test.ts`, Zeile 212 ·
+**Status:** **offen, nicht behoben** · **Herkunft:** `JR-106` (Abnahme E1), 2026-07-28
+
+Der Test `sweeps a stale database from a dead run but leaves a fresh one alone` legt seine
+Fixture-Datenbanken unter **festen** Namen an:
+
+```ts
+const stale = 'oa_test_1609459200000_999999_deadaa_sweeptest';
+const fresh = `oa_test_${Date.now()}_999999_deadbb_sweeptest`;
+```
+
+`stale` enthält keinen prozessspezifischen Anteil. Laufen zwei Integrationsläufe gleichzeitig gegen
+**dasselbe** Postgres, scheitert der zweite an
+
+```
+PostgresError: duplicate key value violates unique constraint "pg_database_datname_index"
+```
+
+**Reproduktion (4 von 4 Versuchen, PostgreSQL 16.13 lokal):**
+
+```bash
+pnpm test:integration & pnpm test:integration & wait
+```
+
+⇒ ein Lauf `exit=0` (32/32), der andere `exit=1` (`1 failed | 31 passed`). Welcher der beiden
+verliert, ist Zeitfrage; dass einer verliert, war in dieser Umgebung nicht vermeidbar.
+
+**Damit ist das Akzeptanzkriterium von `JR-104`** — „Zwei Integrationstests können parallel laufen,
+ohne sich zu beeinflussen" — **in der prozessübergreifenden Lesart nicht erfüllt.** Innerhalb eines
+Laufs hält es (4 Dateien parallel, 32 Tests grün, plus der eigene Testfall
+`keeps four concurrent acquisitions apart`). Der in `06-status.md` als Nachweis geführte Satz
+„Zwei vollständige Läufe gleichzeitig ⇒ beide `exit=0`, 30/30 bzw. 30/30" ist für den heutigen Code
+**widerlegt** — er nennt 30 Tests, die Datei hat 32; der Nachweis kann nur gegen einen früheren
+Zwischenstand gelaufen sein.
+
+**Zweiter, latenter Kollisionspfad — aus dem Code gelesen, nicht beobachtet.** Der Sweeper schützt
+eigene Datenbanken über `Number(match[2]) === process.pid` (`tests/support/pg-harness.ts:257`). Die
+Fixtures tragen die **Fremd**-PID `999999`. Der Folgetest `never sweeps a database this process
+created` setzt `OA_TEST_PG_STALE_MS = '1'` und ruft `sweepStaleHarnessDatabases()` — er darf damit
+die `fresh`-Fixture eines **gleichzeitig** laufenden fremden Prozesses löschen (fremde PID, keine
+offenen Verbindungen, Alter > 1 ms). Beobachtet wurde das nicht, weil der Duplicate-Key-Fehler
+vorher zuschlägt. Ein Fix, der nur den festen Namen ändert, lässt diesen Pfad offen.
+
+**Kein Einfluss auf die CI.** Ein GitHub-Actions-Job fährt einen Lauf gegen einen eigenen
+Service-Container; zwei gleichzeitige Jobs haben je eigenes Postgres. Die grünen Läufe sind echt.
+Betroffen ist die lokale Nutzung und jede künftige Aufstellung, in der sich mehrere Läufe ein
+Postgres teilen (Matrix-Jobs mit gemeinsamem Service, Entwicklerrechner).
+
+**Vorgeschlagene Behebung** (Rolle `tester`, nicht in der Abnahme selbst erledigt, weil eine Abnahme
+nichts reparieren darf, was sie prüft): beide Fixture-Namen aus `process.pid` **und** einem
+Zufallssuffix bilden — genau wie `harnessDatabaseName()` es tut — und den 2021er Zeitstempel nur als
+Alterskennzeichen behalten. Für den zweiten Pfad zusätzlich das Fixture-Paar über ein eindeutiges
+Label kenntlich machen und den Sweeper im Test auf dieses Label einschränken, statt ihn global mit
+`STALE_MS=1` laufen zu lassen. Danach die prozessübergreifende Parallelität erneut belegen, und
+zwar mehrfach — ein einzelner grüner Doppellauf ist bei einem Zeitfensterdefekt kein Nachweis.
 
 ---
 

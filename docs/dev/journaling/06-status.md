@@ -6,7 +6,16 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-28 · **Branch:** `claude/journaling-e1-test-foundation`
+**Letzte Aktualisierung:** 2026-07-28 (Abnahme `JR-106`) · **Branch:**
+`claude/journaling-e1-test-foundation`
+
+> **E1 ist nicht abgenommen.** Die unabhängige Abnahme `JR-106` lief am 2026-07-28 vollständig
+> durch: **fünf von sechs** vorgelegten Tasks sind erfüllt, `JR-104` nicht. Grund ist **F12** — zwei
+> gleichzeitige Integrationsläufe kollidieren reproduzierbar (4/4) auf einem festen Datenbanknamen,
+> womit das Akzeptanzkriterium „zwei Integrationstests parallel, ohne sich zu beeinflussen" in der
+> prozessübergreifenden Lesart bricht und der bisher dafür geführte Nachweis widerlegt ist. Details
+> unten unter „Abnahme `JR-106`" und in `09-befunde-bestandscode.md`. Die CI ist davon **nicht**
+> betroffen und weiterhin grün.
 
 ---
 
@@ -15,22 +24,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status     | Fertig / Gesamt |
-| ----------- | ---- | ---------------------------------- | ---------- | --------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig** | 6 / 6           |
-| 1           | E1   | Test- und CI-Fundament             | in Arbeit  | 5 / 7           |
-| 2           | E13  | IAM-Autorisierung härten           | offen      | 0 / 9           |
-| 3           | E2   | Ledger und Hash-Chain              | offen      | 0 / 10          |
-| 4           | E3   | Spool und Acceptance-Contract      | offen      | 0 / 8           |
-| 5           | E4   | `smtp-ingress`-Service             | offen      | 0 / 13          |
-| 6           | E5   | Journal-Report-Parser              | offen      | 0 / 9           |
-| 7           | E6   | Phase-B-Worker                     | offen      | 0 / 8           |
-| 8           | E7   | WORM-Storage                       | offen      | 0 / 6           |
-| 9           | E8   | Anchoring                          | offen      | 0 / 6           |
-| 10          | E9   | `verify`-CLI                       | offen      | 0 / 8           |
-| 11          | E10  | Completeness-Monitoring            | offen      | 0 / 8           |
-| 12          | E11  | Compliance-Features                | offen      | 0 / 10          |
-| 13          | E12  | Rollout und Dokumentation          | offen      | 0 / 9           |
+| Reihenfolge | Epic | Titel                              | Status              | Fertig / Gesamt |
+| ----------- | ---- | ---------------------------------- | ------------------- | --------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**          | 6 / 6           |
+| 1           | E1   | Test- und CI-Fundament             | **abgelehnt** (F12) | 5 / 7           |
+| 2           | E13  | IAM-Autorisierung härten           | offen               | 0 / 9           |
+| 3           | E2   | Ledger und Hash-Chain              | offen               | 0 / 10          |
+| 4           | E3   | Spool und Acceptance-Contract      | offen               | 0 / 8           |
+| 5           | E4   | `smtp-ingress`-Service             | offen               | 0 / 13          |
+| 6           | E5   | Journal-Report-Parser              | offen               | 0 / 9           |
+| 7           | E6   | Phase-B-Worker                     | offen               | 0 / 8           |
+| 8           | E7   | WORM-Storage                       | offen               | 0 / 6           |
+| 9           | E8   | Anchoring                          | offen               | 0 / 6           |
+| 10          | E9   | `verify`-CLI                       | offen               | 0 / 8           |
+| 11          | E10  | Completeness-Monitoring            | offen               | 0 / 8           |
+| 12          | E11  | Compliance-Features                | offen               | 0 / 10          |
+| 13          | E12  | Rollout und Dokumentation          | offen               | 0 / 9           |
 
 111 Tasks gesamt (E0 lieferte 102; E13 kam mit 9 hinzu).
 
@@ -73,17 +82,17 @@ Bestandscode korrigieren — der Receiver selbst beginnt erst mit E2.
 
 ---
 
-## E1 — Test- und CI-Fundament (in Arbeit)
+## E1 — Test- und CI-Fundament (Abnahme durchgeführt, **nicht** abgenommen)
 
-|     | Task                                                                                           | Rolle |
-| --- | ---------------------------------------------------------------------------------------------- | ----- |
-| [x] | JR-101 vitest im Monorepo einrichten                                                           | TEST  |
-| [x] | JR-102 Testkonventionen festlegen und dokumentieren                                            | TEST  |
-| [x] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` (ohne `FilterBuilder`, s. u.)     | TEST  |
-| [~] | JR-104 Integrationstest-Basis mit isolierter Postgres-Instanz — **geschrieben, Abnahme offen** | TEST  |
-| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**                     | DEV   |
-| [x] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests — CI-Lauf grün                          | DEV   |
-| [ ] | JR-106 Abnahme E1                                                                              | PO    |
+|     | Task                                                                                               | Rolle |
+| --- | -------------------------------------------------------------------------------------------------- | ----- |
+| [x] | JR-101 vitest im Monorepo einrichten — **abgenommen 2026-07-28**                                   | TEST  |
+| [x] | JR-102 Testkonventionen festlegen und dokumentieren — **abgenommen 2026-07-28**                    | TEST  |
+| [x] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` — **abgenommen 2026-07-28**           | TEST  |
+| [!] | JR-104 Integrationstest-Basis — **Abnahme verweigert: F12** (prozessübergreifende Parallelität)    | TEST  |
+| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **abgenommen 2026-07-28**                           | DEV   |
+| [x] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests — **abgenommen 2026-07-28**, CI-Lauf grün   | DEV   |
+| [~] | JR-106 Abnahme E1 — **durchgeführt 2026-07-28; Ergebnis: E1 nicht abgenommen**, F12 nachzuarbeiten | PO    |
 
 **`JR-105a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
 beanstandeten Dateien wurden die **7 handgeschriebenen** formatiert (1 `.md`, 3 `.ts`, 3 `.svelte`);
@@ -100,6 +109,12 @@ vor/nach Formatierung identisch (nur Whitespace, Quotes, `es5`-Trailing-Commas),
 Einschränkung: `pnpm db:generate` ist im Container nicht lauffähig (kein `DATABASE_URL`, keine `.env`,
 kein Postgres). Der drizzle-Nachweis lief über einen direkten `drizzle-kit generate`-Aufruf mit
 Dummy-`DATABASE_URL`; Details und Bewertung in ADR-015.
+
+> **Nachtrag aus `JR-106` (2026-07-28): diese Einschränkung ist aufgehoben.** Mit gesetztem
+> `DATABASE_URL` und laufendem Cluster läuft `pnpm db:generate` durch. Die Abnahme hat einen echten
+> Generatorlauf gefahren (erzwungene Schemaänderung ⇒ `0041_easy_invisible_woman.sql`,
+> `meta/0041_snapshot.json`, geändertes `_journal.json`) und `pnpm lint` danach grün gemessen. Die
+> Restlücke aus ADR-015 ist damit geschlossen; die Probe wurde vollständig zurückgebaut.
 
 Formal offen: die Abnahme von `JR-105a` gehört zu `JR-106` (Rolle PO).
 
@@ -189,10 +204,15 @@ Spaltennamen-Suites.
 `db`-Singleton, das beim Import wirft — sie gehören zu `JR-104`. Der Task-Text von JR-103 nennt
 `FilterBuilder`; das ist hier bewusst nicht erfüllt und in `JR-104` zu erledigen.
 
-### JR-104 geschrieben (2026-07-28) — Integrationstest-Basis · **Abnahme offen**
+### JR-104 geschrieben (2026-07-28) — Integrationstest-Basis · **Abnahme verweigert (F12)**
 
-**Nicht abgehakt.** Der Harness ist geschrieben und lokal gegen ein **echtes** Postgres grün; die
-Abnahme setzt den CI-Lauf aus `JR-105` voraus und gehört zu `JR-106`.
+**Nicht abgehakt.** Der Harness ist geschrieben und lokal gegen ein **echtes** Postgres grün. Die
+ursprünglich offene Bedingung (CI-Lauf gegen `postgres:17-alpine`) **ist erfüllt**. Die Abnahme
+`JR-106` hat den Task trotzdem **abgelehnt**: das Kriterium „zwei Integrationstests parallel, ohne
+sich zu beeinflussen" bricht prozessübergreifend reproduzierbar (**F12**), und der unten in diesem
+Abschnitt geführte Nachweis „zwei vollständige Läufe gleichzeitig ⇒ beide `exit=0`, 30/30 bzw. 30/30"
+ist für den heutigen Code **widerlegt**. Er bleibt hier als historischer Eintrag stehen, ist aber
+**nicht** mehr gültig.
 
 Neue Dateien:
 
@@ -310,30 +330,13 @@ sind:
 
 **F11 — der erste echte CI-Lauf fand einen Defekt, den kein lokaler Lauf finden konnte.** Lauf 1
 (`d0bb792`, Push) wurde bei „Build backend" rot: **54 × `TS2307: Cannot find module
-'@open-archiver/types'`**. Ursache: `@open-archiver/types` wird über `main: dist/index.js` /
-`types: dist/index.d.ts` aufgelöst, und `dist` steht in `.gitignore`. Auf einem frischen Checkout
-existiert es also nicht, und `pnpm --filter @open-archiver/backend build` zieht die
-Workspace-Dependency **nicht** mit — nur `pnpm build:oss` tut das, weil es `./packages/*` filtert
-und pnpm topologisch ordnet. Betroffen sind drei der fünf Schritte: Backend-Build, `svelte-check`
-und `test:types`.
+'@open-archiver/types'`**, weil `@open-archiver/types` über das gitignorierte `dist` auflöst und
+`pnpm --filter @open-archiver/backend build` die Workspace-Dependency nicht mitzieht. Behoben durch
+einen vorgeschalteten `pnpm --filter @open-archiver/types build`.
 
-Das ist **kein CI-Fehler, sondern eine Lücke der im Task vorgegebenen Schrittfolge** — sie ist auf
-einem frischen Checkout nicht lauffähig. Kleinste Korrektur: ein vorgeschalteter Schritt
-`pnpm --filter @open-archiver/types build`. Die vorgegebenen Kommandos bleiben damit wörtlich
-erhalten; im Job-Log ist sichtbar, welches Paket bricht, wenn eines bricht.
-
-Warum die lokalen Läufe das verdeckten: `packages/types/dist` lag im Container aus früheren
-Sessions bereits gebaut vor. **Lokal nachgestellt und beidseitig belegt** — nach
-`rm -rf packages/types/dist packages/backend/dist packages/*/tsconfig.tsbuildinfo` (beide untracked,
-auf einem frischen Checkout also ohnehin nicht vorhanden):
-
-- ohne den neuen Schritt: `pnpm --filter @open-archiver/backend build` ⇒ 54 × `TS2307`, Exit 2 —
-  identisch zum CI-Log;
-- mit dem neuen Schritt: Types-Build, Backend-Build, `svelte-check` (0/0) und `test:types` alle grün.
-
-Der `tsbuildinfo`-Hinweis ist keine Nebensache: `packages/types/tsconfig.json` hat
-`composite: true`, ein bloßes Löschen von `dist` lässt `tsc` also wegen der stehengebliebenen
-Build-Info **nichts** emittieren. Wer das lokal nachstellen will, muss beides löschen.
+> **Der vollständige Befund steht in `09-befunde-bestandscode.md` unter F11** (verschoben dorthin am
+> 2026-07-28, damit die `F`-Nummerierung in einer Datei liegt). Kategorie dort: **Defekt in der
+> vorgegebenen Schrittfolge, nicht im Produktionscode.**
 
 **Der echte CI-Lauf ist grün — das Akzeptanzkriterium ist damit erfüllt, nicht mehr nur plausibel.**
 Lauf 3 (`1bad10c`, Push, Job `Lint, build, typecheck, test`, 88 s):
@@ -375,7 +378,82 @@ hält.
 - **`pull_request`-Trigger**: er feuert (Lauf 2 auf demselben SHA, wegen des offenen PR #2 nach
   `main`), wurde aber nicht bis zum Ende beobachtet. Der Job ist identisch zum Push-Lauf.
 
+### Abnahme `JR-106` (2026-07-28) — Ergebnis: **E1 nicht abgenommen**
+
+Rolle `tester`, unabhängig gegen die Akzeptanzkriterien aus `03-backlog.md` geprüft, nicht gegen den
+geschriebenen Code. Abnahmeregel: `04-testplan.md` §6. Umgebung: kein Docker, aber ein aus den
+vorinstallierten Binaries gestarteter **PostgreSQL-16.13**-Cluster (`initdb` + `pg_ctl`,
+`127.0.0.1:5432`, Rolle `postgres` mit `CREATEDB`, `max_connections` 100), nach der Abnahme restlos
+entfernt (`pg_ctl stop`, `rm -rf`, `pg_isready` ⇒ „no response"). Nichts davon ist committet;
+`git status` ist nach jeder Sonde geprüft und war jedes Mal leer.
+
+| Task    | Kriterium                                                       | Urteil                  | Nachweis                                                                                                                                                                                           |
+| ------- | --------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JR-101  | `pnpm test` läuft von der Wurzel                                | **erfüllt**             | `pnpm test` ⇒ `Test Files 8 passed (8)`, `Tests 181 passed \| 2 skipped (183)`, Exit `0`                                                                                                           |
+| JR-101  | findet Tests in **allen** Paketen                               | **erfüllt**             | je eine Sonde in `packages/types/src/` und `packages/frontend/tests/unit/` ohne Config-Änderung gefunden und grün, danach entfernt                                                                 |
+| JR-101  | Exit `0` bei Erfolg, `≠ 0` bei Fehlschlag                       | **erfüllt**             | Fixture umbenannt ⇒ `3 failed \| 105 passed`, Exit `1`; F12-Doppellauf ⇒ Exit `1`                                                                                                                  |
+| JR-101  | keine Änderung an bestehendem Produktionscode                   | **erfüllt**             | Pre-E1-Worktree (`cea852f`) gebaut und `dist` verglichen: von **111** emittierten `.js` unterscheidet sich **eine** Datei (`config/search.js`) und nur im Zeilenumbruch — md5 gleich nach `tr -d`  |
+| JR-102  | Konventionen in `04-testplan.md`, ein Beispiel je Kategorie     | **erfüllt**             | alle 6 in §2.1 genannten Pfade existieren; `[ci]`/`[nightly]`/`[manual]` im Suite-Namen; alle drei Klassen ausgeführt; `OA_TEST_CLASSES=nightlyy` bricht mit Exit `1` ab                           |
+| JR-103  | ≥ 20 Assertions über die Fixtures, alle grün                    | **erfüllt**             | 108 `expect()`-Stellen in den beiden Fixture-Suites (30 + 78), zur Laufzeit mehr; grün                                                                                                             |
+| JR-103  | die Fixtures werden erstmals **tatsächlich** geladen            | **erfüllt**             | **alle acht** einzeln umbenannt ⇒ jedes Mal Exit `1` mit `IAM policy fixture "<name>" could not be read from …`                                                                                    |
+| JR-104  | zwei Integrationstests parallel, ohne sich zu beeinflussen      | **nicht erfüllt (F12)** | prozessübergreifend 4/4 rot: `duplicate key value violates unique constraint "pg_database_datname_index"`. Innerhalb **eines** Laufs erfüllt (4 Dateien parallel, 32 Tests grün)                   |
+| JR-104  | kein Rückstand in der DB nach dem Lauf                          | **erfüllt**             | nach jedem Lauf, auch nach dem kollidierten: `select … like 'oa\_test\_%'` ⇒ 0 Zeilen; am Ende nur `postgres`, `template0`, `template1`                                                            |
+| JR-105a | `pnpm lint` repo-weit grün, inklusive `.svelte`                 | **erfüllt**             | „All matched files use Prettier code style!", Exit `0`                                                                                                                                             |
+| JR-105a | Commit enthält **ausschließlich** Formatierung                  | **erfüllt**             | für alle 7 handgeschriebenen Dateien gilt mechanisch `prettier(Stand vor 1c46f7e) == Stand nach 1c46f7e`; Token-Streams der 3 `.ts`-Dateien md5-identisch                                          |
+| JR-105a | `pnpm db:generate` erzeugt danach keine erneute Lint-Verletzung | **erfüllt**             | erzwungenes `pnpm db:generate` schrieb `0041_*.sql` + `meta/0041_snapshot.json` + `_journal.json` ⇒ `pnpm lint` weiter grün; Probe vollständig zurückgebaut                                        |
+| JR-105  | Workflow läuft auf dem Branch grün                              | **erfüllt**             | Lauf 7 auf `36cf6bd` (= HEAD), alle 14 Schritte `success`, PostgreSQL **17.10**, `Tests 181 passed \| 2 skipped`                                                                                   |
+| JR-105  | bestehende vier Workflows unverändert                           | **erfüllt**             | Blob-Hashes `cla`/`deploy-docs`/`docker-deployment`/`release-tag` in Merge-Base, HEAD und Worktree identisch; `git log main..HEAD --` auf die vier ⇒ leer                                          |
+| JR-105  | kein Schritt schreibt Dateien ins Repository zurück             | **erfüllt**             | kein `format`/`commit`/`push` außer dem Trigger `push:`; `permissions: contents: read` ohne Job-Override; nach der lokalen Schrittfolge `git status --porcelain` leer; Log liegt in `$RUNNER_TEMP` |
+
+**Zusätzlich ausdrücklich geprüft: die grün aussehende Fehlerform.** Ohne `DATABASE_URL` endet
+`pnpm test` mit Exit **0** bei „149 passed | 34 skipped" — bestätigt. Die Nachlaufprüfung 1 aus
+`ci.yml` macht das rot, und zwar in **allen drei** Nichtverfügbarkeits-Modi (`DATABASE_URL` fehlt ·
+gesetzt aber nichts lauscht · Logdatei fehlt), weil alle Gründe aus `probePostgres()` die Wendung
+„integration suite" enthalten. Die legitimen Klassen-Skips lösen sie **nicht** aus: deren Grund
+lautet „class 'nightly' not selected", im selben Lauf gegengeprüft (0 Treffer). Nachlaufprüfung 2
+ebenfalls beidseitig: `oa_test_leftover_probe` wird erfasst, die Lookalike `oaxtestxnotours` nicht —
+die `\_`-Escapes greifen.
+
+**Zwei Lücken der Nachlaufprüfung 1, gefunden beim Versuch sie zu umgehen** (kein Kriteriumsbruch,
+aber genau die Klasse Fehler, gegen die sie existiert — Ausweg in `JR-1305` einplanen):
+
+1. Sie erkennt eine **übersprungene**, nicht eine **abwesende** Suite. Mit umbenanntem Verzeichnis
+   `tests/integration` läuft `pnpm test` grün („149 passed | 2 skipped", Exit `0`) und die Prüfung
+   meldet „No integration-suite skip notice found."
+2. Eine Datei in `tests/integration/`, die `*.test.ts` statt `*.int.test.ts` heißt, passt auf **kein**
+   Project-Glob und wird von niemandem eingesammelt. Belegt mit einer absichtlich fehlschlagenden
+   Sonde: `pnpm test` blieb grün, der Dateiname erschien nirgends im Log.
+
+Beides ist mit einer positiven Erwartung zu schließen (Mindestzahl gelaufener `integration`-Dateien
+bzw. eine Zusicherung, dass jede `*.test.ts` unter `tests/` von einem Project erfasst ist) statt mit
+einer Negativsuche im Log.
+
+**Kleinere Beobachtungen, kein Kriteriumsbruch:**
+
+- `POLICY_FIXTURES` in `tests/support/policy-fixtures.ts` ist eine feste Liste; kein Test vergleicht
+  sie mit dem Verzeichnisinhalt. Eine **neu hinzugefügte** Fixture wäre stillschweigend ungetestet.
+- Der `JR-105a`-Commit enthält neben der Formatierung auch Projektgedächtnis-Prosa (ADR-015 in
+  `05-entscheidungen.md`, Statuspflege in `06-status.md`). Keine Logikänderung, aber „ausschließlich
+  Formatierung" gilt streng nur für die 7 Quell- und Doku-Dateien.
+- `pnpm --filter @open-archiver/backend test` meldet heute 183 Tests, nicht die oben unter `JR-101`
+  protokollierten 154 — alle Tests liegen derzeit in `packages/backend`.
+
+**Nicht prüfbar in dieser Umgebung:**
+
+- **PostgreSQL 17 lokal.** Lokal lief 16.13, die CI 17.10. Beide grün, aber **nie dieselbe Version in
+  beiden Umgebungen** — eine Versionsdifferenz im Migrations- oder Sweeper-Verhalten würde hier nicht
+  auffallen. Kein Docker im Container, keine PG-17-Binaries.
+- **Valkey und Meilisearch** — nicht vorhanden, von der `integration`-Suite auch nicht berührt.
+- **Teardown nach `SIGKILL`** des vitest-Workers — braucht einen Kindprozess-Treiber, frühestens mit
+  `JR-410`.
+- **F12 nach einer Behebung** — die Abnahme darf nicht reparieren, was sie prüft. Der erneute
+  Nachweis gehört zur Nacharbeit und muss **mehrfach** laufen, nicht einmal.
+
 ### Befunde aus E1 (an DEV, nicht im Test-Epic behoben)
+
+> **Verbindliches Register ist `09-befunde-bestandscode.md`.** Die Tabelle unten ist eine Kurzfassung
+> von F1–F10 (Bestandscode). **F11** (vorgegebene CI-Schrittfolge) und **F12** (Testharness, aus der
+> Abnahme `JR-106`) stehen nur dort.
 
 | Nr. | Ort                                              | Befund                                                                                                                                                                                                                                                                   | Schwere  |
 | --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
@@ -404,13 +482,19 @@ in ein Test-Epic.
   **Offen bleibt PostgreSQL 17** (CI-Ziel) sowie **Valkey und Meilisearch** — beide fehlen weiterhin.
 - ~~**`FilterBuilder` und `mongoToMeli`**~~ — in `JR-104` abgedeckt.
 - ~~**Der CI-Workflow** (`JR-105`)~~ — aufgelöst. Der Lauf gegen `postgres:17-alpine` ist grün
-  (Run 30341370697). Damit ist auch **die letzte offene Bedingung von `JR-104` erfüllt**: die
-  `integration`-Suite läuft in CI gegen PostgreSQL 17.10 durch, sichtbar nicht übersprungen und ohne
-  Rückstände. `JR-104` steht hier weiterhin auf `[~]`, weil das Umsetzen auf `[x]` zur Abnahme
-  `JR-106` (Rolle PO) gehört und nicht zu dieser DEV-Session — **die Bedingung selbst ist nicht mehr
-  offen.**
+  (Run 30341370697, und derselbe Job erneut grün auf HEAD `36cf6bd`: Run 30341858370). Damit ist die
+  **ehemals letzte Bedingung von `JR-104` erfüllt**: die `integration`-Suite läuft in CI gegen
+  PostgreSQL 17.10 durch, sichtbar nicht übersprungen und ohne Rückstände. In der Abnahme `JR-106`
+  nachgeprüft und bestätigt. `JR-104` bleibt trotzdem offen — **aus einem anderen Grund**, F12.
+- ~~**Der `pull_request`-Trigger**~~ — aufgelöst. Die Läufe 4, 6 und 8 (`event=pull_request`) sind
+  alle `conclusion=success`, zuletzt auf HEAD. Der Job ist identisch zum Push-Lauf.
+- ~~**`pnpm db:generate` im Container**~~ — aufgelöst. Mit gesetztem `DATABASE_URL` und laufendem
+  Cluster läuft es durch; die Abnahme hat damit einen echten Generatorlauf gegen `pnpm lint` gefahren,
+  statt wie ADR-015 nur einen direkten `drizzle-kit`-Aufruf mit Dummy-URL.
 - **Teardown nach `SIGKILL`** des vitest-Workers. Nur der Sweeper deckt das ab; ein echter Nachweis
   braucht einen Kindprozess-Treiber (frühestens mit `JR-410`, das ohnehin Prozess-Kills fährt).
+- **PostgreSQL 17 lokal** bleibt offen: geprüft wurde lokal 16.13, in CI 17.10. Es gab noch keinen
+  Lauf, in dem beide Umgebungen dieselbe Hauptversion gefahren haben.
 
 ### Was `JR-105` in der CI einrichten muss
 
@@ -455,11 +539,12 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 ## Sessionprotokoll
 
-| Datum      | Ergebnis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Nächster Schritt                                                                       |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | E1 starten mit `JR-101`                                                                |
-| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101`                        |
-| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)                            |
-| 2026-07-27 | `JR-101`/`JR-102`/`JR-103` erledigt: vitest 3.2 mit drei Projects (`unit`/`integration`/`adversarial`), Harness in `tests/support/` (Klassifizierung, Seeds, Infra-Probe, Coverage-Hinweise), 146 Testfälle grün, Exit-Code beider Richtungen aktiv verifiziert, Fixture-Ladung durch Umbenennen belegt. Sechs IAM-Befunde (F1–F6) an DEV gemeldet, keiner behoben. Kein Push.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `JR-104` (isolierte Postgres-Basis), danach `JR-105` (CI-Workflow)                     |
-| 2026-07-28 | `JR-104` **geschrieben, Abnahme offen**: `pg-harness` mit eigener Datenbank je Aufruf (Schema-Isolation scheitert an `"public"`-qualifizierten Migrationen), Migrationen über `drizzle-orm/postgres-js/migrator`, garantiertes Teardown plus Sweeper. Lokaler PostgreSQL-16.13-Cluster aus den vorinstallierten Binaries gestartet: 32 Integrationstests grün, `pnpm test` 181 grün, zwei parallele Läufe gleichzeitig grün, 0 Rückstände. Vier neue Befunde F7–F10 (F7 hoch: `FilterBuilder` fail-open) plus F4-Nachtrag. Kein Push.                                                                                                                                                                                                                                                                                                                                                                                                                                | `JR-105` (CI-Workflow mit `postgres:17-alpine`), danach `JR-106` (Abnahme E1)          |
-| 2026-07-28 | `JR-105` **erledigt, CI-Lauf grün**: `.github/workflows/ci.yml` (Job `verify`, Trigger `pull_request` + `push`, Node 22 / pnpm 10.13.1 aus `engines`/`packageManager`, pnpm-Store gecacht), reiner Prüf-Workflow (kein `format`, kein Auto-Fix, kein Commit, Log nach `$RUNNER_TEMP`, `permissions: contents: read`), `postgres:17-alpine` als Service-Container, zwei Nachlaufprüfungen (übersprungene `integration`-Suite und `oa_test_*`-Rückstände machen den Job rot; beide in beide Richtungen gegengeprüft). Lauf 1 fand **F11**: die vorgegebene Schrittfolge ist auf einem frischen Checkout nicht lauffähig, weil `@open-archiver/types` über das gitignorierte `dist` auflöst — 54 × `TS2307`. Behoben durch einen vorgeschalteten `pnpm --filter @open-archiver/types build`; lokal beidseitig reproduziert. Lauf 3 (`1bad10c`) grün: PostgreSQL 17.10, 181 Tests, `integration` sichtbar gelaufen, 0 Rückstände. Bestehende vier Workflows unverändert. | `JR-106` (Abnahme E1): `JR-104` und `JR-105` vorlegen — deren CI-Bedingung ist erfüllt |
+| Datum      | Ergebnis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Nächster Schritt                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | E1 starten mit `JR-101`                                                                                    |
+| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101`                                            |
+| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)                                                |
+| 2026-07-27 | `JR-101`/`JR-102`/`JR-103` erledigt: vitest 3.2 mit drei Projects (`unit`/`integration`/`adversarial`), Harness in `tests/support/` (Klassifizierung, Seeds, Infra-Probe, Coverage-Hinweise), 146 Testfälle grün, Exit-Code beider Richtungen aktiv verifiziert, Fixture-Ladung durch Umbenennen belegt. Sechs IAM-Befunde (F1–F6) an DEV gemeldet, keiner behoben. Kein Push.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `JR-104` (isolierte Postgres-Basis), danach `JR-105` (CI-Workflow)                                         |
+| 2026-07-28 | `JR-104` **geschrieben, Abnahme offen**: `pg-harness` mit eigener Datenbank je Aufruf (Schema-Isolation scheitert an `"public"`-qualifizierten Migrationen), Migrationen über `drizzle-orm/postgres-js/migrator`, garantiertes Teardown plus Sweeper. Lokaler PostgreSQL-16.13-Cluster aus den vorinstallierten Binaries gestartet: 32 Integrationstests grün, `pnpm test` 181 grün, zwei parallele Läufe gleichzeitig grün, 0 Rückstände. Vier neue Befunde F7–F10 (F7 hoch: `FilterBuilder` fail-open) plus F4-Nachtrag. Kein Push.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `JR-105` (CI-Workflow mit `postgres:17-alpine`), danach `JR-106` (Abnahme E1)                              |
+| 2026-07-28 | `JR-105` **erledigt, CI-Lauf grün**: `.github/workflows/ci.yml` (Job `verify`, Trigger `pull_request` + `push`, Node 22 / pnpm 10.13.1 aus `engines`/`packageManager`, pnpm-Store gecacht), reiner Prüf-Workflow (kein `format`, kein Auto-Fix, kein Commit, Log nach `$RUNNER_TEMP`, `permissions: contents: read`), `postgres:17-alpine` als Service-Container, zwei Nachlaufprüfungen (übersprungene `integration`-Suite und `oa_test_*`-Rückstände machen den Job rot; beide in beide Richtungen gegengeprüft). Lauf 1 fand **F11**: die vorgegebene Schrittfolge ist auf einem frischen Checkout nicht lauffähig, weil `@open-archiver/types` über das gitignorierte `dist` auflöst — 54 × `TS2307`. Behoben durch einen vorgeschalteten `pnpm --filter @open-archiver/types build`; lokal beidseitig reproduziert. Lauf 3 (`1bad10c`) grün: PostgreSQL 17.10, 181 Tests, `integration` sichtbar gelaufen, 0 Rückstände. Bestehende vier Workflows unverändert.                                                                                                                                                                                                                                                                                                                 | `JR-106` (Abnahme E1): `JR-104` und `JR-105` vorlegen — deren CI-Bedingung ist erfüllt                     |
+| 2026-07-28 | `JR-106` (Abnahme E1) **durchgeführt, Ergebnis: E1 nicht abgenommen.** 15 Kriterien einzeln gegen `03-backlog.md` geprüft, 14 erfüllt: `JR-101`, `JR-102`, `JR-103`, `JR-105a` und `JR-105` abgenommen. `JR-104` **abgelehnt** — neuer Befund **F12**: der Test `sweeps a stale database…` legt seine Fixture-DB unter dem festen Namen `oa_test_1609459200000_999999_deadaa_sweeptest` an, zwei gleichzeitige Läufe gegen dasselbe Postgres kollidieren daher reproduzierbar (4/4) mit `duplicate key … pg_database_datname_index`; der bisherige Nachweis „zwei Läufe gleichzeitig grün" ist widerlegt. CI unberührt (eigener Service-Container je Job) und weiterhin grün. Zusätzlich belegt: die grün aussehende Fehlerform ohne `DATABASE_URL` (Exit 0 bei „149 passed \| 34 skipped") wird von Nachlaufprüfung 1 in allen drei Nichtverfügbarkeits-Modi rot gemacht, legitime `nightly`/`manual`-Skips lösen sie nicht aus; zwei Lücken derselben Prüfung gefunden (abwesende statt übersprungene Suite; falsch benannte `*.test.ts` unter `tests/integration/` wird von keinem Project eingesammelt). Kein Produktionscode geändert, kein Befund behoben. Dokumentenhygiene: **F11 nach `09-befunde-bestandscode.md` verschoben**, F-Nummerierung liegt jetzt in einer Datei. | Entscheidung des Auftraggebers zu **F12**; danach Nacharbeit `JR-104`, erneute Teilabnahme, dann `JR-1301` |

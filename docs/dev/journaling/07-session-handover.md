@@ -58,45 +58,65 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-27 · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
+**Stand:** 2026-07-28 (nach Abnahme `JR-106`) · **Branch:** `claude/journaling-e1-test-foundation`
 
 ### Was zuletzt passiert ist
 
-Epic 0 abgeschlossen: Codebase-Analyse, Gap-Analyse gegen den RFC, Zielarchitektur, Backlog mit 102
-Tasks über 12 Epics, Testplan, ADR-Log und die Agent-Infrastruktur (`CLAUDE.md`, Subagents
-`senior-dev` und `tester`, Skills `journal-ledger`, `oa-migration`, `oa-i18n`).
+**E1 ist gebaut, aber nicht abgenommen.** Die unabhängige Abnahme `JR-106` (Rolle `tester`) lief am
+2026-07-28 vollständig durch und hat 15 Akzeptanzkriterien einzeln geprüft:
 
-Danach ein Nachtrag: **ADR-004 war sachlich falsch.** Die Planungsdokumente wären veröffentlicht
-worden, weil VitePress ohne `srcExclude` jede `.md` unter `docs/` zu einer Seite baut und der lokale
-Suchindex sie erfasst — die Sidebar hat damit nichts zu tun. Behoben durch `srcExclude: ['dev/**']`.
-Zusätzlich ADR-014 (Branch-Strategie) ergänzt.
+- **abgenommen:** `JR-101` (vitest, drei Projects), `JR-102` (Konventionen, Klassifizierung, Seeds,
+  Coverage-Hinweise), `JR-103` (146 Testfälle, alle acht IAM-Fixtures nachweislich von der Platte
+  geladen), `JR-105a` (Formatierung mechanisch als reine Prettier-Ausgabe belegt), `JR-105`
+  (CI-Workflow, Lauf auf HEAD grün gegen PostgreSQL 17.10, bestehende vier Workflows byteidentisch,
+  kein schreibender Schritt).
+- **abgelehnt:** `JR-104`. Neuer Befund **F12** in `09-befunde-bestandscode.md`: der Testfall
+  `sweeps a stale database from a dead run…` legt seine Fixture-Datenbank unter dem **festen** Namen
+  `oa_test_1609459200000_999999_deadaa_sweeptest` an. Zwei gleichzeitige Integrationsläufe gegen
+  dasselbe Postgres kollidieren dadurch reproduzierbar (4 von 4) mit
+  `duplicate key … pg_database_datname_index`. Damit bricht das Kriterium „zwei Integrationstests
+  parallel, ohne sich zu beeinflussen" in der prozessübergreifenden Lesart, und der bisher dafür
+  geführte Nachweis in `06-status.md` ist widerlegt. **Die CI ist nicht betroffen** (ein Lauf je Job,
+  eigener Service-Container) und weiterhin grün.
 
-**Kein Produktionscode** — so entschieden in ADR-001.
+Nebenbei aus der Abnahme: `pnpm db:generate` ist im Container **doch** lauffähig, sobald
+`DATABASE_URL` gesetzt ist — die Restlücke aus ADR-015 ist damit geschlossen. Und zwei Lücken der
+CI-Nachlaufprüfung 1 sind belegt: sie erkennt eine _übersprungene_, nicht eine _abwesende_
+`integration`-Suite, und eine Datei in `tests/integration/` mit der Endung `*.test.ts` statt
+`*.int.test.ts` wird von **keinem** Project eingesammelt und bleibt trotzdem grün.
+
+**Kein Produktionscode geändert, kein Befund F1–F12 behoben.** Das ist E13-Arbeit.
 
 ### Nächster konkreter Schritt
 
-**`JR-101` — vitest im Monorepo einrichten.** Rolle: `TEST` (Subagent `tester`).
-Branch: `claude/journaling-e1-test-foundation`, abgezweigt vom Integrationsbranch.
+**`JR-1301` — Epic E13 (IAM-Autorisierung härten).** Rolle: `DEV` (Subagent `senior-dev`).
+Branch: `claude/journaling-e13-iam-hardening`, abgezweigt vom **Integrationsbranch**:
+
+```bash
+git fetch origin claude/enterprise-product-implementation-cxmmqe
+git checkout -b claude/journaling-e13-iam-hardening \
+    origin/claude/enterprise-product-implementation-cxmmqe
+```
 
 Vorher, in dieser Reihenfolge:
 
 1. `pnpm install` (siehe „Immer zuerst" oben).
-2. Prüfen, ob Postgres/Valkey/Meilisearch erreichbar sind (`docker-compose.yml`), denn `JR-104`
-   braucht eine echte Datenbank.
-3. **`JR-105a` erledigen, bevor `JR-105` beginnt.** Bereits geprüft: `pnpm lint` schlägt auf dem
-   heutigen Bestand fehl (neun Dateien, Liste in `03-backlog.md` unter E1). Der CI-Job wäre sonst
-   von der ersten Minute an rot. Vorher entscheiden, ob die fünf generierten
-   `migrations/meta/*.json` formatiert oder in `.prettierignore` aufgenommen werden — sonst
-   entsteht eine Endlosschleife zwischen `pnpm db:generate` und `pnpm format`.
+2. **Entscheidung des Auftraggebers zu F12 einholen.** Zwei Wege: (a) F12 als kleine Nacharbeit an
+   `JR-104` vorziehen (Fixture-Namen aus `process.pid` + Zufallssuffix bilden, Sweeper-Aufruf im Test
+   auf ein eigenes Label einschränken), danach prozessübergreifende Parallelität **mehrfach** neu
+   belegen und E1 abnehmen; oder (b) F12 bewusst als Harness-Einschränkung akzeptieren und im
+   Testplan festhalten, dass parallele Läufe gegen dasselbe Postgres nicht unterstützt sind.
+   Empfehlung des Testers: (a) — der Aufwand ist gering und der Harness ist die Grundlage jeder
+   Durability-Aussage in E2/E3.
+3. Der Rückmerge von `claude/journaling-e1-test-foundation` in den Integrationsbranch liegt beim
+   Auftraggeber und ist noch nicht erfolgt.
 
-Betroffene Dateien für `JR-101`:
+E13 hängt an E1, nicht an der Abnahme von E1 im formalen Sinn — der Harness ist benutzbar und
+`FilterBuilder` ist über `tests/integration/filter-builder.int.test.ts` abgedeckt, was `JR-1301` als
+Regressionsnetz braucht. F12 betrifft nur den **gleichzeitigen** Doppellauf.
 
-- Root `package.json` — `test`-Script, `vitest` als devDependency
-- `packages/backend/package.json`, `packages/types/package.json` — je ein `test`-Script
-- neue vitest-Konfiguration auf Root- und Paketebene
-- **kein** bestehender Produktionscode
-
-Danach `JR-102` … `JR-106` gemäß `03-backlog.md`.
+Danach `JR-1302` … `JR-1309` gemäß `03-backlog.md`. **F7** ist der Grund, warum E13 vor E2 steht und
+warum E11 ohne E13 nicht abnehmbar ist.
 
 ### Was ein neuer Agent zuerst lesen muss
 
@@ -108,8 +128,21 @@ Danach `JR-102` … `JR-106` gemäß `03-backlog.md`.
 
 ### Offene Fragen an den Auftraggeber
 
-Keine blockierenden. Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und
-sind in `05-entscheidungen.md` als offene ADRs geführt:
+**Blockierend für die Abnahme von E1:**
+
+| Punkt   | Frage                                                                                                                                                                                                 |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F12** | Nacharbeiten (Fixture-Namen prozessspezifisch machen) und E1 danach abnehmen, oder die Einschränkung „keine parallelen Läufe gegen dasselbe Postgres" bewusst akzeptieren und im Testplan festhalten? |
+
+**Nicht blockierend, aber entscheidungsbedürftig:**
+
+| Punkt                                     | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Zwei offene Pull Requests nach `main`** | **PR #1** (`claude/enterprise-product-implementation-cxmmqe` → `main`) und **PR #2** (`claude/journaling-e1-test-foundation` → `main`) sind offen. Beide **widersprechen ADR-014**: `main` wird bis zur Abnahme von E12 nicht angefasst, und Epic-Branches mergen in den Integrationsbranch, nicht nach `main`. Nebenwirkung: jeder Push löst seitdem **zwei** CI-Läufe aus (`push` und `pull_request` auf demselben SHA) und verdoppelt die Laufzeitkosten. **Die Entscheidung liegt beim Auftraggeber. Kein Agent schließt oder merged sie eigenmächtig.** |
+| **Rückmerge E1**                          | `claude/journaling-e1-test-foundation` ist nach `origin` gepusht, aber nicht in den Integrationsbranch gemergt. Der Merge ist Sache des Auftraggebers und sollte auf die F12-Entscheidung warten.                                                                                                                                                                                                                                                                                                                                                            |
+
+Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
+`05-entscheidungen.md` als offene ADRs geführt:
 
 | Wann  | Frage                                                                                                                                       |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,6 +171,18 @@ sind in `05-entscheidungen.md` als offene ADRs geführt:
 5. **Backend-i18n-Strings brauchen einen Rebuild**, um im Container zu erscheinen: der
    `copy-assets`-Buildschritt kopiert `src/locales` nach `dist/locales`. Im Dev-Modus funktioniert es
    sofort, in Produktion erst nach `build`.
+6. **Eine grüne Testsuite kann eine abgeschaltete Testsuite sein.** Ohne `DATABASE_URL` endet
+   `pnpm test` mit Exit **0** bei „149 passed | 34 skipped". Deshalb hat `ci.yml` eine Nachlaufprüfung,
+   die genau diesen Fall rot macht. Wer einen grünen Lauf als Beleg zitiert, muss die Testzahl
+   mitzitieren — 181 ist vollständig, 149 nicht.
+7. **Lokale Build-Artefakte verdecken Fehler, die CI findet.** `packages/types/dist` und
+   `packages/*/tsconfig.tsbuildinfo` sind gitignoriert und liegen im Container aus früheren Sessions
+   vor. Für jede Aussage über einen frischen Checkout müssen **beide** gelöscht werden — wegen
+   `composite: true` emittiert `tsc` sonst nichts (F11).
+8. **PostgreSQL lokal starten geht auch ohne Docker**: `/usr/lib/postgresql/16/bin/{initdb,pg_ctl}`,
+   aber **nicht als `root`** (`su postgres`) und mit einem **kurzen** `unix_socket_directories` —
+   der Scratchpad-Pfad überschreitet die 107-Byte-Grenze für Unix-Sockets. Cluster danach entfernen.
+   Achtung: lokal ist es 16.13, die CI fährt 17.10.
 
 ---
 
