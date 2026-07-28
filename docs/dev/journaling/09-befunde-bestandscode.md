@@ -14,14 +14,14 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde  |
-| -------------------------- | -------------------------------------------------------------------------------------- | -------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10   |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11      |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12, F13 |
+| Kategorie                  | Bedeutung                                                                              | Befunde |
+| -------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10  |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11     |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16 |
 
-Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12) und die
-Nacharbeit `JR-104a` (F13), Rolle `tester`, 2026-07-27/28. Die Bestandscode-Befunde sind im Testcode markiert, teils mit `it.fails` —
+Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
+Nacharbeit `JR-104a` (F13) und die Abnahme `JR-106a` (F14–F16), Rolle `tester`, 2026-07-27/28. Die Bestandscode-Befunde sind im Testcode markiert, teils mit `it.fails` —
 dort schlägt der Marker fehl, sobald jemand den Defekt behebt, und die Erwartung muss dann
 invertiert werden.
 
@@ -459,6 +459,122 @@ entscheiden sollte:
 Laufzeit heben. Die CI ist unberührt: ein Job hat seinen eigenen Service-Container.
 
 ---
+
+## F14 — Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests
+
+**Kategorie:** Testharness — unsere eigene E1-Arbeit ·
+**Schwere:** mittel (kein Kriteriumsbruch, aber genau die Fehlerklasse, gegen die `JR-105b` existiert) ·
+**Ort:** `tests/support/suite-inventory.ts` zusammen mit `tests/support/classification.ts` ·
+**Status:** **offen** — gehört nach `JR-1305` · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+
+`JR-105b` hat die zwei in `JR-106` gefundenen Löcher geschlossen: eine abwesende Suite und eine
+falsch benannte Testdatei machen den Lauf rot. Beide Kriterien sind erfüllt und beidseitig belegt.
+Die Prüfung zählt aber **Dateien**, und der Schaden, den sie verhindern soll — „die
+`integration`-Abdeckung verschwindet, während CI grün bleibt" — ist ohne jede Datei­änderung
+erreichbar.
+
+**Reproduktion (belegt):** in allen vier Dateien unter `packages/backend/tests/integration/`
+`suiteRequiring('ci', …)` zu `suiteRequiring('nightly', …)` ändern — ein Token je Datei. Ergebnis:
+
+```
+[TEST-INVENTORY] unit: 5 file(s) (min 5) · integration: 4 file(s) (min 4) · adversarial: 1 file(s) (min 1) · unclassified: 0
+ Test Files  6 passed | 4 skipped (10)
+      Tests  163 passed | 36 skipped (199)
+EXIT=0
+Suite inventory verified: unit 5/5, integration 4/4, adversarial 1/1, 0 unclassified test files.   ← assert exit=0
+```
+
+Die gesamte `integration`-Suite läuft nicht mehr, und **beide** Wächter melden „verifiziert".
+`OA_TEST_REQUIRE_INFRA=1` greift nicht: `suiteRequiring()` prüft die Klassenauswahl **vor** der
+Infrastruktur und delegiert bei nicht gewählter Klasse an `suite()`, das regulär skippt. Der
+Coverage-Hinweis wird gedruckt (`class 'nightly' not selected`), ist aber vom legitimen
+Klassen-Skip nicht zu unterscheiden — und genau dieses Nichtunterscheiden ist in `JR-105b` bewusst
+so gebaut worden.
+
+**Dieselbe Klasse, zweiter Weg:** eine korrekt benannte Datei, deren Tests alle `it.skip` / `it.todo`
+sind, zählt voll zur Mindestzahl. Belegt: `197 passed | 3 skipped | 1 todo`, Exit `0`.
+
+**Restlücke am Rand:** die Erkennungsregel `\.(?:test|spec)\.[cm]?[jt]sx?$` spiegelt vitests eigene
+Namenskonvention. Eine Datei namens `probe-test.ts`, `probe.tests.ts` oder `probe.integration.ts`
+mit `expect(1).toBe(2)` ist für Wächter **und** vitest unsichtbar: Exit `0`, Dateiname nirgends im
+Log. Das ist geringer zu gewichten als die beiden Wege oben (niemand benennt so absichtlich einen
+Test), gehört aber genannt.
+
+**Mögliche Formen einer Behebung** (Entscheidung nicht Teil dieser Abnahme):
+
+1. **Mindestzahl gelaufener Tests je Suite**, nicht nur Dateien — der Inventurreport trägt die
+   Zahlen ohnehin schon durch die CI. Erfasst F14 und F15 gemeinsam.
+2. **Klassenzugehörigkeit deklarativ je Suite festschreiben** (z. B. eine Liste „diese Datei ist
+   `ci`" neben den Include-Globs), sodass eine Umetikettierung im Diff **und** zur Laufzeit auffällt.
+3. **Skip-Budget**: eine Obergrenze übersprungener Tests im `ci`-Lauf, überschritten ⇒ rot.
+
+## F15 — `minimumFiles` verdeckt eine gelöschte Testdatei, sobald die Suite wächst
+
+**Kategorie:** Testharness — unsere eigene E1-Arbeit ·
+**Schwere:** niedrig heute (Spiel = 0), **mittel ab E2** (wird durch jede neue Testdatei erreichbar) ·
+**Ort:** `tests/support/suite-inventory.ts`, `SUITES[].minimumFiles` ·
+**Status:** **offen** — gehört nach `JR-1305` · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+
+Die Mindestzahlen sind hartkodiert und stehen heute **genau** auf dem Bestand (`unit` 5/5,
+`integration` 4/4, `adversarial` 1/1). Deshalb macht jede Löschung heute rot — das ist belegt und
+das Kriterium ist erfüllt. Der Wert ist aber eine **Untergrenze**, kein Soll: sobald eine Suite über
+ihre Mindestzahl wächst, entsteht Spiel, und eine Löschung in Höhe des Spiels geht still durch.
+
+**Reproduktion (belegt):** eine zusätzliche `integration`-Datei anlegen (⇒ `5 (min 4)`, grün), dann
+`pg-harness.int.test.ts` löschen — die eine Datei, die den gesamten `JR-104`-Isolationsvertrag
+trägt, 13 Tests:
+
+```
+[TEST-INVENTORY] … integration: 4 file(s) (min 4) … unclassified: 0
+ Test Files  10 passed (10)
+      Tests  185 passed | 2 skipped (187)      ← 12 Tests weniger
+EXIT=0
+Suite inventory verified: … integration 4/4 …  ← assert exit=0
+```
+
+Der Kopfkommentar sagt, das Anheben sei „optional". Genau dieses Optional ist der Pflegepfad, auf
+dem der Wächter zu wachen aufhört: E2 legt Dateien an, niemand hebt die Zahl, und die erste
+Konsolidierung danach verliert Abdeckung, ohne dass etwas rot wird. Behebung sinnvollerweise
+zusammen mit F14 (Variante 1 dort deckt beides ab); minimal: die Zahlen als **Gleichheit** statt als
+Untergrenze prüfen, mit einer Meldung, die zum Anpassen in derselben Änderung auffordert.
+
+## F16 — Rückstand nach einem Modul-Throw wird lokal nicht angekündigt
+
+**Kategorie:** Testharness — unsere eigene E1-Arbeit ·
+**Schwere:** niedrig (CI fängt es, lokaler Rückstand verfällt nach 2 h) ·
+**Ort:** `packages/backend/tests/support/pg-harness.ts`, `installExitWarning()` ·
+**Status:** **offen** — gehört nach `JR-1305` · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+
+Eine `integration`-Datei ruft `acquireTestDatabase()` im **Modul-Scope** — sie muss das, weil
+`src/database` sein Singleton beim Import baut (Testplan §2.6). Das Teardown hängt dagegen an einem
+`afterAll`. Wirft der Modul-Scope **nach** dem `acquire` — der Alltagsfall eines Tipp- oder
+Typfehlers in einer Testdatei, und in E2/E3 wird das häufig passieren — läuft dieses `afterAll` nie
+und die Datenbank bleibt liegen.
+
+Dass Rückstand entstehen kann, ist bekannt und vorgesehen; das Modul verspricht dafür ausdrücklich
+Sichtbarkeit: „Anything dropped is announced: residue disappearing silently would hide the fact that
+an earlier run died", umgesetzt als `process.on('exit')`-Warnung
+`process exited with N harness database(s) still present`. **Diese Warnung erscheint in genau diesem
+Fall nicht.** Belegt mit einem injizierten `throw` direkt vor dem `suiteRequiring(...)`-Aufruf in
+`filter-builder.int.test.ts`:
+
+```
+ Test Files  1 failed | 9 passed (10)     EXIT=1
+--- did it announce the leak? ---
+(nichts)
+leftovers after: oa_test_1785250142201_13433_bdeb2d_filter_builder
+```
+
+Ursache: der Wurf passiert im geforkten Worker (`pool: 'forks'`), dessen `exit`-Handler nicht auf dem
+Weg zur Ausgabe des Hauptprozesses landet. Der Handler selbst wird korrekt **eifrig** installiert
+(direkt nach `liveHarnesses.add()`), das ist nicht der Fehler — die Meldung kommt nur nicht an.
+
+**Kein Kriteriumsbruch:** der Lauf ist rot, und in der CI fängt der Schritt
+„Assert no leftover test databases" (`if: always()`) den Rückstand und macht den Job rot. Nur
+**lokal** verschwindet er lautlos in die 2-h-Frist des Sweepers. Naheliegende Behebung: den Rückstand
+im Hauptprozess feststellen statt im Worker — etwa eine `globalTeardown`, die dieselbe Abfrage fährt
+wie der CI-Schritt und ihr Ergebnis ausgibt. Das würde zugleich den lokalen Lauf auf dieselbe
+Zusicherung heben, die die CI schon hat.
 
 ## Bereits im Backlog erfasste Bestandsprobleme
 

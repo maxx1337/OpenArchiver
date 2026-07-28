@@ -77,66 +77,60 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-28 (nach Abnahme `JR-106`) · **Branch:** `claude/journaling-e1-test-foundation`
+**Stand:** 2026-07-28 (nach Abnahme `JR-106a`) · **Branch:** `claude/journaling-e1-test-foundation`
 
 ### Was zuletzt passiert ist
 
-**E1 ist gebaut, aber nicht abgenommen.** Die unabhängige Abnahme `JR-106` (Rolle `tester`) lief am
-2026-07-28 vollständig durch und hat 15 Akzeptanzkriterien einzeln geprüft:
+**E1 ist abgenommen.** Die erneute unabhängige Abnahme `JR-106a` (Rolle `tester`, eigene Session,
+HEAD `0a94308`) hat **alle** `JR-106`-Kriterien noch einmal geprüft — nicht nur die Nacharbeit, weil
+`JR-104a`/`JR-105b` `vitest.config.ts`, `classification.ts`, `pg-harness.ts` und `ci.yml` angefasst
+hatten — plus die Kriterien von `JR-104a` und `JR-105b`. **Ergebnis: alle 20 geprüften Kriterien
+erfüllt.** Die vollständige Tabelle mit Kommandos und Ausgaben steht in `06-status.md` unter „Abnahme
+`JR-106a`".
 
-- **abgenommen:** `JR-101` (vitest, drei Projects), `JR-102` (Konventionen, Klassifizierung, Seeds,
-  Coverage-Hinweise), `JR-103` (146 Testfälle, alle acht IAM-Fixtures nachweislich von der Platte
-  geladen), `JR-105a` (Formatierung mechanisch als reine Prettier-Ausgabe belegt), `JR-105`
-  (CI-Workflow, Lauf auf HEAD grün gegen PostgreSQL 17.10, bestehende vier Workflows byteidentisch,
-  kein schreibender Schritt).
-- **abgelehnt:** `JR-104`. Neuer Befund **F12** in `09-befunde-bestandscode.md`: der Testfall
-  `sweeps a stale database from a dead run…` legt seine Fixture-Datenbank unter dem **festen** Namen
-  `oa_test_1609459200000_999999_deadaa_sweeptest` an. Zwei gleichzeitige Integrationsläufe gegen
-  dasselbe Postgres kollidieren dadurch reproduzierbar (4 von 4) mit
-  `duplicate key … pg_database_datname_index`. Damit bricht das Kriterium „zwei Integrationstests
-  parallel, ohne sich zu beeinflussen" in der prozessübergreifenden Lesart, und der bisher dafür
-  geführte Nachweis in `06-status.md` ist widerlegt. **Die CI ist nicht betroffen** (ein Lauf je Job,
-  eigener Service-Container) und weiterhin grün.
+Die Belege in Kurzform: `pnpm test` ⇒ `10 passed`, `197 passed | 2 skipped`, Exit `0`; Sonden in
+`packages/types/` und `packages/frontend/` werden ohne Config-Änderung gefunden, dieselbe Sonde mit
+fehlschlagender Assertion ⇒ Exit `1`; **F12 bestätigt behoben** über 10 nebenläufige Runden
+(5 Doppel-, 3 versetzte, 2 Dreifachläufe) mit 0 Rückständen; alle acht IAM-Fixtures einzeln umbenannt
+⇒ jedes Mal Exit `1`; CI-Run **30368442950** auf HEAD grün gegen **PostgreSQL 17.10** mit allen vier
+`integration`-Dateien sichtbar gelaufen; die vier Bestandsworkflows blob-identisch; `pnpm lint` grün;
+ein erzwungener `pnpm db:generate` (⇒ `0041_whole_sally_floyd.sql`) lässt `pnpm lint` grün. Der
+Produktionscode ist unberührt: echter Pre-E1-Build gegen HEAD-Build verglichen — **233** `dist`-Dateien,
+Dateilisten identisch, eine Datei byteverschieden und nur im Zeilenumbruch.
 
-Nebenbei aus der Abnahme: `pnpm db:generate` ist im Container **doch** lauffähig, sobald
-`DATABASE_URL` gesetzt ist — die Restlücke aus ADR-015 ist damit geschlossen. Und zwei Lücken der
-CI-Nachlaufprüfung 1 sind belegt: sie erkennt eine _übersprungene_, nicht eine _abwesende_
-`integration`-Suite, und eine Datei in `tests/integration/` mit der Endung `*.test.ts` statt
-`*.int.test.ts` wird von **keinem** Project eingesammelt und bleibt trotzdem grün.
+**Drei neue Befunde am Messinstrument, keiner davon ein Kriteriumsbruch** (Details in
+`09-befunde-bestandscode.md`):
 
-**Danach die Nacharbeit `JR-104a` + `JR-105b` (`653dd1c`), erledigt:**
+- **F14** — die Suite-Inventur wacht über **Dateien**, nicht über gelaufene Tests. `suiteRequiring('ci', …)`
+  in den vier `integration`-Dateien zu `'nightly'` zu ändern schaltet die ganze Suite ab
+  (`163 passed | 36 skipped`), und beide Wächter melden „verifiziert", Exit `0`. `OA_TEST_REQUIRE_INFRA=1`
+  greift nicht, weil die Klassenauswahl **vor** der Infrastrukturprüfung liegt. Dieselbe Klasse:
+  eine Datei, deren Tests alle `it.skip` sind, zählt voll zur Mindestzahl.
+- **F15** — `minimumFiles` ist eine Untergrenze. Heute steht sie exakt auf dem Bestand, also macht
+  jede Löschung rot. Sobald eine Suite darüber wächst, geht eine Löschung in Höhe des Spiels still
+  durch — belegt durch Löschen von `pg-harness.int.test.ts` (13 Tests) bei grünem Lauf.
+- **F16** — wirft eine `integration`-Datei im Modul-Scope **nach** ihrem `acquireTestDatabase()`,
+  bleibt die Datenbank liegen und die vorgesehene Meldung `… still present` erscheint **nicht**
+  (Wurf im geforkten Worker). CI fängt es, lokal verschwindet der Rückstand lautlos.
 
-- **F12 behoben.** Beide Fixture-Namen prozessspezifisch, der Sweeper-Aufruf im Test auf ein eigenes
-  Label eingeschränkt. Der Tester hat den Defekt **zuerst reproduziert** (3/3 rot auf dem
-  unveränderten Stand) und dabei einen **dritten Teil** gefunden, den der Befund nicht genannt hatte:
-  der Zeitstempel der Fixture aus 2021 liegt jenseits der Standardfrist, ein legitimer fremder Sweep
-  hätte sie auch mit eindeutigem Namen gelöscht. Nachweis: 5 Doppelläufe plus 15 Prozesse in
-  gestaffelten Runden, alle grün, keine DB-Rückstände.
-- **Beide CI-Lücken geschlossen**, an der Wurzel statt nur im Workflow: **jede** `*.test.ts` im
-  Repository, die auf kein Project-Glob passt, lässt den Lauf scheitern, und je Suite gilt eine
-  Mindestdateizahl, geprüft im `globalSetup` vor dem ersten Test — eine positive Erwartung statt einer
-  Negativsuche im Log.
-- **Neuer Befund F13** (offen, Testharness): siehe die Entscheidungstabelle unten.
+**Was gehalten hat:** Verzeichnis umbenannt **und** gelöscht ⇒ rot; `foo.test.ts` unter
+`tests/integration/` ⇒ rot; `.spec.ts`/`.test.mts`/`.test.tsx` ⇒ rot; Testdatei außerhalb `packages/`
+(auch in `apps/`) ⇒ rot; leere Testdatei ⇒ rot. Und die **lazy-Guard-Fehlerklasse ist konstruktiv
+geschlossen**: `OA_TEST_REQUIRE_INFRA=yes` bricht **auch bei laufender Datenbank** ab, weil
+`isInfraRequired()` beim Laden von `classification.ts` eifrig aufgerufen wird.
 
-**Kein Produktionscode geändert, kein Befund F1–F11 behoben.** Das ist E13-Arbeit.
+**F13 ausdrücklich nachgeprüft und als schwach bestätigt:** die Zwischenregel aus `04-testplan.md` §2.6
+steht **nicht** in den Backlog-Zeilen `JR-208`/`JR-607`/`JR-410` und **nicht** in §12.6 — also nirgends
+dort, wo jemand nachschlägt, der einen Soak schreibt. Es gibt auch keine Laufzeitprüfung. Empfehlung:
+die Regel in die Akzeptanzkriterien von `JR-208` und `JR-607` aufnehmen, unabhängig von der Wahl des
+F13-Entwurfs.
+
+**Kein Produktionscode geändert, kein Befund F1–F13 behoben, kein Rückmerge, kein PR angefasst.**
+Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
 
 ### Nächster konkreter Schritt
 
-**`JR-106a` — die erneute Abnahme von E1.** Rolle: `TEST` (Subagent `tester`), auf dem aktuellen
-Branch `claude/journaling-e1-test-foundation`.
-
-Der erste Versuch wurde vom **Session-Limit** abgebrochen, bevor er über die Vorbereitung hinauskam —
-es liegt **kein** Abnahmeergebnis vor, E1 bleibt formal abgelehnt. Zu prüfen sind **alle**
-`JR-106`-Kriterien erneut (die Nacharbeit hat `vitest.config.ts`, `classification.ts`,
-`pg-harness.ts` und `ci.yml` angefasst, damit sind die Aussagen von `JR-101`/`JR-102`/`JR-105` nicht
-mehr automatisch gültig) plus die Kriterien von `JR-104a` und `JR-105b`. Auftragsdetails im Backlog
-unter „Nacharbeit aus der Abnahme `JR-106`".
-
-Besonders: **die neue Inventarprüfung selbst angreifen.** Sie ist jetzt Teil des Messinstruments —
-lässt sie sich umgehen, erkennt sie eine _gelöschte_ Testdatei, und existiert die lazy-Guard-Fehlerklasse
-(die der Tester in seiner eigenen ersten Fassung fand) noch woanders?
-
-**Danach:** `JR-1301` — Epic E13 (IAM-Autorisierung härten), Branch
+**`JR-1301`** — Epic E13 (IAM-Autorisierung härten), Branch
 `claude/journaling-e13-iam-hardening`, abgezweigt vom **Integrationsbranch**:
 
 ```bash
@@ -145,8 +139,8 @@ git checkout -b claude/journaling-e13-iam-hardening \
     origin/claude/enterprise-product-implementation-cxmmqe
 ```
 
-E13 hängt an E1, nicht an dessen formaler Abnahme — der Harness ist benutzbar und `FilterBuilder` ist
-über `tests/integration/filter-builder.int.test.ts` abgedeckt, was `JR-1301` als Regressionsnetz
+E1 ist jetzt formal abgenommen, der Harness ist benutzbar, und `FilterBuilder` ist über
+`tests/integration/filter-builder.int.test.ts` abgedeckt — das ist das Regressionsnetz, das `JR-1301`
 braucht. Danach `JR-1302` … `JR-1309` gemäß `03-backlog.md`. **F7** ist der Grund, warum E13 vor E2
 steht und warum E11 ohne E13 nicht abnehmbar ist. **ADR-017 muss vor `JR-1302` entschieden sein.**
 
@@ -160,26 +154,23 @@ steht und warum E11 ohne E13 nicht abnehmbar ist. **ADR-017 muss vor `JR-1302` e
 
 ### Offene Fragen an den Auftraggeber
 
-**F12 ist erledigt und braucht keine Entscheidung mehr.** Der PO hat am 2026-07-28 entschieden
-nachzuarbeiten statt zu akzeptieren — eine bekannte Schwäche im Messinstrument widerspricht
-Grundregel 6 des Testplans, und auf diesem Harness ruht jede Durability-Aussage in E2/E3. Behoben in
-`JR-104a` (`653dd1c`), zusammen mit `JR-105b` (die zwei Lücken der CI-Nachlaufprüfung).
+**F12 ist erledigt und braucht keine Entscheidung mehr.** Behoben in `JR-104a` (`653dd1c`), in
+`JR-106a` unabhängig als behoben bestätigt (10 nebenläufige Runden, 0 Rückstände).
 
-**Blockierend für die Abnahme von E1: nichts Inhaltliches mehr** — es fehlt nur die Durchführung von
-`JR-106a`. Der erste Versuch wurde vom Session-Limit abgebrochen, bevor er über die Vorbereitung
-hinauskam; es liegt **kein** Abnahmeergebnis vor.
+**Blockierend: nichts.** E1 ist mit `JR-106a` abgenommen, `JR-1301` kann beginnen.
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
 
-| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.** |
-| **ADR-017** | Action-Versatz: `search.routes.ts:158` prüft `('search','archive')`, `SearchService.ts:311`/`:423` bauen den Filter für `('read','archive')`. Beide Angleichungsrichtungen treffen Bestandsrollen unterschiedlich. **Vor `JR-1302` zu entscheiden**, nicht der Rolle DEV zu überlassen.                                                                                                                                                                                                                                                       |
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.**              |
+| **ADR-017** | Action-Versatz: `search.routes.ts:158` prüft `('search','archive')`, `SearchService.ts:311`/`:423` bauen den Filter für `('read','archive')`. Beide Angleichungsrichtungen treffen Bestandsrollen unterschiedlich. **Vor `JR-1302` zu entscheiden**, nicht der Rolle DEV zu überlassen.                                                                                                                                                                                                                                                                    |
+| **F14–F16** | Drei Befunde am Messinstrument aus `JR-106a`, alle **offen** und alle **ohne Kriteriumsbruch**: die Suite-Inventur zählt Dateien statt gelaufene Tests (eine Umetikettierung `ci` → `nightly` schaltet die `integration`-Suite ab und bleibt grün), `minimumFiles` verdeckt eine Löschung sobald die Suite wächst, und ein Rückstand nach Modul-Throw wird lokal nicht angekündigt. Inhaltlich gehören alle drei nach **`JR-1305`**, wo `JR-106` den „Ausweg" für genau diese Klasse schon eingeplant hat. Vor E2 zu entscheiden, ob dort mitbehoben wird. |
 
 | Punkt                                     | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Zwei offene Pull Requests nach `main`** | **PR #1** (`claude/enterprise-product-implementation-cxmmqe` → `main`) und **PR #2** (`claude/journaling-e1-test-foundation` → `main`) sind offen. Beide **widersprechen ADR-014**: `main` wird bis zur Abnahme von E12 nicht angefasst, und Epic-Branches mergen in den Integrationsbranch, nicht nach `main`. Nebenwirkung: jeder Push löst seitdem **zwei** CI-Läufe aus (`push` und `pull_request` auf demselben SHA) und verdoppelt die Laufzeitkosten. **Die Entscheidung liegt beim Auftraggeber. Kein Agent schließt oder merged sie eigenmächtig.** |
-| **Rückmerge E1**                          | `claude/journaling-e1-test-foundation` ist nach `origin` gepusht (`653dd1c`), aber nicht in den Integrationsbranch gemergt. Der Merge ist Sache des Auftraggebers und sollte auf das Ergebnis von `JR-106a` warten.                                                                                                                                                                                                                                                                                                                                          |
+| **Rückmerge E1**                          | `claude/journaling-e1-test-foundation` ist nach `origin` gepusht und mit `JR-106a` **abgenommen** — die Bedingung, auf die der Merge warten sollte, ist erfüllt. Der Rückmerge in `claude/enterprise-product-implementation-cxmmqe` ist Sache des Auftraggebers; kein Agent führt ihn eigenmächtig aus.                                                                                                                                                                                                                                                      |
 
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
@@ -212,9 +203,13 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
    `copy-assets`-Buildschritt kopiert `src/locales` nach `dist/locales`. Im Dev-Modus funktioniert es
    sofort, in Produktion erst nach `build`.
 6. **Eine grüne Testsuite kann eine abgeschaltete Testsuite sein.** Ohne `DATABASE_URL` endet
-   `pnpm test` mit Exit **0** bei „149 passed | 34 skipped". Deshalb hat `ci.yml` eine Nachlaufprüfung,
-   die genau diesen Fall rot macht. Wer einen grünen Lauf als Beleg zitiert, muss die Testzahl
-   mitzitieren — 181 ist vollständig, 149 nicht.
+   `pnpm test` mit Exit **0** bei „163 passed | 36 skipped". Dagegen gibt es zwei Wächter:
+   `OA_TEST_REQUIRE_INFRA=1` (in `ci.yml` gesetzt) macht fehlende Infrastruktur zum Fehlschlag, und
+   die Suite-Inventur im `globalSetup` verlangt Mindestdateizahlen je Suite. **Beide zählen nicht,
+   wie viele Tests gelaufen sind** — siehe F14/F15. Wer einen grünen Lauf als Beleg zitiert, muss
+   die Testzahl mitzitieren: **197 passed | 2 skipped** ist vollständig, alles darunter nicht. Die
+   2 Skips sind die `nightly`- und `manual`-Suite in `mongo-to-drizzle.adv.test.ts`; jede weitere
+   übersprungene Suite ist erklärungsbedürftig.
 7. **Lokale Build-Artefakte verdecken Fehler, die CI findet.** `packages/types/dist` und
    `packages/*/tsconfig.tsbuildinfo` sind gitignoriert und liegen im Container aus früheren Sessions
    vor. Für jede Aussage über einen frischen Checkout müssen **beide** gelöscht werden — wegen
