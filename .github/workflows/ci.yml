@@ -1,0 +1,127 @@
+name: CI
+
+# JR-105. This workflow is **check-only**: it never writes a file back into the repository.
+# No `pnpm format`, no auto-fix, no commit, no push. Reason (ADR-015): `docs/api/openapi.json`
+# and `packages/backend/src/database/migrations/meta/` are generated and both generators write
+# them back with `JSON.stringify(..., null, 2)`, so they live in `.prettierignore`. A formatting
+# CI step would fight the generators on every run, forever.
+
+on:
+    pull_request:
+    push:
+
+# Read-only token. The check-only rule above is thereby enforced by the token scope, not just by
+# the absence of a writing step.
+permissions:
+    contents: read
+
+jobs:
+    verify:
+        name: Lint, build, typecheck, test
+        runs-on: ubuntu-latest
+
+        # `packages/backend/src/database/index.ts` builds its `db` singleton **at import time** and
+        # throws without `DATABASE_URL`. The `integration` suite therefore needs a real Postgres;
+        # without one it skips *visibly* (which is green, and exactly the false comfort we do not
+        # want in CI). Mirrors docker-compose.yml.
+        services:
+            postgres:
+                image: postgres:17-alpine
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: postgres
+                ports:
+                    - 5432:5432
+                # The `postgres` superuser has CREATEDB plus DDL in the databases it creates, which
+                # is what `acquireTestDatabase()` needs (Testplan section 2.6). One database is
+                # enough: `postgres` serves only as the maintenance DB, the harness creates and
+                # drops its own `oa_test_*` databases per run. Default `max_connections` (100) is
+                # sufficient.
+                options: >-
+                    --health-cmd "pg_isready -U postgres"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+        env:
+            # Server *and* credentials for the test harness. No `STORAGE_*` variables: the
+            # integration suite never touches `config/storage.ts`.
+            DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+            PGPASSWORD: postgres
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v2
+              with:
+                  version: 10.13.1
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+                  cache: 'pnpm'
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            # Check only -- `prettier --check`. Never `pnpm format`.
+            - name: Lint
+              run: pnpm lint
+
+            - name: Build backend
+              run: pnpm --filter @open-archiver/backend build
+
+            - name: Check frontend
+              run: pnpm --filter @open-archiver/frontend check
+
+            - name: Typecheck test files
+              run: pnpm --filter @open-archiver/backend test:types
+
+            - name: Test
+              id: test
+              shell: bash
+              run: |
+                  set -o pipefail
+                  # The log goes to RUNNER_TEMP, not the workspace: this workflow writes nothing
+                  # into the checkout.
+                  pnpm test 2>&1 | tee "$RUNNER_TEMP/test-output.log"
+
+            # A skipped suite is green. The harness skips `integration` with a coverage notice on
+            # stderr when Postgres is unreachable, so a broken service container would otherwise
+            # look like a passing run. Turn that specific notice into a failure.
+            - name: Assert the integration suite actually ran
+              if: always() && steps.test.conclusion != 'skipped'
+              shell: bash
+              run: |
+                  log="$RUNNER_TEMP/test-output.log"
+                  if [ ! -f "$log" ]; then
+                      echo "::error::$log is missing -- the test step did not produce output."
+                      exit 1
+                  fi
+                  if grep -q 'SKIPPED SUITE .*integration suite' "$log"; then
+                      echo "::error::The integration suite was skipped instead of run. A skipped suite is not a passing suite."
+                      grep 'SKIPPED SUITE .*integration suite' "$log"
+                      exit 1
+                  fi
+                  echo "No integration-suite skip notice found."
+
+            # `release()` drops the per-run database, and `sweepStaleHarnessDatabases()` cleans up
+            # after a killed worker. A leftover here is a harness defect and must fail the job
+            # rather than accumulate silently. `OA_TEST_PG_STALE_MS` is deliberately left at its
+            # default -- lowering it lets the sweeper delete a *foreign* running job's database.
+            - name: Assert no leftover test databases
+              if: always() && steps.test.conclusion != 'skipped'
+              shell: bash
+              run: |
+                  leftovers=$(psql -h localhost -p 5432 -U postgres -d postgres -At \
+                      -c "select datname from pg_database where datname like 'oa\_test\_%'")
+                  if [ -n "$leftovers" ]; then
+                      echo "::error::Test databases were left behind after the run:"
+                      echo "$leftovers"
+                      exit 1
+                  fi
+                  echo "No oa_test_* databases left behind."
