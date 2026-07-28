@@ -8,9 +8,9 @@ gehen.
 Jeder Befund braucht eine Entscheidung des Auftraggebers: **jetzt beheben**, **in ein Epic
 einplanen**, oder **bewusst akzeptieren**.
 
-Herkunft: `JR-103` (Rolle `tester`), 2026-07-27. Die Befunde sind im Testcode markiert, teils mit
-`it.fails` — dort schlägt der Marker fehl, sobald jemand den Defekt behebt, und die Erwartung muss
-dann invertiert werden.
+Herkunft: `JR-103` (F1–F6) und `JR-104` (F7–F10), Rolle `tester`, 2026-07-27/28. Die Befunde sind im
+Testcode markiert, teils mit `it.fails` — dort schlägt der Marker fehl, sobald jemand den Defekt
+behebt, und die Erwartung muss dann invertiert werden.
 
 ---
 
@@ -121,6 +121,96 @@ harmlos in der Wirkung, aber still — eine Policy tut nicht, was ihr Autor anni
 `[]` ist truthy, daher greift die Missing-Fields-Prüfung nicht, und die Schleife iteriert null Mal.
 Keine Rechteausweitung, aber eben auch keine Validierung.
 
+## F7 — `FilterBuilder` ist fail-open, wenn keine `can`-Regel greift
+
+**Schwere:** hoch · **Ort:** `packages/backend/src/services/FilterBuilder.ts` · **Status:** offen ·
+**Herkunft:** `JR-104`, gegen echtes Postgres verifiziert
+
+`rulesToQuery()` aus `@casl/ability/extra` liefert `null`, wenn die Regelliste für
+(Action, Subject) **keine nicht-invertierte** Regel enthält — sowohl wenn es überhaupt keine Regel
+gibt als auch wenn es nur `cannot`-Regeln gibt. `FilterBuilder.create()` bildet `null` auf
+`{ drizzleFilter: undefined, searchFilter: undefined }` ab, kommentiert als „Full access".
+
+„Kein Recht auf dieses Subject" und „darf alles sehen" werden damit vom **selben Wert** dargestellt,
+und der unsichere ist der Default. Zwei belegte Fälle:
+
+- **F7a:** Ein Nutzer **ohne jede Rolle** erhält `undefined`, und die Abfrage liefert die Zeile.
+- **F7b:** `auditor-specific-mailbox.json` verbietet `read`/`search` auf `archive` für
+  `userEmail = dev@openarchiver.com` und erteilt für `archive` **kein** `can`. Ergebnis: unbeschränkt
+  — die ausdrücklich verbotene Zeile kommt zurück. Der Integrationstest prüft genau das, nicht nur
+  den Rückgabewert.
+
+**Erreichbarkeit — die Middleware schützt hier nicht.** `requirePermission` übergibt nie ein
+Resource-Objekt (`api/middleware/requirePermission.ts`), bedingte Regeln passieren das Gate also
+immer. Und die Suchroute prüft `('search', 'archive')` (`api/routes/search.routes.ts:158`), während
+`SearchService` seinen Filter für `('read', 'archive')` baut (`services/SearchService.ts:311`, `:423`).
+Eine Rolle mit `can search archive` und **ohne** `read archive` passiert damit das Gate und bekommt
+eine **ungefilterte** Suche über das gesamte Archiv. Dasselbe `undefined` erreicht
+`ArchivedEmailService.findAll` (`services/ArchivedEmailService.ts:62`).
+
+Das ist F3 an der Stelle, an der es Folgen hat.
+
+**Empfehlung:** `null` von `rulesToQuery` als **deny** behandeln (`sql`1=0``, wie es der bereits
+vorhandene „No access"-Zweig für das leere Query tut), und die unbeschränkte Rückgabe auf den Fall
+„nachweislich unbedingtes `can`" beschränken. Zusätzlich Action-Angleichung zwischen Route-Gate und
+`FilterBuilder`-Aufruf.
+
+## F8 — Der `cannot`-Ausschluss verarbeitet Operator-Bedingungen falsch
+
+**Schwere:** mittel · **Ort:** `packages/backend/src/services/FilterBuilder.ts` · **Status:** offen ·
+**Herkunft:** `JR-104`
+
+Trifft ein unbedingtes `can` mit `cannot`-Regeln zusammen, baut `FilterBuilder` den Ausschluss so:
+
+```ts
+newCondition[key] = { $ne: (condition as any)[key] };
+```
+
+Ist der Bedingungswert selbst ein Operator-Objekt, entsteht `{ $ne: { $in: [...] } }`. Beide
+Übersetzer verstehen das nicht:
+
+```
+mongoToDrizzle → not "ingestion_source_id" = $1   mit Parameter  { "$in": ["…"] }
+mongoToMeli    → ingestionSourceId != [object Object]
+```
+
+Der Ausschluss, den der Policy-Autor geschrieben hat, findet nicht statt. Betroffen ist jede
+`cannot`-Bedingung mit `$in`/`$nin`/`$gte`/… — also genau die ausdrucksstarken.
+
+**Empfehlung:** Negation auf Query-Ebene bilden (`{ $not: condition }` bzw. `$nor`) statt Werte in
+`$ne` zu wickeln, und unübersetzbare Formen laut scheitern lassen (siehe F3).
+
+## F9 — `mongoToMeli`-Platzhalter greift nur bei skalarer Bedingung
+
+**Schwere:** niedrig bis mittel · **Ort:** `packages/backend/src/helpers/mongoToMeli.ts` ·
+**Status:** offen · **Herkunft:** `JR-104`
+
+Die Sonderbehandlung für `ingestionSource.userId` — Auflösung zu
+`ingestionSourceId IN [...]` über eine Abfrage auf `ingestion_sources` — liegt im `else`-Zweig und
+wird nur bei einem **skalaren** Bedingungswert erreicht. Die gleichwertige explizite Schreibweise
+`{ 'ingestionSource.userId': { $eq: id } }` überspringt sie und erzeugt
+`ingestionSource.userId = "…"`. Dieses Attribut steht **nicht** in `filterableAttributes`
+(`services/SearchService.ts:476`: `from,to,cc,bcc,timestamp,ingestionSourceId,userEmail,hasAttachments`).
+
+Zwei Schreibweisen derselben Policy ergeben also einen funktionierenden und einen nicht erfüllbaren
+Filter. **Nicht verifiziert:** ob Meilisearch den Filter ablehnt oder still nichts liefert — im
+Container läuft kein Meilisearch. Geprüft ist der emittierte Attributname.
+
+## F10 — Die expandierte `IN`-Liste ist unsortiert
+
+**Schwere:** niedrig · **Ort:** `packages/backend/src/helpers/mongoToMeli.ts` · **Status:** offen ·
+**Herkunft:** `JR-104`
+
+`select id from ingestion_sources where user_id = …` hat kein `order by`, die erzeugte
+Filter-Zeichenkette ist für gleiche Eingaben also nicht stabil. Für Meilisearch selbst irrelevant,
+aber die Funktion ist damit als Cache-Key unbrauchbar und gegen ein Golden File nicht vergleichbar.
+
+## Nachtrag zu F4 — betrifft auch `mongoToMeli`
+
+F4 war gegen `mongoToDrizzle` gemeldet. `mongoToMeli` hat dieselbe Form (`Object.keys(value)[0]`),
+verliert also ebenfalls die zweite Grenze: `{ timestamp: { $gte: 1, $lte: 5 } }` → `timestamp >= 1`.
+Eine bereichsbeschränkende Policy wird damit auf **beiden** Pfaden zu still erweiterten Rechten.
+
 ---
 
 ## Bereits im Backlog erfasste Bestandsprobleme
@@ -141,7 +231,8 @@ Bewusst nicht umgesetzt, weil sie über den jeweiligen Task hinausgehen:
 1. **`FilterBuilder` eine Ability injizieren**, statt sie über `IamService.getAbilityForUser()` zu
    holen (optionaler Parameter `ability?: AppAbility` mit Fallback auf die heutige Auflösung). Damit
    wäre `FilterBuilder.create()` ohne Datenbank unit-testbar. Aktuell hängt es über `IamService` am
-   `db`-Singleton, der beim Import wirft. Betrifft `JR-104`.
+   `db`-Singleton, der beim Import wirft. `JR-104` hat den Weg über eine echte Datenbank genommen und
+   die Lücke damit geschlossen; der Vorschlag bleibt sinnvoll, ist aber nicht mehr blockierend.
 2. **`src/api/server.ts` type-checkt nicht unter `moduleResolution: bundler`** (Default-Import von
    `i18next-http-middleware`). Deshalb schließt `packages/backend/tsconfig.test.json` den
    Produktionscode aus und prüft nur Testdateien. Vorbestehend, kein Testproblem.

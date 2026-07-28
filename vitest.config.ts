@@ -44,8 +44,20 @@ export default defineConfig({
 					name: 'integration',
 					include: ['packages/*/tests/integration/**/*.int.test.ts'],
 					environment: 'node',
+					// Creating a database and applying 41 migrations happens in a hook; on a cold
+					// Postgres that is comfortably slower than the 10s default.
 					testTimeout: 60_000,
-					hookTimeout: 60_000,
+					hookTimeout: 120_000,
+					// JR-104: an integration test file points `process.env.DATABASE_URL` at the
+					// isolated database it acquired, because `src/database` reads it at import time.
+					// A separate process per file with a fresh module registry is what keeps that
+					// mutation from leaking into a sibling file. Pinned rather than inherited from
+					// the vitest defaults, because the isolation guarantee depends on it.
+					pool: 'forks',
+					isolate: true,
+					// Files still run in parallel -- that is the case JR-104 has to survive, so it is
+					// exercised on every run rather than only asserted inside one file.
+					fileParallelism: true,
 				},
 			},
 			{

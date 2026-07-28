@@ -6,7 +6,7 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-27 · **Branch:** `claude/journaling-e1-test-foundation`
+**Letzte Aktualisierung:** 2026-07-28 · **Branch:** `claude/journaling-e1-test-foundation`
 
 ---
 
@@ -69,15 +69,15 @@ Agent-Infrastruktur geliefert (ADR-001).
 
 ## E1 — Test- und CI-Fundament (in Arbeit)
 
-|     | Task                                                                                       | Rolle |
-| --- | ------------------------------------------------------------------------------------------ | ----- |
-| [x] | JR-101 vitest im Monorepo einrichten                                                       | TEST  |
-| [x] | JR-102 Testkonventionen festlegen und dokumentieren                                        | TEST  |
-| [x] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` (ohne `FilterBuilder`, s. u.) | TEST  |
-| [ ] | JR-104 Integrationstest-Basis mit isolierter Postgres-Instanz                              | TEST  |
-| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**                 | DEV   |
-| [ ] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests                                     | DEV   |
-| [ ] | JR-106 Abnahme E1                                                                          | PO    |
+|     | Task                                                                                           | Rolle |
+| --- | ---------------------------------------------------------------------------------------------- | ----- |
+| [x] | JR-101 vitest im Monorepo einrichten                                                           | TEST  |
+| [x] | JR-102 Testkonventionen festlegen und dokumentieren                                            | TEST  |
+| [x] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` (ohne `FilterBuilder`, s. u.)     | TEST  |
+| [~] | JR-104 Integrationstest-Basis mit isolierter Postgres-Instanz — **geschrieben, Abnahme offen** | TEST  |
+| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **Vorbedingung für JR-105**                     | DEV   |
+| [ ] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests                                         | DEV   |
+| [ ] | JR-106 Abnahme E1                                                                              | PO    |
 
 **`JR-105a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
 beanstandeten Dateien wurden die **7 handgeschriebenen** formatiert (1 `.md`, 3 `.ts`, 3 `.svelte`);
@@ -183,6 +183,54 @@ Spaltennamen-Suites.
 `db`-Singleton, das beim Import wirft — sie gehören zu `JR-104`. Der Task-Text von JR-103 nennt
 `FilterBuilder`; das ist hier bewusst nicht erfüllt und in `JR-104` zu erledigen.
 
+### JR-104 geschrieben (2026-07-28) — Integrationstest-Basis · **Abnahme offen**
+
+**Nicht abgehakt.** Der Harness ist geschrieben und lokal gegen ein **echtes** Postgres grün; die
+Abnahme setzt den CI-Lauf aus `JR-105` voraus und gehört zu `JR-106`.
+
+Neue Dateien:
+
+| Datei                                                           | Rolle                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------- |
+| `packages/backend/tests/support/pg-harness.ts`                  | Datenbank je Aufruf, Migrationen, garantiertes Teardown |
+| `packages/backend/tests/support/iam-seed.ts`                    | Nutzer/Rollen/Quellen/E-Mails säen, ohne `IamService`   |
+| `packages/backend/tests/integration/pg-harness.int.test.ts`     | Der Harness beweist seinen eigenen Vertrag (11 Fälle)   |
+| `packages/backend/tests/integration/filter-builder.int.test.ts` | `FilterBuilder` über echte Rollen (8 Fälle)             |
+| `packages/backend/tests/integration/mongo-to-meli.int.test.ts`  | `mongoToMeli` inkl. DB-Zweig (10 Fälle)                 |
+
+**Eigene Datenbank statt eigenem Schema — erzwungen, nicht gewählt.** `search_path`-Isolation
+scheitert an den generierten Migrationen: drizzle-kit schreibt `CREATE TYPE "public"."…"` und
+`REFERENCES "public"."…"`, `CREATE TABLE` dagegen unqualifiziert. Begründung mit Zeilenangaben in
+`04-testplan.md` §2.6 und im Kopfkommentar des Harness.
+
+**Verifikation in dieser Session — vollständiger als geplant.** Der Container hat kein Docker und
+keinen laufenden Postgres, aber die Server-Binaries von PostgreSQL 16 liegen unter
+`/usr/lib/postgresql/16/bin`. Damit wurde ein eigener Cluster gestartet (`initdb` + `pg_ctl`,
+`127.0.0.1:5432`) und die Suite tatsächlich ausgeführt:
+
+- `pnpm test:integration` ⇒ **32 Tests grün** in 4 Dateien.
+- `pnpm test` von der Wurzel mit `DATABASE_URL` ⇒ **181 grün, 2 skipped**, Exit `0`.
+- `pnpm test` ohne `DATABASE_URL` ⇒ Unit grün, `integration` **sichtbar übersprungen** mit Grund
+  („DATABASE_URL is not set …"); mit gesetzter, aber toter URL lautet der Grund
+  „no Postgres listening at 127.0.0.1:5599".
+- **Zwei vollständige Läufe gleichzeitig** (`pnpm test:integration` doppelt, gleiche Startsekunde)
+  ⇒ beide `exit=0`, 30/30 bzw. 30/30.
+- Rückstandskontrolle nach jedem Lauf: `select … from pg_database where datname like 'oa\_test\_%'`
+  ⇒ **0 Zeilen**.
+
+**Weiterhin nicht verifiziert:** PostgreSQL **17** (CI-Ziel ist `postgres:17-alpine`, geprüft wurde
+16.13), der GitHub-Actions-Lauf selbst, und Teardown nach `SIGKILL` des Workers. Letzteres deckt nur
+der Sweeper ab; der Kill-Pfad braucht einen Kindprozess-Treiber und ist nicht Teil von JR-104.
+
+**Ein eigener Defekt im Harness gefunden und behoben:** der Sweeper löschte mit niedrigem
+`OA_TEST_PG_STALE_MS` die **eigenen, lebenden** Datenbanken. Er prüft jetzt zusätzlich die im Namen
+kodierte PID und offene Verbindungen; zwei Tests halten das fest.
+
+**Vier neue Befunde im Bestandscode** (F7–F10) und ein Nachtrag zu F4 — Details in
+`09-befunde-bestandscode.md`. F7 ist der schwerwiegendste: `FilterBuilder.create()` liefert
+„unbeschränkt", wenn keine `can`-Regel greift, und die Suchroute prüft `search` während
+`SearchService` den Filter für `read` baut.
+
 ### Befunde aus E1 (an DEV, nicht im Test-Epic behoben)
 
 | Nr. | Ort                                              | Befund                                                                                                                                                                                                                                                                   | Schwere  |
@@ -193,18 +241,40 @@ Spaltennamen-Suites.
 | F4  | `helpers/mongoToDrizzle.ts`                      | Nur `Object.keys(value)[0]` wird gelesen: `{ $gte: 1, $lte: 5 }` verliert `$lte` still.                                                                                                                                                                                  | mittel   |
 | F5  | `helpers/mongoToDrizzle.ts`                      | `{ feld: null }` wird zu `"feld" = NULL` und trifft nie eine Zeile. `$exists: false` ist die funktionierende Form.                                                                                                                                                       | niedrig  |
 | F6  | `iam-policy/policy-validator.ts`                 | `{ action: [], subject: 'x' }` gilt als valide (`[]` ist truthy, Schleife läuft nullmal). Keine Rechteausweitung, aber auch keine Prüfung.                                                                                                                               | niedrig  |
+| F7  | `services/FilterBuilder.ts`                      | Greift keine `can`-Regel, liefert `create()` `{ undefined, undefined }` = **unbeschränkt**. Nutzer ohne Rolle und Nutzer mit nur `cannot`-Regeln landen dort; die verbotene Zeile kommt zurück. Suchroute prüft `search`, `SearchService` filtert für `read`.            | **hoch** |
+| F8  | `services/FilterBuilder.ts`                      | `cannot`-Ausschluss wickelt Werte in `{ $ne: wert }`, auch wenn der Wert ein Operator-Objekt ist. `{ $ne: { $in: […] } }` bindet ein Objekt als SQL-Parameter und erzeugt `[object Object]` im Meili-Filter — der Ausschluss findet nicht statt.                         | mittel   |
+| F9  | `helpers/mongoToMeli.ts`                         | Die `ingestionSource.userId`-Expansion greift nur bei skalarem Wert. `{ $eq: id }` erzeugt `ingestionSource.userId = "…"` — kein `filterableAttribute` (`SearchService.ts:476`).                                                                                         | niedrig  |
+| F10 | `helpers/mongoToMeli.ts`                         | Die expandierte `IN`-Liste stammt aus einer Abfrage ohne `order by`, der Filter-String ist damit nicht deterministisch.                                                                                                                                                  | niedrig  |
 
 F1 ist im Test durch `it.fails` markiert: der Test wird **rot**, sobald das Escaping korrigiert wird
-— dann sind die Erwartungen dort zu invertieren. Alle sechs Befunde stehen in existierendem
-IAM-Code, nicht im Journaling-Pfad; ein Fix ist DEV-Arbeit und gehört nicht in ein Test-Epic.
+— dann sind die Erwartungen dort zu invertieren. F8 hat dieselbe Wirkung über eine Meldung im
+`expect`: schlägt der Ausschluss plötzlich richtig an, fällt der Test mit der Aufforderung, die
+Erwartung zu invertieren. Nachtrag zu F4: der Defekt steckt genauso in `mongoToMeli`. Alle Befunde
+stehen in existierendem IAM-Code, nicht im Journaling-Pfad; ein Fix ist DEV-Arbeit und gehört nicht
+in ein Test-Epic.
 
 ### Was in E1 bisher nicht prüfbar war
 
-- **Alles, was Postgres braucht.** Kein Docker, kein Postgres (5432 zu), kein Valkey, kein
-  Meilisearch, keine `.env`. Die `integration`-Suite existiert und überspringt sichtbar; ob sie
-  gegen eine echte Instanz grün ist, ist offen und Teil von `JR-104`/`JR-105`.
-- **`FilterBuilder` und `mongoToMeli`** (s. o.).
+- ~~**Alles, was Postgres braucht.**~~ Teilweise aufgelöst: `JR-104` hat mit den vorinstallierten
+  PostgreSQL-16-Binaries einen eigenen Cluster gestartet und die `integration`-Suite echt ausgeführt.
+  **Offen bleibt PostgreSQL 17** (CI-Ziel) sowie **Valkey und Meilisearch** — beide fehlen weiterhin.
+- ~~**`FilterBuilder` und `mongoToMeli`**~~ — in `JR-104` abgedeckt.
 - **Der CI-Workflow** (`JR-105`) — ob GitHub Actions den Lauf reproduziert, ist hier nicht prüfbar.
+- **Teardown nach `SIGKILL`** des vitest-Workers. Nur der Sweeper deckt das ab; ein echter Nachweis
+  braucht einen Kindprozess-Treiber (frühestens mit `JR-410`, das ohnehin Prozess-Kills fährt).
+
+### Was `JR-105` in der CI einrichten muss
+
+| Punkt             | Anforderung                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Service-Container | `postgres:17-alpine`, Healthcheck `pg_isready`, Port 5432                                                               |
+| Env               | `DATABASE_URL=postgresql://<user>:<pw>@localhost:5432/postgres` für Lint-, Build- **und** Testschritt                   |
+| Rechte            | die Rolle braucht **`CREATEDB`** plus DDL in der neuen Datenbank (`postgres`-Superuser des Service-Containers genügt)   |
+| Datenbanken       | **eine** vorhandene reicht (`postgres` als Maintenance-DB); der Harness legt seine eigenen an und löscht sie wieder     |
+| `max_connections` | Default 100 genügt: 4 parallele Dateien × `max: 4` plus kurzlebige Admin-Verbindungen                                   |
+| Optional          | `OA_TEST_PG_MAINTENANCE_DB`, `OA_TEST_PG_STALE_MS` — nur setzen, wenn ein anderer Name bzw. eine andere Frist nötig ist |
+| Nachlaufprüfung   | nach `pnpm test`: `select datname from pg_database where datname like 'oa\_test\_%'` muss **leer** sein                 |
+| Nicht setzen      | keine der `STORAGE_*`-Variablen nötig — die `integration`-Suite berührt `config/storage.ts` nicht                       |
 
 ---
 
@@ -228,9 +298,10 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 ## Sessionprotokoll
 
-| Datum      | Ergebnis                                                                                                                                                                                                                                                                                                                                                                       | Nächster Schritt                                                   |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                                                                                                                                        | E1 starten mit `JR-101`                                            |
-| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).                                                                                                                      | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101`    |
-| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1).                                                                                                                    | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)        |
-| 2026-07-27 | `JR-101`/`JR-102`/`JR-103` erledigt: vitest 3.2 mit drei Projects (`unit`/`integration`/`adversarial`), Harness in `tests/support/` (Klassifizierung, Seeds, Infra-Probe, Coverage-Hinweise), 146 Testfälle grün, Exit-Code beider Richtungen aktiv verifiziert, Fixture-Ladung durch Umbenennen belegt. Sechs IAM-Befunde (F1–F6) an DEV gemeldet, keiner behoben. Kein Push. | `JR-104` (isolierte Postgres-Basis), danach `JR-105` (CI-Workflow) |
+| Datum      | Ergebnis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Nächster Schritt                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 2026-07-27 | E0 abgeschlossen: Gap-Analyse, Architektur, Backlog (102 Tasks), Testplan, ADR-Log, `CLAUDE.md`, 2 Subagents, 3 Skills. Kein Produktionscode (ADR-001).                                                                                                                                                                                                                                                                                                                                                                               | E1 starten mit `JR-101`                                                       |
+| 2026-07-27 | Nachtrag: ADR-004 als falsch korrigiert und Veröffentlichungs-Leck via `srcExclude` geschlossen; ADR-014 (Branch-Strategie) ergänzt; `CLAUDE.md` §7 und Handover um Sessionstart-Anleitung erweitert. Build-Nachweis offen (kein `pnpm install` möglich).                                                                                                                                                                                                                                                                             | `claude/journaling-e1-test-foundation` abzweigen, dann `JR-101`               |
+| 2026-07-27 | `JR-105a` erledigt auf `claude/journaling-e1-test-foundation`: 7 handgeschriebene Dateien formatiert, 6 generierte per ADR-015 in `.prettierignore`. `pnpm lint` repo-weit grün und bleibt es nach beiden Generatorläufen. Kein Push (sammelt bis Ende E1).                                                                                                                                                                                                                                                                           | `JR-101` (vitest einrichten), danach `JR-105` (CI-Workflow)                   |
+| 2026-07-27 | `JR-101`/`JR-102`/`JR-103` erledigt: vitest 3.2 mit drei Projects (`unit`/`integration`/`adversarial`), Harness in `tests/support/` (Klassifizierung, Seeds, Infra-Probe, Coverage-Hinweise), 146 Testfälle grün, Exit-Code beider Richtungen aktiv verifiziert, Fixture-Ladung durch Umbenennen belegt. Sechs IAM-Befunde (F1–F6) an DEV gemeldet, keiner behoben. Kein Push.                                                                                                                                                        | `JR-104` (isolierte Postgres-Basis), danach `JR-105` (CI-Workflow)            |
+| 2026-07-28 | `JR-104` **geschrieben, Abnahme offen**: `pg-harness` mit eigener Datenbank je Aufruf (Schema-Isolation scheitert an `"public"`-qualifizierten Migrationen), Migrationen über `drizzle-orm/postgres-js/migrator`, garantiertes Teardown plus Sweeper. Lokaler PostgreSQL-16.13-Cluster aus den vorinstallierten Binaries gestartet: 32 Integrationstests grün, `pnpm test` 181 grün, zwei parallele Läufe gleichzeitig grün, 0 Rückstände. Vier neue Befunde F7–F10 (F7 hoch: `FilterBuilder` fail-open) plus F4-Nachtrag. Kein Push. | `JR-105` (CI-Workflow mit `postgres:17-alpine`), danach `JR-106` (Abnahme E1) |

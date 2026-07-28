@@ -18,8 +18,9 @@ Happy-Path-Tests."_
 3. **Determinismus durch Seeds.** Jede Randomisierung wird geseedet und der Seed geloggt. Ein
    flakiger adversarialer Test ist wertlos, weil seinen Fehlschlägen niemand glaubt. Der Seed muss
    eine exakte Wiederholung erlauben.
-4. **Isolation.** Integrationstests bekommen eigenes Postgres-Schema und eigenes Spool-Verzeichnis.
-   Nie von einem sauberen gemeinsamen Zustand ausgehen.
+4. **Isolation.** Integrationstests bekommen eigenen Postgres-Namensraum und eigenes
+   Spool-Verzeichnis. Nie von einem sauberen gemeinsamen Zustand ausgehen. Konkret ist es eine eigene
+   **Datenbank** je Aufruf, nicht ein Schema — warum, steht in §2.6.
 5. **Echte Infrastruktur bei Durability.** Ein gemockter `fsync` beweist nichts. Fault Injection
    läuft über eine schmale, explizit injizierte Dateisystem-Schnittstelle — kein Monkey-Patching
    globaler `fs`-Funktionen.
@@ -123,6 +124,60 @@ Fehlschlag exakt wiederholbar ist. `Math.random()` kommt im Generatorpfad nicht 
 (`[TEST-COVERAGE NOTICE] …`), überleben also jeden Reporter. Pflicht bei: übersprungener Klasse,
 fehlender Infrastruktur, Stichprobe statt Vollauf, übersprungener Plattform. Grundregel 6 ist damit
 maschinell umgesetzt und nicht nur Absicht.
+
+### 2.6 Die Postgres-Basis der `integration`-Suite
+
+> Umgesetzt in JR-104 (2026-07-28): `packages/backend/tests/support/pg-harness.ts`.
+
+`acquireTestDatabase(label)` legt **eine eigene Datenbank je Aufruf** an, wendet die Migrationen des
+Repositorys darauf an und gibt einen postgres-js-Client plus ein Drizzle-Handle zurück.
+`release()` schließt die Verbindungen und löscht die Datenbank; die Registrierung als `afterAll`
+läuft auch dann, wenn ein Test geworfen hat.
+
+**Eigene Datenbank, nicht eigenes Schema — und das ist keine Wahl.** `search_path`-Isolation wäre
+billiger und bräuchte kein `CREATEDB`. Sie funktioniert gegen **diese** Migrationen nicht, weil
+drizzle-kit Enums und Fremdschlüsselziele schema-qualifiziert ausgibt, `CREATE TABLE` aber nicht:
+
+```
+migrations/0000_amusing_namora.sql:1    CREATE TYPE "public"."retention_action" AS ENUM(...)
+migrations/0000_amusing_namora.sql:120  ... REFERENCES "public"."custodians"("id") ...
+```
+
+Unter `search_path = oa_test_x` entstünden die Tabellen in `oa_test_x`, die Fremdschlüssel zeigten
+auf `public.custodians`, und ein zweiter paralleler Lauf kollidierte auf `CREATE TYPE "public"…`,
+weil `CREATE TYPE` mit explizitem Schema `search_path` ignoriert. Migrationen dafür zu ändern ist
+ausgeschlossen (CLAUDE.md 5.2). In einer frischen Datenbank ist `"public"` dagegen deren eigenes
+`public`, und das Problem verschwindet.
+
+| Env-Variable                | Default    | Zweck                                                                     |
+| --------------------------- | ---------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`              | —          | Server **und** Zugangsdaten. Ohne sie überspringt die Suite sichtbar      |
+| `OA_TEST_PG_MAINTENANCE_DB` | `postgres` | Datenbank für `CREATE`/`DROP DATABASE`                                    |
+| `OA_TEST_PG_STALE_MS`       | `7200000`  | Ab welchem Alter ein `oa_test_*`-Rest als verwaist gilt und gelöscht wird |
+
+**Rechteanforderung (relevant für ADR-009).** Die Rolle in `DATABASE_URL` braucht `CREATEDB` sowie
+das Recht, in der neuen Datenbank DDL auszuführen. Das ist die **Bootstrap**-Rolle der Tests, nicht
+die Anwendungsrolle: sobald `JR-205` Append-Only über Rechteentzug erzwingt, muss der Test die
+eingeschränkte Anwendungsrolle **zusätzlich** anlegen und sich für die Append-Only-Prüfungen mit ihr
+verbinden. Eine einzige allmächtige Rolle für beides würde `JR-205` unprüfbar machen.
+
+**`DATABASE_URL` und der Import-Throw.** `src/database/index.ts` baut sein `db`-Singleton **beim
+Import** und wirft ohne `DATABASE_URL`. Wer `FilterBuilder` oder `mongoToMeli` testet, muss daher in
+dieser Reihenfolge arbeiten: Harness holen → `harness.bindAsProcessDatabaseUrl()` →
+`await import(...)`. `bindAsProcessDatabaseUrl()` verweigert den Dienst, wenn das Singleton schon
+existiert — der Fehler wird laut, statt still gegen die falsche Datenbank zu testen. Damit diese
+`process.env`-Mutation nicht in eine andere Testdatei ausläuft, ist das Project `integration` auf
+`pool: 'forks'` und `isolate: true` festgelegt; `fileParallelism` bleibt an, weil paralleles Laufen
+gerade der Fall ist, den die Isolation aushalten muss.
+
+**Rückstände.** Ein hart abgeschossener Worker (`SIGKILL`) führt kein Teardown aus.
+`sweepStaleHarnessDatabases()` löscht solche Reste beim nächsten `acquire`, aber nur wenn sie
+(a) nicht vom eigenen Prozess stammen, (b) keine offenen Verbindungen haben und (c) älter als
+`OA_TEST_PG_STALE_MS` sind. Jede Löschung wird als Coverage-Hinweis ausgegeben — ein verschwindender
+Rest darf nicht lautlos verschwinden, sonst verbirgt er, dass ein Lauf gestorben ist. `(c)` ist die
+einzige Absicherung gegen einen **fremden** laufenden Prozess: `OA_TEST_PG_STALE_MS` unter die
+längste Suite-Laufzeit zu setzen kann dessen Datenbank löschen (beim Verifizieren mit 1000 ms
+beobachtet). Default nicht absenken.
 
 ## 3. RFC §12 → konkrete Testfälle
 
