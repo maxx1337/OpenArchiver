@@ -95,22 +95,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                            | Fertig / Gesamt |
-| ----------- | ---- | ---------------------------------- | ----------------------------------------------------------------- | --------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                        | 6 / 6           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2)  | 9 / 10          |
-| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — Abnahme durchgeführt, **abgelehnt** (F27/F28/F29) | 8 / 9           |
-| 3           | E2   | Ledger und Hash-Chain              | offen                                                             | 0 / 10          |
-| 4           | E3   | Spool und Acceptance-Contract      | offen                                                             | 0 / 8           |
-| 5           | E4   | `smtp-ingress`-Service             | offen                                                             | 0 / 13          |
-| 6           | E5   | Journal-Report-Parser              | offen                                                             | 0 / 9           |
-| 7           | E6   | Phase-B-Worker                     | offen                                                             | 0 / 8           |
-| 8           | E7   | WORM-Storage                       | offen                                                             | 0 / 6           |
-| 9           | E8   | Anchoring                          | offen                                                             | 0 / 6           |
-| 10          | E9   | `verify`-CLI                       | offen                                                             | 0 / 8           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                             | 0 / 8           |
-| 12          | E11  | Compliance-Features                | offen                                                             | 0 / 10          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                             | 0 / 9           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                | Fertig / Gesamt          |
+| ----------- | ---- | ---------------------------------- | ------------------------------------------------------------------------------------- | ------------------------ |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                            | 6 / 6                    |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2)                      | 9 / 10                   |
+| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — Nacharbeit `JR-1313`–`JR-1315` fertig, `JR-1316` und `JR-1309a` offen | 8 / 9 + 3 / 5 Nacharbeit |
+| 3           | E2   | Ledger und Hash-Chain              | offen                                                                                 | 0 / 10                   |
+| 4           | E3   | Spool und Acceptance-Contract      | offen                                                                                 | 0 / 8                    |
+| 5           | E4   | `smtp-ingress`-Service             | offen                                                                                 | 0 / 13                   |
+| 6           | E5   | Journal-Report-Parser              | offen                                                                                 | 0 / 9                    |
+| 7           | E6   | Phase-B-Worker                     | offen                                                                                 | 0 / 8                    |
+| 8           | E7   | WORM-Storage                       | offen                                                                                 | 0 / 6                    |
+| 9           | E8   | Anchoring                          | offen                                                                                 | 0 / 6                    |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                 | 0 / 8                    |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                 | 0 / 8                    |
+| 12          | E11  | Compliance-Features                | offen                                                                                 | 0 / 10                   |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                 | 0 / 9                    |
 
 111 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu). Dazu **`JR-1310`** als Folge-Task nach
 E13 (Variante C aus ADR-017) — er gehört zu keinem Epic und zählt nicht in die Abnahme von `JR-1309`.
@@ -838,8 +838,16 @@ in ein Test-Epic.
 ## E13 — IAM-Autorisierung härten (in Arbeit, **Abnahme abgelehnt**)
 
 **Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`.
-**Kein Rückmerge** — `JR-1309` hat E13 am 2026-07-29 abgelehnt (F27, F28, F29). Nacharbeit und
-`JR-1309a` stehen aus.
+**Kein Rückmerge** — `JR-1309` hat E13 am 2026-07-29 abgelehnt (F27, F28, F29). Die DEV-Nacharbeit
+`JR-1313`–`JR-1315` ist erledigt; `JR-1316` (TEST) und die erneute Abnahme `JR-1309a` stehen aus.
+
+| Nacharbeit | Task                                                                               | Rolle |
+| ---------- | ---------------------------------------------------------------------------------- | ----- |
+| [x]        | JR-1313 F29 + F26s Schreibseite: ein Prädikat für beide Gates — `cfb1462`          | DEV   |
+| [x]        | JR-1314 F27 + F28: Abfragen erweitert **und** Absolutsatz ersetzt — `c17144e`      | DEV   |
+| [x]        | JR-1315 F25: Behauptung eingeschränkt **und** F5-Kommentar nachgezogen — `5c8a521` | DEV   |
+| [ ]        | JR-1316 Regressionstest für die Betreiber-SQL                                      | TEST  |
+| [ ]        | JR-1309a Erneute Abnahme E13                                                       | TEST  |
 
 |     | Task                                                                                                                                               | Rolle     |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
@@ -852,6 +860,144 @@ in ein Test-Epic.
 | [~] | JR-1307 Verhaltensänderung dokumentieren (ADR-016) — geschrieben 2026-07-29, in `JR-1309` **abgelehnt** (F27, F28, F29)                            | DEV       |
 | [x] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden) — **erledigt 2026-07-29**, in `JR-1309` bestätigt                                           | PO        |
 | [x] | JR-1309 Abnahme E13 — **durchgeführt 2026-07-29; Ergebnis: E13 nicht abgenommen**                                                                  | TEST → PO |
+
+### E13 — Nacharbeit `JR-1313`–`JR-1315` erledigt (2026-07-29, Rolle `senior-dev`)
+
+Drei Commits auf `claude/journaling-e13-iam-hardening`, je einer pro Task, gepusht. **Kein Rückmerge,
+kein PR** — `JR-1316` und `JR-1309a` kommen zuerst. Stand vor Beginn `13a7114`, gegen
+`git ls-remote origin refs/heads/claude/journaling-e13-iam-hardening` abgeglichen: identisch, kein
+Container-Rollback.
+
+**Suite: `224 passed | 2 skipped` (Exit 0) vorher ⇒ `250 passed | 2 skipped` (Exit 0) nachher**, 16 ⇒
+17 Dateien, `unit` von 7 auf 8 (`minimumFiles` in `tests/support/suite-inventory.ts` mit angehoben).
+Die 2 Skips sind unverändert die `[nightly]`- und `[manual]`-Suite. Gemessen gegen einen lokalen
+PostgreSQL-16.13-Cluster ohne Docker, `OA_TEST_REQUIRE_INFRA=1`, 0 `oa_test_*`-Rückstände.
+
+#### `JR-1313` (`cfb1462`) — ein Prädikat statt zwei Kopien
+
+`packages/backend/src/helpers/conditionKey.ts` ist **neu** und importiert **nichts**. Es besitzt
+`relationToTableMap`, `resolveConditionKey()` (Form + Relation, liefert `table`/`column` mit),
+`isConditionOperatorKey()` und `checkConditionsShape()`. Beide Gates fragen dieses Modul:
+`PolicyValidator.areConditionKeysValid()` und `mongoToDrizzle.getDrizzleColumn()`; beide haben ihre
+eigenen Regexe und ihre eigene Segmentlogik verloren.
+
+**Begründung der Ablage** (die Frage aus dem Task): der Validator darf `mongoToDrizzle` nicht
+importieren, sonst zieht er `drizzle-orm` in eine Klasse, die heute nur Typen importiert — und damit in
+jeden Unit-Test, der eine Policy validiert. Umgekehrt hat ein SQL-Übersetzer nichts im IAM-Modul zu
+suchen, und `relationToTableMap` gehört neben den Code, der einen Tabellennamen rendert. Bleibt: ein
+drittes, abhängigkeitsfreies Modul in `helpers/`, neben dem Übersetzer.
+
+`conditions` selbst muss jetzt ein **Objekt** sein oder fehlen; Skalar, Array und `null` werden beim
+Anlegen abgewiesen. `undefined` gilt als **abwesend**, nicht als fehlerhaft — `JSON.stringify` verwirft
+es ohnehin, die beiden sind nach einem Datenbank-Roundtrip nicht unterscheidbar. **Das Laufzeitverhalten
+für bereits gespeicherte Policies ist unverändert:** `FilterBuilder.ts` ist in diesem Commit nicht
+angefasst.
+
+Neuer Test `packages/backend/tests/unit/condition-key-gates.test.ts` (26 Fälle): 20 Keys und 9
+`conditions`-Formen durch **beide** Gates, Urteile nebeneinander, plus je Fall das **erwartete** Urteil
+— „beide sind sich einig" allein wäre auch von zwei gleichsinnig kaputten Gates erfüllt. Die drei
+Restspalte (Spaltenexistenz, Operatornamen, `conditions: {}`) sind **grüne Assertions**, kein Kommentar;
+sie zu schließen macht die Datei rot und zwingt zum Lesen der Begründung.
+
+**Eine Ausnahme zur Regel „kein vorher grüner Test wird rot", benannt und begründet:**
+`policy-validator.test.ts` „accepts conditions it does not understand" pinnte, dass `a.b.c` akzeptiert
+wird. Einzeln nachgemessen — alter Test gegen neuen Validator: `1 failed | 52 passed`, genau dieser
+Fall. Der Pin dokumentierte die Lücke, die F29 ist; er ist ersetzt, nicht gelöscht: die Hälfte zum
+unbekannten Operator bleibt grün, die Hälfte zum Key ist umgedreht, mit der Begründung im Test.
+
+**Kein neuer i18n-Key.** Der Ablehnungsgrund wird wie bisher hinter `req.t('iam.invalidPolicy')`
+angehängt (`iam.controller.ts:55`, `:91`); dass diese Gründe englisch sind, ist Bestandszustand und
+wird hier nicht verändert. Keine Migration, kein Schemaeingriff.
+
+#### `JR-1314` (`c17144e`) — beides, wie entschieden
+
+Query 2 bekommt den Befundtyp `conditions is not an object`, gespeist aus `pair`, mit einer Detailzeile,
+die den Wert wörtlich ausgibt und die beiden Lesarten unterscheidet. Query 3 bildet `subject = 'all'`
+über eine neue CTE `subject_table` auf **beide** Tabellen ab. Der Absolutsatz ist **ersatzlos** weg; an
+seiner Stelle steht „How to read an empty result" mit zwei Listen (was geprüft wird, was nicht) und der
+Begründung, dass eine Abfrage über schemaloses JSONB gegen unbekannte Formen nicht beweisbar vollständig
+sein kann. Dazu **Änderung 8** im Fließtext für die neue Ablehnung beim Speichern.
+
+**Beleg, aus der Markdown-Datei extrahiert und wörtlich gefahren** (Fallstrick 17), gegen echtes
+PostgreSQL 16.13 mit den realen Migrationen und 29 gesäten Rollen:
+
+```
+extracted 3 sql block(s)
+BLOCK 1 (Query 1)  → 1 row  (no-role@example.com)
+BLOCK 2 (Query 2)  → 25 rows
+BLOCK 3 (Query 3)  → 9 rows
+```
+
+Nie gemeldet, in **keiner** Ausgabe: `predefined_super_admin`, `predefined_end_user`,
+`predefined_read_only_user`, die Kontrolle `C1 hand-written but unaffected`, und die Sonde
+`P2 rule is not an object`.
+
+**Falsch-negativ-Prüfung** nach der Methode aus Fallstrick 15 — Übersetzer `efea6bc` gegen HEAD, im
+selben Prozess, rein (kein `db`-Import nötig), 17 `conditions`-Werte:
+
+```
+value                | pre-E13                  | post-E13   | gemeldet von
+{}                   | NO FILTER (unrestricted) | REFUSED    | Q2 empty conditions object
+null / "" / 0 / false| NO FILTER (unrestricted) | REFUSED *  | Q2 conditions is not an object
+5 / true             | NO FILTER (unrestricted) | REFUSED    | Q2 conditions is not an object
+"userEmail"          | FILTER                   | REFUSED    | Q2 conditions is not an object
+[] / [{userEmail}]   | NO FILTER (unrestricted) | REFUSED    | Q2 conditions is not an object
+{foo.bar}            | FILTER                   | REFUSED    | Q2 unresolvable relation
+{a.b.c}              | FILTER                   | REFUSED    | Q2 key is not a column reference
+{attachment.name}    | FILTER                   | REFUSED    | Q2 unresolvable relation
+{$regex}             | NO FILTER (unrestricted) | REFUSED    | Q2 unsupported operator
+{$or: []}            | NO FILTER (unrestricted) | REFUSED    | Q2 branch list is empty
+{userEmail}          | FILTER                   | FILTER     | — (Kontrolle, schweigt)
+{userEmial} (Tippf.) | FILTER                   | FILTER     | Q3 (unverändert defekt, beide Releases)
+```
+
+`*` Für die **falsy** Familie entscheidet `FilterBuilder` über `!rule.conditions`, **bevor** der
+Übersetzer läuft; das Ergebnis der Anwendung ist vor und nach E13 `UNRESTRICTED` (deckt sich mit F26).
+Der Übersetzer ist strenger geworden, die Entscheidung nicht. Die Seite sagt genau das.
+
+**Null Falsch-negative:** jeder Wert mit `pre ≠ post` wird von einer der Abfragen gemeldet.
+
+**Ein Falsch-positives, das ich selbst eingebaut und vor dem Commit korrigiert habe:** ein
+`ELSE st.table_name` ohne Segmentzahl-Wächter machte in Query 3 aus `foo.bar` fälschlich
+`archived_emails.bar`. Aufgefallen ist es genau durch den wörtlichen Lauf, nicht durch das Lesen des
+Entwurfs.
+
+**Eine Randlage, die kein Falsch-positives ist:** `manage all` mit `{"userEmail": …}` wird von Query 3
+für `ingestion_sources` gemeldet, weil dort keine Spalte `user_email` existiert. Die Regel funktioniert
+fürs Archiv und lässt die Ingestion-Liste scheitern — das ist ein echter Befund, und die Seite erklärt,
+wie er zu lesen ist.
+
+**Zusätzlich zur Ehrlichkeit gemessen:** ein `roles.policies`, das **kein Array** ist, lässt beide
+Abfragen mit `ERROR: cannot extract elements from an object` **abbrechen** statt still zu überspringen.
+Der erste Entwurf des Doku-Absatzes behauptete „silently skipped" — das war falsch und ist korrigiert,
+samt der Abfrage, mit der ein Betreiber die Zeile findet.
+
+#### `JR-1315` (`5c8a521`) — was ich gewählt habe: beides
+
+Der PO hatte keine Präferenz. Gewählt ist **beides**, weil jede der beiden Varianten allein etwas
+Unwahres stehen lässt:
+
+- **Die Behauptung ist eingeschränkt.** `06-status.md` und `07-session-handover.md` sagen jetzt, dass in
+  `JR-1306` nur **F4** einen Kommentar bekam und der F5-Kommentar erst mit `JR-1315` kam. Den Code so zu
+  ändern, dass ein alter Satz nachträglich stimmt, würde verfälschen, welcher Commit was getan hat.
+- **Der F5-Kommentar ist nachgezogen**, `mongoToDrizzle.ts:130–134`, attribuiert an `JR-1315`. Ein Leser
+  von `eq(column, value)` kann sonst nicht erkennen, dass `= NULL` bekannt und gewollt offen ist.
+
+Prüfung wie im Kriterium:
+`grep -rn "F4\|F5\|finding F" --include=*.ts packages/backend/src/ | grep -v test` findet jetzt beide
+Nummern.
+
+#### Bewusst nicht angefasst
+
+F2, F4, F5, F6, F9, F10, F17, F18, F23, F24 bleiben offen; F4 und F5 sind im **Verhalten** unverändert
+(Golden-Pins grün), nur kommentiert. `FilterBuilder.ts` und `mongoToMeli.ts` sind in allen drei Commits
+**nicht** angefasst — die Laufzeitseite von F26 gehört zu `JR-1311`. `JR-1310`, `JR-1311`, `JR-1312`
+und `JR-1316` sind nicht angerührt.
+
+`pnpm lint` grün · `pnpm --filter @open-archiver/backend test:types` grün ·
+`pnpm --filter @open-archiver/backend build` grün · `pnpm docs:build` grün, `docs/.vitepress/dist/dev/`
+existiert **nicht** · lokaler Cluster und Prüfdatenbank restlos entfernt · keine internen `JR-*`-IDs
+und keine Befundnummern in der öffentlichen Doku (gegen `grep` geprüft).
 
 ### Abnahme `JR-1309` (2026-07-29) — Ergebnis: **E13 nicht abgenommen**
 

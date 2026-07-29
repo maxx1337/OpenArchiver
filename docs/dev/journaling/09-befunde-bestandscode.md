@@ -998,8 +998,16 @@ fällig ist. Umgehung bis dahin: nach einem gefilterten Lauf einmal vollständig
 ## F25 — Die Statusaussage „F4 **und F5** sind im Code als bewusst offen kommentiert" ist für F5 falsch
 
 **Kategorie:** Doku über den eigenen Code · **Schwere:** niedrig ·
-**Ort:** `06-status.md` („Bewusst nicht angefasst"), `07-session-handover.md` · **Status:** offen ·
-**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+**Ort:** `06-status.md` („Bewusst nicht angefasst"), `07-session-handover.md` ·
+**Status:** **behoben** in `5c8a521` (`JR-1315`) · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+> **Behebung (`JR-1315`, 2026-07-29):** beide Seiten, nicht eine. Die Aussage in `06-status.md` und
+> `07-session-handover.md` ist auf F4 eingeschränkt und benennt ausdrücklich, dass der F5-Kommentar
+> erst mit `JR-1315` kam — eine Umschreibung, die eine alte Behauptung durch eine Codeänderung
+> nachträglich wahr macht, würde verfälschen, welcher Commit was getan hat. **Zusätzlich** trägt
+> `mongoToDrizzle.ts:130–134` jetzt den F5-Kommentar, weil ein Leser von `eq(column, value)` sonst
+> nicht erkennen kann, dass `= NULL` bekannt und gewollt offen ist. Prüfung wie im Kriterium:
+> `grep -rn "F4\|F5\|finding F" --include=*.ts packages/backend/src/ | grep -v test` findet beide.
 
 Beide Statusdateien behaupten wörtlich: „F4 (nur der erste Operator wird gelesen) und F5
 (`{field:null}` ⇒ `= NULL`) sind in `mongoToDrizzle` erhalten und **jetzt mit einem Kommentar als
@@ -1036,8 +1044,19 @@ Aussage in beiden Statusdateien auf F4 einschränken.
 
 **Schwere:** mittel (Voraussetzung: Rollenschreibrecht, also Super Admin — dieselbe Vorbedingung wie
 F1) · **Ort:** `packages/backend/src/services/FilterBuilder.ts:51–53`,
-`packages/backend/src/iam-policy/policy-validator.ts:76` · **Status:** offen ·
+`packages/backend/src/iam-policy/policy-validator.ts:76` ·
+**Status:** **Schreibseite behoben** in `cfb1462` (`JR-1313`), **Laufzeitseite offen** (`JR-1311`) ·
 **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+> **Behebung, halb (`JR-1313`, 2026-07-29):** `PolicyValidator.isValid()` prüft die Form von
+> `conditions` selbst über `checkConditionsShape()` — `conditions` muss ein Objekt sein oder fehlen,
+> Skalar, Array und `null` werden **beim Anlegen** mit `400` abgewiesen. Eine solche Policy kann also
+> nicht mehr neu entstehen. **Bewusst nicht geändert:** das Verhalten für **bereits gespeicherte**
+> Policies dieser Form. `FilterBuilder.ts:51–53` liest weiter `!rule.conditions`, also bleibt ein
+> gespeichertes `conditions: null` / `""` / `0` / `false` unbeschränkt — das ist ADR-016s Familie und
+> gehört zu `JR-1311`. Gemessen (Übersetzer `efea6bc` gegen HEAD, rein, ohne DB): für die falsy
+> Familie entscheidet `FilterBuilder` vor dem Übersetzer, das Ergebnis ist vor und nach E13
+> `UNRESTRICTED`. Die Betreiber-SQL aus `JR-1314` meldet beide Hälften.
 
 `JR-1302` hat **F19** behoben: ein `can` mit `conditions: {}` gilt nicht mehr als unbedingt. Die
 Prüfung ist aber eine **Truthiness**-Prüfung (`!rule.conditions`), und `{}` ist das einzige _truthy_
@@ -1072,7 +1091,31 @@ ein stillschweigend erweitertes Recht aus einer offensichtlich fehlerhaften Poli
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 2 **und** Query 3,
-jeweils die `cond`-CTE · **Status:** offen · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+jeweils die `cond`-CTE · **Status:** **behoben** in `c17144e` (`JR-1314`) ·
+**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+> **Behebung (`JR-1314`, 2026-07-29):** beides, wie vom PO entschieden.
+>
+> 1. **Query 2 hat einen eigenen Befundtyp** `conditions is not an object`, gespeist aus `pair`
+>    (nicht aus `cond`, denn es gibt in einem Skalar keine Keys zu begehen). Die Detailzeile gibt den
+>    Wert wörtlich aus und unterscheidet die beiden Lesarten: falsy (`null`, `false`, `0`, `""`) ⇒
+>    „gilt als keine Bedingung, wie vorher", alles andere ⇒ „gilt als unübersetzbare Bedingung, die
+>    Anfrage wird verweigert, wo sie vorher unbeschränkt oder ein Fehler war".
+> 2. **Der Absolutsatz ist ersatzlos weg.** An seiner Stelle steht „How to read an empty result" mit
+>    zwei Listen — was die Abfragen prüfen und was nicht — und der ausdrücklichen Begründung, dass
+>    eine Abfrage über schemaloses JSONB gegen unbekannte Formen nicht beweisbar vollständig sein
+>    kann. Ein neuer Absolutsatz ist bewusst **nicht** an seine Stelle getreten.
+>
+> Zusätzlich als **Änderung 8** dokumentiert: ein `conditions`, das kein Objekt ist, wird beim
+> Speichern abgewiesen (`JR-1313`); die Lesart bereits gespeicherter Policies ist unverändert, und die
+> Seite sagt, welche davon weiter unbeschränkt sind und welche jetzt verweigert werden.
+>
+> **Beleg:** die ` ```sql `-Blöcke aus der veröffentlichten Datei extrahiert und **wörtlich** gegen
+> PostgreSQL 16.13 gefahren, 29 gesäte Rollen. Falsch-negativ-Prüfung nach der Methode aus
+> Fallstrick 15: jeder `conditions`-Wert, dessen Übersetzung sich zwischen `efea6bc` und HEAD
+> unterscheidet, wird von einer der Abfragen gemeldet — 0 Ausnahmen. Die drei `predefined_*`, die
+> Kontrolle `C1` und eine Sonde mit einer Regel, die kein Objekt ist, erscheinen in **keiner**
+> Ausgabe.
 
 Beide `cond`-CTEs sind auf `jsonb_typeof(… -> 'conditions') = 'object'` gefiltert. Ein `conditions`,
 das ein **Skalar** oder ein **Array** ist, ist damit für beide Abfragen unsichtbar — obwohl sich das
@@ -1107,7 +1150,24 @@ Absolutsatz entschärfen.
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig bis mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 3, CTE `resolved` ·
-**Status:** offen · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+**Status:** **behoben** in `c17144e` (`JR-1314`) · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+> **Behebung (`JR-1314`, 2026-07-29):** die `CASE`-Kette in `resolved` ist durch einen Join auf eine
+> neue CTE `subject_table (subject, table_name)` ersetzt, die `all` auf **beide** Tabellen abbildet
+> (`archive`→`archived_emails`, `ingestion`→`ingestion_sources`, `all`→beide). `resolved` ist
+> `SELECT DISTINCT`, weil ein relationspräfigierter Key sonst zwei identische Zeilen ergäbe.
+>
+> **Gemessen:** die gesäte Rolle `A02 typo key under manage all` erzeugt jetzt zwei Zeilen
+> (`archived_emails.user_emial`, `ingestion_sources.user_emial`), vorher keine. Eine nur unter `all`
+> auftretende Randlage ist dabei sichtbar geworden und ist kein Falsch-positives: `manage all` mit
+> `{"userEmail": …}` wird für `ingestion_sources` gemeldet, weil dort keine Spalte `user_email`
+> existiert — die Regel funktioniert fürs Archiv und lässt die Ingestion-Liste scheitern. Die Seite
+> erklärt das ausdrücklich.
+>
+> **Nebenbefund derselben Änderung, korrigiert vor dem Commit:** ein `ELSE st.table_name` ohne
+> Segmentzahl-Wächter machte aus `foo.bar` fälschlich `archived_emails.bar`. Der Wächter
+> `array_length(...) = 1` und `WHERE table_name IS NOT NULL` sind wieder da; ein nicht auflösbares
+> Relationspräfix ist ein Formbefund von Query 2, nicht ein Spaltenbefund von Query 3.
 
 `resolved.table_name` wird nur für `subject = 'archive'` bzw. `'ingestion'` gesetzt und die
 Ergebniszeile über `WHERE table_name IS NOT NULL` verworfen. Eine Regel mit `subject: "all"` filtert
@@ -1133,8 +1193,34 @@ Tabellen abbilden (zwei Zeilen je Key) oder die Grenze ausdrücklich mit `all` b
 
 **Schwere:** niedrig (fail-closed, kein Injektionsweg) · **Ort:**
 `packages/backend/src/iam-policy/policy-validator.ts` `areConditionKeysValid()` gegen
-`packages/backend/src/helpers/mongoToDrizzle.ts` `getDrizzleColumn()` · **Status:** offen ·
-**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+`packages/backend/src/helpers/mongoToDrizzle.ts` `getDrizzleColumn()` ·
+**Status:** **behoben** in `cfb1462` (`JR-1313`) · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+> **Behebung (`JR-1313`, 2026-07-29):** nicht „dieselbe Regel zweimal richtig geschrieben", sondern
+> **ein** Prädikat. `packages/backend/src/helpers/conditionKey.ts` ist ein Modul, das **nichts**
+> importiert, und besitzt `relationToTableMap`, `resolveConditionKey()`, `isConditionOperatorKey()`
+> und `checkConditionsShape()`. Beide Gates fragen es: `PolicyValidator.areConditionKeysValid()` und
+> `mongoToDrizzle.getDrizzleColumn()`.
+>
+> **Warum dort:** der Validator darf `mongoToDrizzle` nicht importieren, sonst zieht er `drizzle-orm`
+> in eine Klasse, die heute nur Typen importiert — und damit in jeden Unit-Test, der eine Policy
+> validiert. Umgekehrt hat ein SQL-Übersetzer nichts im IAM-Policy-Modul zu suchen, und
+> `relationToTableMap` gehört neben den Code, der einen Tabellennamen rendert. Also ein drittes,
+> abhängigkeitsfreies Modul in `helpers/`, neben dem Übersetzer.
+>
+> **Neuer Test:** `packages/backend/tests/unit/condition-key-gates.test.ts` schickt **jeden** Key
+> durch **beide** Gates und stellt die Urteile nebeneinander — die Konstruktion aus Fallstrick 16.
+> Jeder Fall nennt zusätzlich das erwartete Urteil, weil „beide sind sich einig" auch von zwei
+> gleichsinnig kaputten Gates erfüllt wird. 20 Keys, 9 `conditions`-Formen.
+>
+> **Die drei Restspalte sind als grüne Assertions festgehalten**, nicht als Kommentar — genau das hat
+> F29 stehen lassen: Spaltenexistenz (`foo`, ADR-019, `JR-1311`), Operatornamen (`$regex` — SQL- und
+> Suchübersetzer haben verschiedene Mengen, eine Schreibzeit-Allowlist könnte mit keiner der beiden
+> übereinstimmen) und `conditions: {}` (ein Objekt, also speicherbar; bei Benutzung verweigert).
+>
+> **Ein vorher grüner Pin ist getroffen und ersetzt:** `policy-validator.test.ts` „accepts conditions
+> it does not understand" behauptete, `a.b.c` werde akzeptiert. Er dokumentierte die Lücke; die Hälfte
+> zum unbekannten Operator bleibt, die Hälfte zum Key ist umgedreht, mit Begründung im Test.
 
 Der Validator akzeptiert **beliebig viele** punktgetrennte Identifier-Segmente und **jede**
 Relation; der Übersetzer akzeptiert höchstens zwei Segmente und nur Relationen aus

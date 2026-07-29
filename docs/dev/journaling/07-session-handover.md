@@ -85,48 +85,82 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (**Abnahme `JR-1309` durchgeführt — E13 nicht abgenommen**) ·
+**Stand:** 2026-07-29 (**DEV-Nacharbeit `JR-1313`–`JR-1315` erledigt**) ·
 **Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei
-`efea6bc`), `HEAD` = `54536cd` plus der Abnahme-Commit dieser Session
+`efea6bc`), `HEAD` = `5c8a521`, gepusht
 
 ### Der Stand in einem Satz
 
-**Die unabhängige Abnahme `JR-1309` ist gelaufen und hat E13 abgelehnt.** Die **fünf Codekorrekturen
-sind unabhängig belegt und tragen** — der Injektionsweg ist an beiden Gates zu, `FilterBuilder` ist
-zeilenscharf fail-closed, jeder Fix ist einzeln als tragend nachgewiesen. Gebrochen sind **zwei
-Kriterien in der betreibersichtbaren Hälfte**: `JR-1307`s Prüf-SQL hat ein gemessenes
-falsch-negatives, und die veröffentlichte Doku behauptet eine Ablehnung beim Speichern, die nicht
-stattfindet. **Kein Rückmerge, kein PR.**
+Die Abnahme `JR-1309` hatte E13 abgelehnt, weil die **betreibersichtbare** Hälfte gebrochen war; die
+drei DEV-Nacharbeiten `JR-1313`, `JR-1314` und `JR-1315` sind erledigt, **die Suite ist von
+`224 passed | 2 skipped` auf `250 passed | 2 skipped` gewachsen** (Exit 0), und offen sind nur noch
+`JR-1316` (TEST, Regressionstest für die Betreiber-SQL) und die erneute Abnahme `JR-1309a`. **Kein
+Rückmerge, kein PR.**
 
-### Nächster konkreter Schritt — die Nacharbeit `JR-1313`–`JR-1315`, dann `JR-1309a`
+### Nächster konkreter Schritt — `JR-1316`, dann `JR-1309a`
 
-Alle vier Tasks stehen mit Akzeptanzkriterien in `03-backlog.md` unter „Nacharbeit aus der Abnahme
-`JR-1309`". Reihenfolge und betroffene Dateien:
+| Task         | Rolle | Datei(en)                                                                                    | Kern                                                                                                                                                 |
+| ------------ | ----- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JR-1316**  | TEST  | neuer Test + `docs/user-guides/upgrade-and-migration/access-control-changes.md` (nur lesend) | die Betreiber-SQL bekommt einen Regressionstest: Blöcke **aus der Markdown-Datei** extrahieren, gegen dieselben Fixtures fahren wie den Code         |
+| **JR-1309a** | TEST  | —                                                                                            | erneute Abnahme: die zwei in `JR-1309` gebrochenen Kriterien plus `JR-1313`–`JR-1316` plus ein Volllauf. **Eigene Session, nicht die von `JR-1316`** |
 
-| Task         | Rolle | Datei(en)                                                                                         | Kern                                                                                                                                                          |
-| ------------ | ----- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **JR-1313**  | DEV   | `packages/backend/src/iam-policy/policy-validator.ts`                                             | **F29**: `areConditionKeysValid()` auf ≤ 2 Segmente **und** `relationToTableMap` prüfen; **dazu F26/F27s Ursache**: `conditions` muss Objekt sein oder fehlen |
-| **JR-1314**  | DEV   | `docs/user-guides/upgrade-and-migration/access-control-changes.md` (Query 2 und Query 3)          | **F27**: `conditions`, das nicht `object` ist, melden · **F28**: `subject = 'all'` in Query 3 · **und** der Absolutsatz fällt (PO-Entscheidung: beides)       |
-| **JR-1315**  | DEV   | `packages/backend/src/helpers/mongoToDrizzle.ts` **oder** `06-status.md`/`07-session-handover.md` | **F25**: F5-Kommentar nachziehen oder die Behauptung auf F4 einschränken                                                                                      |
-| **JR-1316**  | TEST  | neuer Test + `docs/user-guides/upgrade-and-migration/access-control-changes.md` (nur lesend)      | die Betreiber-SQL bekommt einen Regressionstest gegen dieselben Fixtures wie der Code — **nach `JR-1314`**                                                    |
-| **JR-1309a** | TEST  | —                                                                                                 | erneute Abnahme: die zwei gebrochenen Kriterien plus `JR-1313`–`JR-1316` plus ein Volllauf. **Eigene Session, nicht die von `JR-1316`**                       |
-
-Startprompt für die Nacharbeit:
+Startprompt für `JR-1316`:
 
 ```
-Arbeite JR-1313, JR-1314 und JR-1315 aus docs/dev/journaling/03-backlog.md ab
-(Nacharbeit aus der Abnahme JR-1309). Branch claude/journaling-e13-iam-hardening.
+Arbeite JR-1316 aus docs/dev/journaling/03-backlog.md ab (Nacharbeit aus der Abnahme
+JR-1309). Rolle TEST. Branch claude/journaling-e13-iam-hardening, Stand 5c8a521.
 ```
+
+**Was `JR-1316` mitbekommen sollte:** die Wegwerf-Fassung dieses Belegs existierte in dieser Session
+schon und hat gearbeitet — ein Python-Skript, das die ` ```sql `-Blöcke aus der Markdown-Datei zieht und
+sie über `psql -f -` **wörtlich** fährt, gegen eine Datenbank, in die vorher alle 41 Migrationen per
+`psql -f` eingespielt wurden (die Migrationsdateien sind mit `-- ` kommentierten
+`--> statement-breakpoint`-Zeilen direkt psql-taugfähig). Genau dieser Lauf hat ein Falsch-positives in
+meinem eigenen Entwurf von Query 3 gefunden, das beim Lesen unsichtbar war. Für `JR-1316` gilt
+zusätzlich das Kriterium aus dem Backlog: **ein neuer Fixture-Typ, den die Abfrage nicht kennt, muss den
+Test rot machen** — die Wegwerf-Fassung leistet das nicht, sie prüft nur die heute bekannten Formen.
 
 **`JR-1309a` muss wieder in einer eigenen Session laufen** (`04-testplan.md` §6). Erst danach:
 Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, kein Squash), dann `JR-1312` als
 Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
 
-**Nicht in der Nacharbeit:** **F26** (`can` mit falsy `conditions` ⇒ Vollzugriff) ist kein Regress und
-bricht kein Kriterium; er gehört zu `JR-1311`, **PO entscheidet** über das Vorziehen. `JR-1310`,
-`JR-1311`, `JR-1312` waren und bleiben **nicht** Teil von E13s Abnahme.
+**Nicht Teil dieser Nacharbeit, unverändert offen:** die **Laufzeitseite von F26** — ein bereits
+gespeichertes `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil
+`FilterBuilder.ts:51–53` unverändert `!rule.conditions` liest. Das ist Absicht und steht bei `JR-1311`.
+`JR-1310`, `JR-1311`, `JR-1312` waren und bleiben **nicht** Teil von E13s Abnahme.
 
-### Was zuletzt passiert ist — die Abnahme `JR-1309`
+### Was zuletzt passiert ist — die Nacharbeit `JR-1313`–`JR-1315`
+
+Rolle `senior-dev`, drei Commits, je einer pro Task, gepusht. Vollständige Fassung mit allen Ausgaben in
+`06-status.md` unter „E13 — Nacharbeit `JR-1313`–`JR-1315` erledigt".
+
+| Commit    | Task      | Kern                                                                                                               |
+| --------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
+| `cfb1462` | `JR-1313` | neues, **importfreies** Modul `src/helpers/conditionKey.ts`; beide Gates fragen es; `conditions` muss Objekt sein  |
+| `c17144e` | `JR-1314` | Query 2 neuer Befundtyp, Query 3 `subject = 'all'` → beide Tabellen, Absolutsatz **ersatzlos** weg, Änderung 8 neu |
+| `5c8a521` | `JR-1315` | Behauptung auf F4 eingeschränkt **und** F5-Kommentar nachgezogen — beides, mit Begründung                          |
+
+**Warum `conditionKey.ts` und nicht eines der beiden Gates:** der Validator darf `mongoToDrizzle` nicht
+importieren (zieht `drizzle-orm` in eine Klasse, die nur Typen importiert, und damit in jeden
+Policy-Unit-Test), und ein SQL-Übersetzer hat nichts im IAM-Modul zu suchen; `relationToTableMap` gehört
+neben den Code, der Tabellennamen rendert.
+
+**Belege, die eine Abnahme nachrechnen kann:**
+
+- **Suite vorher/nachher:** `224 passed | 2 skipped` ⇒ `250 passed | 2 skipped`, 16 ⇒ 17 Dateien, `unit`
+  `minimumFiles` 7 ⇒ 8. Beides Exit 0, 0 `oa_test_*`-Rückstände nach dem Volllauf.
+- **Der eine getroffene Pin, einzeln nachgemessen:** alter `policy-validator.test.ts` gegen den neuen
+  Validator ⇒ `1 failed | 52 passed`, genau „accepts conditions it does not understand" (`a.b.c`). Er
+  dokumentierte F29 und ist ersetzt, nicht gelöscht.
+- **Die Betreiber-SQL wörtlich aus der Datei gefahren**, PostgreSQL 16.13, 29 gesäte Rollen: Query 1 → 1
+  Zeile, Query 2 → 25, Query 3 → 9. Die drei `predefined_*`, die Kontrolle und die Sonde
+  `P2 rule is not an object` erscheinen in **keiner** Ausgabe.
+- **Falsch-negativ-Prüfung:** Übersetzer `efea6bc` gegen HEAD auf 17 `conditions`-Werten im selben
+  Prozess; jeder Wert mit `pre ≠ post` wird von einer der Abfragen gemeldet, **0 Ausnahmen**.
+- **Kein neuer i18n-Key, keine Migration, kein Schemaeingriff.** `FilterBuilder.ts` und `mongoToMeli.ts`
+  sind in allen drei Commits nicht angefasst.
+
+### Was davor passiert ist — die Abnahme `JR-1309`
 
 Unabhängige Session, Rolle `tester`, HEAD `54536cd` **zuerst gegen das Remote abgeglichen** (identisch
 — kein Rollback). 21 Kriterien einzeln: **17 erfüllt**, 1 teilweise, 1 bewusst nicht erfüllt und durch
@@ -739,6 +773,34 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     sonst belegt der grüne Lauf den Entwurf und nicht das, was ein Betreiber kopiert. Zusätzlich
     gehören zu einer solchen Abfrage **Negativfälle**: dass die drei `predefined_*`-Rollen in **keiner**
     Ausgabe erscheinen, trägt die Aussage „keine Pauschalwarnung".
+
+18. **Ein Prädikat, das zwei Module teilen sollen, hat oft in keinem der beiden ein Zuhause.** Bei
+    `JR-1313` war der naheliegende Griff, `PolicyValidator` aus `mongoToDrizzle` importieren zu lassen —
+    das zieht `drizzle-orm` in eine Klasse, die heute nur Typen importiert, und damit in jeden Unit-Test,
+    der eine Policy validiert. Die Gegenrichtung ist genauso falsch: ein SQL-Übersetzer, der das
+    IAM-Policy-Modul importiert. Richtig war ein **drittes Modul, das nichts importiert**
+    (`src/helpers/conditionKey.ts`). Der Test dafür ist nicht Geschmack, sondern die Frage, welche
+    Abhängigkeit dadurch **neu** entsteht.
+
+19. **Ein Restspalt, den man als Kommentar festhält, ist nicht festgehalten.** F29 stand genau deshalb
+    still: der Validator trug einen ausführlichen Kommentar darüber, was er bewusst **nicht** prüft, und
+    die Divergenz war trotzdem da. In `JR-1313` sind die drei Restspalte deshalb **grüne Assertions**
+    (`tests/unit/condition-key-gates.test.ts`, Suite „deliberate gaps"): wer einen davon schließt, macht
+    die Datei rot und muss die Begründung lesen. Ein Kommentar wird beim Ändern überlesen, ein roter Test
+    nicht.
+
+20. **Eine Doku-Abfrage kann durch eine Erweiterung ein neues Falsch-**positives** bekommen, und das
+    sieht man nur im Lauf.** Beim Abbilden von `subject = 'all'` auf beide Tabellen (F28) ersetzte ich die
+    `CASE`-Kette in Query 3 durch einen Join und schrieb `ELSE st.table_name` — damit wurde aus `foo.bar`
+    plötzlich `archived_emails.bar`, also ein Spaltenbefund für einen Key, der ein **Formbefund** von
+    Query 2 ist. Beim Lesen des Diffs war das unsichtbar; im wörtlichen Lauf gegen die gesäten Rollen
+    stand es in der ersten Ausgabezeile. Der Wächter `array_length(...) = 1` muss bleiben.
+
+21. **`jsonb_array_elements` bricht ab, es überspringt nicht.** Ein `roles.policies`, das kein JSON-Array
+    ist, beendet beide Betreiberabfragen mit `ERROR: cannot extract elements from an object`. Der erste
+    Entwurf des Doku-Absatzes „was wird nicht geprüft" behauptete „silently skipped" — falsch, und in die
+    gefährliche Richtung falsch, weil ein Betreiber „skipped" als „unauffällig" liest. Wer über eine
+    JSONB-Spalte behauptet, was eine Abfrage tut oder nicht tut, sät die Form vorher ein.
 
 ---
 
