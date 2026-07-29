@@ -366,7 +366,8 @@ i18n-Key** — der Ablehnungsgrund des Validators wird wie die bestehenden Grün
 `req.t('iam.invalidPolicy')` angehängt; dass diese Gründe nicht lokalisiert sind, ist Bestandszustand.
 
 **Bewusst nicht angefasst:** F2, F4, F5, F6, F9, F10, F17, F18, F22, F23. F4 und F5 sind in
-`mongoToDrizzle` erhalten und jetzt im Code als bewusst offen kommentiert. `pnpm lint` grün,
+`mongoToDrizzle` im Verhalten erhalten; **berichtigt (F25, `JR-1315`):** als bewusst offen kommentiert
+wurde in diesem Commit nur **F4**, der F5-Kommentar kam erst mit `JR-1315`. `pnpm lint` grün,
 `pnpm --filter @open-archiver/backend test:types` grün, Backend-Build grün, 0 `oa_test_*`-Rückstände,
 lokaler PostgreSQL-16.13-Cluster restlos entfernt. Kein Rückmerge, kein PR.
 

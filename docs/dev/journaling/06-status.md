@@ -1219,8 +1219,9 @@ gehört dorthin, wo das Subject bekannt ist — also in die Nähe von `JR-1310`.
 
 **Bewusst nicht angefasst** (kein Scope-Creep, `JR-1309` prüft das): F2, F4, F5, F6, F9, F10, F17,
 F18, F23. F4 (nur der erste Operator wird gelesen) und F5 (`{field:null}` ⇒ `= NULL`) sind in
-`mongoToDrizzle` erhalten und jetzt mit einem Kommentar als bewusst offen markiert; ihre Pins sind
-grün. `mongoToMeli.ts` ist unverändert. **Keine Migration, kein Schemaeingriff, kein neuer i18n-Key**
+`mongoToDrizzle` im Verhalten erhalten, ihre Pins sind grün. **Berichtigt (F25, `JR-1315`):** einen
+Kommentar hat in diesem Commit nur **F4** bekommen; der F5-Kommentar ist in `JR-1315` nachgezogen
+worden, nicht hier. `mongoToMeli.ts` ist unverändert. **Keine Migration, kein Schemaeingriff, kein neuer i18n-Key**
 — der Ablehnungsgrund des Validators wird wie die bestehenden Gründe hinter
 `req.t('iam.invalidPolicy')` auf Englisch angehängt (`iam.controller.ts`); dass diese drei Gründe
 nicht lokalisiert sind, ist ein Bestandszustand, den E13 nicht verändert.

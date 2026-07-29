@@ -129,6 +129,10 @@ export function mongoToDrizzle(query: Record<string, any>): SQL {
 					);
 			}
 		} else {
+			// A literal `null` value renders as `= NULL`, not `IS NULL`, so the comparison is never
+			// true and the condition matches nothing (finding F5). Deliberately left as it is: it is
+			// outside E13's scope, and it is held in place by the golden pin "literal null becomes
+			// = NULL, not IS NULL" so that a change to it cannot pass unnoticed.
 			conditions.push(eq(column, value));
 		}
 	}
