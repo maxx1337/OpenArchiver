@@ -91,12 +91,66 @@ Integrationsbranch bei `efea6bc`), `HEAD` = `9b407db` plus dieser Handover-Commi
 
 ### Der Stand in einem Satz
 
-**E13s Code ist fertig, die Betreiberdoku steht, und die Suite ist grün (`224 passed | 2 skipped`,
-Exit 0) — aber E13 ist _nicht_ abgenommen.** Offen sind nur noch `JR-1308` (Upstream-Meldung,
-Entwurf, **nicht** versenden, Rolle PO) und `JR-1309` (unabhängige Abnahme, Rolle TEST → PO, **eigene
-Session**). Kein Rückmerge, kein PR.
+**E13 ist inhaltlich vollständig — Code, Betreiberdoku und Upstream-Entwurf stehen, die Suite ist grün
+(`224 passed | 2 skipped`, Exit 0) — aber E13 ist _nicht_ abgenommen.** Offen ist **nur noch
+`JR-1309`**: die unabhängige Abnahme, Rolle TEST → PO, **in einer eigenen Session**. Kein Rückmerge,
+kein PR.
 
-### Was zuletzt passiert ist — `JR-1307`
+### Nächster konkreter Schritt — `JR-1309`
+
+**Die Abnahme muss in einer eigenen Session laufen**, nicht in der, die die Arbeit gemacht hat
+(`04-testplan.md` §6). Startprompt:
+
+```
+Nimm Epic 13 unabhängig ab — Rolle Tester, Kriterien aus 03-backlog.md.
+Branch claude/journaling-e13-iam-hardening.
+```
+
+Was `JR-1309` laut Backlog prüfen muss, und was diese Runde dazu bereitstellt:
+
+- **Negative Assertions je Rolle.** `tests/integration/predefined-roles.int.test.ts` (7 Fälle) und die
+  Regressionstests aus `JR-1301`/`704e8d1`. Erwartet: `224 passed | 2 skipped`, Exit 0.
+- **Nachweis, dass F2/F4/F5/F6/F9/F10 unverändert offen dokumentiert sind** und nicht stillschweigend
+  mitverändert wurden. F4 und F5 sind in `mongoToDrizzle` jetzt ausdrücklich als bewusst offen
+  kommentiert — das ist zu prüfen, nicht zu glauben.
+- **`JR-1310`, `JR-1311` und `JR-1312` gehören ausdrücklich NICHT zu den Kriterien.** Sie sind
+  Folge-Tasks nach E13.
+- Die Prüf-SQL aus `JR-1307` ist gegen echtes PostgreSQL 16.13 getestet worden, die CI fährt 17.10 —
+  **die Versionslücke ist weiterhin unbelegt** und ein legitimer Prüfpunkt.
+
+Erst **nach** der Abnahme: Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, kein Squash), dann
+`JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
+
+### Was zuletzt passiert ist — `JR-1308`
+
+**`JR-1308` ist erledigt (Rolle PO): der Entwurf liegt in `10-upstream-meldung.md`, ist _nicht_
+versendet und _nicht_ veröffentlicht.** Englischer Meldetext, wie er versendet würde, plus eine
+deutsche Entscheidungsvorlage darüber.
+
+> **Kein Agent versendet diesen Text, öffnet damit ein Issue oder einen Pull Request.** Kanal,
+> Zeitpunkt und Absender entscheidet der Auftraggeber. Die Datei liegt bewusst unter
+> `docs/dev/journaling/` — sie beschreibt **nicht behobene** Lücken einer veröffentlichten Version und
+> enthält eine funktionierende Injection-Nutzlast; `srcExclude: ['dev/**']` hält sie von der
+> Doku-Website fern und muss das weiter tun.
+
+Inhalt: vier Befunde (fail-open ohne `can`-Regel samt F19/F20, Injection über Condition-Keys,
+stilles Verwerfen unübersetzbarer Bedingungen samt der Richtungskorrektur aus F22, wirkungsloser
+`cannot`-Ausschluss bei Operator-Bedingungen), dazu **F17** als getrennter Bug statt als Teil des
+Advisories. Zu entscheiden sind: **Kanal** (Upstream hat keine `SECURITY.md` ⇒ privates GitHub
+Security Advisory, **kein** öffentliches Issue), **Zeitpunkt und Frist**, **Absender und ob eine CVE
+beantragt wird**, und ob die Nutzlast bei einer öffentlichen Meldung entfernt wird.
+
+**F2/F4/F5/F6/F9/F10 sind bewusst nicht enthalten** — offen dokumentiert, in diesem Fork nicht behoben;
+eine Meldung ohne Fix und ohne eigene Prüfung wäre dünn. Ein Patch-Set für Upstream ist **noch nicht**
+erzeugt: es müsste erst von den E1-Harness-Abhängigkeiten getrennt werden, die Upstream nicht hat.
+
+**Zusätzlich `JR-1312` angelegt** für die veraltete IAM-Doku (`export` fehlt in der Action-Liste,
+`manage` als Aufzählung statt als Wildcard beschrieben — die dritte Stelle aus `CLAUDE.md` §5.4). Reine
+Dokumentation, gehört auf den **Integrationsbranch nach dem Rückmerge**. Bewusst **nicht** in `JR-1307`
+mitgenommen, obwohl DEV dieselbe Datei angefasst hat: das hätte den Diff eines Sicherheits-Epics um
+eine sachfremde Korrektur erweitert.
+
+### Was davor passiert ist — `JR-1307`
 
 **`JR-1307` ist erledigt (Rolle `senior-dev`), zwei Commits.** `efb5582` liefert ADR-016 und die
 Betreiberdoku, `9b407db` die Statuspflege.
@@ -401,14 +455,14 @@ Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
 - Korrigiert: die erste Fassung von `06-status.md` verwies F14–F16 auf `JR-1305`. Das ist E13s Task
   für F8; richtig ist `JR-105c`.
 
-### Nächster konkreter Schritt
+### Material, das `JR-1308` verwendet hat (erledigt — der aktuelle nächste Schritt steht oben)
 
-**`JR-1308` — Rolle PO**, auf demselben Branch `claude/journaling-e13-iam-hardening`: die
-Upstream-Meldung **vorbereiten** — Beschreibung, Reproduktion, Fix-Vorschlag, betroffene Versionen
-(released ist 0.5.2). **Nicht versenden**; Kanal und Zeitpunkt entscheidet der Auftraggeber.
-Akzeptanzkriterium ist genau das: „Entwurf liegt vor und ist **nicht** versendet."
+> Dieser Abschnitt beschrieb `JR-1308` als nächsten Schritt. **`JR-1308` ist erledigt**, der Entwurf
+> liegt in `10-upstream-meldung.md`. Der nächste Schritt ist `JR-1309` — siehe „Nächster konkreter
+> Schritt — `JR-1309`" oben. Die Materialliste bleibt stehen, weil sie beim Versenden noch gebraucht
+> wird.
 
-Material dafür liegt vollständig vor und muss nicht neu erarbeitet werden: F7 in
+Material lag vollständig vor und musste nicht neu erarbeitet werden: F7 in
 `09-befunde-bestandscode.md` (Befund, Erreichbarkeit, Bewertung, gegen echtes Postgres verifiziert),
 ADR-016 (Begründung der gewählten Semantik), ADR-017 (der Action-Versatz als zweiter Weg),
 `tests/integration/filter-builder-f7.int.test.ts` (Reproduktion) und die vier Commits `bcac6bd`,
@@ -417,9 +471,8 @@ ADR-016 (Begründung der gewählten Semantik), ADR-017 (der Action-Versatz als z
 lauffähig und gehört nicht in einen offenen Kanal, solange der Auftraggeber nicht über den Kanal
 entschieden hat.
 
-Danach `JR-1309` (Abnahme, Rolle TEST → PO, **eigene Session**). **Rückmerge in den
-Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12 unangetastet; kein PR ohne
-ausdrückliche Aufforderung.
+**Rückmerge in den Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12
+unangetastet; kein PR ohne ausdrückliche Aufforderung.
 
 **Für `JR-1309` steht keine Entscheidung mehr aus.** Der frühere Blocker — der eine rote Test — ist in
 ADR-018 entschieden und in `704e8d1` aufgelöst; die Suite endet mit Exit 0.

@@ -42,6 +42,7 @@ SEC 17a-4, FINRA 4511, MiFID II).
 | 07  | `07-session-handover.md`     | Was ist der nächste konkrete Schritt                               | am Anfang und Ende jeder Session        |
 | 08  | `08-risiken.md`              | Risiken mit Gegenmaßnahme                                          | bei Planungsänderungen                  |
 | 09  | `09-befunde-bestandscode.md` | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes          | bevor man einen davon „nebenbei" behebt |
+| 10  | `10-upstream-meldung.md`     | **Entwurf** der Upstream-Sicherheitsmeldung — **nicht versendet**  | nur wenn der Auftraggeber sie versendet |
 
 ## Team und Rollen
 
@@ -92,10 +93,12 @@ Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelös
 `224 passed | 2 skipped`, Exit 0**, F1/F3/F7/F8/F19/F20/F22 behoben, kein vorher grüner Test rot
 geworden.
 
-**E13 ist damit implementiert, aber ausdrücklich _nicht_ abgenommen.** Offen: `JR-1307`
-(Betreiberdoku plus ADR-016), `JR-1308` (Upstream-Entwurf, nicht versenden), `JR-1309` (unabhängige
-Abnahme in eigener Session). Kein Rückmerge, kein PR. Es existiert noch **kein** Produktionscode für
-den Receiver selbst.
+`JR-1307` (ADR-016 plus Betreiberdoku mit getesteter Prüf-SQL) und `JR-1308` (Upstream-Entwurf in
+`10-upstream-meldung.md`, **nicht versendet**) sind ebenfalls erledigt.
+
+**E13 ist damit inhaltlich vollständig, aber ausdrücklich _nicht_ abgenommen.** Offen ist **nur noch
+`JR-1309`** — die unabhängige Abnahme, in einer **eigenen** Session. Kein Rückmerge, kein PR. Es
+existiert noch **kein** Produktionscode für den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 
