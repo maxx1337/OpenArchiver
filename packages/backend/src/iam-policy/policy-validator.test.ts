@@ -72,16 +72,31 @@ suite('ci', 'PolicyValidator.isValid() -- repository policy fixtures', () => {
 		expect(PolicyValidator.isValid(denyRule!)).toEqual({ valid: true, reason: 'valid' });
 	});
 
-	it('accepts conditions it does not understand -- conditions are deliberately unvalidated', () => {
+	it('refuses a condition key that is not a column reference, accepts an unknown operator', () => {
+		// Superseded pin. Until JR-1313 this case asserted that `isValid()` accepts *both* halves of
+		// `{ id: { $totallyNotAnOperator: 1 }, 'a.b.c': null }`, because step 3 of `isValid()` was a
+		// TODO comment. The two halves are now judged differently, and on purpose:
+		//
+		//   - `a.b.c` is refused. `mongoToDrizzle` has always refused a key with more than two parts,
+		//     so accepting it here stored a policy that could only fail later (finding F29). The two
+		//     gates now share one predicate; `tests/unit/condition-key-gates.test.ts` holds them
+		//     against each other.
+		//   - `$totallyNotAnOperator` is still accepted here and still refused at query time. The SQL
+		//     translator and the search translator support different operator sets, so a save-time
+		//     operator allowlist would refuse policies the other translator accepts. That carve-out
+		//     is asserted in the cross-gate file rather than left to a comment.
 		const [policy] = loadPolicyFixture('auditor-specific-sources');
 		expect(policy.conditions).toBeDefined();
-		const nonsense: CaslPolicy = {
+		const badKey: CaslPolicy = { ...policy, conditions: { 'a.b.c': null } };
+		const result = PolicyValidator.isValid(badKey);
+		expect(result.valid).toBe(false);
+		expect(result.reason).toContain('a.b.c');
+
+		const unknownOperator: CaslPolicy = {
 			...policy,
-			conditions: { id: { $totallyNotAnOperator: 1 }, 'a.b.c': null },
+			conditions: { id: { $totallyNotAnOperator: 1 } },
 		};
-		// This documents a real gap, not a feature: step 3 of isValid() is a TODO comment.
-		// A policy with a bogus condition operator is accepted and fails later, at query time.
-		expect(PolicyValidator.isValid(nonsense)).toEqual({ valid: true, reason: 'valid' });
+		expect(PolicyValidator.isValid(unknownOperator)).toEqual({ valid: true, reason: 'valid' });
 	});
 });
 

@@ -1,12 +1,8 @@
 import { SQL, and, or, not, eq, gt, gte, lt, lte, inArray, isNull, sql } from 'drizzle-orm';
+import { checkConditionsShape, resolveConditionKey } from './conditionKey';
 
 const camelToSnakeCase = (str: string) =>
 	str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-
-const relationToTableMap: Record<string, string> = {
-	ingestionSource: 'ingestion_sources',
-	// TBD: Add other relations here as needed
-};
 
 /**
  * Refuse to translate.
@@ -22,50 +18,39 @@ function refuse(reason: string): never {
 }
 
 /**
- * The shape a condition key has to have before it may become a column reference.
+ * Turns a condition key into a column reference, or refuses it.
  *
- * Escaping was not an option: drizzle's Postgres dialect renders an identifier as
- * `` `"${name}"` `` without doubling an embedded double quote (`pg-core/dialect.js`), and the
- * relation branch used `sql.raw`, which escapes nothing at all. A condition key containing a `"`
- * therefore wrote raw SQL into the `WHERE` clause of every `FilterBuilder`-scoped query (finding
- * F1). Escaping the quote would close the injection but would name a column that does not exist,
- * so every scoped query would fail at runtime instead of denying access. An allowlist is the
- * stronger answer: an unknown key is a policy error, and a policy error belongs fail-closed.
+ * The decision itself is **not** made here: `resolveConditionKey()` in `./conditionKey` owns it, and
+ * `PolicyValidator` asks the same function before the policy is ever stored. Keeping the rule in one
+ * place is the point -- when each gate carried its own copy, the validator accepted `foo.bar` and
+ * this translator refused it, so a broken policy was saved with HTTP 200 and only failed later.
  */
-const COLUMN_KEY_SEGMENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 function getDrizzleColumn(key: string): SQL {
-	const keyParts = key.split('.');
-
-	if (keyParts.length === 2) {
-		const [relationName, columnKey] = keyParts;
-		const tableName = relationToTableMap[relationName];
-		if (!tableName) {
-			refuse(
-				`condition key ${JSON.stringify(key)} names the relation ` +
-					`${JSON.stringify(relationName)}, which is not resolvable. Resolvable relations: ` +
-					`${Object.keys(relationToTableMap).join(', ')}`
-			);
-		}
-		if (!COLUMN_KEY_SEGMENT.test(columnKey)) {
-			refuse(`condition key ${JSON.stringify(key)} is not a column reference`);
-		}
-		// `sql.identifier` on both halves rather than `sql.raw` on the whole thing: the table name
-		// comes from the map above, the column name has just been validated, and neither is
-		// interpolated as raw SQL any more.
-		return sql`${sql.identifier(tableName)}.${sql.identifier(camelToSnakeCase(columnKey))}`;
+	const resolution = resolveConditionKey(key);
+	if (!resolution.valid) {
+		refuse(resolution.reason);
 	}
 
-	if (keyParts.length === 1 && COLUMN_KEY_SEGMENT.test(key)) {
-		return sql`${sql.identifier(camelToSnakeCase(key))}`;
+	// `sql.identifier` on both halves rather than `sql.raw` on the whole thing: the table name comes
+	// from the relation map, the column name has passed the allowlist, and neither is interpolated
+	// as raw SQL any more.
+	const column = sql`${sql.identifier(camelToSnakeCase(resolution.column))}`;
+	if (resolution.table === null) {
+		return column;
 	}
-
-	refuse(`condition key ${JSON.stringify(key)} is not a column reference`);
+	return sql`${sql.identifier(resolution.table)}.${column}`;
 }
 
 export function mongoToDrizzle(query: Record<string, any>): SQL {
-	if (typeof query !== 'object' || query === null || Array.isArray(query)) {
-		refuse(`expected a condition object, got ${JSON.stringify(query)}`);
+	const shape = checkConditionsShape(query);
+	if (!shape.valid) {
+		refuse(shape.reason);
+	}
+	if (query === undefined) {
+		// `checkConditionsShape` reads `undefined` as "no condition at all", which is a legitimate
+		// policy but not something this function can translate: an absent filter means "do not
+		// restrict".
+		refuse('expected a condition object, got undefined');
 	}
 
 	const conditions: SQL[] = [];

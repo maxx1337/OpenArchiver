@@ -1,4 +1,9 @@
 import type { CaslPolicy, AppActions, AppSubjects } from '@open-archiver/types';
+import {
+	checkConditionsShape,
+	isConditionOperatorKey,
+	resolveConditionKey,
+} from '../helpers/conditionKey';
 
 // Create sets of valid actions and subjects for efficient validation
 const validActions: Set<AppActions> = new Set([
@@ -21,15 +26,6 @@ const validSubjects: Set<AppSubjects> = new Set([
 	'dashboard',
 	'all',
 ]);
-
-/**
- * A condition key is a column reference: one or more dot-separated identifier segments
- * (`userEmail`, `ingestionSource.userId`).
- */
-const CONDITION_KEY_SEGMENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-/** A MongoDB-style operator key (`$or`, `$in`, ...). Never rendered as an identifier. */
-const CONDITION_OPERATOR_KEY = /^\$[A-Za-z][A-Za-z0-9]*$/;
 
 /**
  * @class PolicyValidator
@@ -74,8 +70,21 @@ export class PolicyValidator {
 			}
 		}
 
-		// 3. Validate condition keys.
-		if (policy.conditions) {
+		// 3. Validate the shape of `conditions` itself, then its keys.
+		//
+		// The shape check is not `if (policy.conditions)`. That truthiness test skipped every falsy
+		// value, so `conditions: null`, `""`, `0` and `false` were stored and then read at request
+		// time as "this rule carries no condition", which is unrestricted access -- a silently widened
+		// permission out of an obviously broken policy. A truthy scalar such as `conditions: 5` was
+		// stored just as happily and denies every request instead. Neither is a condition; both are
+		// refused before they are stored. What is already in the database keeps behaving as it does
+		// today -- changing that is a separate decision, not part of this gate.
+		const shape = checkConditionsShape(policy.conditions);
+		if (!shape.valid) {
+			return { valid: false, reason: shape.reason };
+		}
+
+		if (policy.conditions !== undefined) {
 			const { valid, reason } = this.areConditionKeysValid(policy.conditions);
 			if (!valid) {
 				return { valid: false, reason };
@@ -95,13 +104,20 @@ export class PolicyValidator {
 	 * it is ever stored, and `iam.controller.ts` rejects `createRole`/`updateRole` with 400 when it
 	 * is.
 	 *
+	 * The verdict itself comes from `resolveConditionKey()` in `helpers/conditionKey`, which is the
+	 * same function `mongoToDrizzle` asks at query time. That is deliberate: while each gate carried
+	 * its own copy of the rule, this one accepted any number of segments and any relation prefix, so
+	 * a key such as `foo.bar` or `attachment.name` was stored with HTTP 200 and then made every
+	 * scoped query of that role fail. One predicate, one source.
+	 *
 	 * What is deliberately **not** checked here: whether the key names a column that exists. The
 	 * validator has no table context -- the same policy statement can be written for several
-	 * subjects -- and a name check belongs where the table is known. `mongoToDrizzle` is where the
-	 * relation allowlist lives.
+	 * subjects -- and a name check belongs where the table is known.
 	 *
 	 * Operator keys are recursed through rather than validated as identifiers: they are never
-	 * rendered as an identifier, and an unknown operator is refused by both translators.
+	 * rendered as an identifier, and an unknown operator is refused by both translators. The
+	 * operator *names* are not checked here on purpose -- the SQL and the search translator support
+	 * different sets, so there is no one allowlist this gate could agree with.
 	 */
 	private static areConditionKeysValid(value: unknown): { valid: boolean; reason: string } {
 		if (Array.isArray(value)) {
@@ -119,16 +135,17 @@ export class PolicyValidator {
 		}
 
 		for (const key of Object.keys(value)) {
-			const isOperator = key.startsWith('$')
-				? CONDITION_OPERATOR_KEY.test(key)
-				: key.split('.').every((segment) => CONDITION_KEY_SEGMENT.test(segment));
-			if (!isOperator) {
-				return {
-					valid: false,
-					reason:
-						`Condition key '${key}' is not a valid column reference. A condition key ` +
-						`must be one or more dot-separated identifiers, or a MongoDB operator.`,
-				};
+			if (!isConditionOperatorKey(key)) {
+				const resolution = resolveConditionKey(key);
+				if (!resolution.valid) {
+					return {
+						valid: false,
+						reason:
+							`${resolution.reason.charAt(0).toUpperCase()}${resolution.reason.slice(1)}. ` +
+							`A condition key must be a column name, optionally prefixed by a ` +
+							`resolvable relation, or a MongoDB operator.`,
+					};
+				}
 			}
 			const result = this.areConditionKeysValid((value as Record<string, unknown>)[key]);
 			if (!result.valid) {

@@ -71,10 +71,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		include: ['packages/*/src/**/*.test.ts', 'packages/*/tests/unit/**/*.test.ts'],
 		// 5 after JR-105b; 7 after JR-1301 added the F1 regression at the validator boundary
 		// (src/iam-policy/policy-validator.f1-conditions.test.ts) and the ADR-017 call-site
-		// inventory (tests/unit/filter-builder-call-sites.test.ts). Raised to the exact count on
+		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-1313 added the
+		// cross-gate check (tests/unit/condition-key-gates.test.ts). Raised to the exact count on
 		// purpose: leaving slack is what F15 describes -- a deletion the size of the slack passes
 		// unnoticed.
-		minimumFiles: 7,
+		minimumFiles: 8,
 	},
 	{
 		name: 'integration',
