@@ -499,6 +499,16 @@ deeper. Read an empty result as an indication, not as a clearance, and run the b
   a gap somebody forgot to close: the queries report what has been written down, and the behaviour
   check is what covers the rest.
 
+**What it may report even though the role still works.** The queries err towards reporting. They match
+on the shape they find at a position, not on what the application does with it, so a reported row is a
+prompt to look — not a verdict that the role is broken. The known case: an empty object inside a
+**value-level** operator list, such as `{"id": {"$in": [{}]}}`, is reported as an empty condition
+object, and the rule is nevertheless translated and keeps working. Every finding names the position it
+was found at, and that is what tells the two apart: a position ending in a condition key or an
+`$or`/`$and` branch changes what the rule does, whereas one sitting inside the value of `$in`, `$nin`
+or another value-level operator may not. When in doubt, use the behaviour check in
+[After the upgrade](#after-the-upgrade) — it answers the question the query cannot.
+
 One structural problem is not skipped but reported as a failure: if any `roles.policies` value is not
 a JSON array, the query stops with `ERROR: cannot extract elements from an object`. That is the query
 telling you it cannot answer, not an empty result — find the offending row with
