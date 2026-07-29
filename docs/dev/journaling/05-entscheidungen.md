@@ -330,14 +330,91 @@ sehen will, braucht eine neue ADR, die diese ersetzt. Der Review von Snapshots (
 `oa-migration`) bleibt unverändert Pflicht — „von Prettier ignoriert" heißt nicht „nicht
 reviewpflichtig".
 
-## ADR-016 — reserviert für `JR-1307`
+## ADR-016 — Fail-closed rechtfertigt den Verhaltensbruch aus `JR-1302`
 
-**Status:** offen · **Nummer bewusst freigehalten**
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F7, F19, F20, `JR-1302`,
+`JR-1307`, E11
 
-`JR-1307` in `03-backlog.md` fordert eine ADR-016, die festhält, dass fail-closed den
-Verhaltensbruch aus `JR-1302` rechtfertigt. Sie wird dort geschrieben, nicht hier. **Die Lücke
-zwischen ADR-015 und ADR-017 ist Absicht — nicht umnummerieren.** ADR-017 entstand zuerst, weil sie
-`JR-1302` blockiert und ADR-016 dessen Ergebnis beschreibt.
+> **Zur Nummer:** ADR-016 liegt zwischen ADR-015 und ADR-017, und das ist Absicht — **nicht
+> umnummerieren.** ADR-017 wurde zuerst geschrieben, weil sie `JR-1302` blockierte; ADR-016
+> beschreibt dessen Ergebnis und hat die Nummer reserviert bekommen. Die Reihenfolge der Nummern ist
+> die Reihenfolge der Sachlogik, nicht die der Entstehung.
+
+**Entscheidung:** `FilterBuilder.create()` antwortet für **jedes** Ergebnis mit deny, das kein
+nachweislich **unbedingtes `can`** ist — kein passendes Recht, nur Verbote, ein widerrufenes Recht,
+eine Bedingungsmenge, die sich nicht ausdrücken lässt. Der damit verbundene Verhaltensbruch wird
+**hingenommen** und über einen Release-Hinweis samt Prüfanleitung begleitet (`JR-1307`), nicht über
+einen Kompatibilitätsschalter abgefedert.
+
+Wer bisher den `null`-Zweig traf, sah das **ganze** Archiv und sieht künftig **nichts**. Das ist die
+größte Verhaltensänderung, die E13 auslöst.
+
+### Warum das kein „Sicherheit geht vor" ist
+
+Das Argument ist nicht abstrakt, sondern eine Aussage über die Aussagekraft des Systems: **„kein Recht
+auf dieses Subject" und „darf alles sehen" wurden vom selben Wert dargestellt** —
+`{ drizzleFilter: undefined, searchFilter: undefined }` —, **und der unsichere war der Default.**
+`FilterBuilder.ts:49` bildete das `null` von `rulesToQuery` auf genau diesen Wert ab, kommentiert als
+„Full access", während der unmittelbar folgende Zweig für das leere Query korrekt ``sql`1=0` ``
+lieferte.
+
+Die Folge ist keine Größenordnung von Risiko, sondern das Fehlen einer Eigenschaft: **in diesem
+Zustand ist keine Zugriffsaussage über das Archiv belegbar.** Man kann einer Rolle nicht ansehen, ob
+sie einschränkt. Zwei Policies, von denen eine ein Postfach freigibt und die andere ein Postfach
+verbietet, liefern dieselbe Wirkung — Vollzugriff. Damit ist auch keine Aussage darüber möglich, wer
+ein Archivobjekt gesehen haben **kann**, und genau diese Aussage ist der Zweck der Zugriffsschicht
+über einem Archiv (RFC §11). F19 und F20 sind dieselbe Verwechslung an zwei weiteren Stellen: ein
+`can` mit leerem `conditions` und ein `cannot` ohne Bedingung landeten ebenfalls bei „darf alles
+sehen".
+
+Fail-closed stellt die Unterscheidbarkeit her: unbeschränkt ist ab jetzt genau ein Fall, und der ist
+im Code benannt. Alles andere ist ein Filter oder ein deny.
+
+### Verworfene Alternative: Verhalten beibehalten und nur dokumentieren
+
+Die naheliegende Alternative war, `null` weiter als Vollzugriff zu behandeln und das Verhalten
+lediglich zu dokumentieren — „wer einschränken will, muss ein `can` erteilen" —, notfalls mit einem
+Schalter, der die alte Semantik erhält. Das ist nicht tragfähig, aus einem konkreten Grund und nicht
+aus Vorsicht:
+
+**E11s Auditor-Rolle ist auf genau diesen Mechanismus gebaut.** `JR-1101` liefert eine Rolle, die
+lesen und suchen darf und sonst nichts, in der Form von `auditor-specific-mailbox.json`. Diese Form
+erteilt für `archive` **kein** `can`, sondern nur ein Verbot — und traf damit exakt den `null`-Zweig.
+Ein „read-only"-Auditor, der unbeschränkt liest, ist keine Auditor-Rolle; **E11 wäre mit dem alten
+Verhalten nicht abnehmbar.** Dokumentieren hätte bedeutet, die Einschränkung als nicht existent zu
+beschreiben und E11 die Grundlage zu entziehen.
+
+Verschärfend kommt F17 dazu: ausgeliefert existiert **keine** Read-Only-Rolle, weil der
+Rollen-Bootstrap in einer echten Installation nie läuft. Jeder eingeschränkte Nutzer ist damit eine
+handgeschriebene Policy in genau der Form, die der `null`-Zweig ins Gegenteil verkehrt. Das ist nicht
+der Ausnahmefall, sondern der einzige Weg, den ein Betreiber hat.
+
+**Auch der Schalter ist verworfen.** Er müsste dokumentiert werden, und jede Installation, die ihn
+setzt, hätte wieder keine belegbare Zugriffsaussage — derselbe Zustand, nur mit Namen. Ein
+Kompatibilitätsschalter über einer Autorisierungsentscheidung ist eine dauerhafte zweite Semantik,
+die jeder künftige Test mitprüfen müsste.
+
+### Was den Bruch verträglich macht
+
+- **Keine der drei `predefined_*`-Rollen ist betroffen** — belegt, nicht hergeleitet, durch
+  `tests/integration/predefined-roles.int.test.ts`, das durch alle fünf Fixes grün geblieben ist
+  (Einschränkungen: ADR-017, Nachtrag, Punkte 1 und 2).
+- Die betroffenen Formen sind **benennbar und abfragbar**: drei Formen für den `null`-Zweig plus die
+  Formen aus F19/F20 und `JR-1306`. Deshalb ist `JR-1307` eine Prüfanleitung mit SQL gegen
+  `roles.policies` und keine Pauschalwarnung.
+- Der Bruch ist **laut**, nicht still: ein deny fällt auf, eine leere Ergebnisliste ist auffindbar.
+  Der Zustand davor war das Gegenteil.
+
+### Konsequenz
+
+- `JR-1307` liefert Release-Hinweis und Prüfanleitung in der **öffentlichen** Doku
+  (`docs/user-guides/upgrade-and-migration/access-control-changes.md`), englisch nach ADR-003, samt
+  der getesteten SQL. Die Prüfanleitung ist Teil dieser Entscheidung, nicht Beigabe: der Bruch ist
+  nur deshalb vertretbar, weil er vorab feststellbar ist.
+- Wer die alte Semantik zurückholen will — auch als Schalter —, braucht eine ADR, die diese ersetzt.
+- Die Anleitung darf **nicht** als „vollständig geprüft" gelesen werden: der Restspalt aus ADR-019
+  (ein Key, der nur die Spaltenexistenz verletzt) fällt weiter erst zur Abfragezeit auf und ist als
+  `JR-1311` geführt.
 
 ## ADR-017 — Action-Versatz zwischen Route-Gate und `FilterBuilder`
 
