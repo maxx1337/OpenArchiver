@@ -5,7 +5,7 @@ import { probePostgres } from '@oa-test/infra';
 import { coverageNotice } from '@oa-test/notice';
 import type { CaslPolicy } from '@open-archiver/types';
 import { acquireTestDatabase, loadBackendDatabaseSingleton } from '../support/pg-harness';
-import { redUntil } from '../support/fail-closed';
+import { classifyFilter, expectFailClosed, redUntil } from '../support/fail-closed';
 import { seedArchivedEmail, seedIngestionSource, seedPrincipal } from '../support/iam-seed';
 import { archivedEmails } from '../../src/database/schema';
 
@@ -31,9 +31,11 @@ import { archivedEmails } from '../../src/database/schema';
  *
  *   - **F3's fail-open is load-bearing on `mongoToMeli`.** `FilterBuilder.create()` builds both
  *     halves in one object literal and awaits the Meili half, so `mongoToMeli`'s throw is what
- *     makes the whole call reject. The Drizzle half on its own is fail-open, and that is what the
- *     test below shows with rows: any future caller that skips the search translator, or any
- *     lenient rewrite of it, silently makes the same policy unrestricted.
+ *     makes the whole call reject. Before `JR-1304` the Drizzle half on its own was fail-open --
+ *     measured, with rows -- so any future caller that skips the search translator, or any lenient
+ *     rewrite of it, silently made the same policy unrestricted. The test below therefore demands
+ *     the refusal from `mongoToDrizzle` **alone**, with no Meili call anywhere in it, and executes
+ *     whatever it does return against the seeded rows.
  *
  * Both tests are RED until `JR-1306` (F1) resp. `JR-1304` (F3).
  */
@@ -215,28 +217,62 @@ suiteRequiring(
 				const rows = await seedTwoMailboxes('f3');
 				const untranslatable = { subject: { $regex: 'confidential' } };
 
-				// The shape `rulesToQuery` produces for a role with exactly one conditional `can`
-				// whose condition cannot be translated: `{ $or: [ <untranslatable> ] }`. `or()` over
-				// an empty list is `undefined`, so the policy places no restriction at all. This is
-				// the half that reaches `ArchivedEmailService.findAll` (ArchivedEmailService.ts:62)
-				// directly -- no Meilisearch involved, no throw to save it.
-				const drizzleOnly = mongoToDrizzle!({ $or: [untranslatable] });
-				expect(
-					await visible(drizzleOnly, [rows.mine, rows.theirs]),
-					`mongoToDrizzle() returned no filter for a policy consisting solely of an ` +
-						`untranslatable condition, so every row is visible. The policy grants nothing ` +
-						`that can be expressed; the correct answer is no row (or a refusal).`
-				).toEqual([]);
+				/**
+				 * Demand the fail-closed contract from `mongoToDrizzle`, and when it answers with a
+				 * deny predicate instead of throwing, execute that predicate against the two seeded
+				 * rows.
+				 *
+				 * Both outcomes `expectFailClosed` accepts are covered that way, and the row check is
+				 * what keeps this case in the integration suite: the claim is not merely "the
+				 * translator refuses" but "no row is reachable through whatever it returned".
+				 */
+				async function refusesAndExposesNothing(
+					context: string,
+					query: Record<string, unknown>
+				) {
+					const produce = () => mongoToDrizzle!(query);
+					expectFailClosed(context, produce);
+					const outcome = classifyFilter(produce);
+					if (outcome.kind === 'deny') {
+						expect(
+							await visible(produce(), [rows.mine, rows.theirs]),
+							`${context}: the deny predicate ${JSON.stringify(outcome.rendered.sql)} ` +
+								`must select no row`
+						).toEqual([]);
+					}
+				}
 
-				// The partially-translatable disjunction is a different, *narrowing* failure and is
-				// asserted at unit level. Recorded here because F3's write-up calls it "erweitert die
-				// Disjunktion" -- see finding F22: dropping a branch from an `$or` of `can`
-				// conditions makes the filter narrower, not wider. The fail-open direction lives in
-				// the `$and` of negated `cannot` conditions and in the empty case above.
-				const partial = mongoToDrizzle!({
+				// The shape `rulesToQuery` produces for a role with exactly one conditional `can`
+				// whose condition cannot be translated: `{ $or: [ <untranslatable> ] }`. Before
+				// `JR-1304`, `or()` over the empty list of surviving branches was `undefined`, so the
+				// policy placed no restriction at all -- measured here, against rows. This is the half
+				// that reaches `ArchivedEmailService.findAll` (ArchivedEmailService.ts:62) directly:
+				// no Meilisearch involved, no throw to save it.
+				await refusesAndExposesNothing(
+					'a policy consisting solely of an untranslatable condition',
+					{ $or: [untranslatable] }
+				);
+
+				// The partially translatable disjunction, asserted as a refusal for the same reason
+				// rather than as a row set. `JR-1304`'s criterion is "kein Zweig wird stillschweigend
+				// weggelassen"; the expectation `[rows.mine]` that stood here until 2026-07-29 pinned
+				// exactly that omission as the wanted result and therefore contradicted the task it
+				// was red for. The unit suite states the same requirement on the emitted predicate
+				// (mongoToDrizzle.test.ts, "an untranslatable $or branch is not silently dropped").
+				//
+				// Finding F22 stays worth recording, and it is a measurement rather than a reading of
+				// F3's write-up ("erweitert die Disjunktion"): pre-`JR-1304` this shape rendered
+				// `"user_email" = $1`, so dropping a branch from the `$or` of `can` conditions made
+				// the filter *narrower*, not wider. The fail-open direction sat in the `$and` of
+				// negated `cannot` conditions and in the empty branch list above -- and in this very
+				// shape as soon as it is negated: `FilterBuilder` wraps every `cannot` condition in
+				// `$not`, and `not (A or U)` losing its second branch renders `not A`, which is true
+				// for every row `U` was there to prohibit (measured on the pre-`JR-1304` translator).
+				// "Narrowing" is thus a property of the top-level `can` composition, never of the drop
+				// itself, which is why the requirement reads "do not drop it", not "do not widen it".
+				await refusesAndExposesNothing('a partially translatable disjunction', {
 					$or: [{ userEmail: rows.mineEmail }, untranslatable],
 				});
-				expect(await visible(partial, [rows.mine, rows.theirs])).toEqual([rows.mine]);
 			}
 		);
 
