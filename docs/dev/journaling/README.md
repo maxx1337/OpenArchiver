@@ -85,11 +85,12 @@ Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenomm
 2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, CI gegen PostgreSQL 17,
 `pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig vor E2).
 
-**E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` ist
-erledigt: die Regressionstests für F1/F3/F7/F8 fordern jetzt den gewünschten Zustand und sind
-**absichtlich rot** — 21 fehlschlagende Tests, `pnpm test` ⇒ Exit 1. Das ist in E13 der geplante
-Zwischenstand (rot → Fix → grün) und **kein** zu reparierender Schaden; wer die Tests abschwächt,
-zerstört den Nachweis. Nächster Schritt: `JR-1303`, dann die übrigen Fixes (Rolle DEV). Es existiert
+**E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
+Regressionstests für F1/F3/F7/F8 auf den gewünschten Zustand umgestellt (21 rot), die fünf Fix-Tasks
+`JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt: **20 der 21 Tests sind grün, kein
+vorher grüner Test ist rot geworden**, F1/F3/F7/F8 sowie F19/F20 sind behoben. Ein Test bleibt rot —
+zwei `JR-1301`-Tests fordern für dieselbe Eingabe Gegenteiliges; das ist eine Entscheidung des PO und
+keine offene Lücke (Vorlage in `06-status.md`). Nächster Schritt: `JR-1307` (Rolle DEV). Es existiert
 noch **kein** Produktionscode für den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.

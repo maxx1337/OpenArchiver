@@ -85,12 +85,74 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (`JR-1301` erledigt) · **Branch:** `claude/journaling-e13-iam-hardening`
-(Epic-Branch, abgezweigt vom Integrationsbranch bei `efea6bc`)
+**Stand:** 2026-07-29 (`JR-1302`–`JR-1306` erledigt) · **Branch:**
+`claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei `efea6bc`)
 
 ### Was zuletzt passiert ist
 
-**`JR-1301` ist erledigt (Rolle `tester`). Der Epic-Branch ist absichtlich rot.**
+**Die fünf Fix-Tasks von E13 sind erledigt (Rolle `senior-dev`): `JR-1303`, `JR-1302`, `JR-1304`,
+`JR-1305`, `JR-1306`.** Ein Commit je Task, in dieser Reihenfolge:
+
+| Commit    | Task      | Kern der Änderung                                                                                                      |
+| --------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `bcac6bd` | `JR-1303` | `SearchService.ts:311`/`:423` bauen den Filter für `('archive','search')` (ADR-017 B). Kein Route-Gate berührt         |
+| `a309fd1` | `JR-1302` | `null` von `rulesToQuery` ⇒ deny; unbedingtes `cannot` ⇒ deny (**F20**); `undefined` vom Übersetzer ⇒ deny (**F19**)   |
+| `45ac0e9` | `JR-1304` | `mongoToDrizzle` wirft statt zu verwerfen; Rückgabetyp `SQL`                                                           |
+| `2311996` | `JR-1305` | `cannot`-Ausschluss über `{ $not: condition }` statt `{ $ne: value }`                                                  |
+| `dcec017` | `JR-1306` | Allowlist für Condition-Keys, `sql.raw` entfernt, `PolicyValidator` prüft Condition-Keys; die drei F21-Pins invertiert |
+
+```
+DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
+  vorher (8984ce9)   Tests  21 failed | 203 passed | 2 skipped (226)   EXIT=1
+  nachher (dcec017)  Tests   1 failed | 223 passed | 2 skipped (226)   EXIT=1
+```
+
+**20 der 21 roten Tests sind grün, und kein vorher grüner Test ist rot geworden** — maschinell
+geprüft, nicht gezählt: beide Läufe mit `--reporter=json` protokolliert und die Statusliste je
+Testname verglichen (0 Übergänge grün ⇒ nicht grün). `predefined-roles.int.test.ts` ist mit allen
+sieben Fällen **grün geblieben**. Die vollständige Tabelle steht in `06-status.md` unter „Grün-Lauf
+der Fixes".
+
+> **Der eine verbleibende rote Test ist ein Widerspruch zwischen zwei `JR-1301`-Tests, kein
+> unfertiger Fix — und er braucht eine Entscheidung.**
+> `RED UNTIL JR-1304: the Drizzle half alone is fail-closed for an untranslatable condition (F3)` in
+> `tests/integration/filter-builder-f1-f3.int.test.ts` fordert für die teilweise übersetzbare
+> Disjunktion ein Prädikat, das Zeilen liefert (Zeile 236: `[rows.mine]`), und ruft `mongoToDrizzle`
+> in Zeile 223 ohne `try` auf. `src/helpers/mongoToDrizzle.test.ts:203` fordert für die
+> **strukturell identische** Eingabe „throw oder `1=0`/`false`". Beides ist nicht gleichzeitig
+> erfüllbar. Gewählt ist **werfen**, weil (a) `JR-1304`s Kriterium „kein Zweig wird stillschweigend
+> weggelassen" lautet und die zweite Assertion gerade die F22-Verengung festhält, die das Kriterium
+> verbietet, (b) `mongoToMeli` für dieselbe Form schon heute wirft und ein **grüner** Test das
+> festhält (`mongo-to-meli.int.test.ts:147`), (c) ein never-true-Prädikat je Zweig am `$not` kippt:
+> `not(false)` ist wahr. **Der Test wurde nicht angepasst** — Teständerungen sind Rolle `tester`.
+> Empfehlung und Begründung in `06-status.md`; danach ist der Endstand `224 passed | 2 skipped`,
+> Exit 0.
+
+**Eine benannte Abweichung von der F21-Entscheidung.** „Abgewiesen wird jeder unbekannte Key" ist als
+Allowlist über die **Form** des Keys plus die Relation umgesetzt: ein einzelner Identifier oder
+`<relation>.<identifier>` mit Relation aus `relationToTableMap`. Damit fallen alle SQL-Syntax-Keys und
+alle Keys mit unbekannter Relation heraus (`attachment.name`, `foo.bar`, `a.b.c`). Ein einzelner,
+unbekannter, syntaktisch harmloser Key (`foo`) wird **weiter übersetzt**: `mongoToDrizzle` kennt die
+Zieltabelle nicht, und eine spaltengenaue Allowlist hätte drei weitere heute grüne Pins gebrochen
+(`{a:1}`, `{b:2}`, `{n:{$gt:1}}` plus die `FIELDS`-Liste der adversarialen Suite) — was der Auftrag
+ausschloss. Vorschlag: spaltengenaue Prüfung dort, wo das Subject bekannt ist, also bei `JR-1310`.
+
+**Geänderter Produktionscode: vier Dateien.** `src/services/SearchService.ts`,
+`src/services/FilterBuilder.ts`, `src/helpers/mongoToDrizzle.ts`,
+`src/iam-policy/policy-validator.ts`. **`mongoToMeli.ts` ist unverändert.** Geänderter Testcode: nur
+die vom PO freigegebene F21-Invertierung in `src/helpers/mongoToDrizzle.test.ts` und
+`tests/fixtures/mongo-to-drizzle-golden.json`. **Keine Migration, kein Schemaeingriff, kein neuer
+i18n-Key** — der Ablehnungsgrund des Validators wird wie die bestehenden Gründe auf Englisch hinter
+`req.t('iam.invalidPolicy')` angehängt; dass diese Gründe nicht lokalisiert sind, ist Bestandszustand.
+
+**Bewusst nicht angefasst:** F2, F4, F5, F6, F9, F10, F17, F18, F22, F23. F4 und F5 sind in
+`mongoToDrizzle` erhalten und jetzt im Code als bewusst offen kommentiert. `pnpm lint` grün,
+`pnpm --filter @open-archiver/backend test:types` grün, Backend-Build grün, 0 `oa_test_*`-Rückstände,
+lokaler PostgreSQL-16.13-Cluster restlos entfernt. Kein Rückmerge, kein PR.
+
+### Was davor passiert ist — `JR-1301`
+
+**`JR-1301` ist erledigt (Rolle `tester`). Der Epic-Branch war absichtlich rot.**
 
 ```
 DATABASE_URL=… OA_TEST_REQUIRE_INFRA=1 pnpm test
@@ -138,7 +200,7 @@ ignoriert) — beide inhaltlich in `JR-1302`/`JR-1304` mitzubehandeln, beide ber
 `pnpm lint` grün, `pnpm --filter @open-archiver/backend test:types` grün, Backend-Build grün, 0
 `oa_test_*`-Rückstände, lokaler PostgreSQL-16.13-Cluster restlos entfernt.
 
-### Was davor passiert ist
+### Und davor — ADR-017
 
 **ADR-017 ist entschieden: Variante B** (Auftraggeber, 2026-07-29). Der Action-Versatz wird dort
 aufgelöst, wo der Filter gebaut wird, nicht am Route-Gate:
@@ -239,59 +301,42 @@ Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
 
 ### Nächster konkreter Schritt
 
-**`JR-1303`, dann `JR-1302` / `JR-1304` / `JR-1305` / `JR-1306` — Rolle DEV**, auf demselben Branch
-`claude/journaling-e13-iam-hardening`. Die Reihenfolge steht in `03-backlog.md`; `JR-1303` zuerst, weil
-ADR-017 es zu reiner Umsetzung gemacht hat.
+**`JR-1307` — Rolle DEV**, auf demselben Branch `claude/journaling-e13-iam-hardening`: die
+Verhaltensänderung dokumentieren (Release-Hinweis **plus** Prüfanleitung für Bestandsinstallationen)
+und als **ADR-016** festhalten, dass fail-closed den Bruch rechtfertigt. Die Nummernlücke zwischen
+ADR-015 und ADR-017 ist dafür reserviert — **nicht umnummerieren**. Was die Anleitung sagen muss:
 
-**Die roten Tests sind die Abnahme.** Jede der vier Fix-Tasks hat ihre Zielmenge im Testnamen:
+- Wer den `null`-Zweig traf, sieht künftig **nichts** statt alles. Die drei betroffenen Formen
+  konkret benennen: Nutzer **ohne Rolle**, Policy mit **ausschließlich** `cannot`-Regeln auf einem
+  Subject, handgeschriebene Rolle mit `search` ohne `read` auf `archive`. Keine Pauschalwarnung.
+- Neu hinzugekommen und ebenfalls verhaltensändernd: ein **unbedingtes `cannot`** und ein `can` mit
+  **leerem `conditions`** verweigern jetzt (F20/F19), eine Policy mit einem Condition-Key, den die
+  Allowlist nicht kennt, **schlägt beim Anlegen fehl** (`400`) und bei einer bestehenden Rolle beim
+  Abfragen (`JR-1306`) — für einen Betreiber ist das der sichtbarste Bruch, weil ein Tippfehler in
+  einer gespeicherten Policy vorher wirkungslos war und jetzt laut ist.
+- **F17 mit aufnehmen:** ausgeliefert existiert nur `predefined_super_admin`; wer nach
+  `predefined_read_only_user` sucht, findet nichts, und das ist kein Fehler seiner Installation.
+- Keine der drei `predefined_*`-Rollen ist betroffen — belegt durch
+  `tests/integration/predefined-roles.int.test.ts`, das durch alle Fixes grün geblieben ist.
+
+Danach `JR-1308` (Rolle PO, Entwurf, **nicht versenden**), dann `JR-1309` (Abnahme, Rolle TEST → PO).
+**Rückmerge in den Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12
+unangetastet; kein PR ohne ausdrückliche Aufforderung.
+
+**Vor `JR-1309` braucht der PO eine Entscheidung** zum verbleibenden roten Test (siehe „Offene Fragen
+an den Auftraggeber"). Solange sie aussteht, endet `pnpm test` mit Exit 1, und `ci.yml` zeigt auf
+`push` rote Läufe.
+
+**Das Kommando, mit dem beide Läufe protokolliert wurden** — Postgres lokal ohne Docker, siehe
+Fallstricke Punkt 8:
 
 ```bash
-DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 \
-  pnpm test -t "RED UNTIL JR-1302"      # 5 Fälle
+DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
 ```
 
-Fertig ist eine Task, wenn **ihre** roten Fälle grün sind **und** kein bisher grüner Fall rot wurde.
-
-> **Eine ausdrückliche Ausnahme von „kein grüner Fall wird rot": `JR-1306`.** Die F21-Entscheidung
-> (strenge Allowlist) macht drei heute grüne Pins gegenstandslos — `attachment.name`, `foo.bar` in
-> `tests/fixtures/mongo-to-drizzle-golden.json` und „resolves only the relations listed in
-> `relationToTableMap`". Sie werden im **selben** Commit wie der Fix invertiert, nicht davor und nicht
-> danach, damit kein Stand existiert, in dem Test und Code sich widersprechen. Das ist die einzige
-> Stelle in E13, an der ein grüner Test bewusst umgedreht wird.
-> Der Endstand von E13 ist `pnpm test` ⇒ Exit `0` bei `224 passed | 2 skipped`. Betroffene
-> Produktionsdateien je Task:
-
-| Task        | Datei(en)                                                                                                 |
-| ----------- | --------------------------------------------------------------------------------------------------------- |
-| **JR-1303** | `src/services/SearchService.ts` Zeilen 311 und 423 — **nur** das dritte Argument, sonst nichts            |
-| **JR-1302** | `src/services/FilterBuilder.ts` (`null`-Zweig Zeile 49; dazu **F19** und **F20**)                         |
-| **JR-1304** | `src/helpers/mongoToDrizzle.ts` (Leerheits- und Unbekannt-Fälle), Aufrufer behandeln `undefined` als deny |
-| **JR-1305** | `src/services/FilterBuilder.ts` Zeilen 39–46 (`cannot`-Ausschluss), beide Übersetzer                      |
-| **JR-1306** | `src/helpers/mongoToDrizzle.ts` `getDrizzleColumn()` **und** `src/iam-policy/policy-validator.ts`         |
-
-**Vier Dinge, die der DEV wissen muss, bevor er anfängt:**
-
-1. **`packages/backend/tests/integration/predefined-roles.int.test.ts` ist grün und muss grün
-   bleiben.** Es ist der Nachweis, dass eine Standardinstallation sich nicht ändert. Wird es rot, ist
-   der Fix eine Regression für Bestandsinstallationen — nicht der Test.
-2. **`JR-1306`: vor dem Anfangen F21 entscheiden.** Gilt die Allowlist nur für Keys mit SQL-Syntax
-   oder für alle unbekannten Keys? Die strenge Variante macht drei heute grüne Pins rot
-   (`attachment.name`, `foo.bar` in der Golden-Datei, „resolves only the relations listed in
-   `relationToTableMap`") — die gehören dann im selben Commit invertiert. Die Regressionstests fordern
-   die strenge Variante **nicht**, damit sie die Entscheidung nicht vorwegnehmen.
-3. **`JR-1304`: F22 lesen.** Das Akzeptanzkriterium sagt „der `$or`-Fall erweitert die Disjunktion
-   nicht mehr". Gemessen ist der `$or`-Fall eine **Verengung**; fail-open ist das `$and` negierter
-   `cannot`-Bedingungen und jede Form, in der **alle** Zweige verschwinden. Wer nach dem Wortlaut
-   arbeitet, behebt den harmlosen Fall.
-4. **`JR-1302`: die Vorlage, auf die die Task verweist, feuert nie.** Der „No access"-Zweig in
-   `FilterBuilder.ts:53` wurde in keinem der über zwanzig Policy-Zuschnitte unter Test erreicht und ist
-   nach Lesart von `@casl/ability/extra` wahrscheinlich unerreichbar (Notiz unter F19). Es gibt also
-   keinen laufenden Fall und keinen Test, der sie abdeckt — die Semantik muss aus dem Kriterium kommen,
-   nicht aus der Beobachtung.
-
-Danach `JR-1307` / `JR-1308`, dann `JR-1309` (Abnahme, Rolle TEST → PO). **Rückmerge in den
-Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12 unangetastet; kein PR ohne
-ausdrückliche Aufforderung.
+Für den Nachweis „kein vorher grüner Test ist rot geworden" nicht die Zahlen vergleichen, sondern die
+Statuslisten: `pnpm test --reporter=json --outputFile=<datei>` auf beiden Ständen und die Paare
+`status` / `fullName` gegeneinander diffen. Die Gesamtzahl allein verdeckt einen Tausch.
 
 ### Was ein neuer Agent zuerst lesen muss
 
@@ -303,14 +348,28 @@ ausdrückliche Aufforderung.
 
 ### Offene Fragen an den Auftraggeber
 
+**Blockierend für die Abnahme `JR-1309`, nicht für `JR-1307`: der eine rote Test.**
+`RED UNTIL JR-1304: the Drizzle half alone is fail-closed for an untranslatable condition (F3)` und
+`src/helpers/mongoToDrizzle.test.ts:203` fordern für dieselbe Eingabeform Gegenteiliges — der
+Integrationstest ein Prädikat, das Zeilen liefert, der Unit-Test „throw oder never-true". Der Fix hat
+sich für **werfen** entschieden (Begründung in `06-status.md`, u. a. weil `mongoToMeli` für dieselbe
+Form schon heute wirft und ein grüner Test das festhält). **Zu entscheiden: wird der Integrationstest
+korrigiert?** Empfehlung: ja — Zeile 223 und 236 in `expectFailClosed` bzw. `try`/`catch` fassen und
+die Erwartung `[rows.mine]` streichen, weil sie die F22-Verengung pinnt, die `JR-1304` beseitigen
+soll. **Das ist eine Teständerung und gehört zur Rolle `tester`**, nicht zum DEV; sie wurde deshalb
+nicht vorgenommen. Danach `224 passed | 2 skipped`, Exit 0.
+
+**Zur Kenntnis, kein Entscheidungsbedarf: eine benannte Abweichung in `JR-1306`.** Die Allowlist prüft
+Form des Keys plus Relation, nicht die Existenz der Spalte; ein einzelner unbekannter Key (`foo`) wird
+weiter übersetzt. Begründung und Vorschlag (spaltengenaue Prüfung bei `JR-1310`) stehen unter „Was
+zuletzt passiert ist" und in F21.
+
 **F12 ist erledigt und braucht keine Entscheidung mehr.** Behoben in `JR-104a` (`653dd1c`), in
 `JR-106a` unabhängig als behoben bestätigt (10 nebenläufige Runden, 0 Rückstände).
 
-**Blockierend: nichts.** `JR-1303` kann beginnen.
-
 **Vom PO am 2026-07-29 abgearbeitet — kein Vorlagebedarf mehr:** **F18** (ADR-017 und F7 um „für die
 Paare der heutigen Aufrufstellen" ergänzt, plus der F17-Nachtrag), **F21** (strenge Variante
-entschieden und in `JR-1306` festgeschrieben, die drei Pins werden im selben Commit invertiert),
+entschieden und in `JR-1306` festgeschrieben, die drei Pins im selben Commit invertiert),
 **F22** (`JR-1304`s Kriterium auf „kein Zweig wird stillschweigend weggelassen" umformuliert, mit der
 richtigen Gefahrenrichtung), **F17(a)** (`JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle
 existiert). **F19/F20** brauchten ohnehin keine Entscheidung und sind über die roten Tests Teil der
@@ -326,9 +385,9 @@ gehört nicht in E13. **Blockiert nichts.**
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **F17**     | (a) **Erledigt (PO):** `JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle existiert, und ADR-017 hat den Nachtrag. (b) **Offen beim Auftraggeber:** soll der Bootstrap repariert werden? Produktänderung, keine Härtung, nicht in E13. PO-Nachprüfung am Code bestätigt: `createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`, der Bootstrap kann danach nie mehr feuern. |
 | **F18**     | **Erledigt (PO).** ADR-017 hat einen Nachtrag: die Aussage gilt für die Paare der heutigen vier Aufrufstellen, nicht für jede (Action, Subject) je Rolle. Das Aufrufstellen-Inventar wacht darüber.                                                                                                                                                                                                                                             |
-| **F21**     | **Entschieden (PO): strenge Variante.** Abgewiesen wird jeder unbekannte Key, nicht nur einer mit SQL-Syntax; die drei Pins werden im selben Commit invertiert. Steht in `JR-1306`.                                                                                                                                                                                                                                                             |
+| **F21**     | **Umgesetzt in `JR-1306` (`dcec017`).** Die drei Pins sind im Fix-Commit invertiert. Eine benannte Abweichung: die Allowlist prüft die Form des Keys plus die Relation, nicht die Existenz der Spalte — ein einzelner unbekannter Key (`foo`) wird weiter übersetzt, weil `mongoToDrizzle` keinen Tabellenkontext hat. Vorschlag: spaltengenau bei `JR-1310`.                                                                                   |
 | **F22**     | **Erledigt (PO).** `JR-1304`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit dem Hinweis, dass die fail-open-Richtung im `$and` und bei leerer Zweigliste liegt, nicht im `$or`.                                                                                                                                                                                                                                     |
-| **F19/F20** | Zwei weitere Fail-open-Formen in `FilterBuilder`. Kein Entscheidungsbedarf, aber sie erweitern den Umfang von `JR-1302` und `JR-1304` um je einen Fall. Beide sind rot und damit Teil der Abnahme.                                                                                                                                                                                                                                              |
+| **F19/F20** | **Behoben** in `JR-1302` (`a309fd1`) bzw. mit `JR-1304` (`45ac0e9`): ein unbedingtes `cannot` verweigert, und ein `can` mit leerem `conditions` gilt nicht mehr als unbedingt. Beide Tests sind grün.                                                                                                                                                                                                                                           |
 | **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                                            |
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
@@ -336,7 +395,7 @@ gehört nicht in E13. **Blockiert nichts.**
 | Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.**              |
-| **ADR-017** | **Erledigt am 2026-07-29: Variante B.** Braucht keine Entscheidung mehr. Umsetzung in `JR-1303`, Folgearbeit als `JR-1310` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **ADR-017** | **Erledigt am 2026-07-29: Variante B, umgesetzt in `JR-1303` (`bcac6bd`).** Braucht keine Entscheidung mehr. Folgearbeit als `JR-1310` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                                |
 | **F14–F16** | Drei Befunde am Messinstrument aus `JR-106a`, alle **offen** und alle **ohne Kriteriumsbruch**: die Suite-Inventur zählt Dateien statt gelaufene Tests (eine Umetikettierung `ci` → `nightly` schaltet die `integration`-Suite ab und bleibt grün), `minimumFiles` verdeckt eine Löschung sobald die Suite wächst, und ein Rückstand nach Modul-Throw wird lokal nicht angekündigt. Inhaltlich gehören alle drei nach **`JR-1305`**, wo `JR-106` den „Ausweg" für genau diese Klasse schon eingeplant hat. Vor E2 zu entscheiden, ob dort mitbehoben wird. |
 
 | Punkt                                     | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -403,6 +462,16 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 11. **`pnpm --filter @open-archiver/backend test:types` kann an unberührtem Produktionscode scheitern**,
     sobald eine Testdatei einen Express-Controller importiert: `req.t` existiert im Test-Programm nicht
     (F23). Der Build ist davon nicht betroffen, die Ursache liegt in `tsconfig.test.json`.
+12. **Ein gefilterter Lauf (`pnpm test -t "…"`) lässt `oa_test_*`-Datenbanken liegen.** Die
+    `integration`-Dateien rufen `acquireTestDatabase()` im **Modul-Scope** auf, also bevor vitest die
+    Fälle nach `-t` filtert; wird die Suite dann komplett übersprungen, läuft der zugehörige Teardown
+    nicht. Ein **vollständiger** `pnpm test`-Lauf hinterlässt nachweislich **0** Rückstände. Wer
+    zwischendurch mit `-t` arbeitet, muss vor der Abschlussprüfung aufräumen — sonst liest sich der
+    eigene Zwischenstand wie ein Leck. Verwandt mit **F16**, aber nicht dieselbe Ursache; gehört in
+    die Betrachtung von `JR-105c`.
+    ```bash
+    psql -tAc "select datname from pg_database where datname like 'oa\_test\_%'"
+    ```
 
 ---
 

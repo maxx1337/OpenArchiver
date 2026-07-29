@@ -27,10 +27,18 @@ Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16) und `JR-1301` (F17
 > **Seit `JR-1301` (2026-07-29) markiert der Testcode die vier E13-Befunde nicht mehr als bestanden.**
 > F1, F3, F7 und F8 waren bis dahin mit `it.fails` bzw. mit Assertions auf den **Ist**-Zustand
 > festgehalten — ein grüner Test, der eine Sicherheitslücke beschreibt. Sie fordern jetzt den
-> gewünschten Zustand und sind **rot**, mit dem Titelpräfix `RED UNTIL JR-13xx`. Die Rot-Läufe sind in
+> gewünschten Zustand, mit dem Titelpräfix `RED UNTIL JR-13xx`. Die Rot-Läufe sind in
 > `06-status.md` protokolliert. Für Befunde **außerhalb** von E13s Umfang (F4, F5, F9, F10, F17) gilt
 > weiter: Ist-Zustand festhalten, laut in einer `coverageNotice` benennen, nicht beheben — es gibt
 > keine Task dafür, und ein roter Test ohne Zuständigen blockiert nur die Abnahme.
+
+> **Stand 2026-07-29 nach den Fixes `JR-1302`–`JR-1306`: F1, F3, F7, F8, F19 und F20 sind behoben**,
+> F21 ist umgesetzt. 20 der 21 roten Tests sind grün, kein vorher grüner Test ist rot geworden. Der
+> eine noch rote Test ist ein Widerspruch zwischen zwei `JR-1301`-Tests und keine offene Lücke —
+> Vorlage in `06-status.md` unter „Der eine verbleibende rote Test".
+>
+> **Unverändert offen und ausdrücklich nicht mitbehandelt:** F2, F4, F5, F6, F9, F10, F13–F18, F22,
+> F23. `JR-1309` prüft, dass sie nicht stillschweigend mitverändert wurden.
 
 ---
 
@@ -38,7 +46,16 @@ Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16) und `JR-1301` (F17
 
 **Schwere:** hoch im Wirkungsgrad, aber **Super-Admin-Rechte als Voraussetzung** ·
 **Ort:** `packages/backend/src/helpers/mongoToDrizzle.ts`, `getDrizzleColumn()` ·
-**Status:** offen, **nicht behoben**
+**Status:** **behoben** in `JR-1306` (`dcec017`, 2026-07-29)
+
+> **Behoben (`JR-1306`, `dcec017`).** Condition-Keys werden gegen eine Allowlist geprüft statt
+> escaped: angenommen wird ein einzelner Identifier oder `<relation>.<identifier>` mit einer Relation
+> aus `relationToTableMap`, alles andere wirft. `sql.raw` ist aus dem Relationszweig entfernt, beide
+> Hälften gehen durch `sql.identifier`. `PolicyValidator.isValid()` weist dieselben Keys **vor** dem
+> Speichern ab, rekursiv auch in `$or`/`$and`/`$not`, sodass `iam.controller.ts` mit `400` antwortet.
+> Einschränkung, bewusst und in `06-status.md` begründet: ein einzelner **unbekannter, syntaktisch
+> harmloser** Key (`foo`) wird weiter übersetzt — eine spaltengenaue Allowlist ist in
+> `mongoToDrizzle` nicht formulierbar, weil die Funktion keinen Tabellenkontext hat.
 
 Ein Condition-Key mit einem doppelten Anführungszeichen schreibt rohes SQL in die `WHERE`-Klausel
 jeder über `FilterBuilder` gescopeten Abfrage:
@@ -125,7 +142,21 @@ spiegeln den Cast bewusst und dokumentieren das in `ability.test.ts`.
 
 ## F3 — Fail-open-Übersetzung in `mongoToDrizzle`
 
-**Schwere:** mittel · **Ort:** `packages/backend/src/helpers/mongoToDrizzle.ts` · **Status:** offen
+**Schwere:** mittel · **Ort:** `packages/backend/src/helpers/mongoToDrizzle.ts` ·
+**Status:** **behoben** in `JR-1304` (`45ac0e9`, 2026-07-29) — eine Testfassung bleibt rot, siehe unten
+
+> **Behoben (`JR-1304`, `45ac0e9`).** `mongoToDrizzle` wirft, statt eine Bedingung zu verwerfen:
+> unbekannter Operator, leeres Bedingungsobjekt, leeres `$or`/`$and`, ein unübersetzbarer Zweig in
+> `$or`/`$and`, ein unübersetzbares `$not`. Der Rückgabetyp ist `SQL`, nicht mehr `SQL | undefined`;
+> `FilterBuilder` behandelt ein trotzdem auftretendes `undefined` als deny. Nicht mitbehoben, weil
+> außerhalb von E13: **F4** (nur der erste Operator wird gelesen) und **F5** (`{field:null}` ⇒
+> `= NULL`); beide sind im Code kommentiert und durch grüne Pins festgehalten.
+>
+> **Offen bleibt eine Testfassung, nicht der Defekt:** `filter-builder-f1-f3.int.test.ts` fordert für
+> die teilweise übersetzbare Disjunktion ein Prädikat, das Zeilen liefert, während
+> `mongoToDrizzle.test.ts` für dieselbe Form „throw oder never-true" fordert. Beide können nicht
+> gleichzeitig grün sein; Vorlage und Empfehlung in `06-status.md` unter „Der eine verbleibende rote
+> Test".
 
 Unbekannter Operator, leeres `$or`/`$and` oder leere Query liefern `undefined` — also **kein Filter**.
 Für `FilterBuilder` bedeutet „kein Filter" **unbeschränkt**.
@@ -185,8 +216,15 @@ Keine Rechteausweitung, aber eben auch keine Validierung.
 
 ## F7 — `FilterBuilder` ist fail-open, wenn keine `can`-Regel greift
 
-**Schwere:** hoch · **Ort:** `packages/backend/src/services/FilterBuilder.ts` · **Status:** offen ·
+**Schwere:** hoch · **Ort:** `packages/backend/src/services/FilterBuilder.ts` ·
+**Status:** **behoben** in `JR-1302` (`a309fd1`) und `JR-1303` (`bcac6bd`), 2026-07-29 ·
 **Herkunft:** `JR-104`, gegen echtes Postgres verifiziert
+
+> **Behoben.** `JR-1302` (`a309fd1`) bildet `null` von `rulesToQuery` auf denselben Deny ab, den der
+> vorhandene „No access"-Zweig liefert (``sql`1=0` `` plus ein nie zutreffender Suchfilter); die
+> unbeschränkte Rückgabe bleibt allein dem nachweislich unbedingten `can`. `JR-1303` (`bcac6bd`)
+> beseitigt den Action-Versatz, über den F7 durch die Suchroute erreichbar war. Alle vier roten F7-Fälle
+> und der ADR-017-Fall sind grün, `predefined-roles.int.test.ts` ist grün geblieben.
 
 `rulesToQuery()` aus `@casl/ability/extra` liefert `null`, wenn die Regelliste für
 (Action, Subject) **keine nicht-invertierte** Regel enthält — sowohl wenn es überhaupt keine Regel
@@ -280,8 +318,13 @@ Action-Versatz).
 
 ## F8 — Der `cannot`-Ausschluss verarbeitet Operator-Bedingungen falsch
 
-**Schwere:** mittel · **Ort:** `packages/backend/src/services/FilterBuilder.ts` · **Status:** offen ·
-**Herkunft:** `JR-104`
+**Schwere:** mittel · **Ort:** `packages/backend/src/services/FilterBuilder.ts` ·
+**Status:** **behoben** in `JR-1305` (`2311996`, 2026-07-29) · **Herkunft:** `JR-104`
+
+> **Behoben (`JR-1305`, `2311996`).** Die Negation entsteht auf Query-Ebene (`{ $not: condition }`
+> je `cannot`-Regel, alle per `$and` verknüpft) statt durch Einwickeln des **Werts** in `$ne`. `$not`
+> komponiert mit jedem Operator, und beide Übersetzer implementieren es bereits. Die drei roten Fälle
+> (`$in`, `$nin`, `$gte`) sind grün, der Gegenprobefall für die skalare Bedingung ist grün geblieben.
 
 > **Regressionstests seit `JR-1301`:** `tests/integration/filter-builder-f8.int.test.ts`, drei rote
 > Fälle (`$in`, `$nin`, `$gte` auf einer numerischen Spalte) und ein grüner Gegenprobefall für die
@@ -756,7 +799,13 @@ Aufrufstellen" ergänzen.
 
 **Kategorie:** Bestandscode · **Schwere:** mittel · **Ort:**
 `packages/backend/src/services/FilterBuilder.ts:53`, `src/helpers/mongoToDrizzle.ts` ·
-**Status:** offen — inhaltlich in `JR-1304` zu erledigen · **Herkunft:** `JR-1301`
+**Status:** **behoben** in `JR-1302` (`a309fd1`) und `JR-1304` (`45ac0e9`), 2026-07-29 ·
+**Herkunft:** `JR-1301`
+
+> **Behoben.** Zwei voneinander unabhängige Riegel: `FilterBuilder` behandelt ein `undefined` aus dem
+> Übersetzer als deny (`a309fd1`), und `mongoToDrizzle` wirft für das leere Bedingungsobjekt, aus dem
+> `{ $or: [ {} ] }` besteht (`45ac0e9`). Der `can`-Regel mit `conditions: {}` wird damit kein
+> Vollzugriff mehr zugeschrieben; sie wird abgelehnt.
 
 Gefunden beim Schreiben einer Gegenprobe für den vorhandenen „No access"-Zweig, die fehlschlug. Eine
 Regel `{ action: 'read', subject: 'archive', conditions: {} }` läuft so durch:
@@ -788,8 +837,12 @@ Quelltext, aber es gibt keinen laufenden Fall und keinen Test, der sie abdeckt.
 
 **Kategorie:** Bestandscode · **Schwere:** mittel (in der HTTP-Kette durch `requirePermission`
 abgefedert, in Serviceaufrufen nicht) · **Ort:**
-`packages/backend/src/services/FilterBuilder.ts:27–33` · **Status:** offen — inhaltlich in `JR-1302`
-zu erledigen · **Herkunft:** `JR-1301`
+`packages/backend/src/services/FilterBuilder.ts:27–33` · **Status:** **behoben** in `JR-1302`
+(`a309fd1`, 2026-07-29) · **Herkunft:** `JR-1301`
+
+> **Behoben (`JR-1302`, `a309fd1`).** `FilterBuilder` sammelt jetzt zusätzlich die `cannot`-Regeln
+> **ohne** Bedingung und antwortet für sie mit deny, bevor der Zweig „unbedingtes `can`" greift. Ein
+> pauschales Verbot lässt sich nicht als Filter ausdrücken, also ist deny die einzige richtige Antwort.
 
 Der Ausschlussfilter sammelt nur `cannot`-Regeln, die eine Bedingung tragen:
 
@@ -812,8 +865,8 @@ nicht erfüllt, solange sie so bleibt: ein widerrufenes `can` ist kein unbedingt
 **Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig (Arbeitsplanung, kein Defekt) ·
 **Ort:** `packages/backend/src/helpers/mongoToDrizzle.test.ts` (Suite „column name mapping"),
 `packages/backend/tests/fixtures/mongo-to-drizzle-golden.json` Fall „unknown relation key is emitted
-as one identifier containing a dot" · **Status:** **entschieden (PO, 2026-07-29)** — strenge Variante,
-in `JR-1306` festgeschrieben ·
+as one identifier containing a dot" · **Status:** **erledigt** — strenge Variante entschieden (PO,
+2026-07-29) und in `JR-1306` (`dcec017`) umgesetzt, die drei Pins im selben Commit invertiert ·
 **Herkunft:** `JR-1301`
 
 `JR-1306` soll Condition-Keys „gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen".
@@ -835,6 +888,17 @@ fail-closed behandelt" lässt die milde Lesart nicht zu. Kein Vorlagebedarf beim
 einen Betreiber ändert sich nur, dass ein Tippfehler in einer Policy künftig beim Anlegen auffällt
 statt stillschweigend eine Regel ohne Wirkung zu erzeugen. Die drei Pins werden im selben Commit wie
 der Fix invertiert, damit kein Zwischenstand existiert, in dem Test und Code sich widersprechen.
+
+**Umgesetzt in `JR-1306` (`dcec017`, 2026-07-29), mit einer benannten Einschränkung.** Abgewiesen wird
+jeder Key mit SQL-Syntax und jeder Key mit **unbekannter Relation** (`attachment.name`, `foo.bar`,
+`a.b.c`). Ein einzelner, unbekannter, syntaktisch harmloser Key (`foo`) wird dagegen **weiter
+übersetzt**: `mongoToDrizzle` kennt die Zieltabelle nicht, eine spaltengenaue Allowlist ist dort also
+nicht formulierbar, und sie hätte drei weitere heute grüne Pins gebrochen (`{a:1}`, `{b:2}`,
+`{n:{$gt:1}}` sowie die `FIELDS`-Liste der adversarialen Suite) — was der Auftrag ausdrücklich
+ausschloss. Die spaltengenaue Prüfung gehört dorthin, wo das Subject bekannt ist, also in die Nähe von
+`JR-1310`. Die drei Pins sind wie vorgesehen im Fix-Commit invertiert; der Golden-Fall trägt dafür den
+eigenen Marker `mustRefuseKey`, damit die von `JR-1301` assertierte Zahl der drei
+`mustFailClosed`-Fälle (F3) unverändert bleibt.
 
 ## F22 — F3s `$or`-Beispiel beschreibt die Wirkungsrichtung falsch
 

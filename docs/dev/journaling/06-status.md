@@ -6,18 +6,26 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-29 (`JR-1301` erledigt) · **Branch:**
+**Letzte Aktualisierung:** 2026-07-29 (`JR-1302`–`JR-1306` erledigt) · **Branch:**
 `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt bei `efea6bc`)
 
-> **`JR-1301` ist erledigt (2026-07-29, Rolle `tester`). Der Epic-Branch ist absichtlich rot: 21
-> fehlschlagende Tests, `pnpm test` ⇒ Exit 1.** Das ist der Beleg, nicht eine Panne — E13s
-> Reihenfolge ist rot → Fix → grün, und ein Test, der nie rot war, belegt nichts. `ci.yml` läuft auf
-> `push`, der Branch zeigt also rote Läufe, bis `JR-1302`/`JR-1303`/`JR-1304`/`JR-1305`/`JR-1306`
-> gelandet sind. **Niemand „reparieren" durch Abschwächen der Tests.** Details unter „E13 — Rot-Läufe
-> `JR-1301`" weiter unten.
+> **Die fünf Fix-Tasks `JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt
+> (2026-07-29, Rolle `senior-dev`). Von den 21 roten Tests sind 20 grün, kein vorher grüner Test ist
+> rot geworden.** `pnpm test` ⇒ **223 passed | 1 failed | 2 skipped**, Exit 1.
+>
+> **Der eine verbleibende rote Test ist kein unfertiger Fix, sondern ein Widerspruch zwischen zwei
+> Tests aus `JR-1301`.** `filter-builder-f1-f3.int.test.ts` fordert für dieselbe Eingabeform, für die
+> `mongoToDrizzle.test.ts` „throw oder never-true" fordert, ein Prädikat, das Zeilen liefert. Beide
+> können nicht gleichzeitig grün sein. Details und Entscheidungsvorlage unter „E13 — Der eine
+> verbleibende rote Test" weiter unten. **Nicht durch Abschwächen eines der beiden Tests auflösen** —
+> die Entscheidung liegt beim PO.
 >
 > **ADR-017s Wirkungsanalyse hält** — jetzt belegt statt hergeleitet, mit zwei benannten
-> Einschränkungen (**F17**, **F18**). Sieben neue Befunde: **F17–F23**.
+> Einschränkungen (**F17**, **F18**). Sieben neue Befunde aus `JR-1301`: **F17–F23**; davon sind
+> **F19** und **F20** mit `JR-1302`/`JR-1304` behoben.
+>
+> `predefined-roles.int.test.ts` ist **grün geblieben** (alle 7 Fälle) — der Nachweis, dass eine
+> Standardinstallation sich durch die Fixes nicht ändert.
 
 > **ADR-017 ist entschieden (2026-07-29, Auftraggeber): Variante B.** `SearchService.ts:311` und
 > `:423` rufen künftig `FilterBuilder.create(userId, 'archive', 'search')`; `search.routes.ts` bleibt
@@ -49,7 +57,8 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 > melden grün. Solange das offen ist, belegt ein grüner CI-Lauf **nicht**, dass die Integration-Suite
 > gelaufen ist — und auf genau diesen Tests ruht jede Durability-Aussage in E2/E3.
 >
-> Nächster Schritt: **`JR-1301`** (E13, Branch `claude/journaling-e13-iam-hardening`).
+> Nächster Schritt: **`JR-1307`** (Rolle DEV), danach `JR-1308` und die Abnahme `JR-1309`. Vorher
+> braucht der PO eine Entscheidung zum verbleibenden roten Test (siehe unten).
 
 ---
 
@@ -62,7 +71,7 @@ eingeschoben (siehe `03-backlog.md`).
 | ----------- | ---- | ---------------------------------- | ---------------------------------------------------------------- | --------------- |
 | —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                       | 6 / 6           |
 | 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2) | 9 / 10          |
-| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — `JR-1301` erledigt, Branch absichtlich rot       | 1 / 9           |
+| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — Fixes gelandet, 1 Test rot (Testwiderspruch)     | 6 / 9           |
 | 3           | E2   | Ledger und Hash-Chain              | offen                                                            | 0 / 10          |
 | 4           | E3   | Spool und Acceptance-Contract      | offen                                                            | 0 / 8           |
 | 5           | E4   | `smtp-ingress`-Service             | offen                                                            | 0 / 13          |
@@ -802,17 +811,131 @@ in ein Test-Epic.
 
 **Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`.
 
-|     | Task                                                                              | Rolle     |
-| --- | --------------------------------------------------------------------------------- | --------- |
-| [x] | JR-1301 Fehlschlagende Regressionstests für F1/F3/F7/F8 — **erledigt 2026-07-29** | TEST      |
-| [ ] | JR-1303 Action-Versatz auflösen (ADR-017, Variante B)                             | DEV       |
-| [ ] | JR-1302 `FilterBuilder`: `null` als deny                                          | DEV       |
-| [ ] | JR-1304 `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen        | DEV       |
-| [ ] | JR-1305 `cannot`-Ausschluss mit Operator-Bedingungen korrekt bauen                | DEV       |
-| [ ] | JR-1306 Condition-Keys gegen eine Allowlist prüfen                                | DEV       |
-| [ ] | JR-1307 Verhaltensänderung dokumentieren (ADR-016)                                | DEV       |
-| [ ] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden)                            | PO        |
-| [ ] | JR-1309 Abnahme E13                                                               | TEST → PO |
+|     | Task                                                                                                                                | Rolle     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| [x] | JR-1301 Fehlschlagende Regressionstests für F1/F3/F7/F8 — **erledigt 2026-07-29**                                                   | TEST      |
+| [x] | JR-1303 Action-Versatz auflösen (ADR-017, Variante B) — `bcac6bd`                                                                   | DEV       |
+| [x] | JR-1302 `FilterBuilder`: `null` als deny (mit F19, F20) — `a309fd1`                                                                 | DEV       |
+| [~] | JR-1304 `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen — `45ac0e9`, 6 von 7 Tests grün, 1 Testwiderspruch offen | DEV       |
+| [x] | JR-1305 `cannot`-Ausschluss mit Operator-Bedingungen korrekt bauen — `2311996`                                                      | DEV       |
+| [x] | JR-1306 Condition-Keys gegen eine Allowlist prüfen — `dcec017`                                                                      | DEV       |
+| [ ] | JR-1307 Verhaltensänderung dokumentieren (ADR-016)                                                                                  | DEV       |
+| [ ] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden)                                                                              | PO        |
+| [ ] | JR-1309 Abnahme E13                                                                                                                 | TEST → PO |
+
+### E13 — Grün-Lauf der Fixes `JR-1302`–`JR-1306` (2026-07-29, Rolle `senior-dev`)
+
+**Ausgangsstand (derselbe Lauf wie unter „Rot-Läufe `JR-1301`", auf `8984ce9` reproduziert):**
+
+```
+DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
+ Test Files  6 failed | 10 passed (16)
+      Tests  21 failed | 203 passed | 2 skipped (226)      EXIT=1
+```
+
+**Endstand (`dcec017`, gleiches Kommando, gleicher Cluster):**
+
+```
+ Test Files  1 failed | 15 passed (16)
+      Tests  1 failed | 223 passed | 2 skipped (226)       EXIT=1
+```
+
+**Der Nachweis „kein vorher grüner Test ist rot geworden" ist maschinell geführt**, nicht durch
+Zählen: beide Läufe wurden mit `--reporter=json` protokolliert und die Statuslisten je Testnamen
+verglichen (`8984ce9` gegen `dcec017`).
+
+| Übergang                | Anzahl | Anmerkung                                                                            |
+| ----------------------- | ------ | ------------------------------------------------------------------------------------ |
+| rot ⇒ grün              | **20** | alle `RED UNTIL JR-13xx` außer einem                                                 |
+| grün ⇒ nicht grün       | **0**  | keine Regression                                                                     |
+| Fall verschwunden / neu | 1 / 1  | derselbe Golden-Fall, umbenannt: `translates …` ⇒ `refuses …` (die F21-Invertierung) |
+| noch rot                | **1**  | siehe „Der eine verbleibende rote Test"                                              |
+
+`predefined-roles.int.test.ts` ist mit **allen sieben** Fällen grün geblieben — eine
+Standardinstallation verhält sich vor und nach den Fixes identisch, wie ADR-017 behauptet.
+
+**Geänderter Produktionscode — vier Dateien, nichts sonst** (`git diff --stat 8984ce9..HEAD`):
+
+| Datei                                | Task                | Änderung                                                                                                                                   |
+| ------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/services/SearchService.ts`      | `JR-1303`           | Zeilen 311/423: drittes Argument `'read'` ⇒ `'search'`, plus je ein erklärender Kommentar. Kein Route-Gate angefasst                       |
+| `src/services/FilterBuilder.ts`      | `JR-1302`,`JR-1305` | `null` ⇒ deny; unbedingtes `cannot` ⇒ deny (F20); `undefined` aus dem Übersetzer ⇒ deny (F19); `cannot`-Ausschluss über `$not` statt `$ne` |
+| `src/helpers/mongoToDrizzle.ts`      | `JR-1304`,`JR-1306` | unübersetzbare Bedingungen werfen statt zu verschwinden; Condition-Keys gegen eine Allowlist; `sql.raw` entfernt; Rückgabetyp `SQL`        |
+| `src/iam-policy/policy-validator.ts` | `JR-1306`           | Schritt 3 von `isValid()` implementiert: Condition-Keys rekursiv geprüft, auch in `$or`/`$and`/`$not`                                      |
+
+**Zwei Testdateien geändert — ausschließlich die vom PO freigegebene F21-Invertierung:**
+
+| Datei                                         | Änderung                                                                                                                                                               |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/helpers/mongoToDrizzle.test.ts`          | `attachment.name` erwartet jetzt eine Abweisung; der F21-Vorbehalt im Suite-Kommentar durch die Entscheidung ersetzt; neuer `it.each` für `mustRefuseKey`-Golden-Fälle |
+| `tests/fixtures/mongo-to-drizzle-golden.json` | Fall `foo.bar`: von einem Übersetzungsfall auf **`mustRefuseKey`** umgestellt, alte Ausgabe in `observedBeforeE13` festgehalten                                        |
+
+> **Warum ein eigener Marker `mustRefuseKey` und nicht `mustFailClosed`:** der F3-Test assertiert
+> ausdrücklich, dass die Golden-Datei **drei** `mustFailClosed`-Fälle trägt. Der `foo.bar`-Fall gehört
+> zu F1/`JR-1306`, nicht zu F3. Ein eigener Marker lässt die F3-Zahl unverändert und hält die
+> Gesamtzahl der Testfälle bei 226 — sonst wären es 225 und jede Zahl in diesem Dokument müsste neu
+> gelesen werden.
+
+**Die Allowlist prüft die Form des Keys plus die Relation, nicht die Existenz der Spalte.** Ein Key
+wird angenommen als einzelner Identifier (`^[A-Za-z_][A-Za-z0-9_]*$`) oder als
+`<relation>.<identifier>`, sofern die Relation in `relationToTableMap` steht. Abgewiesen wird damit
+jeder Key mit SQL-Syntax **und** jeder mit unbekannter Relation (`attachment.name`, `foo.bar`,
+`a.b.c`). Ein einzelner, unbekannter, syntaktisch harmloser Key (`foo`) wird **weiterhin
+übersetzt** — eine echte Spalten-Allowlist ist in `mongoToDrizzle` nicht formulierbar, weil die
+Funktion keinen Tabellenkontext hat, und sie würde drei weitere heute grüne Pins brechen
+(`{a:1}`, `{b:2}`, `{n:{$gt:1}}`, dazu die `FIELDS`-Liste der adversarialen Suite). Das ist die
+einzige Abweichung von der Formulierung „jeder unbekannte Key" in der F21-Entscheidung und wird hier
+festgehalten, damit sie nicht als Versehen gelesen wird. **Vorschlag:** eine spaltengenaue Prüfung
+gehört dorthin, wo das Subject bekannt ist — also in die Nähe von `JR-1310`.
+
+**Bewusst nicht angefasst** (kein Scope-Creep, `JR-1309` prüft das): F2, F4, F5, F6, F9, F10, F17,
+F18, F23. F4 (nur der erste Operator wird gelesen) und F5 (`{field:null}` ⇒ `= NULL`) sind in
+`mongoToDrizzle` erhalten und jetzt mit einem Kommentar als bewusst offen markiert; ihre Pins sind
+grün. `mongoToMeli.ts` ist unverändert. **Keine Migration, kein Schemaeingriff, kein neuer i18n-Key**
+— der Ablehnungsgrund des Validators wird wie die bestehenden Gründe hinter
+`req.t('iam.invalidPolicy')` auf Englisch angehängt (`iam.controller.ts`); dass diese drei Gründe
+nicht lokalisiert sind, ist ein Bestandszustand, den E13 nicht verändert.
+
+`pnpm lint` grün · `pnpm --filter @open-archiver/backend test:types` grün ·
+`pnpm --filter @open-archiver/backend build` grün · keine `oa_test_*`-Rückstände · lokaler
+PostgreSQL-16.13-Cluster restlos entfernt. Kein Frontend-Code berührt, `svelte-check` daher nicht
+einschlägig.
+
+### E13 — Der eine verbleibende rote Test (Entscheidungsvorlage)
+
+```
+RED UNTIL JR-1304: the Drizzle half alone is fail-closed for an untranslatable condition (F3)
+  tests/integration/filter-builder-f1-f3.int.test.ts
+```
+
+**Er ist mit seinem Geschwistertest aus derselben Task unvereinbar.** Beide beschreiben die
+_strukturell identische_ Eingabe — eine Disjunktion aus einem übersetzbaren und einem
+unübersetzbaren Zweig — und fordern Gegenteiliges:
+
+| Ort                                                      | Eingabe                                              | Forderung                                                                     |
+| -------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `src/helpers/mongoToDrizzle.test.ts:203`                 | `{ $or: [ {id:'a'}, {subject:{$regex:'x'}} ] }`      | `expectFailClosed` ⇒ **throw oder `1=0`/`false`**                             |
+| `tests/integration/filter-builder-f1-f3.int.test.ts:236` | `{ $or: [ {userEmail:E}, {subject:{$regex:'…'}} ] }` | ein Prädikat, das **genau `[rows.mine]`** liefert — also weder noch           |
+| `tests/integration/filter-builder-f1-f3.int.test.ts:223` | `{ $or: [ {subject:{$regex:'…'}} ] }`                | ein Prädikat, das **keine** Zeile liefert — der Aufruf ist **nicht** in `try` |
+
+Eine Implementierung kann höchstens zwei der drei erfüllen. Gewählt ist **werfen**, aus drei Gründen:
+
+1. Das Akzeptanzkriterium von `JR-1304` lautet „kein Zweig wird stillschweigend weggelassen" — auch
+   im `$or` (dort verengend, F22). Die Forderung des Unit-Tests deckt sich damit, die zweite
+   Assertion des Integrationstests hält gerade das F22-Verhalten fest, das das Kriterium verbietet.
+2. `mongoToMeli` **wirft** für genau diese Form schon heute, und ein **grüner** Test hält das fest
+   (`tests/integration/mongo-to-meli.int.test.ts:147`). `FilterBuilder.create()` lehnt eine solche
+   Policy also bereits vor E13 ab. Ein never-true-Prädikat im Drizzle-Zweig hätte die beiden
+   Übersetzer auseinanderlaufen lassen.
+3. Ein never-true-Prädikat pro Zweig ist am `$not` nicht durchhaltbar: `not(false)` ist **wahr** —
+   aus einem verlorenen Verbot würde eine Erlaubnis.
+
+**Der Fix ist nicht das Problem, die Testfassung ist es.** Empfehlung an den PO: die beiden Aufrufe
+in `filter-builder-f1-f3.int.test.ts` (Zeilen 223 und 236) durch `expectFailClosed` bzw. ein
+`try`/`catch` ersetzen und die Erwartung `[rows.mine]` streichen — sie pinnt die F22-Verengung, die
+`JR-1304` beseitigen soll. **Das ist eine Teständerung und gehört zur Rolle `tester`, nicht zum
+DEV**; sie wurde deshalb nicht vorgenommen und der Test bleibt rot. Danach ist der Endstand
+`224 passed | 2 skipped`, Exit 0.
 
 ### E13 — Rot-Läufe `JR-1301` (2026-07-29)
 
