@@ -599,6 +599,43 @@ Prüfung in `FilterBuilder.create()`, das `resourceType` bereits als Parameter h
 fällt beim Anlegen auf, wenn er die Form verletzt, und erst zur Abfragezeit, wenn er nur die
 Spaltenexistenz verletzt.**
 
+## ADR-020 — Betreiberdokumentation sagt, was sie meldet, nie was sie garantiert
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F27, F30, `JR-1307`,
+`JR-1314`, `JR-1317`
+
+Eine Prüfanleitung für Betreiber beschreibt **die Befunde, die sie meldet**. Sie behauptet **keine
+Vollständigkeit** über Daten ohne festes Schema. Sätze der Form „es prüft rekursiv alle …", „ein
+leeres Ergebnis heißt, dass keine Rolle betroffen ist" oder „diese Klasse ändert sich in diesem
+Release nicht" sind in `docs/user-guides/upgrade-and-migration/access-control-changes.md` unzulässig.
+
+**Begründung — zwei Ablehnungen derselben Klasse.** E13 ist zweimal an der betreibersichtbaren Hälfte
+gescheitert, und beide Male an einem **positiven Abdeckungssatz**, nicht am Code:
+
+| Runde      | Befund  | Widerlegter Satz                                                         | Gefundene Form                            |
+| ---------- | ------- | ------------------------------------------------------------------------ | ----------------------------------------- |
+| `JR-1309`  | **F27** | „No rows means no role … is affected"                                    | `conditions: 5` (Skalar an der Wurzel)    |
+| `JR-1309a` | **F30** | „walked recursively … the empty object" · „not one this release changes" | `{"$or": [{…}, {}]}`, `{"userEmail": {}}` |
+
+Die Policies liegen als JSONB, also ohne Schema. Zu jeder Abfrage, die Abdeckung behauptet, lässt sich
+eine Ebene tiefer eine Form konstruieren, die sie nicht kennt — der Anspruch ist **prinzipiell**
+falsifizierbar, nicht nur zufällig falsch. Ein Betreiber, der „ist abgedeckt" liest und kein Ergebnis
+bekommt, zieht dann den gefährlichsten möglichen Schluss.
+
+**Was an die Stelle tritt:** die Liste der gemeldeten Befundtypen, der ausdrückliche Satz, dass ein
+leeres Ergebnis ein **Hinweis und keine Freigabe** ist, und eine Gegenprobe, die **nicht** von einer
+Aufzählung von JSON-Formen abhängt — jede eingeschränkte Rolle einmal ausüben und das Ergebnis
+vergleichen. Diese Prüfung ist vollständig, weil sie das Verhalten misst statt die Datenform zu raten.
+
+**Verworfene Alternative:** die Abfragen so lange erweitern, bis sie vollständig sind. Zweimal
+versucht, zweimal von einer tieferen Form eingeholt; die dritte Runde hätte dasselbe Ergebnis. Die
+billige Erweiterung wird trotzdem mitgenommen (`JR-1317` (a)) — sie ist eine Verbesserung, nur keine
+Grundlage für eine Zusage.
+
+**Konsequenz:** `JR-1316` (Regressionstest für diese Abfragen) bleibt nach E13 und ist damit eine
+Verbesserung statt einer Abnahmevoraussetzung — genau deshalb war es richtig, ihn aus E13 zu nehmen.
+Wer künftig einen Abdeckungssatz in diese Seite schreibt, braucht eine ADR, die diese ersetzt.
+
 ---
 
 ## Nicht verhandelbar (keine ADR nötig)
