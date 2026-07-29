@@ -85,8 +85,16 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (`JR-1302`–`JR-1306` erledigt) · **Branch:**
-`claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei `efea6bc`)
+**Stand:** 2026-07-29 (E13 implementiert, Suite grün — **Abnahme `JR-1309` offen**) · **Branch:**
+`claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei `efea6bc`),
+`HEAD` = `704e8d1` plus der PO-Doku-Commit dieser Runde
+
+### Der Stand in einem Satz
+
+**E13s Code ist fertig und die Suite ist grün (`224 passed | 2 skipped`, Exit 0) — aber E13 ist
+_nicht_ abgenommen.** Offen sind `JR-1307` (Betreiberdoku plus ADR-016), `JR-1308`
+(Upstream-Meldung, Entwurf, **nicht** versenden) und `JR-1309` (unabhängige Abnahme, **eigene
+Session**). Kein Rückmerge, kein PR.
 
 ### Was zuletzt passiert ist
 
@@ -128,6 +136,23 @@ der Fixes".
 > Empfehlung und Begründung in `06-status.md`; danach ist der Endstand `224 passed | 2 skipped`,
 > Exit 0.
 
+**Erledigt: der Widerspruch ist entschieden und aufgelöst (`704e8d1`, ADR-018).** Der PO hat so
+entschieden wie oben vorgeschlagen — die Unit-Erwartung gilt. Der Tester hat **alle drei
+Begründungen nachgemessen statt sie zu übernehmen** und eine verstärkt: die beiden Erwartungen sind
+unter **jeder** Implementierung unvereinbar, weil keine prinzipielle Regel `{id:'a'}` anders behandelt
+als `{userEmail:…}` — beide sind Gleichheit auf einer erlaubten Spalte. Die Korrektur ist **in beide
+Richtungen mutationsgeprüft**, ist also kein Test, der bloß aufgehört hat zu scheitern. Endstand:
+`224 passed | 2 skipped`, Exit **0**, 16/16 Dateien grün.
+
+> **Dabei ist eine Aussage des PO korrigiert worden.** „Im `$or` nur verengend" (F22 und, in meiner
+> Fassung vom 2026-07-29, `JR-1304`s Kriterium) gilt **nur**, solange die Disjunktion oben in einer
+> `can`-Komposition steht. Unter dem `$not` — und `FilterBuilder.ts:84` setzt **jede**
+> `cannot`-Bedingung genau dorthin — ist derselbe Wegfall **fail-open**: `not A` ist wahr für jede
+> Zeile, die der verlorene Zweig verbieten sollte. Richtig ist der unbedingte Satz: **ein weggelassener
+> Zweig ist nie harmlos; die Richtung hängt von der Komposition ab, und die kennt der Übersetzer
+> nicht.** F22 und `JR-1304`s Kriterium sind berichtigt, ADR-018 hält fest, dass `mongoToDrizzle`
+> deshalb auch später keinen milden Modus bekommen darf.
+
 **Eine benannte Abweichung von der F21-Entscheidung.** „Abgewiesen wird jeder unbekannte Key" ist als
 Allowlist über die **Form** des Keys plus die Relation umgesetzt: ein einzelner Identifier oder
 `<relation>.<identifier>` mit Relation aus `relationToTableMap`. Damit fallen alle SQL-Syntax-Keys und
@@ -136,6 +161,15 @@ unbekannter, syntaktisch harmloser Key (`foo`) wird **weiter übersetzt**: `mong
 Zieltabelle nicht, und eine spaltengenaue Allowlist hätte drei weitere heute grüne Pins gebrochen
 (`{a:1}`, `{b:2}`, `{n:{$gt:1}}` plus die `FIELDS`-Liste der adversarialen Suite) — was der Auftrag
 ausschloss. Vorschlag: spaltengenaue Prüfung dort, wo das Subject bekannt ist, also bei `JR-1310`.
+
+**Vom PO angenommen und festgeschrieben (ADR-019), mit einer Korrektur am Vorschlag.** Die Abweichung
+ist tragfähig: der Zweck von F1 war der Injektionsweg, und der ist an **zwei** Stellen zu — der
+`PolicyValidator` weist eine Policy mit nicht-identifierartigem Key beim Anlegen ab, `mongoToDrizzle`
+erneut zur Abfragezeit, und `sql.raw` ist aus dem Relationszweig entfernt. Der Restspalt ist ein
+Policy-Schreibfehler, kein Angriffsweg. Er wird als **`JR-1311`** geführt — und zwar **nicht** bei
+`JR-1310`: die spaltengenaue Prüfung gehört in `FilterBuilder.create()`, das `resourceType` bereits als
+Parameter bekommt, und braucht Variante C dafür nicht. Meine F21-Formulierung „jeder unbekannte Key"
+war zu absolut geschrieben, ohne zu berücksichtigen, dass `mongoToDrizzle` subjektagnostisch ist.
 
 **Geänderter Produktionscode: vier Dateien.** `src/services/SearchService.ts`,
 `src/services/FilterBuilder.ts`, `src/helpers/mongoToDrizzle.ts`,
@@ -318,6 +352,14 @@ ADR-015 und ADR-017 ist dafür reserviert — **nicht umnummerieren**. Was die A
   `predefined_read_only_user` sucht, findet nichts, und das ist kein Fehler seiner Installation.
 - Keine der drei `predefined_*`-Rollen ist betroffen — belegt durch
   `tests/integration/predefined-roles.int.test.ts`, das durch alle Fixes grün geblieben ist.
+- **Aus ADR-018:** eine gespeicherte Policy mit einer **unübersetzbaren** Bedingung (unbekannter
+  Operator, etwa `$regex`) führt jetzt zu einem **Fehler** statt zu einem stillschweigend falschen
+  Ergebnis. Das ist Absicht — ein Fehler ist auffindbar, ein falsches Ergebnis nicht —, aber es ist für
+  einen Betreiber ein sichtbarer Bruch und gehört in die Anleitung, mit dem Hinweis, wie er seine
+  gespeicherten Policies vorab durchsieht.
+- **Aus ADR-019:** ein Condition-Key, der nur die **Spaltenexistenz** verletzt (`foo`), fällt weiterhin
+  erst zur Abfragezeit auf, nicht beim Anlegen. Das ist der bekannte Restspalt (`JR-1311`) und darf in
+  der Anleitung nicht als „vollständig geprüft" dargestellt werden.
 
 Danach `JR-1308` (Rolle PO, Entwurf, **nicht versenden**), dann `JR-1309` (Abnahme, Rolle TEST → PO).
 **Rückmerge in den Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12
@@ -468,10 +510,16 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     nicht. Ein **vollständiger** `pnpm test`-Lauf hinterlässt nachweislich **0** Rückstände. Wer
     zwischendurch mit `-t` arbeitet, muss vor der Abschlussprüfung aufräumen — sonst liest sich der
     eigene Zwischenstand wie ein Leck. Verwandt mit **F16**, aber nicht dieselbe Ursache; gehört in
-    die Betrachtung von `JR-105c`.
+    die Betrachtung von `JR-105c`. **Als F24 erfasst** und in `JR-105c`s Umfang aufgenommen.
     ```bash
     psql -tAc "select datname from pg_database where datname like 'oa\_test\_%'"
     ```
+13. **Ein in einem Zug geschriebener `RED UNTIL`-Satz kann sich selbst widersprechen — und keiner der
+    beiden Tests sieht für sich falsch aus.** In `JR-1301` forderten zwei Erwartungen mit demselben
+    `RED UNTIL JR-1304`-Tag für strukturell gleiche Eingaben Unvereinbares; aufgefallen ist es erst,
+    als vier Fixes gelandet waren und einer nicht grün werden konnte. **Der Tell war, dass beide
+    dieselbe Task nannten.** Wer rote Tests vorab schreibt, prüft die Erwartungen eines Tags
+    **gegeneinander**, bevor der Fix beginnt — nicht erst gegen den Code. Aufgelöst in ADR-018.
 
 ---
 

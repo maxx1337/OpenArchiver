@@ -451,6 +451,77 @@ und sie gehört nicht in ein Epic, dessen Zweck das Schließen einer Autorisieru
 - Wer diese Entscheidung umkehren will, braucht eine neue ADR, die diese ersetzt — keine stille
   Änderung des dritten Arguments.
 
+## ADR-018 — Ein unübersetzbarer Zweig wird verweigert, nicht durch ein Sentinel ersetzt
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F3, F22, `JR-1304`,
+`JR-1301`
+
+`mongoToDrizzle` **wirft**, wenn eine Policy-Bedingung nicht übersetzbar ist. Es gibt **keinen**
+milden Modus, und ein verworfener Zweig wird **nicht** durch ein „never-true"-Prädikat je Zweig
+ersetzt.
+
+**Anlass:** Nach den Fixes `JR-1302`–`JR-1306` blieb genau ein roter Test übrig, und zwar nicht
+wegen eines fehlenden Fixes, sondern weil zwei Erwartungen aus `JR-1301` sich widersprachen:
+
+| Ort                                             | Eingabe                                       | Forderung                                        |
+| ----------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| `src/helpers/mongoToDrizzle.test.ts:227`        | `{ $or: [{id:'a'}, {subject:{$regex:'x'}}] }` | fail-closed, und **nicht** `"id" = $1`           |
+| `tests/integration/filter-builder-f1-f3.int.ts` | strukturell identisch                         | ein Prädikat, unter dem `rows.mine` sichtbar ist |
+
+Beide trugen `RED UNTIL JR-1304`. Unabhängig nachgemessen: die beiden sind **unter jeder
+Implementierung** unvereinbar — es gibt keine prinzipielle Regel, die `{id:'a'}` anders behandelt als
+`{userEmail:…}`, beide sind Gleichheit auf einer erlaubten Spalte.
+
+**Entscheidung: die Unit-Erwartung gilt, die Integrationszeile war falsch.** Drei Gründe:
+
+1. `JR-1304`s Kriterium lautet „kein Zweig wird stillschweigend weggelassen" und nennt das `$or`
+   ausdrücklich. Die Integrationszeile forderte genau dieses Weglassen.
+2. **Das Sentinel-Verfahren ist unsicher.** `FilterBuilder.ts:84` setzt jede `cannot`-Bedingung unter
+   ein `$not`. Ein „never-true" je verworfenem Zweig ergibt dort `not(false)` = **wahr**: ein
+   vakuumer Konjunkt, das Verbot ist weg. Gemessen am Übersetzer vor `JR-1304`:
+   `{ $and: [{ $not: {userEmail} }, { $not: <unübersetzbar> }] }` ⇒ `not "user_email" = $1`, das
+   zweite Verbot fehlt schlicht.
+3. `mongoToMeli` wirft für dieselbe Form schon **vor** E13, festgehalten von einem grünen Test
+   (`mongo-to-meli.int.test.ts:141`). `FilterBuilder.create()` hat solche Policies also immer
+   abgelehnt — nur eben abhängig davon, dass der Suchübersetzer streng bleibt.
+
+**Konsequenz:** Wer `mongoToDrizzle` später einen „gib zurück, was du kannst"-Modus geben will, hebt
+damit F3 und F22 wieder auf und braucht eine ADR, die diese ersetzt. Der Aufrufer, der eine
+Verweigerung nicht will, muss die Policy reparieren, nicht den Übersetzer aufweichen.
+
+**Nebenwirkung, bewusst akzeptiert:** eine Policy, die vor E13 stillschweigend zu wenig oder zu viel
+zeigte, führt jetzt zu einem Fehler statt zu einem falschen Ergebnis. Das ist die Absicht — ein
+Fehler ist auffindbar, ein falsches Ergebnis nicht. `JR-1307` muss es in der Betreiberanleitung
+nennen.
+
+## ADR-019 — Die Key-Allowlist prüft Form und Relation, nicht Spaltenexistenz
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F1, F21, `JR-1306`,
+`JR-1311`
+
+Die in `JR-1306` gebaute Allowlist lässt einen Key durch, wenn er **formal** eine Spaltenreferenz ist
+— ein einzelner Identifier oder `<relation>.<identifier>` mit einer Relation aus
+`relationToTableMap`. Sie prüft **nicht**, ob die Spalte existiert. Ein einzelner unbekannter, aber
+syntaktisch harmloser Key wie `foo` wird weiter übersetzt und scheitert erst an Postgres.
+
+**Das ist eine Einschränkung meiner eigenen F21-Entscheidung.** Ich hatte „jeder unbekannte Key wird
+abgewiesen" verfügt, ohne zu berücksichtigen, dass `mongoToDrizzle` ein **subjektagnostischer**
+Übersetzer ist: er bekommt nur das Query-Objekt und weiß nicht, gegen welche Tabelle er baut. Eine
+spaltengenaue Liste dort hätte entweder falsch sein müssen oder die Formtests des Übersetzers
+gebrochen, die absichtlich mit synthetischen Feldnamen arbeiten (`{a:1}`, `{b:2}`, `{n:{$gt:1}}`).
+
+**Warum das trotzdem tragfähig ist:** Der Zweck von F1 war der Injektionsweg, und der ist zu — an
+**zwei** Stellen. `PolicyValidator` weist eine Policy mit einem nicht-identifierartigen Key beim
+Anlegen ab (400 aus `iam.controller.ts`), und `mongoToDrizzle` weist sie zur Abfragezeit erneut ab;
+`sql.raw` ist aus dem Relationszweig entfernt. Der Restspalt ist ein **Policy-Schreibfehler**, kein
+Angriffsweg: `"foo" = $1` trifft keine Spalte und erzeugt einen Fehler, kein stilles Ergebnis.
+
+**Konsequenz:** Der Restspalt wird als **`JR-1311`** geführt, nicht offen gelassen — spaltengenaue
+Prüfung in `FilterBuilder.create()`, das `resourceType` bereits als Parameter hat. Unabhängig von
+`JR-1310`; Variante C wird dafür nicht gebraucht. Bis dahin gilt: **ein Tippfehler in einer Policy
+fällt beim Anlegen auf, wenn er die Form verletzt, und erst zur Abfragezeit, wenn er nur die
+Spaltenexistenz verletzt.**
+
 ---
 
 ## Nicht verhandelbar (keine ADR nötig)

@@ -87,11 +87,15 @@ Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenomm
 
 **E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
 Regressionstests für F1/F3/F7/F8 auf den gewünschten Zustand umgestellt (21 rot), die fünf Fix-Tasks
-`JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt: **20 der 21 Tests sind grün, kein
-vorher grüner Test ist rot geworden**, F1/F3/F7/F8 sowie F19/F20 sind behoben. Ein Test bleibt rot —
-zwei `JR-1301`-Tests fordern für dieselbe Eingabe Gegenteiliges; das ist eine Entscheidung des PO und
-keine offene Lücke (Vorlage in `06-status.md`). Nächster Schritt: `JR-1307` (Rolle DEV). Es existiert
-noch **kein** Produktionscode für den Receiver selbst.
+`JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt, und der letzte rote Test war ein
+Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelöst. **Die Suite ist grün:
+`224 passed | 2 skipped`, Exit 0**, F1/F3/F7/F8/F19/F20/F22 behoben, kein vorher grüner Test rot
+geworden.
+
+**E13 ist damit implementiert, aber ausdrücklich _nicht_ abgenommen.** Offen: `JR-1307`
+(Betreiberdoku plus ADR-016), `JR-1308` (Upstream-Entwurf, nicht versenden), `JR-1309` (unabhängige
+Abnahme in eigener Session). Kein Rückmerge, kein PR. Es existiert noch **kein** Produktionscode für
+den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 

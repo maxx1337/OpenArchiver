@@ -904,7 +904,8 @@ eigenen Marker `mustRefuseKey`, damit die von `JR-1301` assertierte Zahl der dre
 
 **Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig, aber irreführend ·
 **Ort:** F3 in diesem Dokument, sowie das Akzeptanzkriterium von `JR-1304` („der `$or`-Fall aus F3
-erweitert die Disjunktion nicht mehr") · **Status:** offen · **Herkunft:** `JR-1301`
+erweitert die Disjunktion nicht mehr") · **Status:** **behoben** in `JR-1304` (`45ac0e9`), Beschreibung
+am 2026-07-29 korrigiert (siehe unten) · **Herkunft:** `JR-1301`
 
 `{ $or: [ {id:'a'}, {subject:{$regex:'x'}} ] }` ⇒ `"id" = $1`. Beide Texte nennen das eine
 Erweiterung der Disjunktion. Gemessen ist `A` **enger** als `A or B`: der Nutzer sieht weniger
@@ -918,6 +919,37 @@ Zweige verschwinden, weil `or()`/`and()` über eine leere Liste `undefined` lief
 **Warum das zählt:** wer `JR-1304` nach dem Kriterium abarbeitet, kann aus „erweitert die Disjunktion"
 schließen, der `$or`-Fall sei der gefährliche und die Leerheits-Fälle Randfälle. Es ist umgekehrt.
 **Empfehlung:** das Kriterium von `JR-1304` auf „lässt keinen Zweig stillschweigend weg" umformulieren.
+
+### Korrektur 2026-07-29 — „im `$or` nur verengend" ist selbst zu grob
+
+**Status:** **behoben** in `JR-1304` (`45ac0e9`); die Beschreibung hier war zweimal ungenau.
+
+Der Abschnitt oben — und in seinem Gefolge die Fassung, die ich am 2026-07-29 in `JR-1304`s
+Akzeptanzkriterium geschrieben habe („weder im `$or` (**dort verengend**, F22) …") — sagt, der `$or`-Fall
+sei die harmlose Richtung. Das gilt nur, solange die Disjunktion **oben** in einer
+`can`-Komposition steht. Unter einem `$not` kippt sie, und `FilterBuilder` setzt seit `JR-1305`
+**jede** `cannot`-Bedingung genau dort hin (`FilterBuilder.ts:84`):
+
+```ts
+query = { $and: cannotConditions.map((condition) => ({ $not: condition })) };
+```
+
+Gemessen am Übersetzer vor `JR-1304` (`git show 45ac0e9^:…`, in einer Wegwerf-Kopie):
+
+```
+{ $and: [ { $not: { $or: [ {userEmail}, {subject:{$regex}} ] } } ] }
+  ⇒  not "user_email" = $1        beabsichtigt: not ("user_email" = $1 or <unübersetzbar>)
+```
+
+`not A` ist wahr für **jede** Zeile, die der weggefallene Zweig verbieten sollte. Ein `cannot`, dessen
+Bedingung eine Disjunktion mit einem unübersetzbaren Zweig ist, war damit **fail-open durch den
+`$or`-Wegfall selbst** — nicht nur über `$and` und die Leerheits-Fälle. Richtig ist deshalb der
+unbedingte Satz: **ein weggelassener Zweig ist nie harmlos, die Richtung hängt von der Komposition ab,
+und die kennt der Übersetzer nicht.** Genau deshalb darf `mongoToDrizzle` auch später keinen
+milden Modus bekommen (ADR-018).
+
+Keine eigene F-Nummer: es ist derselbe Mechanismus wie F22, nur mit korrekt bestimmter Richtung.
+Herkunft der Messung: die Nacharbeit an `JR-1301` (`704e8d1`).
 
 ## F23 — `tsconfig.test.json` und `tsconfig.json` sind sich über globale Augmentierungen nicht einig
 
@@ -942,6 +974,26 @@ Typ-Import ohne Laufzeitwirkung. Das ist eine Behebung des Symptoms. Die Fehlerk
 weitere globale Augmentierung, die nur über eine Produktionsdatei ins Programm kommt, fehlt im
 Test-Programm ebenfalls, und sie fällt erst auf, wenn eine Testdatei die betroffene Datei importiert.
 Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.
+
+## F24 — Ein gefilterter `pnpm test -t "…"` hinterlässt Testdatenbanken
+
+**Kategorie:** Testharness · **Schwere:** niedrig (Entwicklerkomfort, kein Produktdefekt) ·
+**Ort:** `packages/backend/tests/support/pg-harness.ts` im Zusammenspiel mit vitests `-t`-Filter ·
+**Status:** offen · **Herkunft:** `JR-1302`–`JR-1306` (Rolle DEV, 2026-07-29)
+
+`acquireTestDatabase()` wird im **Modul-Scope** der Integrationsdateien aufgerufen, also beim Laden —
+und das passiert **vor** der Auswertung des `-t`-Filters. Der Teardown einer Suite, deren Fälle der
+Filter alle überspringt, läuft dagegen nicht. Ein gezielter Lauf wie
+`pnpm test -t "RED UNTIL JR-1302"` legt daher `oa_test_*`-Datenbanken an und lässt sie liegen. Ein
+**vollständiger** Lauf hinterlässt nachweislich 0.
+
+Nicht gefährlich, aber irreführend: wer nach einem gefilterten Lauf auf Rückstände prüft, findet
+welche und sucht den Fehler an der falschen Stelle. Dieselbe Wurzel wie **F16** (Wurf im Modul-Scope
+nach `acquireTestDatabase()`) — der Erwerb liegt vor allem, was ihn absichern könnte.
+
+**Gehört nach `JR-105c`**, das ohnehin die Messinstrument-Befunde F14–F16 zusammenfasst und **vor E2**
+fällig ist. Umgehung bis dahin: nach einem gefilterten Lauf einmal vollständig laufen, oder
+`sweepStaleHarnessDatabases()` von Hand aufrufen.
 
 ## Bereits im Backlog erfasste Bestandsprobleme
 
