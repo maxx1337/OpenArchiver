@@ -14,15 +14,16 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde               |
-| -------------------------- | -------------------------------------------------------------------------------------- | --------------------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20 |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22    |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23          |
+| Kategorie                  | Bedeutung                                                                              | Befunde                         |
+| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29 |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22              |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24               |
+| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30              |
 
 Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
-Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16) und `JR-1301` (F17–F23), Rolle `tester`,
-2026-07-27 bis 2026-07-29.
+Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16), `JR-1301` (F17–F23), die Abnahme
+`JR-1309` (F24–F29) und die Abnahme `JR-1309a` (F30), Rolle `tester`, 2026-07-27 bis 2026-07-29.
 
 > **Seit `JR-1301` (2026-07-29) markiert der Testcode die vier E13-Befunde nicht mehr als bestanden.**
 > F1, F3, F7 und F8 waren bis dahin mit `it.fails` bzw. mit Assertions auf den **Ist**-Zustand
@@ -1254,6 +1255,76 @@ begründet das damit, dass `mongoToDrizzle` subjektagnostisch ist. Die Relation 
 dagegen genauso gut wie der Übersetzer — `relationToTableMap` ist eine Konstante. Behebung ist klein:
 `areConditionKeysValid()` auf ≤ 2 Segmente und auf `relationToTableMap` prüfen, dann sind beide Gates
 deckungsgleich und die Doku stimmt wieder.
+
+## F30 — Die Betreiberabfrage prüft die Form von `conditions` nur an der **Wurzel**, der Übersetzer an **jedem Knoten**
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
+**Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 2 (Befundtyp
+`empty conditions object` und `conditions is not an object`) sowie der Abschnitt „How to read an
+empty result" · **Status:** **offen** · **Herkunft:** Abnahme `JR-1309a` (2026-07-29)
+
+`JR-1314` hat **F27** für die Wurzel behoben: ein `conditions`, das existiert und kein Objekt ist,
+wird gemeldet. Die Prüfung, die `mongoToDrizzle` seit `JR-1313` vornimmt, gilt aber **rekursiv** —
+`checkConditionsShape()` läuft in jedem `$or`/`$and`/`$not`-Zweig erneut, und ein leerer
+Bedingungsknoten wird auf jeder Ebene mit `the condition object is empty` abgewiesen. Query 2 prüft
+beides nur an der Wurzel: der Befundtyp `conditions is not an object` speist sich aus `pair`
+(`p.rule -> 'conditions'`), der Befundtyp `empty conditions object` aus `p.rule -> 'conditions' =
+'{}'::jsonb`. Beide sehen keinen **verschachtelten** Knoten, obwohl die rekursive CTE `cond` daneben
+liegt.
+
+Gemessen mit `FilterBuilder` von `efea6bc` gegen den von `HEAD` im selben Prozess, gegen echtes
+PostgreSQL 16.13 mit den 41 Migrationen, 54 gesäte Rollen, Paar `('archive','read')`; die drei
+` ```sql `-Blöcke wörtlich aus der veröffentlichten Datei extrahiert:
+
+```
+pre               post     Q2/Q3     conditions
+UNRESTRICTED      THROWS   SILENT    {"$not": {}}
+UNRESTRICTED      THROWS   SILENT    {"$not": 5}
+UNRESTRICTED      THROWS   SILENT    {"$or": [{"$and": [{}]}]}
+FILTER(2/2 rows)  THROWS   SILENT    can archive + cannot archive {"userEmail": {}}
+FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{"userEmail": "…"}, 5]}
+FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{}, {"userEmail": "…"}]}
+FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{"userEmail": "…"}, {}]}
+FILTER(0/2 rows)  THROWS   SILENT    {"$and": [{"userEmail": "…"}, {}]}
+```
+
+Die ersten vier sind die gefährliche Richtung: **vor** dem Update sieht die Rolle das ganze Archiv
+bzw. alle Zeilen, **danach** scheitert jede Anfrage, die die Policy braucht — wörtlich die Kopfzeile
+von Änderung 1 („a user who previously saw everything through such a role now sees nothing"). Zur
+Gegenprobe: `{"$and": []}` und `{"$or": []}` **werden** gemeldet, ebenso jeder Formfehler an einem
+**Key** in beliebiger Tiefe (`{"$or": [{…}, {"attachment.name": "v"}]}`), und die drei
+`predefined_*`-Rollen sowie drei unbetroffene handgeschriebene Kontrollen erscheinen in **keiner**
+Ausgabe. Der Ausfall betrifft genau die Knotenform, nicht die Rekursion an sich.
+
+**Zwei Sätze der veröffentlichten Seite sind damit widerlegt** — das ist der eigentliche Befund, denn
+eine unvollständige Abfrage mit ehrlicher Grenzangabe wäre vertretbar:
+
+1. Unter „It examines": _„a `conditions` that **is** an object, walked recursively through nested
+   objects and arrays: **the empty object**, operator keys, condition key shapes, and empty
+   `$or`/`$and` branch lists."_ Der leere Objektknoten wird **nicht** rekursiv geprüft, sondern nur
+   an der Wurzel. Ein Betreiber mit `{"$or": [{"userEmail": "a@x"}, {}]}` liest hier „ist abgedeckt",
+   erhält keine Zeile und verliert nach dem Update den Zugriff dieser Rolle.
+2. Unter „It does not examine": _„the values inside a condition. A condition on the right column with
+   the wrong value is a policy mistake, but **not one this release changes**."_ Das ist für
+   `{"userEmail": {}}` falsch, und in die beruhigende Richtung falsch: richtige Spalte, falscher Wert,
+   und die Wirkung kippt von „alle Zeilen sichtbar" auf „jede Anfrage scheitert".
+
+**Kein Codedefekt.** Das Laufzeitverhalten ist fail-closed und richtig; F30 liegt ausschließlich in
+der betreibersichtbaren Hälfte. **Kein Regress gegenüber `JR-1309`:** die Vorher/Nachher-Tabelle aus
+`JR-1314` (17 `conditions`-Werte an der Wurzel) hält vollständig — alle acht Formen hier sind
+verschachtelt und standen in keiner der bisher geprüften Listen.
+
+**Bricht `JR-1307`s Akzeptanzkriterium** („ein Betreiber kann **vor** dem Update feststellen, welche
+seiner Rollen betroffen sind") und die PO-Vorgabe zu `JR-1314` („die Abfragen decken alle **heute
+bekannten** Formen ab, und das Dokument sagt genau, welche das sind") — die Knotenform ist seit
+`JR-1313` bekannt, sie steht im Prädikat, das beide Gates benutzen. `JR-1314`s eigene, engere
+Kriterien sind erfüllt.
+
+**Behebung ist klein und liegt an einer Stelle:** in Query 2 die beiden Formbefunde aus `cond` statt
+aus `pair` speisen (die CTE trägt den Knoten in `node` schon mit) — ein `jsonb_typeof(c.node)`, das
+weder `object` noch ein Operandenwert ist, plus `c.node = '{}'::jsonb` für jeden Knoten, nicht nur
+für die Wurzel. Dazu die zwei zitierten Sätze berichtigen. Solange das offen ist, darf die Seite den
+leeren Objektknoten nicht als geprüft aufführen.
 
 ## Bereits im Backlog erfasste Bestandsprobleme
 

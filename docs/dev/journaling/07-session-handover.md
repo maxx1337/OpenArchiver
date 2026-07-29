@@ -85,57 +85,117 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (**DEV-Nacharbeit `JR-1313`–`JR-1315` erledigt; `JR-1316` aus E13
-herausgenommen**) · **Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom
+**Stand:** 2026-07-29 (**Abnahme `JR-1309a` durchgeführt — E13 erneut _nicht_ abgenommen, Befund
+F30**) · **Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom
 Integrationsbranch bei `efea6bc`), gepusht
 
 ### Der Stand in einem Satz
 
-Die Abnahme `JR-1309` hatte E13 abgelehnt, weil die **betreibersichtbare** Hälfte gebrochen war; die
-drei DEV-Nacharbeiten `JR-1313`, `JR-1314` und `JR-1315` sind erledigt, **die Suite ist von
-`224 passed | 2 skipped` auf `250 passed | 2 skipped` gewachsen** (Exit 0), und **offen ist nur noch
-die erneute Abnahme `JR-1309a`**. Danach Rückmerge. **Kein PR.**
+Die Nacharbeit `JR-1313`–`JR-1315` hat F25–F29 behoben und die Suite auf `250 passed | 2 skipped`
+(Exit 0) gebracht; die erneute Abnahme **`JR-1309a` hat E13 wieder abgelehnt**: von 23 geprüften
+Kriterien sind **22 erfüllt**, gebrochen ist erneut `JR-1307`s Kriterium — **F30**, dieselbe Klasse wie
+F27, eine Ebene tiefer. **Kein Rückmerge, kein PR.**
 
-> **`JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden — Entscheidung des Auftraggebers.** Das
-> Epic war von 9 auf 14 Positionen gewachsen, und `JR-1316` sichert kein Autorisierungsverhalten,
-> sondern ein **Doku-Artefakt** ab. Die Lücke dahinter (**F27**) ist behoben und in `JR-1314` durch eine
-> Falsch-negativ-Prüfung gegen echtes Postgres belegt; `JR-1316` schützt gegen ihre **Wiederkehr**. Die
-> Task steht wortgleich unter „Folge-Task nach E13" und ist **kein** Kriterium von `JR-1309a`.
+> **Zwei Lücken, die `JR-1309` offenlassen musste, sind in `JR-1309a` geschlossen:** der **HTTP-400-Pfad**
+> ist end-to-end gemessen (`IamController.createRole` direkt aufgerufen, 11 × `400` mit dem Key bzw. Wert
+> im Text, 5 × `201`), und die **Betreiber-SQL ist auf PostgreSQL 17.10** gefahren — zeichenweise
+> identische Ausgabe wie auf 16.13 in allen drei Blöcken. Wie: `postgresql-17` (17.10-1, dieselbe
+> Version wie die CI) aus dem pgdg-Repository (`https://apt.postgresql.org/pub/repos/apt noble-pgdg`),
+> eigener Cluster auf Port **5433**, alle 41 Migrationen per `psql -f`, danach Paketquelle und Cluster
+> restlos entfernt.
 
-### Nächster konkreter Schritt — `JR-1309a`, dann Rückmerge
+> **`JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden — Entscheidung des Auftraggebers.** Sie
+> sichert kein Autorisierungsverhalten, sondern ein **Doku-Artefakt** ab, und sie war **kein** Kriterium
+> von `JR-1309a`. **F30 ist allerdings genau der Fall, gegen den sie schützen würde** — die Betreiber-SQL
+> ist weiterhin das einzige sicherheitsrelevante Artefakt in E13 ohne Test, und sie ist jetzt zum
+> zweiten Mal die Stelle, an der die Abnahme scheitert. Das ist ein Argument für ein Vorziehen, keine
+> Entscheidung des Testers.
 
-`JR-1309a` ist die **letzte** Task von E13. Rolle TEST, **eigene Session** (`04-testplan.md` §6):
+### Nächster konkreter Schritt — F30 entscheiden, beheben, dritte Abnahmerunde
+
+**Blockierend, und es braucht zuerst eine Entscheidung des Auftraggebers** (Vorlage unten unter
+„Offene Fragen"): F30 beheben, oder F30 als Restrisiko akzeptieren und E13 abnehmen. Der Tester hat
+eine Präferenz und nennt sie: **beheben**, weil nicht die Unvollständigkeit der Abfrage der Befund ist,
+sondern zwei **positive** Sätze der veröffentlichten Seite, die widerlegt sind.
+
+Die Behebung ist klein und liegt an einer Stelle (Rolle DEV, `access-control-changes.md`):
+
+1. In **Query 2** die zwei Formbefunde aus der rekursiven CTE **`cond`** speisen statt aus `pair`. Die
+   CTE trägt den Knoten schon in `node`; gebraucht wird ein Befund für „`node` ist weder ein Objekt noch
+   ein Operandenwert" und einer für „`node = '{}'::jsonb`" auf **jeder** Ebene, nicht nur an der Wurzel.
+   Vorsicht dabei: `cond` läuft auch in Operandenwerte hinein (`{"userEmail": "a@x"}` hat den Knoten
+   `"a@x"`), ein naives `jsonb_typeof(node) <> 'object'` erzeugt also ein Falsch-positives für **jede**
+   normale Bedingung — genau der Fehler aus Fallstrick 20. Der Wächter ist, dass nur ein Knoten geprüft
+   wird, der als Bedingungsobjekt gelesen wird: die Wurzel, ein `$or`/`$and`-Zweig, der Rumpf eines
+   `$not`.
+2. Die zwei zitierten Sätze berichtigen: „the empty object" darf nicht in der „It examines"-Liste als
+   rekursiv geprüft stehen, solange es das nicht ist, und „the values inside a condition … not one this
+   release changes" ist mit `{"userEmail": {}}` widerlegt.
+
+Danach eine dritte Abnahmerunde (Rolle TEST, eigene Session). **Nicht** alles neu: die 22 erfüllten
+Kriterien nur dort, wo die Nacharbeit sie berührt — praktisch also Kriterien 7–12 der Tabelle in
+`06-status.md` („Abnahme `JR-1309a`") plus ein Volllauf.
 
 ```
-Nimm Epic 13 erneut ab — Rolle Tester, JR-1309a aus 03-backlog.md.
-Branch claude/journaling-e13-iam-hardening.
+Nimm Epic 13 ein drittes Mal ab — Rolle Tester.
+Branch claude/journaling-e13-iam-hardening. Umfang: F30 und die Kriterien von JR-1307/JR-1314.
 ```
 
-Prüfumfang: die **zwei in `JR-1309` gebrochenen** Kriterien einzeln (`JR-1306` — wird eine Policy mit
-unauflösbarer Relation und mit nicht-Objekt-`conditions` **beim Anlegen** abgewiesen? `JR-1307` — kann
-ein Betreiber vorher feststellen, wer betroffen ist?), die Kriterien von `JR-1313`/`JR-1314`/`JR-1315`,
-ein Volllauf, und der Nachweis, dass F2/F4/F5/F6/F9/F10 **im Code** unverändert sind. **Nicht** alles
-neu — die 17 in `JR-1309` erfüllten Kriterien nur dort, wo die Nacharbeit sie berührt.
+**Erst nach der Annahme:** Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, **kein Squash** — ein
+Squash würde die dokumentierten Ablehnungen tilgen und damit den Beleg, dass die Abnahme funktioniert
+hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet. Nächstes Epic
+ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
 
-**Der entscheidende Prüfpunkt bleibt die Betreiber-SQL:** die Blöcke **aus der Markdown-Datei**
-extrahieren und wörtlich fahren, mit Falsch-negativ-Prüfung gegen die Vorher/Nachher-Tabelle weiter
-unten. Genau dort hat `JR-1309` den Bruch gefunden. Werkzeug dafür existierte in dieser Session schon:
-ein Skript, das die ` ```sql `-Blöcke zieht und über `psql -f -` fährt, gegen eine Datenbank mit allen
-41 Migrationen per `psql -f` (die Migrationsdateien sind mit `-- ` kommentierten
-`--> statement-breakpoint`-Zeilen direkt psql-taugfähig). Dieser Lauf hat ein Falsch-positives
-gefunden, das beim Lesen des Diffs unsichtbar war.
+**Unverändert offen und richtig so:** die **Laufzeitseite von F26** — ein bereits gespeichertes
+`conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil `FilterBuilder.ts:51–53`
+unverändert `!rule.conditions` liest. In `JR-1309a` nachgemessen (`UNRESTRICTED` vor **und** nach E13)
+und als erfülltes Kriterium verbucht; die Datei ist blob-identisch zu `13a7114`. Gehört zu `JR-1311`.
+`JR-1310`, `JR-1311`, `JR-1312`, `JR-1316` waren und bleiben **nicht** Teil von E13s Abnahme.
 
-**Nach der Annahme:** Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, **kein Squash** — ein
-Squash würde die dokumentierte Ablehnung `5e081df` tilgen und damit den Beleg, dass die Abnahme
-funktioniert hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
-Nächstes Epic ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
+### Was zuletzt passiert ist — die Abnahme `JR-1309a`
 
-**Nicht Teil dieser Nacharbeit, unverändert offen:** die **Laufzeitseite von F26** — ein bereits
-gespeichertes `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil
-`FilterBuilder.ts:51–53` unverändert `!rule.conditions` liest. Das ist Absicht und steht bei `JR-1311`.
-`JR-1310`, `JR-1311`, `JR-1312` waren und bleiben **nicht** Teil von E13s Abnahme.
+Unabhängige Session, Rolle `tester`, HEAD `2a8df48`, zuerst gegen das Remote abgeglichen (identisch).
+Vollständige Kriterientabelle mit Kommandos und Ausgaben in `06-status.md` unter „Abnahme `JR-1309a`".
 
-### Was zuletzt passiert ist — die Nacharbeit `JR-1313`–`JR-1315`
+**F30 in einer Tabelle** — `FilterBuilder` von `efea6bc` gegen den von `HEAD` im selben Prozess, echtes
+PostgreSQL 16.13 mit den 41 Migrationen, 54 gesäte Rollen, Paar `('archive','read')`, die drei
+` ```sql `-Blöcke wörtlich aus der veröffentlichten Datei:
+
+```
+pre               post     Q2/Q3     conditions
+UNRESTRICTED      THROWS   SILENT    {"$not": {}}
+UNRESTRICTED      THROWS   SILENT    {"$not": 5}
+UNRESTRICTED      THROWS   SILENT    {"$or": [{"$and": [{}]}]}
+FILTER(2/2 rows)  THROWS   SILENT    can archive + cannot archive {"userEmail": {}}
+FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{"userEmail": "…"}, 5]}
+FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{}, {"userEmail": "…"}]}
+FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{"userEmail": "…"}, {}]}
+FILTER(0/2 rows)  THROWS   SILENT    {"$and": [{"userEmail": "…"}, {}]}
+```
+
+Gegenprobe im selben Lauf: `{"$or": []}` und `{"$and": []}` **werden** gemeldet, ein Formfehler an einem
+**Key** in beliebiger Tiefe ebenfalls, und die drei `predefined_*` plus drei handgeschriebene Kontrollen
+erscheinen in **keiner** Ausgabe. Der Ausfall betrifft die **Knotenform**, nicht die Rekursion.
+
+**Was gehalten hat, gemessen statt übernommen:** die zwei Gates urteilen deckungsgleich **und** richtig
+(26 Keys × 2 Gates × eigene Erwartung, 0 Divergenzen — darunter fünf Keys, die die ausgelieferte
+Testdatei nicht führt, etwa die Groß-/Kleinschreibung der Relationstabelle); alle 10 Nicht-Objekt-Formen
+von `conditions` werden beim Anlegen mit `400` abgewiesen, vor E13 waren alle 10 `ACCEPT`; die
+Vorher/Nachher-Tabelle aus `JR-1314` hält an allen 17 Wurzelwerten; `predefined-roles.int.test.ts` 7/7
+grün; `FilterBuilder.ts` und `mongoToMeli.ts` blob-identisch zu `13a7114`; F2/F9/F10-Dateien
+blob-identisch zu `efea6bc`, F4/F5/F6 pre gegen post gleich; genau **ein** vorher grüner Pin ist
+umgedreht (alter `policy-validator.test.ts` gegen neuen Validator ⇒ `1 failed | 52 passed`); Suite
+`250 passed | 2 skipped`, Exit 0, die 2 Skips aus dem JSON-Report als `[nightly]`/`[manual]`
+identifiziert; öffentliche Doku ohne interne IDs, Nutzlast und Compliance-Behauptung;
+`docs/.vitepress/dist/dev/` existiert nicht und der Suchindex enthält keinen `dev/`-Pfad; `main` =
+`a560b8c`, kein PR aus E13.
+
+**Kein Produktionscode, kein Test, keine öffentliche Doku geändert.** Proben in
+`packages/backend/.probe/` (danach gelöscht) und in Wegwerf-Datenbanken. 0 `oa_test_*`-Rückstände nach
+dem **Volllauf**; beide Cluster (16.13 auf 5432, 17.10 auf 5433), die Prüfdatenbanken und die
+pgdg-Paketquelle sind restlos entfernt.
+
+### Was davor passiert ist — die Nacharbeit `JR-1313`–`JR-1315`
 
 Rolle `senior-dev`, drei Commits, je einer pro Task, gepusht. Vollständige Fassung mit allen Ausgaben in
 `06-status.md` unter „E13 — Nacharbeit `JR-1313`–`JR-1315` erledigt".
@@ -582,8 +642,9 @@ ADR-016 (Begründung der gewählten Semantik), ADR-017 (der Action-Versatz als z
 lauffähig und gehört nicht in einen offenen Kanal, solange der Auftraggeber nicht über den Kanal
 entschieden hat.
 
-**Rückmerge in den Integrationsbranch erst nach `JR-1309a`** (ADR-014) — `JR-1309` hat E13 abgelehnt;
-`main` bleibt bis E12 unangetastet; kein PR ohne ausdrückliche Aufforderung.
+**Rückmerge in den Integrationsbranch erst nach einer _angenommenen_ Abnahme** (ADR-014) — `JR-1309`
+**und** `JR-1309a` haben E13 abgelehnt; `main` bleibt bis E12 unangetastet; kein PR ohne ausdrückliche
+Aufforderung.
 
 **Das Kommando für den Suitenlauf** — Postgres lokal ohne Docker, siehe Fallstricke Punkt 8:
 
@@ -605,15 +666,30 @@ Statuslisten: `pnpm test --reporter=json --outputFile=<datei>` auf beiden Ständ
 
 ### Offene Fragen an den Auftraggeber
 
-**Die Abnahme `JR-1309` ist gelaufen und hat E13 abgelehnt.** Blockierend ist jetzt nur die Nacharbeit
-`JR-1313`–`JR-1315`, und die braucht **keine** Entscheidung — sie ist Arbeit. Eine einzige Frage liegt
-beim Auftraggeber, und sie blockiert nichts:
+**Blockierend, genau eine Frage: `F30`.** Die erneute Abnahme `JR-1309a` hat E13 wieder abgelehnt.
+Zu entscheiden ist:
 
-**Zu entscheiden — `JR-1314`, Variante:** entweder die beiden Abfragen der Betreiberdoku erweitern (den
-Befundtyp für nicht-objektartiges `conditions` und `subject = 'all'` in Query 3), **oder** den
-Absolutsatz „No rows means no role in your installation is affected" auf das entschärfen, was die
-Abfragen tragen. Die erste Variante ist mehr Arbeit und macht die Zusage wahr; die zweite ist ehrlicher
-formuliert und billiger. Der Tester hat keine Präferenz — beide erfüllen `JR-1307`s Kriterium.
+**(a) F30 beheben** — Query 2 prüft die Form eines Bedingungsknotens nur an der **Wurzel**, der
+Übersetzer an **jedem** Knoten; acht verschachtelte Formen werden nicht gemeldet, vier davon kippen von
+„sieht alles / alle Zeilen" auf „jede Anfrage scheitert". Zwei **positive** Sätze der veröffentlichten
+Seite sind damit widerlegt. Aufwand: die zwei Formbefunde aus `cond` statt aus `pair` speisen, plus zwei
+Sätze berichtigen. Danach eine dritte Abnahmerunde über die Kriterien 7–12.
+
+**(b) F30 als Restrisiko akzeptieren** und E13 abnehmen, weil die Codehälfte in `JR-1309` **und**
+`JR-1309a` unabhängig belegt ist und alle acht Formen fehlerhafte, handgeschriebene Policies sind.
+
+**Der Tester hat diesmal eine Präferenz: (a).** Nicht wegen der Unvollständigkeit — die Seite darf und
+soll sagen, dass eine Abfrage über schemaloses JSONB nicht beweisbar vollständig ist. Sondern weil zwei
+Sätze der Seite eine Abdeckung **behaupten**, die es nicht gibt („walked recursively … the empty object")
+und weil ein Satz in der beruhigenden Richtung falsch ist („the values inside a condition … not one this
+release changes"). Ein Betreiber mit `{"$or": [{"userEmail": "a@x"}, {}]}` liest dort „ist geprüft",
+erhält keine Zeile und verliert nach dem Update den Zugriff dieser Rolle. Das ist wörtlich derselbe
+Fehlermodus, für den F27 zur Ablehnung geführt hat.
+
+**Damit verbunden, zur Erwägung: `JR-1316` vorziehen.** Die Betreiber-SQL ist das einzige
+sicherheitsrelevante Artefakt in E13 ohne Test und jetzt zum **zweiten** Mal die Stelle, an der die
+Abnahme scheitert — beide Male an einer Form, die niemand aufgeschrieben hatte. Das ist genau die Lücke,
+die `JR-1316` maschinell schließen soll. Entscheidung des Auftraggebers; der Tester legt es nur vor.
 
 **Zur Kenntnis, kein Entscheidungsbedarf für die Abnahme:** **F26** (ein `can` mit falsy `conditions`
 liefert weiter Vollzugriff) ist **kein** Regress und bricht kein Kriterium. Er gehört inhaltlich zu
@@ -807,6 +883,38 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     Entwurf des Doku-Absatzes „was wird nicht geprüft" behauptete „silently skipped" — falsch, und in die
     gefährliche Richtung falsch, weil ein Betreiber „skipped" als „unauffällig" liest. Wer über eine
     JSONB-Spalte behauptet, was eine Abfrage tut oder nicht tut, sät die Form vorher ein.
+
+22. **Eine Prüfung, die rekursiv wirkt, braucht eine Abfrage, die rekursiv prüft — und der Beleg dafür ist
+    ein verschachtelter Fall, nicht ein Wurzelfall.** `JR-1314` hat F27 an der **Wurzel** von `conditions`
+    geschlossen und dort vollständig; `checkConditionsShape()` läuft in `mongoToDrizzle` aber in **jedem**
+    `$or`/`$and`/`$not`-Zweig erneut. Ergebnis: `conditions: 5` wird gemeldet, `conditions: {"$not": 5}`
+    nicht (**F30**). Beim Lesen des Diffs ist das unsichtbar, weil beide Befundtypen richtig aussehen — die
+    rekursive CTE `cond` liegt direkt daneben und wird für die Formbefunde nur nicht benutzt. Regel für die
+    nächste solche Abfrage: **jede** Form, die im Code an mehr als einer Stelle geprüft wird, mit einem
+    Fall auf **jeder** dieser Stellen einsäen, nicht nur mit einem.
+
+23. **Der HTTP-`400`-Pfad ist prüfbar, ohne den Server zu starten.** `JR-1309` hat ihn als „nicht prüfbar"
+    verbucht, weil ein Servertest an der Importkette scheitert (Fallstrick 10). `IamController` importiert
+    aber nur `IamService`, `PolicyValidator` und `logger`, also nur `db` — mit gesetztem `DATABASE_URL`
+    lässt sich `controller.createRole(req, res)` mit einem synthetischen `res` (`status()`/`json()` als
+    Rückgabe von `this`) und `req = { body: { name, policies }, t: k => k }` direkt aufrufen und der
+    Statuscode ablesen. Das ist deutlich mehr Aussage als `PolicyValidator.isValid()` allein, weil es die
+    Schleife über `policies` und die Antwortbildung mitprüft.
+
+24. **PostgreSQL 17.10 lässt sich im Container nachinstallieren** — damit ist die Versionslücke
+    16.13 / 17.10 nicht nur für die CI-Suite, sondern auch für SQL-Artefakte schließbar:
+
+    ```bash
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor > /etc/apt/keyrings/pgdg.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg-probe.list
+    apt-get update -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/pgdg-probe.list -o Dir::Etc::sourceparts=/dev/null
+    apt-get install -y --no-install-recommends postgresql-17     # 17.10-1.pgdg24.04+1, exakt die CI-Version
+    ```
+
+    Danach ein zweiter Cluster auf einem **anderen Port** (`-p 5433`, eigenes `unix_socket_directories`),
+    dieselben Migrationen, dieselben Fixtures, und die Ausgaben beider Versionen zeichenweise diffen.
+    Paketquelle, Keyring und Cluster hinterher entfernen.
 
 ---
 

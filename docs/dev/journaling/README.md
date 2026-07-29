@@ -106,11 +106,22 @@ veröffentlichte Doku behauptet eine Ablehnung beim Speichern, die nicht stattfi
 **Die Nacharbeit ist erledigt** (`JR-1313` F29 und F26s Schreibseite, `JR-1314` F27/F28, `JR-1315`
 F25): Suite `250 passed | 2 skipped`, Exit 0.
 
-**Nächster Schritt: `JR-1309a`** — die erneute Abnahme, **die letzte Task von E13**, in einer eigenen
-Session. Danach Rückmerge in den Integrationsbranch, dann **E2** (davor fällig: `JR-105c`). Kein PR.
+**Die erneute Abnahme `JR-1309a` ist durchgeführt — Ergebnis: E13 ist _wieder nicht_ abgenommen**
+(2026-07-29). 23 Kriterien, **22 erfüllt**. Erfüllt und diesmal unabhängig gemessen sind unter anderem:
+beide Gates urteilen deckungsgleich **und** richtig (26 Keys gegen eine eigene Erwartungstabelle), der
+**HTTP-400-Pfad** über `IamController.createRole` (11 × 400, 5 × 201), und die Betreiber-SQL liefert auf
+PostgreSQL **17.10** eine zeichenweise identische Ausgabe wie auf 16.13 — zwei Lücken, die `JR-1309`
+offenlassen musste, sind damit zu. Gebrochen ist erneut ein Kriterium der betreibersichtbaren Hälfte:
+**F30** — die Formprüfung wirkt im Übersetzer **rekursiv**, in Query 2 nur an der **Wurzel**, also
+schweigt die Anleitung zu acht verschachtelten Formen, von denen vier von „sieht alles" auf „jede
+Anfrage scheitert" kippen; zwei positive Sätze der Seite sind damit widerlegt.
+
+**Nächster Schritt: Entscheidung des Auftraggebers zu F30** (Behebung ist klein: die beiden Formbefunde
+in Query 2 aus der rekursiven CTE `cond` speisen statt aus `pair`, plus zwei Sätze berichtigen), dann
+eine dritte Abnahmerunde. **Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`).
 `JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden und steht bei den Folge-Tasks — sie sichert
-ein Doku-Artefakt ab, kein Autorisierungsverhalten. Es existiert noch **kein** Produktionscode für den
-Receiver selbst.
+ein Doku-Artefakt ab, kein Autorisierungsverhalten, und sie war **kein** Kriterium von `JR-1309a`. Es
+existiert noch **kein** Produktionscode für den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 
