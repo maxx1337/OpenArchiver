@@ -85,10 +85,44 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-28 (nach Abnahme `JR-106a` **und** Rückmerge von E1) · **Branch:**
-`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch), `HEAD` = `b4ae8f7`
+**Stand:** 2026-07-29 (ADR-017 entschieden) · **Branch:**
+`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch)
 
 ### Was zuletzt passiert ist
+
+**ADR-017 ist entschieden: Variante B** (Auftraggeber, 2026-07-29). Der Action-Versatz wird dort
+aufgelöst, wo der Filter gebaut wird, nicht am Route-Gate:
+
+```diff
+  # packages/backend/src/services/SearchService.ts, Zeilen 311 und 423
+- const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'read');
++ const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'search');
+```
+
+`api/routes/search.routes.ts` bleibt unverändert. `ArchivedEmailService.ts:62` bleibt auf `'read'`
+(seine Routen gaten auf `read`), `IngestionService.ts:137` ebenfalls (Subject `ingestion`, kein
+Versatz). Variante A ist verworfen, Variante C verworfen für E13 und als **`JR-1310`** nach E13
+vorgemerkt — ausdrücklich **nicht** Teil der Abnahme `JR-1309`.
+
+**Damit ist keine Entscheidung mehr blockierend für E13.** `JR-1303` ist von „PO entscheidet" auf
+reine Umsetzung geschärft und gibt `JR-1302` frei.
+
+**Eine frühere Aussage des PO ist korrigiert.** „Der F7-Fix bricht Bestandsinstallationen" war zu
+scharf. Am Code nachgeprüft (`iam.controller.ts` `createDefaultRoles`, `UserService.ts:270`): keine der
+drei `predefined_*`-Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` — zwei erteilen
+unbedingte `can`-Regeln und werden schon von Zeile 31 abgefangen, `predefined_end_user` hat
+`manage archive` **mit** Bedingungen, woraus `rulesToQuery` eine echte Query liefert. Erreichbar ist
+der Zweig über einen Nutzer **ohne Rolle**, eine `cannot`-only-Policy auf `archive`, und eine
+handgeschriebene Rolle mit `search` ohne `read`. **F7 bleibt Schwere hoch** — die ersten zwei Formen
+sind real, und die zweite ist genau die Form jeder scope-einschränkenden Auditor-Policy aus E11.
+`JR-1307` ist entsprechend entschärft: die Prüfanleitung bleibt, die Pauschalwarnung fällt.
+
+Geändert wurden nur `05-entscheidungen.md` (ADR-017 plus ein Platzhalter, der ADR-016 für `JR-1307`
+reserviert — **die Nummernlücke ist Absicht, nicht umnummerieren**), `03-backlog.md` (`JR-1303`
+geschärft, `JR-1307` entschärft, `JR-1310` angelegt), `09-befunde-bestandscode.md` (F7-Reichweite) und
+diese beiden Statusdateien. **Kein Produktionscode.**
+
+### Was davor passiert ist
 
 **E1 ist abgenommen.** Die erneute unabhängige Abnahme `JR-106a` (Rolle `tester`, eigene Session,
 HEAD `0a94308`) hat **alle** `JR-106`-Kriterien noch einmal geprüft — nicht nur die Nacharbeit, weil
@@ -167,7 +201,16 @@ git checkout -b claude/journaling-e13-iam-hardening \
 E1 ist jetzt formal abgenommen, der Harness ist benutzbar, und `FilterBuilder` ist über
 `tests/integration/filter-builder.int.test.ts` abgedeckt — das ist das Regressionsnetz, das `JR-1301`
 braucht. Danach `JR-1302` … `JR-1309` gemäß `03-backlog.md`. **F7** ist der Grund, warum E13 vor E2
-steht und warum E11 ohne E13 nicht abnehmbar ist. **ADR-017 muss vor `JR-1302` entschieden sein.**
+steht und warum E11 ohne E13 nicht abnehmbar ist.
+
+**ADR-017 ist entschieden**, `JR-1303` blockiert also nichts mehr. Zwei Dinge muss `JR-1301` deshalb
+konkret leisten:
+
+1. Der Regressionstest für F7 fordert die Semantik aus ADR-017 — der Filter für eine Rolle mit
+   **bedingtem** `search archive` entsteht aus deren `search`-Regeln.
+2. **Die drei `predefined_*`-Rollen gehören als Integrationstest gegen echtes Postgres dazu**, vor und
+   nach dem Fix mit identischem Ergebnis. Das ist der Beleg für „keine Regression in
+   Standardinstallationen" — die Tabelle in ADR-017 ist nur die Herleitung, nicht der Nachweis.
 
 ### Was ein neuer Agent zuerst lesen muss
 
@@ -189,7 +232,7 @@ steht und warum E11 ohne E13 nicht abnehmbar ist. **ADR-017 muss vor `JR-1302` e
 | Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.**              |
-| **ADR-017** | Action-Versatz: `search.routes.ts:158` prüft `('search','archive')`, `SearchService.ts:311`/`:423` bauen den Filter für `('read','archive')`. Beide Angleichungsrichtungen treffen Bestandsrollen unterschiedlich. **Vor `JR-1302` zu entscheiden**, nicht der Rolle DEV zu überlassen.                                                                                                                                                                                                                                                                    |
+| **ADR-017** | **Erledigt am 2026-07-29: Variante B.** Braucht keine Entscheidung mehr. Umsetzung in `JR-1303`, Folgearbeit als `JR-1310` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **F14–F16** | Drei Befunde am Messinstrument aus `JR-106a`, alle **offen** und alle **ohne Kriteriumsbruch**: die Suite-Inventur zählt Dateien statt gelaufene Tests (eine Umetikettierung `ci` → `nightly` schaltet die `integration`-Suite ab und bleibt grün), `minimumFiles` verdeckt eine Löschung sobald die Suite wächst, und ein Rückstand nach Modul-Throw wird lokal nicht angekündigt. Inhaltlich gehören alle drei nach **`JR-1305`**, wo `JR-106` den „Ausweg" für genau diese Klasse schon eingeplant hat. Vor E2 zu entscheiden, ob dort mitbehoben wird. |
 
 | Punkt                                     | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

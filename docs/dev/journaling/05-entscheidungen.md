@@ -330,6 +330,94 @@ sehen will, braucht eine neue ADR, die diese ersetzt. Der Review von Snapshots (
 `oa-migration`) bleibt unverändert Pflicht — „von Prettier ignoriert" heißt nicht „nicht
 reviewpflichtig".
 
+## ADR-016 — reserviert für `JR-1307`
+
+**Status:** offen · **Nummer bewusst freigehalten**
+
+`JR-1307` in `03-backlog.md` fordert eine ADR-016, die festhält, dass fail-closed den
+Verhaltensbruch aus `JR-1302` rechtfertigt. Sie wird dort geschrieben, nicht hier. **Die Lücke
+zwischen ADR-015 und ADR-017 ist Absicht — nicht umnummerieren.** ADR-017 entstand zuerst, weil sie
+`JR-1302` blockiert und ADR-016 dessen Ergebnis beschreibt.
+
+## ADR-017 — Action-Versatz zwischen Route-Gate und `FilterBuilder`
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** Auftraggeber · **Betrifft:** F7, `JR-1302`,
+`JR-1303`
+
+**Entscheidung: Variante B.** `SearchService` baut seinen Row-Level-Filter künftig für die Action,
+unter der die Route den Request tatsächlich autorisiert hat:
+
+```diff
+- const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'read');
++ const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'search');
+```
+
+in `packages/backend/src/services/SearchService.ts:311` und `:423`. Die beiden Suchrouten in
+`api/routes/search.routes.ts` bleiben **unverändert**.
+
+### Der Befund
+
+Das Route-Gate und der Filteraufbau prüfen unterschiedliche Actions:
+
+| Ort                                                    | geprüfte (Action, Subject)                        |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| `api/routes/search.routes.ts:158` GET `/search`        | `requirePermission('search', 'archive')`          |
+| `api/routes/search.routes.ts:211` GET `/search/facets` | `requirePermission('search', 'archive')`          |
+| `services/SearchService.ts:311`                        | `FilterBuilder.create(userId, 'archive', 'read')` |
+| `services/SearchService.ts:423`                        | `FilterBuilder.create(userId, 'archive', 'read')` |
+
+Eine Rolle mit `can search archive` und **ohne** `read archive` passiert damit das Gate, während
+`rulesToQuery` für `('read','archive')` `null` liefert — was `FilterBuilder` heute als „Full access"
+auslegt (F7). Der Versatz ist die Erreichbarkeit von F7 über die Suche.
+
+Er existiert **nur** an diesen zwei Routen. Alle vier `FilterBuilder.create`-Aufrufe im Repository
+verwenden die Action `'read'`, aber die übrigen Routen gaten selbst auf `read`
+(`archived-email.routes.ts:66`/`:138`, `storage.routes.ts:70`, `integrity.routes.ts:56`); der vierte
+Aufruf, `IngestionService.ts:137`, arbeitet auf dem Subject `'ingestion'`, nicht `'archive'`.
+
+### Warum Variante B
+
+Row-Level-Scoping muss sich nach denselben (Action, Subject) richten, unter denen der Request
+autorisiert wurde. Alles andere ist zwei Wahrheiten über dieselbe Anfrage. B ist zugleich die
+minimale Änderung, die F7s Weg über die Suchroute schließt.
+
+**Auswirkung auf die ausgelieferten Rollen: keine.** Geprüft am Code
+(`api/controllers/iam.controller.ts` `createDefaultRoles`, `services/UserService.ts:270`):
+
+| Rolle                       | Regel für `archive`                    | Verhalten bei Action `search`                                                                  |
+| --------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `predefined_super_admin`    | `manage: all`, unbedingt               | unbedingtes `can` ⇒ Vollzugriff, wie bei `read`                                                |
+| `predefined_end_user`       | `manage archive` **mit** `conditions`  | CASLs `manage` ist ein echter Wildcard und deckt `search`; dieselbe Bedingung, derselbe Filter |
+| `predefined_read_only_user` | `action: ['read','search']`, unbedingt | `search` ist explizit erteilt ⇒ Vollzugriff, wie bei `read`                                    |
+
+Keine dieser drei Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` — weder vor noch nach der
+Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-1301`, nicht diese Tabelle.
+
+### Verworfen: Variante A — Suchrouten zusätzlich auf `read` gaten
+
+Eine Rolle mit `search` ohne `read` bekäme ein klares `403` statt eines leeren Ergebnisses, was für
+den Betreiber besser diagnostizierbar wäre. Der Preis ist zu hoch: wenn `read` ohnehin nötig ist,
+trägt `search` auf `archive` keine eigene Information mehr. Das Vokabular verlöre eine Unterscheidung,
+die `docs/services/iam-service/iam-policy.md` ausdrücklich führt, und `predefined_read_only_user`
+erteilt beide Actions genau deshalb getrennt.
+
+### Verworfen für E13: Variante C — Divergenz konstruktiv ausschließen
+
+Die in `requirePermission` geprüfte (Action, Subject) am Request mitführen und `FilterBuilder` daraus
+speisen, statt sie im Service erneut zu wählen. Damit könnte der Versatz nicht wiederkehren — die
+Fehlerklasse verschwindet, nicht nur dieser Fall. Das ist richtig, aber es berührt die Middleware,
+alle vier Aufrufstellen und die Service-Signaturen: eine Refaktorierung, keine Sicherheitskorrektur,
+und sie gehört nicht in ein Epic, dessen Zweck das Schließen einer Autorisierungslücke ist. **Als
+`JR-1310` nach E13 vorgemerkt**, ausdrücklich nicht Teil von E13s Abnahme.
+
+### Konsequenz
+
+- `JR-1303` ist damit entschieden und gibt `JR-1302` frei.
+- `JR-1301` muss die gewählte Semantik fordern: der Filter für eine Rolle mit bedingtem
+  `search archive` entsteht aus deren `search`-Regeln.
+- Wer diese Entscheidung umkehren will, braucht eine neue ADR, die diese ersetzt — keine stille
+  Änderung des dritten Arguments.
+
 ---
 
 ## Nicht verhandelbar (keine ADR nötig)

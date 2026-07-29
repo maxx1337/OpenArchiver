@@ -164,12 +164,31 @@ eine **ungefilterte** Suche über das gesamte Archiv. Dasselbe `undefined` errei
 Das ist F3 an der Stelle, an der es Folgen hat.
 
 **Unabhängig verifiziert (PO, 2026-07-28).** Nachgeprüft am Code, nicht am Testbericht:
-`FilterBuilder.ts:49–51` lautet `if (query === null) { return { drizzleFilter: undefined,
-searchFilter: undefined }; // Full access }`, während der unmittelbar folgende Zweig für das **leere**
-Query korrekt `sql`1=0``liefert. Der Autor kannte den „kein Zugriff"-Fall also — der`null`-Fall ist
-genau verkehrt herum. `auditor-specific-mailbox.json`enthält für`archive`tatsächlich **nur** eine`inverted`-Regel und kein `can`; eine Policy, deren einziger Zweck das Verbot ist, erteilt damit
-Vollzugriff. Der Action-Versatz zwischen `search.routes.ts:158` (`'search'`) und
-`SearchService.ts:311`/`:423` (`'read'`) ist ebenfalls bestätigt.
+`FilterBuilder.ts:49–51` lautet
+`if (query === null) { return { drizzleFilter: undefined, searchFilter: undefined }; // Full access }`,
+während der unmittelbar folgende Zweig für das **leere** Query korrekt ``sql`1=0` `` liefert. Der
+Autor kannte den „kein Zugriff"-Fall also — der `null`-Fall ist genau verkehrt herum.
+`auditor-specific-mailbox.json` enthält für `archive` tatsächlich **nur** eine `inverted`-Regel und
+kein `can`; eine Policy, deren einziger Zweck das Verbot ist, erteilt damit Vollzugriff. Der
+Action-Versatz zwischen `search.routes.ts:158` (`'search'`) und `SearchService.ts:311`/`:423`
+(`'read'`) ist ebenfalls bestätigt.
+
+**Reichweite präzisiert (PO, 2026-07-29) — keine der ausgelieferten Rollen trifft den `null`-Zweig.**
+Geprüft an `api/controllers/iam.controller.ts` `createDefaultRoles` und `services/UserService.ts:270`:
+`predefined_super_admin` (`manage: all`) und `predefined_read_only_user`
+(`action: ['read','search']`) erteilen **unbedingte** `can`-Regeln und werden schon von
+`FilterBuilder.ts:31` abgefangen; `predefined_end_user` hat `manage archive` **mit** `conditions`,
+woraus `rulesToQuery` eine echte Query liefert. Der `null`-Zweig ist damit erreichbar über genau drei
+Formen: einen Nutzer **ohne jede Rolle** (F7a), eine handgeschriebene Policy mit **ausschließlich**
+`cannot`-Regeln auf `archive` (F7b), und eine handgeschriebene Rolle mit `can search archive` **ohne**
+`read archive` (der Action-Versatz, siehe ADR-017).
+
+Das ändert die Schwere **nicht**: F7a und F7b sind real, F7b ist die Form, in der jede
+scope-einschränkende Auditor-Policy aus E11 geschrieben würde, und ein Nutzer ohne Rolle entsteht
+schon durch das Löschen einer Rolle. Es korrigiert nur eine frühere, zu scharfe Aussage des PO, der
+Fix aus `JR-1302` „bräche Bestandsinstallationen": eine Standardinstallation mit den drei
+`predefined_*`-Rollen verhält sich vor und nach dem Fix gleich. Der Nachweis dafür ist der
+Integrationstest aus `JR-1301`, nicht diese Feststellung.
 
 **Bewertung des PO:** Das ist der schwerste Befund dieser Session — schwerer als F1. F1 setzt
 Super-Admin voraus; F7 ist von einer **eingeschränkten** Rolle aus erreichbar und kehrt die Wirkung
@@ -181,10 +200,10 @@ Auditor-Policy im Stil von `auditor-specific-mailbox.json` wäre wirkungslos. **
 abgenommen werden, solange F7 offen ist** — ein „read-only"-Auditor, der unbeschränkt liest, ist
 keine Auditor-Rolle.
 
-**Empfehlung:** `null` von `rulesToQuery` als **deny** behandeln (`sql`1=0``, wie es der bereits
+**Empfehlung:** `null` von `rulesToQuery` als **deny** behandeln (``sql`1=0` ``, wie es der bereits
 vorhandene „No access"-Zweig für das leere Query tut), und die unbeschränkte Rückgabe auf den Fall
 „nachweislich unbedingtes `can`" beschränken. Zusätzlich Action-Angleichung zwischen Route-Gate und
-`FilterBuilder`-Aufruf.
+`FilterBuilder`-Aufruf — **entschieden in ADR-017 als Variante B**, umzusetzen in `JR-1303`.
 
 ## F8 — Der `cannot`-Ausschluss verarbeitet Operator-Bedingungen falsch
 

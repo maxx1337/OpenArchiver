@@ -81,10 +81,12 @@ Auditor-Artefakte ab E9/E11.
 
 ## Aktueller Stand (Kurzfassung)
 
-Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 läuft:** vitest steht,
-149 Unit-Tests sind grün, `pnpm lint` ist repo-weit sauber. Offen in E1 sind `JR-104`
-(Integrationstest-Basis) und `JR-105` (CI-Workflow). Es existiert noch **kein** Produktionscode für
-den Receiver selbst.
+Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenommen** (`JR-106a`,
+2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, 197 Tests grün, CI gegen
+PostgreSQL 17, `pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig
+vor E2). **Nächstes Epic: E13** (IAM-Autorisierung härten), beginnend mit `JR-1301`; ADR-017 ist
+entschieden, es blockiert keine Entscheidung mehr. Es existiert noch **kein** Produktionscode für den
+Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 
