@@ -20,8 +20,9 @@ the whole archive. That is now a denial: a user who previously saw everything th
 sees nothing.
 
 The rest of this page describes the shapes of policy these changes affect, gives you queries that look
-for them in your own database, and — because a query over a schemaless column cannot be shown to be
-complete — a behaviour check that does not depend on the shapes at all. Read
+for them in your own database, and adds a behaviour check that needs no list of shapes because it
+measures what your roles return instead. The two parts answer different questions and neither stands in
+for the other: each reports what it can measure and says what it cannot. Read
 [How to read an empty result](#how-to-read-an-empty-result) before you take a query's output as an
 all-clear.
 
@@ -214,11 +215,12 @@ that they are meant to have no access.
 
 ### Query 2 — roles whose behaviour changes
 
-This is the widest of the three queries. It expands every rule in `roles.policies`, walks into the
-`conditions` objects, and reports one row per role and finding, with the rule number the finding is in
-— counted from 1 in the order the rules appear in the policy. What it reports, and what it cannot, is
-spelled out under [How to read an empty result](#how-to-read-an-empty-result) below the query; read
-that before you act on the output, in either direction.
+This is the widest of the three queries. It expands the rules in `roles.policies`, walks into the
+`conditions` objects, and reports one row per role and finding. Most rows name the rule the finding is
+in — counted from 1 in the order the rules appear in the policy; the finding for archive search granted
+without archive read is about the policy as a whole and names no rule. What it reports, and what it
+cannot, is spelled out under [How to read an empty result](#how-to-read-an-empty-result) below the
+query; read that before you act on the output, in either direction.
 
 The row-level findings are limited to the three permissions the application actually builds a row
 filter for: reading archived emails, searching the archive, and listing ingestion sources. A role that
@@ -450,8 +452,8 @@ FROM finding
 ORDER BY role_name, finding, detail;
 ```
 
-Every row names the role, the rule inside it, and which change applies; the sections above say what to
-do about each.
+Every row names the role and which change applies, and most of them name the rule inside it as well; the
+sections above say what to do about each.
 
 #### How to read an empty result
 
@@ -460,13 +462,15 @@ and the difference matters enough to spell out: `roles.policies` is a JSONB colu
 behind it. A policy can be shaped in a way nobody has written down, so **a query over that column
 cannot be shown to be complete** — for any list of shapes, another one can be constructed a level
 deeper. Read an empty result as an indication, not as a clearance, and run the behaviour check in
-[After the upgrade](#after-the-upgrade), which does not depend on knowing the shapes at all.
+[After the upgrade](#after-the-upgrade) as well: it needs no list of shapes, and it reports on the three
+surfaces it exercises.
 
 **What it reports:**
 
-- every rule in every row of `roles.policies`, expanded per action and per subject. `manage` is
-  matched against each of the three permissions the application builds a row filter for, and
-  `subject: "all"` is matched against each of them too.
+- each rule that has the documented structure, in every row of `roles.policies`, expanded per action and
+  per subject. `manage` is matched against each of the three permissions the application builds a row
+  filter for, and `subject: "all"` is matched against each of them too. What happens to a rule that does
+  not have that structure is under _What it does not report_ below.
 - the three findings that need no condition at all: a prohibition without a matching grant, a
   prohibition carrying no condition, and archive search granted without archive read.
 - a `conditions` that exists and is **not** an object, together with which of the two readings under
@@ -476,8 +480,10 @@ deeper. Read an empty result as an indication, not as a clearance, and run the b
   nodes below it the walk descends into: an empty condition object, an operator key, the shape of a
   condition key, a relation prefix that does not resolve, an `$or`/`$and` with no branches or with a
   value that is not a list of branches, and an `$or`/`$and` branch or `$not` body that is not an
-  object of condition keys. Each finding names the position it was found at, so
-  `"conditions" -> "$or" -> []` is a branch and `"conditions" -> "userEmail"` is the value of a key.
+  object of condition keys. Some of these name the position they were found at, so
+  `"conditions" -> "$or" -> []` is a branch and `"conditions" -> "userEmail"` is the value of a key;
+  the ones that report a condition key, a relation prefix, an operator or an empty branch list give the
+  rule number and that key or operator instead, and you read the rule to see where it sits.
 
 **What it does not report:**
 
@@ -490,37 +496,53 @@ deeper. Read an empty result as an indication, not as a clearance, and run the b
   is reported as one of the findings above.
 - **anything outside the `roles` table.** A role in a database this query is not run against is
   invisible to it, and so is any permission granted by some other mechanism.
-- **a rule whose own structure is not the documented one.** The query assumes each rule is an object
-  carrying `action`, `subject`, optionally `inverted` and optionally `conditions`. A rule that is not
-  that — a bare number or string where a rule object belongs, an `action` or `subject` that is neither
-  a string nor an array of strings — is skipped without a row. If you have hand-edited policies
+- **a rule whose own structure is not the documented one, or parts of it.** The query assumes each rule
+  is an object carrying `action`, `subject`, optionally `inverted` and optionally `conditions`. A bare
+  number or string where a rule object belongs is skipped without a row, and without stopping the
+  query. A rule whose `action` or `subject` is neither a string nor an array of strings is reported in
+  part: the findings that need a resolved action and subject — the three that need no condition, and
+  the one for a `conditions` that is not an object — are lost, while the findings from inside a
+  `conditions` object still arrive, because those are read from the rule rather than from the pair. Such
+  a row names the rule number with no action or subject beside it. If you have hand-edited policies
   directly in the database, read those roles yourself.
 - **a shape that is not in the list above.** That is the limit of a query over a schemaless column, not
-  a gap somebody forgot to close: the queries report what has been written down, and the behaviour
-  check is what covers the rest.
+  a gap somebody forgot to close: the query reports the findings listed above, and no others. The
+  behaviour check in [After the upgrade](#after-the-upgrade) asks a different question — whether the
+  numbers a role produces have moved on the three surfaces it exercises — and is worth running for that
+  reason, not because it stands in for this list.
 
-**What it may report even though the role still works.** The queries err towards reporting. They match
-on the shape they find at a position, not on what the application does with it, so a reported row is a
-prompt to look — not a verdict that the role is broken. The known case: an empty object inside a
-**value-level** operator list, such as `{"id": {"$in": [{}]}}`, is reported as an empty condition
-object, and the rule is nevertheless translated and keeps working. Every finding names the position it
-was found at, and that is what tells the two apart: a position ending in a condition key or an
-`$or`/`$and` branch changes what the rule does, whereas one sitting inside the value of `$in`, `$nin`
-or another value-level operator may not. When in doubt, use the behaviour check in
-[After the upgrade](#after-the-upgrade) — it answers the question the query cannot.
+**Why a reported row is a prompt and not a verdict.** The queries err towards reporting. They match on
+the shape they find at a position, not on what the application does with it. That includes positions
+**inside a value**: the walk descends into the value of a value-level operator — `$in`, `$nin`, `$eq`
+and the others — and whatever it finds there is matched by the same rules as a condition node. That is a
+class of position rather than a single case. `{"id": {"$in": [{}]}}` is reported as an empty condition
+object, and an operator name, a condition key or an `$or` with no branches written in the same place is
+reported just as readily.
+
+Where the finding sits tells you whether the application refuses the condition or uses it. A position
+ending in a condition key or an `$or`/`$and` branch is refused, which is change 7. One inside the value
+of a value-level operator is not refused: the rule is translated and the value is passed on as written,
+so what follows depends on that value and on the column it is compared against — including a request
+that fails at the database. The findings that carry a position say so in their detail, as in
+`"conditions" -> "id" -> "$in" -> []`; for the others you have the rule number and the key or operator,
+and the rule itself shows the rest. Either way, read the rule: a structure where a value belongs is
+rarely what its author meant. Whether a user of that role sees different numbers than before is a
+separate question, and the behaviour check in [After the upgrade](#after-the-upgrade) is what measures
+it, on the three surfaces it exercises.
 
 One structural problem is not skipped but reported as a failure: if any `roles.policies` value is not
-a JSON array, the query stops with `ERROR: cannot extract elements from an object`. That is the query
-telling you it cannot answer, not an empty result — find the offending row with
-`SELECT name FROM roles WHERE jsonb_typeof(policies) <> 'array';` and fix it before you read anything
-into either query.
+a JSON array, the query stops with `ERROR: cannot extract elements from an object` when that value is an
+object, and with `ERROR: cannot extract elements from a scalar` when it is a string, a number, a boolean
+or a JSON `null`. That is the query telling you it cannot answer, not an empty result — find the
+offending row with `SELECT name FROM roles WHERE jsonb_typeof(policies) <> 'array';`, which finds all
+five, and fix it before you read anything into either query.
 
 Query 2 and Query 3 are worth running again after the upgrade, and neither replaces the last step on
 this page: exercising each role you changed.
 
 ### Query 3 — condition keys that name no column
 
-This query covers the gap described under
+This query looks for the case described under
 [What is still not checked](#what-is-still-not-checked). It resolves every condition key against the
 table the filter is applied to — archived emails for the `archive` subject, ingestion sources for the
 `ingestion` subject and for the `ingestionSource.` prefix — and reports the keys that name no column
@@ -618,21 +640,33 @@ one. Fix the key, or drop the rule.
 
 ## After the upgrade
 
-The queries look for shapes in your policies. This check looks at behaviour instead, and that is why it
-does not depend on any list of shapes being complete: it exercises the policies you actually have,
-whatever they look like inside.
+The queries look for shapes in your policies. This check looks at behaviour instead, so it needs no list
+of shapes: it exercises the policies you actually have, whatever they look like inside. What it measures
+are the three surfaces the application builds a row filter for — the same three the row-level findings
+of Query 2 are limited to — and nothing besides them.
 
 1. **Before you upgrade**, write down for each restricted role what a user holding it sees: how many
-   rows the archive list returns, and the result count of one search. A role that has no user of its
-   own can be measured with a test user you assign it to.
+   rows the archive list returns, the result count of one search, and how many entries the ingestion
+   sources list shows. All three, because they are filtered separately and can move separately. A role
+   that has no user of its own can be measured with a test user you assign it to.
 2. **After the upgrade**, or on a copy of the installation if you would rather not find this out in
-   production, log in as a user of each of those roles and take the same two numbers again.
-3. **Compare them.** A role that now returns nothing, or noticeably fewer rows, is affected by one of
-   the changes above — the sections say which one and what to do. A role whose numbers are unchanged is
-   not affected, whatever the queries did or did not report about it.
+   production, log in as a user of each of those roles and take the same three numbers again.
+3. **Compare them, one number at a time.** A number that is now zero, or noticeably lower, means the
+   role is affected by one of the changes above — the sections say which one and what to do. Do not read
+   one number for another: a role with archive grants whose only statement about ingestion sources is a
+   prohibition — the shape change 1 describes — keeps both archive numbers and loses the ingestion
+   sources list entirely.
 
 An empty result where you expect rows means the role has no grant for the permission being checked — go
 back to change 1 above.
+
+**What this check does not show you.** Three unchanged numbers are three unchanged numbers. That is what
+was measured, and it is not a verdict on the role. A change that moves none of them stays invisible
+here: a prohibition that begins excluding rows the installation does not hold yet, a condition on a
+column your rows do not differ on, or one that swaps which rows come back without changing how many. A
+role nobody holds is not measured at all unless you assign it to a test user for the purpose. And a
+moved number does not name its own cause: it says the role is affected, the queries above say which
+shape in it to read, and neither result excuses you from the other.
 
 This step is cheaper than it was before this release, because a policy the application cannot translate
 no longer fails quietly. The request that needs it returns an error instead of a result set, and the
