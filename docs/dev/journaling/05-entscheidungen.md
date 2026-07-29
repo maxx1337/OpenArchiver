@@ -393,6 +393,39 @@ minimale Änderung, die F7s Weg über die Suchroute schließt.
 Keine dieser drei Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` — weder vor noch nach der
 Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-1301`, nicht diese Tabelle.
 
+### Nachtrag 2026-07-29 — nachgemessen in `JR-1301`, zwei Einschränkungen
+
+Die Entscheidung bleibt Variante B, und sie ist jetzt **belegt statt hergeleitet**:
+`tests/integration/predefined-roles.int.test.ts` legt die drei Rollen über Produktionscode an und
+zeigt, dass `('archive','read')` und `('archive','search')` je Rolle **identischen** Filtertext,
+identische Bind-Parameter und identischen Meili-Filter ergeben. `JR-1303` ist damit für eine
+Standardinstallation nachweisbar wirkungsfrei — unabhängig davon, was `JR-1302` mit dem `null`-Zweig
+macht.
+
+Zwei Aussagen dieses Abschnitts waren aber zu weit gefasst:
+
+1. **Der Satz gilt je Aufrufstelle, nicht je Rolle (F18).** Über das volle Vokabular (8 Actions × 7
+   Subjects) erreicht `predefined_end_user` den `null`-Zweig für 39 von 56 Paaren,
+   `predefined_read_only_user` für 46 — eine Read-Only-Rolle hat naturgemäß kein `create archive`.
+   Nur `manage: all` erteilt für jedes Paar ein unbedingtes `can`. Richtig gelesen lautet die Aussage:
+   **für die (Action, Subject)-Paare der heute existierenden vier Aufrufstellen** trifft keine der drei
+   Rollen den `null`-Zweig. Eine fünfte Aufrufstelle mit einer anderen Action — `export archive` aus
+   E11 ist der naheliegende Kandidat — kann das umstoßen. `tests/unit/filter-builder-call-sites.test.ts`
+   wacht deshalb darüber, dass es bei vier bleibt.
+2. **„Ausgeliefert" trifft auf zwei der drei Rollen nicht zu (F17).** `createDefaultRoles()` läuft in
+   einer echten Installation **nie**: `createFirstAdmin()` legt `predefined_super_admin` an und
+   erfüllt damit dauerhaft den Bootstrap-Auslöser `!roles.some(r => r.slug?.includes('predefined_'))`.
+   Eine Standardinstallation hat **eine** Rolle, nicht drei.
+
+Punkt 2 macht die Wirkungsanalyse nicht falsch — die beiden nicht existierenden Rollen können den
+Zweig erst gar nicht treffen —, aber er verschiebt die Lesart von F7 in die unangenehme Richtung:
+**ausgeliefert gibt es keine Read-Only-Rolle.** Jeder eingeschränkte Nutzer ist eine handgeschriebene
+Policy, und die naheliegende Form dafür ist die von `auditor-specific-mailbox.json` — genau die Form,
+die F7 ins Gegenteil verkehrt. **F7s praktische Schwere steigt dadurch.** Der Fix für F17 ist eine
+Produktentscheidung (welche Rollen liefert Open Archiver aus?) und gehört **nicht** in E13;
+`JR-1307`s Betreiberanleitung muss den Sachverhalt aber benennen, sonst sucht ein Betreiber nach
+einer Rolle, die es nicht gibt.
+
 ### Verworfen: Variante A — Suchrouten zusätzlich auf `read` gaten
 
 Eine Rolle mit `search` ohne `read` bekäme ein klares `403` statt eines leeren Ergebnisses, was für

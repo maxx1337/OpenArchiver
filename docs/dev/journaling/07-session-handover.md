@@ -251,8 +251,15 @@ DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA
 ```
 
 Fertig ist eine Task, wenn **ihre** roten Fälle grün sind **und** kein bisher grüner Fall rot wurde.
-Der Endstand von E13 ist `pnpm test` ⇒ Exit `0` bei `224 passed | 2 skipped`. Betroffene
-Produktionsdateien je Task:
+
+> **Eine ausdrückliche Ausnahme von „kein grüner Fall wird rot": `JR-1306`.** Die F21-Entscheidung
+> (strenge Allowlist) macht drei heute grüne Pins gegenstandslos — `attachment.name`, `foo.bar` in
+> `tests/fixtures/mongo-to-drizzle-golden.json` und „resolves only the relations listed in
+> `relationToTableMap`". Sie werden im **selben** Commit wie der Fix invertiert, nicht davor und nicht
+> danach, damit kein Stand existiert, in dem Test und Code sich widersprechen. Das ist die einzige
+> Stelle in E13, an der ein grüner Test bewusst umgedreht wird.
+> Der Endstand von E13 ist `pnpm test` ⇒ Exit `0` bei `224 passed | 2 skipped`. Betroffene
+> Produktionsdateien je Task:
 
 | Task        | Datei(en)                                                                                                 |
 | ----------- | --------------------------------------------------------------------------------------------------------- |
@@ -301,16 +308,28 @@ ausdrückliche Aufforderung.
 
 **Blockierend: nichts.** `JR-1303` kann beginnen.
 
-**Neu aus `JR-1301` (2026-07-29), nicht blockierend, aber vor der jeweiligen Task zu entscheiden:**
+**Vom PO am 2026-07-29 abgearbeitet — kein Vorlagebedarf mehr:** **F18** (ADR-017 und F7 um „für die
+Paare der heutigen Aufrufstellen" ergänzt, plus der F17-Nachtrag), **F21** (strenge Variante
+entschieden und in `JR-1306` festgeschrieben, die drei Pins werden im selben Commit invertiert),
+**F22** (`JR-1304`s Kriterium auf „kein Zweig wird stillschweigend weggelassen" umformuliert, mit der
+richtigen Gefahrenrichtung), **F17(a)** (`JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle
+existiert). **F19/F20** brauchten ohnehin keine Entscheidung und sind über die roten Tests Teil der
+Abnahme.
 
-| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F17**     | `predefined_end_user` und `predefined_read_only_user` werden in einer echten Installation nie angelegt. Zwei Fragen: (a) **`JR-1307`** muss das in die Prüfanleitung aufnehmen — ausgeliefert gibt es keine Read-Only-Rolle. (b) Soll der Bootstrap **repariert** werden? Das ist eine Produktänderung (welche Rollen liefert Open Archiver aus?), keine Härtung, und gehört nicht in E13. Entscheidung des Auftraggebers. |
-| **F18**     | ADR-017 und der F7-Eintrag um „für die Paare der heutigen Aufrufstellen" ergänzen. Rein redaktionell, aber die unbedingte Fassung wird falsch, sobald eine fünfte `FilterBuilder`-Aufrufstelle mit anderer Action dazukommt (`export archive` aus E11 ist der Kandidat).                                                                                                                                                   |
-| **F21**     | Reichweite der Allowlist aus `JR-1306` — nur Keys mit SQL-Syntax oder alle unbekannten? Vor `JR-1306` zu entscheiden, sonst wird der Fix rot gegen drei bestehende Pins.                                                                                                                                                                                                                                                   |
-| **F22**     | Formulierung des `JR-1304`-Kriteriums korrigieren: „lässt keinen Zweig stillschweigend weg" statt „erweitert die Disjunktion nicht mehr".                                                                                                                                                                                                                                                                                  |
-| **F19/F20** | Zwei weitere Fail-open-Formen in `FilterBuilder`. Kein Entscheidungsbedarf, aber sie erweitern den Umfang von `JR-1302` und `JR-1304` um je einen Fall. Beide sind rot und damit Teil der Abnahme.                                                                                                                                                                                                                         |
-| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                       |
+**Offen und wirklich beim Auftraggeber: nur `F17(b)`** — soll der Rollen-Bootstrap repariert werden?
+Das ist eine Produktentscheidung (welche Rollen liefert Open Archiver aus?), keine Härtung, und sie
+gehört nicht in E13. **Blockiert nichts.**
+
+**Restliche Punkte aus `JR-1301`, zur Kenntnis:**
+
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F17**     | (a) **Erledigt (PO):** `JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle existiert, und ADR-017 hat den Nachtrag. (b) **Offen beim Auftraggeber:** soll der Bootstrap repariert werden? Produktänderung, keine Härtung, nicht in E13. PO-Nachprüfung am Code bestätigt: `createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`, der Bootstrap kann danach nie mehr feuern. |
+| **F18**     | **Erledigt (PO).** ADR-017 hat einen Nachtrag: die Aussage gilt für die Paare der heutigen vier Aufrufstellen, nicht für jede (Action, Subject) je Rolle. Das Aufrufstellen-Inventar wacht darüber.                                                                                                                                                                                                                                             |
+| **F21**     | **Entschieden (PO): strenge Variante.** Abgewiesen wird jeder unbekannte Key, nicht nur einer mit SQL-Syntax; die drei Pins werden im selben Commit invertiert. Steht in `JR-1306`.                                                                                                                                                                                                                                                             |
+| **F22**     | **Erledigt (PO).** `JR-1304`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit dem Hinweis, dass die fail-open-Richtung im `$and` und bei leerer Zweigliste liegt, nicht im `$or`.                                                                                                                                                                                                                                     |
+| **F19/F20** | Zwei weitere Fail-open-Formen in `FilterBuilder`. Kein Entscheidungsbedarf, aber sie erweitern den Umfang von `JR-1302` und `JR-1304` um je einen Fall. Beide sind rot und damit Teil der Abnahme.                                                                                                                                                                                                                                              |
+| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                                            |
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
 

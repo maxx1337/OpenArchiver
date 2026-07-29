@@ -232,9 +232,17 @@ Formen: einen Nutzer **ohne jede Rolle** (F7a), eine handgeschriebene Policy mit
 `cannot`-Regeln auf `archive` (F7b), und eine handgeschriebene Rolle mit `can search archive` **ohne**
 `read archive` (der Action-Versatz, siehe ADR-017).
 
-Das ändert die Schwere **nicht**: F7a und F7b sind real, F7b ist die Form, in der jede
-scope-einschränkende Auditor-Policy aus E11 geschrieben würde, und ein Nutzer ohne Rolle entsteht
-schon durch das Löschen einer Rolle. Es korrigiert nur eine frühere, zu scharfe Aussage des PO, der
+**Zwei Präzisierungen aus `JR-1301` (2026-07-29)** — die Aussage oben gilt **für die
+(Action, Subject)-Paare der heutigen vier Aufrufstellen**, nicht für jedes Paar je Rolle (**F18**: über
+das volle Vokabular treffen `predefined_end_user` 39 und `predefined_read_only_user` 46 von 56 Paaren
+den Zweig). Und „ausgeliefert" trifft auf zwei der drei Rollen gar nicht zu (**F17**): der
+Rollen-Bootstrap läuft in einer echten Installation nie, es existiert nur `predefined_super_admin`.
+
+Das ändert die Schwere **nicht** — es erhöht sie praktisch. F7a und F7b sind real, ein Nutzer ohne
+Rolle entsteht schon durch das Löschen einer Rolle, und weil ausgeliefert **keine** Read-Only-Rolle
+existiert (F17), ist jeder eingeschränkte Nutzer eine handgeschriebene Policy in der Form von
+`auditor-specific-mailbox.json` — also in genau der Form, die F7 ins Gegenteil verkehrt. Das ist nicht
+der Ausnahmefall, sondern der einzige Weg, den ein Betreiber hat. Es korrigiert nur eine frühere, zu scharfe Aussage des PO, der
 Fix aus `JR-1302` „bräche Bestandsinstallationen": eine Standardinstallation mit den drei
 `predefined_*`-Rollen verhält sich vor und nach dem Fix gleich. Der Nachweis dafür ist der
 Integrationstest aus `JR-1301`, nicht diese Feststellung.
@@ -804,7 +812,8 @@ nicht erfüllt, solange sie so bleibt: ein widerrufenes `can` ist kein unbedingt
 **Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig (Arbeitsplanung, kein Defekt) ·
 **Ort:** `packages/backend/src/helpers/mongoToDrizzle.test.ts` (Suite „column name mapping"),
 `packages/backend/tests/fixtures/mongo-to-drizzle-golden.json` Fall „unknown relation key is emitted
-as one identifier containing a dot" · **Status:** offen — vor `JR-1306` zu entscheiden ·
+as one identifier containing a dot" · **Status:** **entschieden (PO, 2026-07-29)** — strenge Variante,
+in `JR-1306` festgeschrieben ·
 **Herkunft:** `JR-1301`
 
 `JR-1306` soll Condition-Keys „gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen".
@@ -819,6 +828,13 @@ Allowlist nur für Keys mit SQL-Syntax (dann bleiben die drei Pins gültig) oder
 Keys (dann gehören sie im selben Commit invertiert)? **Empfehlung:** die strenge Variante, mit
 Anpassung der drei Pins — ein unbekannter Key ist ein Policy-Fehler und trifft in SQL ohnehin keine
 Spalte, führt also entweder zu einem Laufzeitfehler oder zu einem falschen Ergebnis.
+
+**Entscheidung (PO, 2026-07-29): die strenge Variante, der Empfehlung folgend.** Sie war ohnehin schon
+im Aufgabentext von `JR-1306` angelegt — „ein unbekannter Key ist ohnehin ein Fehler und gehört
+fail-closed behandelt" lässt die milde Lesart nicht zu. Kein Vorlagebedarf beim Auftraggeber: für
+einen Betreiber ändert sich nur, dass ein Tippfehler in einer Policy künftig beim Anlegen auffällt
+statt stillschweigend eine Regel ohne Wirkung zu erzeugen. Die drei Pins werden im selben Commit wie
+der Fix invertiert, damit kein Zwischenstand existiert, in dem Test und Code sich widersprechen.
 
 ## F22 — F3s `$or`-Beispiel beschreibt die Wirkungsrichtung falsch
 
