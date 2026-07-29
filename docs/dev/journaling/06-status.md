@@ -823,17 +823,121 @@ in ein Test-Epic.
 
 **Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`.
 
-|     | Task                                                                                                                                | Rolle     |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| [x] | JR-1301 Fehlschlagende Regressionstests für F1/F3/F7/F8 — **erledigt 2026-07-29**                                                   | TEST      |
-| [x] | JR-1303 Action-Versatz auflösen (ADR-017, Variante B) — `bcac6bd`                                                                   | DEV       |
-| [x] | JR-1302 `FilterBuilder`: `null` als deny (mit F19, F20) — `a309fd1`                                                                 | DEV       |
-| [~] | JR-1304 `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen — `45ac0e9`, 6 von 7 Tests grün, 1 Testwiderspruch offen | DEV       |
-| [x] | JR-1305 `cannot`-Ausschluss mit Operator-Bedingungen korrekt bauen — `2311996`                                                      | DEV       |
-| [x] | JR-1306 Condition-Keys gegen eine Allowlist prüfen — `dcec017`                                                                      | DEV       |
-| [ ] | JR-1307 Verhaltensänderung dokumentieren (ADR-016)                                                                                  | DEV       |
-| [ ] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden)                                                                              | PO        |
-| [ ] | JR-1309 Abnahme E13                                                                                                                 | TEST → PO |
+|     | Task                                                                                                                                               | Rolle     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| [x] | JR-1301 Fehlschlagende Regressionstests für F1/F3/F7/F8 — **erledigt 2026-07-29**                                                                  | TEST      |
+| [x] | JR-1303 Action-Versatz auflösen (ADR-017, Variante B) — `bcac6bd`                                                                                  | DEV       |
+| [x] | JR-1302 `FilterBuilder`: `null` als deny (mit F19, F20) — `a309fd1`                                                                                | DEV       |
+| [x] | JR-1304 `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen — `45ac0e9`; der Testwiderspruch ist in `704e8d1` per ADR-018 aufgelöst | DEV       |
+| [x] | JR-1305 `cannot`-Ausschluss mit Operator-Bedingungen korrekt bauen — `2311996`                                                                     | DEV       |
+| [x] | JR-1306 Condition-Keys gegen eine Allowlist prüfen — `dcec017`                                                                                     | DEV       |
+| [x] | JR-1307 Verhaltensänderung dokumentieren (ADR-016) — **erledigt 2026-07-29**                                                                       | DEV       |
+| [ ] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden)                                                                                             | PO        |
+| [ ] | JR-1309 Abnahme E13                                                                                                                                | TEST → PO |
+
+### E13 — `JR-1307` erledigt (2026-07-29, Rolle `senior-dev`)
+
+Zwei Lieferungen, **kein Produktionscode, keine Teständerung, keine Migration**.
+
+**1. ADR-016 geschrieben**, der Platzhalter in `05-entscheidungen.md` ist ersetzt. Die Nummernlücke
+zwischen ADR-015 und ADR-017 bleibt inhaltlich erklärt (der Hinweis „nicht umnummerieren" steht jetzt
+im ADR selbst statt im Platzhalter). Kern des Arguments, wie vom PO vorgegeben: nicht „Sicherheit geht
+vor", sondern **„kein Recht auf dieses Subject" und „darf alles sehen" wurden vom selben Wert
+dargestellt, und der unsichere war der Default** — in diesem Zustand ist keine Zugriffsaussage über
+das Archiv belegbar. Verworfene Alternative („Verhalten beibehalten und nur dokumentieren", auch als
+Schalter) mit dem konkreten Grund: **E11s Auditor-Rolle ist auf genau diesen Mechanismus gebaut**,
+E11 wäre mit dem alten Verhalten nicht abnehmbar.
+
+**2. Betreiberdoku in der öffentlichen Doku, englisch (ADR-003):**
+
+| Datei                                                              | Rolle                                                                                                       |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `docs/user-guides/upgrade-and-migration/access-control-changes.md` | **neu** — Release-Hinweis plus Prüfanleitung mit drei SQL-Abfragen                                          |
+| `docs/.vitepress/config.mts`                                       | Sidebar-Eintrag unter „Upgrading and Migration" (eine unverlinkte Seite wäre erreichbar, aber unauffindbar) |
+| `docs/services/iam-service/iam-policy.md`                          | zwei neue Abschnitte: „Condition Keys" und „When No Rule Applies", mit Verweis auf die Upgrade-Seite        |
+
+**Warum diese Ablage:** die Prüfung findet **vor** einem Update statt, also gehört sie in die
+Sidebar-Sektion, die ein Betreiber genau dann öffnet („Upgrading and Migration") — nicht in die
+Service-Referenz, die man beim Schreiben einer Policy liest. Umgekehrt musste `iam-policy.md`
+angefasst werden, weil dort die Semantik steht, die sich geändert hat: die Seite beschrieb bisher
+nicht, was passiert, wenn **keine** Regel greift. Wer nur die Upgrade-Seite gelesen hätte, hätte die
+Regel beim nächsten Policy-Schreiben nicht wiedergefunden.
+
+**Was die Anleitung nennt** — alle sieben Verhaltensänderungen, jede mit der betroffenen Policy-Form
+und einer Handlungsanweisung: (1) kein `can` ⇒ deny, mit den drei Formen (Nutzer ohne Rolle als
+Query 1, `cannot`-only, `search` ohne `read`); (2) unbedingtes `cannot` ⇒ deny; (3) `conditions: {}`
+⇒ deny; (4) Suche filtert über `search` statt `read`; (5) `cannot` mit Operator schließt jetzt
+**wirklich** aus, Nutzer sehen also **weniger** Zeilen (aus `JR-1305`/F8 — nicht in der
+Handover-Liste, aber betreibersichtbar); (6) Condition-Keys gegen die Form geprüft, `400` beim
+Speichern, Fehler zur Abfragezeit bei Bestandsrollen; (7) unübersetzbare Bedingung ⇒ Fehler statt
+stillschweigend falschem Ergebnis (ADR-018).
+
+**Ausdrücklich als Restspalt benannt** (ADR-019): ein Key, der nur die Spaltenexistenz verletzt, wird
+von der Anwendung **nicht** geprüft. Eigener Abschnitt „What is still not checked" plus Query 3, die
+diese Prüfung selbst vornimmt — mit dem Satz „The application does **not** perform this check. The
+query does, and only for those two subjects." Nichts ist als „vollständig geprüft" dargestellt.
+
+**F17 aufgenommen:** ein eigener Abschnitt sagt, dass in einer frischen Installation **nur** die
+Super-Admin-Rolle existiert, dass die anderen beiden `predefined_*`-Policies Vorlagen in der Doku und
+keine Datenbankzeilen sind, und dass eine fehlende Read-Only-Rolle **kein Fehler der Installation**
+ist. Derselbe Abschnitt hält fest, dass keine der `predefined_*`-Rollen betroffen ist — mit dem
+Beleg, dass ein automatisierter Test das gegen eine echte Datenbank prüft, ohne Dateinamen zu nennen.
+**Keine Pauschalwarnung.**
+
+**Die Prüf-SQL ist gegen echtes Postgres ausgeführt**, nicht nur geschrieben — PostgreSQL 16.13,
+lokaler Cluster ohne Docker. Vorgehen: `roles`/`users`/`user_roles` nach dem Drizzle-Schema angelegt,
+14 Rollen eingespielt (die drei `predefined_*`, zehn absichtlich betroffene, eine unbetroffene
+Gegenprobe), dazu sieben Randfälle. Die veröffentlichten Blöcke wurden **aus der Markdown-Datei
+extrahiert und wörtlich ausgeführt**, nicht aus dem Entwurf.
+
+```
+Query 2 — 10 von 10 betroffenen Rollen gemeldet, je mit Regelnummer:
+ Auditor prohibition only | prohibition without a matching grant         | read archive is forbidden by rule #1, but no rule grants it
+ Auditor prohibition only | prohibition without a matching grant         | search archive is forbidden by rule #1, but no rule grants it
+ Blanket revoke           | prohibition without conditions               | rule #2 forbids read archive and carries no condition
+ Empty branch list        | condition branch list is empty               | rule #1: $or has no branches
+ Empty conditions         | empty conditions object                      | rule #1 (can read archive) has "conditions": {}
+ Injection shaped key     | condition key is not a column reference      | rule #1: key "userEmail\" is not null or \"id"
+ Operator prohibition     | prohibition with an operator condition       | rule #2 uses the operator $in inside a "cannot" condition
+ Regex condition          | unsupported condition operator               | rule #1: operator "$regex"
+ Search without read      | archive search granted without archive read  | search archive is granted, read archive is not
+ Unknown relation key     | condition key names an unresolvable relation | rule #1: key "attachment.name" (…)
+
+Query 3 — der Restspalt, den die Anwendung nicht prüft:
+ Typo in column name | 1 | archive | userEmial | archived_emails | user_emial
+
+Query 1 — Nutzer ohne Rolle:  orphan@example.com
+```
+
+**Die drei `predefined_*`-Rollen und die unbetroffene Gegenprobe erscheinen in keiner Ausgabe** — das
+ist der Grund, warum die Anleitung ohne Pauschalwarnung auskommen kann. Die Randfälle sind ebenfalls
+geprüft: ein Skalar als Policy-Element, ein leeres `policies`-Array, `manage`/`all` als
+**einelementiges Array** (kein Falschtreffer), `a.b.c`, `$nor`, `$not` um eine Operator-Bedingung,
+`conditions: null` an einem `cannot`. Kein Fehler, kein Falschtreffer.
+
+**Belege:**
+
+```
+pnpm lint                                  → All matched files use Prettier code style!
+pnpm docs:build                            → build complete in 19.46s
+ls -d docs/.vitepress/dist/dev             → No such file or directory   (srcExclude greift)
+docs/.vitepress/dist/user-guides/upgrade-and-migration/access-control-changes.html vorhanden
+DATABASE_URL=… OA_TEST_REQUIRE_INFRA=1 pnpm test
+  Test Files  16 passed (16)
+       Tests  224 passed | 2 skipped (226)     EXIT=0
+```
+
+**Kein neuer i18n-Key** — die Doku enthält keine UI-Zeichenkette, und es wurde keine Meldung im
+Produktionscode geändert. Keine `JR-*`-ID, keine F-Nummer und kein Ausnutzungsbeispiel in der
+öffentlichen Doku; keine Compliance-Behauptung. `docs/api/openapi.json` ist durch `docs:build`
+**nicht** verändert worden (`git status` sauber für diese Datei).
+
+**Ein Befund beim Schreiben, nicht behoben (Auftrag: melden):** `docs/services/iam-service/iam-policy.md`
+listet in „Actions" die Action `export` weiterhin nicht und beschreibt `manage` als Expansion auf
+`create/read/update/delete/search/sync` statt als echten Wildcard — das ist die in `CLAUDE.md` §5.4
+benannte stale Stelle (3) des Permission-Vokabulars. Sie liegt in derselben Datei, die `JR-1307`
+angefasst hat, gehört aber nicht zu dieser Task. **Vorschlag an den PO:** eigene, nur
+dokumentarische Task; die Quellen (1) und (2) sind bereits einig, es ist reine Doku-Nacharbeit.
 
 ### E13 — Grün-Lauf der Fixes `JR-1302`–`JR-1306` (2026-07-29, Rolle `senior-dev`)
 
@@ -1146,3 +1250,4 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 | 2026-07-29 | **Befunde aus `JR-1301` durch den PO abgearbeitet, damit DEV nicht auf Entscheidungen wartet.** Zwei Aussagen von ADR-017 waren zu weit gefasst und sind per **Nachtrag** korrigiert: sie gelten **je Aufrufstelle, nicht je Rolle** (F18 — über das volle Vokabular treffen 39 bzw. 46 von 56 Paaren den `null`-Zweig), und „ausgeliefert" trifft auf zwei der drei Rollen gar nicht zu (F17). Die **Entscheidung Variante B bleibt** und ist durch `predefined-roles.int.test.ts` jetzt belegt statt hergeleitet. **F17 am Code nachgeprüft und bestätigt** (`createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`): **F7s praktische Schwere steigt** — ausgeliefert existiert keine Read-Only-Rolle, jeder eingeschränkte Nutzer ist eine handgeschriebene Policy in der Form, die F7 unwirksam macht. **F21 entschieden: strenge Allowlist** — abgewiesen wird jeder unbekannte Key, nicht nur einer mit SQL-Syntax; die drei betroffenen grünen Pins werden im selben Commit wie der Fix invertiert (die einzige Stelle in E13, an der ein grüner Test bewusst umgedreht wird). **F22** eingearbeitet: `JR-1304`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit der richtigen Gefahrenrichtung (`$and` und leere Zweigliste, nicht `$or`). **F17(a)** in `JR-1307` aufgenommen. Offen beim Auftraggeber bleibt allein **F17(b)** — Rollen-Bootstrap reparieren? Produktentscheidung, nicht E13, blockiert nichts. Nur Dokumentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `JR-1303`, dann `JR-1302`/`JR-1304`/`JR-1305`/`JR-1306` (Rolle DEV)                                        |
 | 2026-07-29 | **`JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` erledigt (Rolle `senior-dev`).** Produktionscode in vier Dateien, sonst nichts: `SearchService.ts` (ADR-017 B, Zeilen 311/423 auf `'search'`), `FilterBuilder.ts` (`null` ⇒ deny, unbedingtes `cannot` ⇒ deny (F20), `undefined` vom Übersetzer ⇒ deny (F19), `cannot`-Ausschluss über `$not` statt `$ne` (F8)), `mongoToDrizzle.ts` (unübersetzbare Bedingungen werfen, Key-Allowlist, `sql.raw` entfernt), `policy-validator.ts` (Condition-Keys werden beim Anlegen geprüft, rekursiv auch in `$or`/`$and`/`$not`). Keine Migration, kein i18n-Key, `mongoToMeli.ts` unberührt. **20 von 21 roten Tests grün, 0 Regressionen** — maschinell belegt über zwei `--reporter=json`-Läufe und einen Statusdiff je Testname, nicht durch Zählen. Der eine verbleibende rote Test war **kein fehlender Fix**, sondern ein Widerspruch zwischen zwei `JR-1301`-Erwartungen mit demselben `RED UNTIL`-Tag; DEV hat ihn korrekt **nicht** angefasst und vorgelegt. Zwei benannte Abweichungen: die Key-Allowlist prüft Form und Relation statt Spaltenexistenz (⇒ ADR-019, `JR-1311`), und ein gefilterter `-t`-Lauf hinterlässt Testdatenbanken (⇒ **F24**, nach `JR-105c`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Testwiderspruch entscheiden, dann `JR-1307`/`JR-1308`, dann Abnahme `JR-1309`                              |
 | 2026-07-29 | **Testwiderspruch entschieden (ADR-018) und aufgelöst — E13s Suite ist grün: `224 passed \| 2 skipped`, Exit 0.** Entscheidung des PO: die Unit-Erwartung gilt, ein unübersetzbarer Zweig wird **verweigert** statt durch ein never-true-Prädikat je Zweig ersetzt — dieses kippt unter `$not` zu `not(false)` = wahr und verliert ein Verbot. Der Tester hat alle drei Begründungen **nachgemessen statt übernommen** und eine davon verstärkt: die beiden Erwartungen sind unter **jeder** Implementierung unvereinbar, weil keine prinzipielle Regel `{id:'a'}` anders behandelt als `{userEmail:…}`. Korrektur in `704e8d1`, **in beide Richtungen mutationsgeprüft**. **Dabei eine eigene Aussage des PO korrigiert:** „im `$or` nur verengend" (F22) gilt nur oben in einer `can`-Komposition — unter dem `$not`, wohin `FilterBuilder.ts:84` jede `cannot`-Bedingung setzt, ist derselbe Wegfall **fail-open**. `JR-1304`s Kriterium und F22 sind entsprechend berichtigt. Neu: **ADR-018**, **ADR-019**, **`JR-1311`**, **F24**. **E13 ist damit implementiert, aber nicht abgenommen** — `JR-1307`, `JR-1308`, `JR-1309` stehen aus, `JR-1309` muss in einer eigenen Session laufen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `JR-1307` (Betreiberdoku + ADR-016) und `JR-1308` (Upstream-Entwurf), dann `JR-1309`                       |
+| 2026-07-29 | **`JR-1307` erledigt (Rolle `senior-dev`): ADR-016 plus Betreiberdoku.** ADR-016 ersetzt den Platzhalter und begründet den Bruch nicht mit „Sicherheit geht vor", sondern damit, dass „kein Recht auf dieses Subject" und „darf alles sehen" vom **selben Wert** dargestellt wurden und der unsichere der Default war — ein Zustand ohne belegbare Zugriffsaussage über das Archiv. Verworfen: Verhalten beibehalten und nur dokumentieren (auch als Schalter), weil **E11s Auditor-Rolle auf genau diesem Mechanismus aufsetzt**. Die Betreiberdoku ist neu in `docs/user-guides/upgrade-and-migration/access-control-changes.md` (englisch, ADR-003, in der Sidebar verlinkt): sieben benannte Verhaltensänderungen, F17 („ausgeliefert existiert nur die Super-Admin-Rolle — eine fehlende Read-Only-Rolle ist kein Fehler der Installation"), der ADR-019-Restspalt als eigener Abschnitt „What is still not checked", **keine** Pauschalwarnung. Herzstück sind drei SQL-Abfragen gegen `roles.policies`, `users` und `user_roles`, **gegen echtes Postgres 16.13 ausgeführt** — aus der Markdown-Datei extrahiert und wörtlich gelaufen: 10 von 10 absichtlich betroffenen Rollen gemeldet, die drei `predefined_*` und die Gegenprobe in **keiner** Ausgabe, sieben Randfälle ohne Fehler und ohne Falschtreffer. `iam-policy.md` hat zwei neue Abschnitte („Condition Keys", „When No Rule Applies"), weil dort die geänderte Semantik nachgeschlagen wird. **Kein Produktionscode, keine Teständerung, keine Migration, kein i18n-Key.** `pnpm lint` grün, `pnpm docs:build` grün, `docs/.vitepress/dist/dev/` existiert weiterhin nicht, `pnpm test` `224 passed \| 2 skipped`, Exit 0. Gemeldet, nicht behoben: `iam-policy.md` führt die Action `export` weiterhin nicht und beschreibt `manage` falsch (`CLAUDE.md` §5.4, stale Stelle (3)) — Vorschlag: eigene Doku-Task.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
