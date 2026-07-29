@@ -35,6 +35,12 @@ interface GoldenCase {
 	 * outcomes are defined in `tests/support/fail-closed.ts`. Mutually exclusive with `sql`.
 	 */
 	mustFailClosed?: boolean;
+	/**
+	 * JR-1306: the condition **key** is not a column reference the translator can resolve, so the
+	 * whole condition must be refused. Kept apart from `mustFailClosed` so that the F3 case count
+	 * asserted below still counts F3 cases. Mutually exclusive with `sql`.
+	 */
+	mustRefuseKey?: boolean;
 	observedBeforeE13?: string;
 	note?: string;
 }
@@ -46,8 +52,11 @@ suite('ci', 'mongoToDrizzle() -- golden file', () => {
 		expect(golden.cases.length).toBeGreaterThanOrEqual(20);
 	});
 
-	const translationCases = golden.cases.filter((entry) => !entry.mustFailClosed);
+	const translationCases = golden.cases.filter(
+		(entry) => !entry.mustFailClosed && !entry.mustRefuseKey
+	);
 	const failClosedCases = golden.cases.filter((entry) => entry.mustFailClosed);
+	const refuseKeyCases = golden.cases.filter((entry) => entry.mustRefuseKey);
 
 	it.each(translationCases.map((entry) => [entry.name, entry] as const))(
 		'translates %s',
@@ -90,6 +99,21 @@ suite('ci', 'mongoToDrizzle() -- golden file', () => {
 			expectFailClosed(`golden case "${entry.name}"`, () => mongoToDrizzle(entry.query));
 		}
 	});
+
+	/**
+	 * JR-1306 (finding F21, strict allowlist). The case this covers used to be a *translating* case
+	 * in the golden file: `{ 'foo.bar': 'x' }` rendered `"foo.bar" = $1`. It was inverted in the
+	 * same commit as the fix, and `observedBeforeE13` records what it rendered before, so the change
+	 * of expectation is legible from the fixture alone.
+	 */
+	it.each(refuseKeyCases.map((entry) => [entry.name, entry] as const))(
+		'refuses %s',
+		(_name, entry) => {
+			expect(() => mongoToDrizzle(entry.query), entry.name).toThrow(
+				/not resolvable|not a column reference/
+			);
+		}
+	);
 });
 
 suite('ci', 'mongoToDrizzle() -- operator translation', () => {
@@ -282,8 +306,15 @@ suite('ci', 'mongoToDrizzle() -- column name mapping', () => {
 		expect(render({ 'ingestionSource.status': 'active' })!.sql).toBe(
 			'"ingestion_sources"."status" = $1'
 		);
-		// Not in the map: emitted verbatim as a single quoted identifier containing a dot.
-		expect(render({ 'attachment.name': 'x' })!.sql).toBe('"attachment.name" = $1');
+		// INVERTED in JR-1306 (finding F21, decided by the PO 2026-07-29: strict allowlist).
+		// Until then this line pinned the observed behaviour -- a relation that is not in the map
+		// was emitted verbatim as one quoted identifier containing a dot
+		// (`"attachment.name" = $1`), which names no column and therefore fails at query time for
+		// every caller instead of denying access. A key whose relation cannot be resolved is a
+		// policy error and is now refused.
+		expect(() => mongoToDrizzle({ 'attachment.name': 'x' })).toThrow(
+			/not resolvable|not a column reference/
+		);
 	});
 });
 
@@ -314,11 +345,14 @@ suite('ci', 'mongoToDrizzle() -- column name mapping', () => {
  * If the senior developer picks escaping after all, that is a change of decision and needs an ADR,
  * not a quiet edit of this expectation.
  *
- * What these tests deliberately do NOT assert: that a merely *unknown but syntactically harmless*
- * key (`foo.bar`, `attachment.name`) is rejected. `JR-1306`'s criterion is about the injection.
- * A strict allowlist would reject those too and would then contradict the two pins in the
- * "column name mapping" suite above and golden case "unknown relation key is emitted as one
- * identifier containing a dot" -- see finding F21.
+ * Finding F21 -- decided by the PO on 2026-07-29 in favour of the **strict** allowlist: an unknown
+ * key is refused whether or not it carries SQL syntax. The two pins that recorded the permissive
+ * behaviour for `attachment.name` (in the "column name mapping" suite above) and for `foo.bar` (in
+ * the golden file) were inverted in the same commit as the fix, so no state exists in which test
+ * and code disagree. What the allowlist checks is the *shape* of the key plus the relation table:
+ * a bare identifier passes, a dotted key passes only for a relation listed in
+ * `relationToTableMap`. It does not check that the column exists -- `mongoToDrizzle` has no table
+ * context, which is why `a`, `b` and `n` are still translatable above.
  */
 suite('ci', 'mongoToDrizzle() -- FINDING F1: unescaped condition keys', () => {
 	/** Keys that inject SQL through `sql.identifier()` / `sql.raw()`. */

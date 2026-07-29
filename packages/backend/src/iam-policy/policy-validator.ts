@@ -23,6 +23,15 @@ const validSubjects: Set<AppSubjects> = new Set([
 ]);
 
 /**
+ * A condition key is a column reference: one or more dot-separated identifier segments
+ * (`userEmail`, `ingestionSource.userId`).
+ */
+const CONDITION_KEY_SEGMENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** A MongoDB-style operator key (`$or`, `$in`, ...). Never rendered as an identifier. */
+const CONDITION_OPERATOR_KEY = /^\$[A-Za-z][A-Za-z0-9]*$/;
+
+/**
  * @class PolicyValidator
  *
  * This class provides a static method to validate a CASL policy.
@@ -65,7 +74,67 @@ export class PolicyValidator {
 			}
 		}
 
-		// 3. (Optional) Validate Conditions, Fields, etc. in the future if needed.
+		// 3. Validate condition keys.
+		if (policy.conditions) {
+			const { valid, reason } = this.areConditionKeysValid(policy.conditions);
+			if (!valid) {
+				return { valid: false, reason };
+			}
+		}
+
+		return { valid: true, reason: 'valid' };
+	}
+
+	/**
+	 * Refuses a `conditions` object whose keys cannot be a column reference.
+	 *
+	 * This is the half of finding F1 that matters operationally. `mongoToDrizzle` builds the column
+	 * reference of a scoped query from the condition key, so a key carrying SQL syntax ends up in
+	 * the `WHERE` clause of every query `FilterBuilder` scopes. `mongoToDrizzle` refuses such a key
+	 * as well, but only at query time; this is the one place where the policy can be refused before
+	 * it is ever stored, and `iam.controller.ts` rejects `createRole`/`updateRole` with 400 when it
+	 * is.
+	 *
+	 * What is deliberately **not** checked here: whether the key names a column that exists. The
+	 * validator has no table context -- the same policy statement can be written for several
+	 * subjects -- and a name check belongs where the table is known. `mongoToDrizzle` is where the
+	 * relation allowlist lives.
+	 *
+	 * Operator keys are recursed through rather than validated as identifiers: they are never
+	 * rendered as an identifier, and an unknown operator is refused by both translators.
+	 */
+	private static areConditionKeysValid(value: unknown): { valid: boolean; reason: string } {
+		if (Array.isArray(value)) {
+			for (const entry of value) {
+				const result = this.areConditionKeysValid(entry);
+				if (!result.valid) {
+					return result;
+				}
+			}
+			return { valid: true, reason: 'valid' };
+		}
+
+		if (typeof value !== 'object' || value === null) {
+			return { valid: true, reason: 'valid' };
+		}
+
+		for (const key of Object.keys(value)) {
+			const isOperator = key.startsWith('$')
+				? CONDITION_OPERATOR_KEY.test(key)
+				: key.split('.').every((segment) => CONDITION_KEY_SEGMENT.test(segment));
+			if (!isOperator) {
+				return {
+					valid: false,
+					reason:
+						`Condition key '${key}' is not a valid column reference. A condition key ` +
+						`must be one or more dot-separated identifiers, or a MongoDB operator.`,
+				};
+			}
+			const result = this.areConditionKeysValid((value as Record<string, unknown>)[key]);
+			if (!result.valid) {
+				return result;
+			}
+		}
 
 		return { valid: true, reason: 'valid' };
 	}

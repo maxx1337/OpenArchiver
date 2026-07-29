@@ -40,13 +40,13 @@
 			"params": ["u"]
 		},
 		{
-			"name": "unknown relation key is emitted as one identifier containing a dot",
+			"name": "unknown relation key must fail closed",
 			"query": {
 				"foo.bar": "x"
 			},
-			"sql": "\"foo.bar\" = $1",
-			"params": ["x"],
-			"note": "There is no column literally named foo.bar; Postgres would reject this at query time rather than at policy-save time."
+			"mustRefuseKey": true,
+			"observedBeforeE13": "\"foo.bar\" = $1 (one quoted identifier containing a dot)",
+			"note": "INVERTED in JR-1306 (finding F21, decided by the PO 2026-07-29: strict allowlist). This case used to pin the emitted identifier. There is no column literally named foo.bar, so the old behaviour made every FilterBuilder-scoped query fail at runtime instead of denying access; an unresolvable relation is a policy error and is refused. Marked `mustRefuseKey` and not `mustFailClosed` so that the count of F3 cases stays what JR-1301 set it to."
 		},
 		{
 			"name": "$eq",

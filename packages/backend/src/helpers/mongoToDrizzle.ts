@@ -21,17 +21,46 @@ function refuse(reason: string): never {
 	throw new Error(`mongoToDrizzle: ${reason}`);
 }
 
+/**
+ * The shape a condition key has to have before it may become a column reference.
+ *
+ * Escaping was not an option: drizzle's Postgres dialect renders an identifier as
+ * `` `"${name}"` `` without doubling an embedded double quote (`pg-core/dialect.js`), and the
+ * relation branch used `sql.raw`, which escapes nothing at all. A condition key containing a `"`
+ * therefore wrote raw SQL into the `WHERE` clause of every `FilterBuilder`-scoped query (finding
+ * F1). Escaping the quote would close the injection but would name a column that does not exist,
+ * so every scoped query would fail at runtime instead of denying access. An allowlist is the
+ * stronger answer: an unknown key is a policy error, and a policy error belongs fail-closed.
+ */
+const COLUMN_KEY_SEGMENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 function getDrizzleColumn(key: string): SQL {
 	const keyParts = key.split('.');
-	if (keyParts.length > 1) {
-		const relationName = keyParts[0];
-		const columnName = camelToSnakeCase(keyParts[1]);
+
+	if (keyParts.length === 2) {
+		const [relationName, columnKey] = keyParts;
 		const tableName = relationToTableMap[relationName];
-		if (tableName) {
-			return sql.raw(`"${tableName}"."${columnName}"`);
+		if (!tableName) {
+			refuse(
+				`condition key ${JSON.stringify(key)} names the relation ` +
+					`${JSON.stringify(relationName)}, which is not resolvable. Resolvable relations: ` +
+					`${Object.keys(relationToTableMap).join(', ')}`
+			);
 		}
+		if (!COLUMN_KEY_SEGMENT.test(columnKey)) {
+			refuse(`condition key ${JSON.stringify(key)} is not a column reference`);
+		}
+		// `sql.identifier` on both halves rather than `sql.raw` on the whole thing: the table name
+		// comes from the map above, the column name has just been validated, and neither is
+		// interpolated as raw SQL any more.
+		return sql`${sql.identifier(tableName)}.${sql.identifier(camelToSnakeCase(columnKey))}`;
 	}
-	return sql`${sql.identifier(camelToSnakeCase(key))}`;
+
+	if (keyParts.length === 1 && COLUMN_KEY_SEGMENT.test(key)) {
+		return sql`${sql.identifier(camelToSnakeCase(key))}`;
+	}
+
+	refuse(`condition key ${JSON.stringify(key)} is not a column reference`);
 }
 
 export function mongoToDrizzle(query: Record<string, any>): SQL {
