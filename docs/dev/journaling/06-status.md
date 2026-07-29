@@ -6,8 +6,18 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-29 (ADR-017 entschieden) · **Branch:**
-`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch)
+**Letzte Aktualisierung:** 2026-07-29 (`JR-1301` erledigt) · **Branch:**
+`claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt bei `efea6bc`)
+
+> **`JR-1301` ist erledigt (2026-07-29, Rolle `tester`). Der Epic-Branch ist absichtlich rot: 21
+> fehlschlagende Tests, `pnpm test` ⇒ Exit 1.** Das ist der Beleg, nicht eine Panne — E13s
+> Reihenfolge ist rot → Fix → grün, und ein Test, der nie rot war, belegt nichts. `ci.yml` läuft auf
+> `push`, der Branch zeigt also rote Läufe, bis `JR-1302`/`JR-1303`/`JR-1304`/`JR-1305`/`JR-1306`
+> gelandet sind. **Niemand „reparieren" durch Abschwächen der Tests.** Details unter „E13 — Rot-Läufe
+> `JR-1301`" weiter unten.
+>
+> **ADR-017s Wirkungsanalyse hält** — jetzt belegt statt hergeleitet, mit zwei benannten
+> Einschränkungen (**F17**, **F18**). Sieben neue Befunde: **F17–F23**.
 
 > **ADR-017 ist entschieden (2026-07-29, Auftraggeber): Variante B.** `SearchService.ts:311` und
 > `:423` rufen künftig `FilterBuilder.create(userId, 'archive', 'search')`; `search.routes.ts` bleibt
@@ -52,7 +62,7 @@ eingeschoben (siehe `03-backlog.md`).
 | ----------- | ---- | ---------------------------------- | ---------------------------------------------------------------- | --------------- |
 | —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                       | 6 / 6           |
 | 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2) | 9 / 10          |
-| 2           | E13  | IAM-Autorisierung härten           | offen                                                            | 0 / 9           |
+| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — `JR-1301` erledigt, Branch absichtlich rot       | 1 / 9           |
 | 3           | E2   | Ledger und Hash-Chain              | offen                                                            | 0 / 10          |
 | 4           | E3   | Spool und Acceptance-Contract      | offen                                                            | 0 / 8           |
 | 5           | E4   | `smtp-ingress`-Service             | offen                                                            | 0 / 13          |
@@ -788,6 +798,159 @@ in ein Test-Epic.
 
 ---
 
+## E13 — IAM-Autorisierung härten (in Arbeit)
+
+**Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`.
+
+|     | Task                                                                              | Rolle     |
+| --- | --------------------------------------------------------------------------------- | --------- |
+| [x] | JR-1301 Fehlschlagende Regressionstests für F1/F3/F7/F8 — **erledigt 2026-07-29** | TEST      |
+| [ ] | JR-1303 Action-Versatz auflösen (ADR-017, Variante B)                             | DEV       |
+| [ ] | JR-1302 `FilterBuilder`: `null` als deny                                          | DEV       |
+| [ ] | JR-1304 `mongoToDrizzle`: unübersetzbare Bedingungen laut scheitern lassen        | DEV       |
+| [ ] | JR-1305 `cannot`-Ausschluss mit Operator-Bedingungen korrekt bauen                | DEV       |
+| [ ] | JR-1306 Condition-Keys gegen eine Allowlist prüfen                                | DEV       |
+| [ ] | JR-1307 Verhaltensänderung dokumentieren (ADR-016)                                | DEV       |
+| [ ] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden)                            | PO        |
+| [ ] | JR-1309 Abnahme E13                                                               | TEST → PO |
+
+### E13 — Rot-Läufe `JR-1301` (2026-07-29)
+
+**Der Branch ist rot, und das ist das Ergebnis.** Die Vorgängertests hielten F1/F3/F7/F8 als
+_bestanden_ fest — ein grüner Test, der eine Sicherheitslücke beschreibt, lässt sie vermessen
+aussehen. Sie fordern jetzt den gewünschten Zustand.
+
+**Kommando und Ausgabe (lokaler PostgreSQL-16.13-Cluster, danach restlos entfernt):**
+
+```
+DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
+```
+
+```
+[TEST-INVENTORY] unit: 7 file(s) (min 7) · integration: 8 file(s) (min 8) · adversarial: 1 file(s) (min 1) · unclassified: 0
+ Test Files  6 failed | 10 passed (16)
+      Tests  21 failed | 203 passed | 2 skipped (226)
+EXIT=1
+```
+
+Zum Vergleich der Ausgangsstand auf `efea6bc`, gleiches Kommando: `10 passed`,
+`197 passed | 2 skipped`, Exit `0`. Der Zuwachs an grünen Tests (197 → 203) kommt aus den
+Gegenproben, der Zuwachs an roten aus den Anforderungen.
+
+**21 rote Tests, jeder einer DEV-Task zugeordnet.** Das Titelpräfix `RED UNTIL JR-13xx` steht im
+Testnamen, ist also im Lauf sichtbar und filterbar (`pnpm test -t "RED UNTIL JR-1302"`).
+
+| Task        | Rot | Datei(en)                                                                                                                                                       |
+| ----------- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JR-1302** | 5   | `tests/integration/filter-builder-f7.int.test.ts` (4), `tests/integration/filter-builder-f1-f3.int.test.ts` (1, F20)                                            |
+| **JR-1303** | 1   | `tests/unit/filter-builder-call-sites.test.ts`                                                                                                                  |
+| **JR-1304** | 7   | `src/helpers/mongoToDrizzle.test.ts` (5, davon 3 aus der Golden-Datei), `tests/integration/filter-builder-f1-f3.int.test.ts` (2, davon 1 = F19)                 |
+| **JR-1305** | 3   | `tests/integration/filter-builder-f8.int.test.ts` (`$in`, `$nin`, `$gte`)                                                                                       |
+| **JR-1306** | 5   | `src/helpers/mongoToDrizzle.test.ts` (2), `src/iam-policy/policy-validator.f1-conditions.test.ts` (2), `tests/integration/filter-builder-f1-f3.int.test.ts` (1) |
+
+**Kein Opt-out-Mechanismus, bewusst.** Es gibt kein `it.skip`, kein `it.fails`, keine
+Umgebungsvariable, die die roten Tests grün oder still macht. Jeder solche Schalter ist ein Hebel, um
+das Epic fertig aussehen zu lassen, während der Defekt offen ist — und genau diese Fehlerform hat
+`JR-1301` gerade beseitigt. Die Isolation, die man tatsächlich braucht, liefert vitest schon: ein
+fehlschlagender Fall macht seinen eigenen Fall rot, die übrigen 15 Dateien laufen und berichten
+weiter. `it.fails` ist zusätzlich untauglich: es meldet **grün**, solange der Defekt besteht.
+
+**Neue und geänderte Dateien:**
+
+| Datei                                                                    | Klasse | Rolle                                                                               |
+| ------------------------------------------------------------------------ | ------ | ----------------------------------------------------------------------------------- |
+| `packages/backend/tests/support/fail-closed.ts`                          | —      | gemeinsamer Fail-closed-Vertrag (`expectFailClosed`, `redUntil`, …)                 |
+| `packages/backend/tests/support/express-i18n-augmentation.d.ts`          | —      | Typ-Import, damit `test:types` einen Express-Controller verträgt (F23)              |
+| `packages/backend/src/iam-policy/policy-validator.f1-conditions.test.ts` | `ci`   | F1 an der Validierungsgrenze                                                        |
+| `packages/backend/tests/unit/filter-builder-call-sites.test.ts`          | `ci`   | ADR-017/`JR-1303`: Aufrufstellen-Inventar                                           |
+| `packages/backend/tests/integration/filter-builder-f7.int.test.ts`       | `ci`   | F7a, F7b, ADR-017-Semantik                                                          |
+| `packages/backend/tests/integration/filter-builder-f8.int.test.ts`       | `ci`   | F8, drei Operator-Formen                                                            |
+| `packages/backend/tests/integration/filter-builder-f1-f3.int.test.ts`    | `ci`   | F1 ausgeführt gegen Postgres, F3/F19/F20                                            |
+| `packages/backend/tests/integration/predefined-roles.int.test.ts`        | `ci`   | ADR-017-Wirkungsanalyse, **grün** vor und nach dem Fix                              |
+| `packages/backend/src/helpers/mongoToDrizzle.test.ts`                    | `ci`   | geändert: F1-Block und drei F3-Pins umgebaut, `it.fails` entfernt                   |
+| `packages/backend/tests/fixtures/mongo-to-drizzle-golden.json`           | —      | geändert: drei `failOpen`-Fälle ⇒ `mustFailClosed`                                  |
+| `packages/backend/tests/integration/filter-builder.int.test.ts`          | `ci`   | geändert: F1/F3/F7/F8-Blöcke entfernt, bleibt grün vor und nach dem Fix             |
+| `tests/support/suite-inventory.ts`                                       | —      | `minimumFiles` bewusst auf den neuen Bestand: unit 5 → **7**, integration 4 → **8** |
+| `packages/backend/tests/unit/suite-inventory.test.ts`                    | `ci`   | geändert: hartkodierte `4` durch `suiteMinimum('integration')` ersetzt              |
+
+Klasse durchweg `ci`: alles läuft in unter 10 s, die `integration`-Dateien brauchen nur die Postgres,
+die der CI-Job schon bereitstellt. Kein `nightly`, kein `manual` — es gibt hier keinen Soak und keine
+externe Infrastruktur. **F14 beachtet:** die Mindestzahlen sind auf den exakten Bestand gehoben, nicht
+mit Spiel gelassen (das ist F15s Fehlerform).
+
+### ADR-017s Wirkungsanalyse: **hält** — Nachweis erbracht
+
+`tests/integration/predefined-roles.int.test.ts` legt die drei Rollen über **Produktionscode** an
+(`UserService.createAdminRole()`, und `createDefaultRoles()` über seinen echten Auslöser
+`IamController.getRoles()`), nicht über eine Kopie der Policies. Zwei unabhängige Hälften:
+
+**1. Zweig-Sonde.** Von außen liefern `FilterBuilder.ts:31` (gewollter Vollzugriff) und `:49` (der
+F7-Defekt) heute **denselben** Wert, sind also nicht unterscheidbar. Die Sonde leitet den Zweig aus
+der echten Ability neu ab (`rulesFor` + `rulesToQuery`, wie `FilterBuilder`) und berichtet ihn:
+
+```
+predefined_super_admin    / read archive   -> unconditional-can
+predefined_super_admin    / search archive -> unconditional-can
+predefined_super_admin    / read ingestion -> unconditional-can
+predefined_end_user       / read archive   -> translated-query
+predefined_end_user       / search archive -> translated-query
+predefined_end_user       / read ingestion -> translated-query
+predefined_read_only_user / read archive   -> unconditional-can
+predefined_read_only_user / search archive -> unconditional-can
+predefined_read_only_user / read ingestion -> unconditional-can
+```
+
+Kein `null-branch`. **ADR-017s Tabelle ist bestätigt**, für alle drei (Action, Subject)-Paare, die die
+vier `FilterBuilder.create()`-Aufrufstellen verwenden.
+
+**2. Verhaltens-Momentaufnahme, und die eigentliche Aussage.** Für jede der drei Rollen sind das
+Ergebnis für `('archive','read')` und für `('archive','search')` **identisch** (Filter-Text, gebundene
+Parameter, Meili-Filter). Damit ist `JR-1303`s Änderung des dritten Arguments für eine
+Standardinstallation belegbar wirkungsfrei — unabhängig davon, was `JR-1302` mit dem `null`-Zweig
+macht. Dazu die Zeilen: `predefined_end_user` sieht genau seine eigenen Quellen
+(`"ingestion_sources"."user_id" = $1`, Meili `(ingestionSourceId IN [...])`), die beiden anderen alles.
+
+**Zwei Einschränkungen, beide neu und beide benannt:**
+
+- **F18** — die Aussage gilt **je Aufrufstelle, nicht je Rolle.** Über das volle Vokabular (8 Actions
+  × 7 Subjects) erreichen `predefined_end_user` **39** und `predefined_read_only_user` **46** Paare den
+  `null`-Zweig; nur `manage: all` erreicht ihn nie. Heute harmlos, weil keine Aufrufstelle einen
+  Filter für diese Paare baut — und deshalb wacht `tests/unit/filter-builder-call-sites.test.ts`
+  jetzt darüber, dass es bei vier Aufrufstellen bleibt.
+- **F17** — **zwei der drei Rollen werden in einer echten Installation nie angelegt.**
+  `createAdminRole()` legt bei der Ersteinrichtung `predefined_super_admin` an und erfüllt damit
+  dauerhaft den Auslöser `!roles.some(r => r.slug?.includes('predefined_'))`, sodass
+  `createDefaultRoles()` nie läuft. Nachgewiesen. `JR-1307`s Prüfanleitung muss das sagen: ausgeliefert
+  gibt es **keine Read-Only-Rolle**, jede eingeschränkte Rolle ist handgeschrieben und hat die Form von
+  `auditor-specific-mailbox.json` — genau die Form, die F7 unwirksam macht. **F7s praktische Schwere
+  steigt dadurch.**
+
+Fazit: `JR-1307` bleibt in der entschärften Fassung richtig, muss aber F17 aufnehmen. Die scharfe
+Formulierung („der Fix bricht Bestandsinstallationen") ist **nicht** nötig.
+
+### Was `JR-1301` bewusst nicht getan hat
+
+- **Kein Produktionscode geändert.** `FilterBuilder.ts`, `SearchService.ts`, `mongoToDrizzle.ts`,
+  `mongoToMeli.ts`, `policy-validator.ts` und alle Routen sind unberührt
+  (`git diff --stat -- packages/backend/src ':!*.test.ts'` ist leer).
+- **F17, F18, F21, F22 nicht behoben und nicht rot gemacht.** Sie liegen außerhalb der vier Befunde,
+  die E13 beauftragt hat; ein roter Test ohne zuständige Task blockiert nur `JR-1309`. Sie sind
+  gemeldet und, wo sinnvoll, als Ist-Zustand mit lauter `coverageNotice` festgehalten (F17).
+- **Kein Test durch `SearchService` hindurch.** Zwei Gründe, beide im Testkopf benannt: es läuft kein
+  Meilisearch in dieser Umgebung, und ein Import von `SearchService` zieht über `IngestionService` →
+  `jobs/queues.ts` drei BullMQ-Queues gegen ein nicht vorhandenes Redis. Der Action-Versatz ist
+  deshalb über das **Aufrufstellen-Inventar** am Quelltext geprüft, die Semantik dahinter
+  verhaltensmäßig über `FilterBuilder`. Die Lücke ist eine Aussage über die Verdrahtung, nicht über das
+  Verhalten — wer sie schließen will, braucht ADR-017s Variante C (`JR-1310`) oder Meilisearch im
+  Testaufbau.
+- **F4, F5, F9, F10 unverändert** als offen dokumentiert und weiterhin als Ist-Zustand gepinnt.
+- **PostgreSQL 17 nicht geprüft.** Lokal 16.13, CI 17.10 — die Versionslücke aus `JR-104`/`JR-106a`
+  besteht unverändert. Für diese Befunde ist sie unkritisch (kein versionsabhängiges Verhalten
+  berührt), sie ist aber nicht ausgeschlossen: der F1-Nachweis hängt an der Operator-Präzedenz und der
+  Typprüfung von Postgres, und beides ist zwischen 16 und 17 unverändert, aber nicht gemessen.
+
+---
+
 ## E2 – E12 (offen)
 
 Tasklisten stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics
@@ -821,4 +984,5 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 | 2026-07-28 | `JR-104a` und `JR-105b` **erledigt** (Nacharbeit aus der Ablehnung von E1). **F12 behoben**, dreiteilig: prozessspezifische Fixture-Namen über `buildForeignFixtureName()`, `sweepStaleHarnessDatabases({ staleMs, restrictTo })` mit SQL-seitiger Einschränkung und konstruktiver Verweigerung eines gesenkten Schwellwerts ohne `restrictTo`, plus Fixture-Alter unter die Standardfrist gezogen (der 2021er Zeitstempel war ein drittes, in der Abnahme nicht genanntes Teilproblem). Reproduktion vorher 3/3 rot, dabei der bis dahin nur hergeleitete zweite Pfad **beobachtet** (ein Lauf verlor seine eigene Datenbank an den Sweeper des anderen). Nachher: **5 Doppelläufe grün**, plus 3 Tripel- und 3 versetzte Runden, 0 Rückstände, keine Runde unsauber. `JR-105b`: beide Lücken der CI-Nachlaufprüfung mit **positiven** Erwartungen geschlossen — `tests/support/suite-inventory.ts` als einzige Quelle der Include-Globs prüft in `globalSetup` Mindestdateizahlen je Suite und verbietet testartig benannte Dateien ohne Project; `OA_TEST_REQUIRE_INFRA=1` macht fehlende Infrastruktur in der CI zum Fehlschlag statt zum Skip; die Log-Suche ist ersetzt durch eine Report-Datei, deren Fehlen den Job rot macht. Beide Richtungen und alle vier Proben belegt und zurückgebaut. Neuer Befund **F13** (verbleibende Sweeper-Lücke bei Läufen > 2 h, für die E2/E3-Soaks relevant), kein Produktionscode berührt, F1–F11 unangetastet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **`JR-106a`** (erneute Abnahme E1) — muss unabhängig von dieser Session laufen                             |
 | 2026-07-28 | `JR-106a` (erneute Abnahme E1) **durchgeführt, Ergebnis: E1 abgenommen.** HEAD `0a94308` zuerst gegen `origin` abgeglichen (identisch — kein Container-Rollback). Alle 20 Kriterien einzeln geprüft und alle erfüllt, keines übernommen: `pnpm test` ⇒ `10 passed`, `197 passed \| 2 skipped`, Exit `0`; Sonden in `packages/types/` und `packages/frontend/` ohne Config-Änderung eingesammelt, dieselbe Sonde fehlschlagend ⇒ Exit `1`; **F12 bestätigt behoben** über 10 nebenläufige Runden (5 Doppel-, 3 versetzte, 2 Dreifachläufe), alle Teilläufe Exit `0`, 0 Rückstände; alle acht IAM-Fixtures einzeln umbenannt ⇒ jedes Mal Exit `1`; CI-Run **30368442950** auf HEAD grün, 14/14 Schritte `success`, `starting PostgreSQL 17.10`, alle vier `integration`-Dateien mit `✓` und Testzahlen, `Suite inventory verified: … integration 4/4`, „No `oa_test_*` databases left behind."; vier Bestandsworkflows blob-identisch in Merge-Base/HEAD/Worktree; genau **ein** `permissions: contents: read` ohne Job-Override; `pnpm lint` grün, erzwungener `pnpm db:generate` (⇒ `0041_whole_sally_floyd.sql`) lässt ihn grün; Produktionscode unberührt (echter Pre-E1-Build vs. HEAD-Build: **233** `dist`-Dateien, Listen identisch, 1 Datei nur im Zeilenumbruch verschieden, md5 nach Whitespace-Strip gleich); `JR-105b` beidseitig belegt, zusätzlich der von der alten Prüfung nicht erfasste **Lösch**-Fall; `00-rfc.md` seit `6d6564c` unverändert, `srcExclude: ['dev/**']` intakt. **Neun Angriffe auf die neue Inventurprüfung**, sechs hielten, drei nicht ⇒ neue Befunde **F14** (Datei- statt Testebene: `ci` → `nightly` schaltet die Suite ab und bleibt grün), **F15** (`minimumFiles`-Spiel verdeckt eine Löschung), **F16** (Rückstand nach Modul-Throw lokal nicht angekündigt) — keiner bricht ein Kriterium, alle drei nach `JR-1305`. Die lazy-Guard-Fehlerklasse ist geschlossen (`OA_TEST_REQUIRE_INFRA=yes` bricht auch bei laufender DB ab). **F13** nachgeprüft und als schwach bestätigt: die Zwischenregel steht in keiner Backlog-Zeile von `JR-208`/`JR-607`/`JR-410` und nicht in §12.6, und es gibt keine Laufzeitprüfung. Kein Produktionscode geändert, kein Befund behoben, kein Rückmerge, kein PR angefasst; PostgreSQL-16.13-Cluster restlos entfernt (Versionslücke zur CI-17.10 bleibt bestehen und ist benannt). | `JR-1301` (E13, Branch `claude/journaling-e13-iam-hardening`)                                              |
 | 2026-07-28 | **Rückmerge E1 in den Integrationsbranch** (`efb769c`, `--no-ff`, gepusht als `b4ae8f7`). ADR-014 gibt ihn nach unabhängiger Abnahme frei; `main` bleibt bis E12 unangetastet. **Kein Squash** — die aufgeräumte Sicht liefert bereits `git log --first-parent` (ein Merge-Commit je Epic), und ein Squash würde die dokumentierte Ablehnung von E1 (`cab0e38`) sowie die beweisbare Formatierungs-Reinheit von `JR-105a` (ADR-015) vernichten. Zusätzlich: **`JR-105c`** für F14–F16 angelegt (fällig vor E2; der Wächter zählt Dateien statt ausgeführter Tests), die **F13-Zwischenregel** in die Akzeptanzkriterien von `JR-208`/`JR-607` übernommen, und der falsche Verweis „F14–F16 → `JR-1305`" korrigiert (`JR-1305` ist E13s Task für F8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `JR-1301` (E13) auf `claude/journaling-e13-iam-hardening`                                                  |
+| 2026-07-29 | **`JR-1301` erledigt (Rolle `tester`) — der Epic-Branch ist absichtlich rot.** Die F1/F3/F7/F8-Tests, die den Defekt als _bestanden_ festhielten (inkl. `it.fails`), sind zu Regressionstests umgebaut, die den gewünschten Zustand fordern: **21 rote Tests**, `pnpm test` ⇒ `6 failed \| 10 passed` Dateien, `21 failed \| 203 passed \| 2 skipped`, Exit `1` (Ausgangsstand `efea6bc`: `197 passed`, Exit `0`). Jeder rote Test trägt `RED UNTIL JR-13xx` im Namen und ist einer DEV-Task zugeordnet (1302: 5, 1303: 1, 1304: 7, 1305: 3, 1306: 5). **Kein Opt-out-Schalter** — ein `it.skip`/`it.fails` oder eine Env-Variable wäre ein Hebel, das Epic fertig aussehen zu lassen; vitest isoliert ohnehin je Fall. Vier neue Testdateien plus zwei Support-Dateien, `minimumFiles` bewusst auf den neuen Bestand (unit 5→7, integration 4→8, F14/F15 beachtet). **ADR-017s Wirkungsanalyse hält:** die drei `predefined_*`-Rollen werden über Produktionscode angelegt, keine trifft an einer der drei Aufrufstellen den `null`-Zweig, und `('archive','read')` und `('archive','search')` liefern je Rolle identische Ergebnisse — `JR-1303` ist für eine Standardinstallation belegbar wirkungsfrei. **Sieben neue Befunde F17–F23**, davon zwei mit Gewicht: **F17** (zwei der drei „ausgelieferten" Rollen werden nie angelegt, weil `createAdminRole()` den Bootstrap-Auslöser dauerhaft erfüllt ⇒ es gibt ausgeliefert keine Read-Only-Rolle, F7s praktische Schwere steigt) und **F18** (ADR-017s Aussage gilt je Aufrufstelle, nicht je Rolle: 39 bzw. 46 von 56 Paaren treffen den Zweig). F1s Ausnutzbarkeit ist erstmals **gegen echtes Postgres** belegt — von vier Payloads läuft genau einer, und er hebt über drizzles unklammerte `and()`-Verkettung auch die Einschränkung des Aufrufers auf. Kein Produktionscode geändert (`git diff` gegen `src` ohne Tests ist leer), `pnpm lint` grün, `test:types` grün, Backend-Build grün, 0 Datenbank-Rückstände, PostgreSQL-16.13-Cluster restlos entfernt.                                                                                                                                                                                                                                                                                                                                      | `JR-1303`, dann `JR-1302`/`JR-1304`/`JR-1305`/`JR-1306` (Rolle DEV) — die roten Tests sind die Abnahme     |
 | 2026-07-29 | **ADR-017 entschieden (Auftraggeber): Variante B.** `SearchService.ts:311`/`:423` bauen den Filter künftig für `('archive','search')` — dieselbe (Action, Subject), unter der `requirePermission` den Request durchlässt; `search.routes.ts` bleibt unverändert. `JR-1303` ist damit von Entscheidung auf Umsetzung geschärft (Datei und Zeilen im Backlog benannt), `JR-1302` freigegeben. Variante A verworfen (entwertet die Action `search`, die `predefined_read_only_user` getrennt erteilt), Variante C verworfen für E13 und als **`JR-1310`** danach vorgemerkt — nicht Teil von `JR-1309`. Am Code nachgeprüft und in ADR-017 belegt: **keine der drei `predefined_*`-Rollen trifft den `null`-Zweig in `FilterBuilder.ts:49`**, eine Standardinstallation verhält sich vor und nach dem F7-Fix gleich; damit ist die frühere PO-Aussage „der Fix bricht Bestandsinstallationen" korrigiert und `JR-1307` entsprechend entschärft. Erreichbar bleibt der Zweig über Nutzer ohne Rolle, `cannot`-only-Policies auf `archive` und handgeschriebene Rollen mit `search` ohne `read` — **F7 bleibt Schwere hoch.** ADR-016 bleibt für `JR-1307` reserviert, die Nummernlücke ist Absicht. Nur Dokumentation, kein Produktionscode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `JR-1301` (E13) auf `claude/journaling-e13-iam-hardening`                                                  |

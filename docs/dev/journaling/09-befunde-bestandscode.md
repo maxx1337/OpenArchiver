@@ -14,16 +14,23 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde |
-| -------------------------- | -------------------------------------------------------------------------------------- | ------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10  |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11     |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16 |
+| Kategorie                  | Bedeutung                                                                              | Befunde               |
+| -------------------------- | -------------------------------------------------------------------------------------- | --------------------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20 |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22    |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23          |
 
 Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
-Nacharbeit `JR-104a` (F13) und die Abnahme `JR-106a` (F14–F16), Rolle `tester`, 2026-07-27/28. Die Bestandscode-Befunde sind im Testcode markiert, teils mit `it.fails` —
-dort schlägt der Marker fehl, sobald jemand den Defekt behebt, und die Erwartung muss dann
-invertiert werden.
+Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16) und `JR-1301` (F17–F23), Rolle `tester`,
+2026-07-27 bis 2026-07-29.
+
+> **Seit `JR-1301` (2026-07-29) markiert der Testcode die vier E13-Befunde nicht mehr als bestanden.**
+> F1, F3, F7 und F8 waren bis dahin mit `it.fails` bzw. mit Assertions auf den **Ist**-Zustand
+> festgehalten — ein grüner Test, der eine Sicherheitslücke beschreibt. Sie fordern jetzt den
+> gewünschten Zustand und sind **rot**, mit dem Titelpräfix `RED UNTIL JR-13xx`. Die Rot-Läufe sind in
+> `06-status.md` protokolliert. Für Befunde **außerhalb** von E13s Umfang (F4, F5, F9, F10, F17) gilt
+> weiter: Ist-Zustand festhalten, laut in einer `coverageNotice` benennen, nicht beheben — es gibt
+> keine Task dafür, und ein roter Test ohne Zuständigen blockiert nur die Abnahme.
 
 ---
 
@@ -75,6 +82,35 @@ Einschränkung nicht selbst aufheben können. In ADR-009 ist F1 als Begründung 
 Allowlist ist hier die stärkere Lösung, weil ein unbekannter Key ohnehin ein Fehler ist und
 fail-closed behandelt werden sollte (siehe F3).
 
+**Ausnutzbarkeit gegen echtes Postgres nachgewiesen (`JR-1301`, 2026-07-29).** Bis hierher war F1 am
+**gerenderten** SQL belegt, nicht am ausgeführten. Der Nachweis fehlte, und er ist nicht trivial: von
+vier Payloads laufen drei **nicht**.
+
+| Condition-Key                                              | Gerendertes Prädikat                                                | Ergebnis in Postgres                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------- |
+| `id" or 1=1 --`                                            | `"id" or 1=1 --" = $1`                                              | Typfehler (`text or boolean`)         |
+| `userEmail" is not null or "id" is not null --`            | `… --" = $1`                                                        | Syntaxfehler: `--` frisst die Klammer |
+| `id" is not null or "id`                                   | `"id" is not null or "id" = $1`                                     | Typfehler: E-Mail gegen `uuid`        |
+| `userEmail" is not null or "id" is not null or "userEmail` | `"user_email" is not null or "id" is not null or "user_email" = $1` | **läuft, liefert alle Zeilen**        |
+
+Wer aus einem `invalid input syntax for type uuid` im Log auf Eindämmung schließt, irrt: die
+Bedingungen sind nur „balancierter Ausdruck, kein `--`, passender Typ in der letzten Vergleichsstelle".
+Der vierte Payload erfüllt sie und macht aus einer auf ein Postfach eingeschränkten Policy eine, die
+das ganze Archiv liefert.
+
+**Verschärfend: der Ausbruch reicht über den Filter hinaus.** `and()` in drizzle verkettet seine
+Operanden **ohne** sie zu klammern. Ein Aufrufer, der `and(drizzleFilter, <eigene Einschränkung>)`
+baut — also jeder — erzeugt `A or B = $1 and <Einschränkung>`, was als
+`A or (B = $1 and <Einschränkung>)` geparst wird. Das injizierte `or` hebt damit auch die
+**Einschränkung des Aufrufers** auf, nicht nur die der Policy. Der Testfall in
+`filter-builder-f1-f3.int.test.ts` assertiert deshalb auf eine konkrete fremde Zeile und nicht auf
+„nicht gleich der erwarteten Menge": die erste Fassung dieses Tests wurde **grün, weil die Injection
+zu gut funktionierte** (die Ergebnismenge war größer als die beiden erwarteten Zeilen).
+
+Regressionstests: `src/helpers/mongoToDrizzle.test.ts` (Rendering, 2 rote Fälle),
+`src/iam-policy/policy-validator.f1-conditions.test.ts` (Validierungsgrenze, 2 rote Fälle),
+`tests/integration/filter-builder-f1-f3.int.test.ts` (Ausführung gegen Postgres, 1 roter Fall).
+
 ## F2 — `AppAbility`-Typ schützt Row-Level-Prüfungen nicht
 
 **Schwere:** mittel · **Ort:** `packages/backend/src/iam-policy/ability.ts`,
@@ -105,6 +141,19 @@ Ein `$not` um eine unübersetzbare Bedingung verwirft die Negation komplett.
 
 **Empfehlung:** `undefined` bei den Aufrufern als **deny** behandeln, und unübersetzbare Bedingungen
 laut scheitern lassen statt weglassen.
+
+**Richtung korrigiert (`JR-1301`, 2026-07-29) — siehe F22.** Der oben zitierte `$or`-Fall ist
+gemessen eine **Verengung**, keine Erweiterung: `A or B` wird zu `A`, der Nutzer sieht also _weniger_
+Zeilen als die Policy gewährt. Fail-open ist die Richtung dort, wo das Weglassen die Bedingung
+vollständig verschwinden lässt — beim `$and` negierter `cannot`-Bedingungen und bei einer Disjunktion,
+deren **einziger** Zweig unübersetzbar ist (`{ $or: [ <unübersetzbar> ] }` ⇒ `undefined` ⇒
+unbeschränkt). Genau diese Form erzeugt `rulesToQuery` für eine Rolle mit **einer** bedingten
+`can`-Regel, also den Normalfall einer scope-einschränkenden Policy. Die Anforderung lautet deshalb
+„nicht stillschweigend weglassen", nicht „nicht erweitern". Zwei weitere Leerheits-Formen, die F3 nicht
+benennt, sind als **F19** eröffnet.
+
+Regressionstests: `src/helpers/mongoToDrizzle.test.ts` (5 rote Fälle, davon 3 aus der Golden-Datei)
+und `tests/integration/filter-builder-f1-f3.int.test.ts` (2 rote Fälle gegen echte Zeilen).
 
 ## F4 — Zweiter Operator wird stillschweigend verworfen
 
@@ -201,14 +250,36 @@ abgenommen werden, solange F7 offen ist** — ein „read-only"-Auditor, der unb
 keine Auditor-Rolle.
 
 **Empfehlung:** `null` von `rulesToQuery` als **deny** behandeln (``sql`1=0` ``, wie es der bereits
-vorhandene „No access"-Zweig für das leere Query tut), und die unbeschränkte Rückgabe auf den Fall
-„nachweislich unbedingtes `can`" beschränken. Zusätzlich Action-Angleichung zwischen Route-Gate und
-`FilterBuilder`-Aufruf — **entschieden in ADR-017 als Variante B**, umzusetzen in `JR-1303`.
+vorhandene „No access"-Zweig für das leere Query tut — Einschränkung dazu unter F19), und die
+unbeschränkte Rückgabe auf den Fall „nachweislich unbedingtes `can`" beschränken. Zusätzlich
+Action-Angleichung zwischen Route-Gate und `FilterBuilder`-Aufruf — **entschieden in ADR-017 als
+Variante B**, umzusetzen in `JR-1303`.
+
+**Reichweite bestätigt (`JR-1301`, 2026-07-29) — mit zwei Einschränkungen.** Der in ADR-017
+angekündigte Nachweis ist erbracht: für die drei (Action, Subject)-Paare, die die vier
+`FilterBuilder.create()`-Aufrufstellen verwenden, trifft keine der drei `predefined_*`-Rollen den
+`null`-Zweig, und die Ergebnisse für `('archive','read')` und `('archive','search')` sind je Rolle
+identisch. Die ADR-017-Änderung ist für eine Standardinstallation damit belegbar wirkungsfrei. Die
+Einschränkungen: die Aussage gilt **je Aufrufstelle, nicht je Rolle** (**F18**), und zwei der drei
+Rollen werden in einer echten Installation **nie angelegt** (**F17**) — womit ausgeliefert keine
+Read-Only-Rolle existiert und jede eingeschränkte Rolle handgeschrieben in der Form von
+`auditor-specific-mailbox.json` entsteht, also genau in der Form, die F7 unwirksam macht.
+
+Regressionstests: `tests/integration/filter-builder-f7.int.test.ts` (4 rote, 2 grüne Fälle),
+`tests/integration/predefined-roles.int.test.ts` (7 grüne Fälle, der Nachweis für die
+Wirkungsanalyse), `tests/unit/filter-builder-call-sites.test.ts` (1 roter Fall für den
+Action-Versatz).
 
 ## F8 — Der `cannot`-Ausschluss verarbeitet Operator-Bedingungen falsch
 
 **Schwere:** mittel · **Ort:** `packages/backend/src/services/FilterBuilder.ts` · **Status:** offen ·
 **Herkunft:** `JR-104`
+
+> **Regressionstests seit `JR-1301`:** `tests/integration/filter-builder-f8.int.test.ts`, drei rote
+> Fälle (`$in`, `$nin`, `$gte` auf einer numerischen Spalte) und ein grüner Gegenprobefall für die
+> skalare Bedingung, die schon heute korrekt ausschließt. Die Meili-Hälfte wird strukturell geprüft
+> (kein `[object Object]`, die ausgeschlossene ID kommt weiter vor) — es läuft kein Meilisearch in
+> dieser Umgebung.
 
 Trifft ein unbedingtes `can` mit `cannot`-Regeln zusammen, baut `FilterBuilder` den Ausschluss so:
 
@@ -594,6 +665,203 @@ Weg zur Ausgabe des Hauptprozesses landet. Der Handler selbst wird korrekt **eif
 im Hauptprozess feststellen statt im Worker — etwa eine `globalTeardown`, die dieselbe Abfrage fährt
 wie der CI-Schritt und ihr Ergebnis ausgibt. Das würde zugleich den lokalen Lauf auf dieselbe
 Zusicherung heben, die die CI schon hat.
+
+## F17 — Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt
+
+**Kategorie:** Bestandscode · **Schwere:** mittel (kein Sicherheitsloch, aber die
+Wirkungsanalyse von ADR-017 und die Betreiberanleitung in `JR-1307` stehen darauf) ·
+**Ort:** `packages/backend/src/api/controllers/iam.controller.ts:17`,
+`packages/backend/src/services/UserService.ts:231/:252` · **Status:** offen, **nicht behoben** ·
+**Herkunft:** `JR-1301`, gegen echtes Postgres verifiziert
+
+`createDefaultRoles()` — die einzige Stelle, die `predefined_end_user` und
+`predefined_read_only_user` anlegt — hat genau einen Aufrufer, und der ist bedingt:
+
+```ts
+// api/controllers/iam.controller.ts, getRoles()
+if (!roles.some((r) => r.slug?.includes('predefined_'))) {
+	await this.createDefaultRoles();
+}
+```
+
+Bei der Ersteinrichtung ruft `createFirstAdmin()` (`UserService.ts:231`) aber
+`createAdminRole()` auf, und das legt die Rolle mit dem Slug **`predefined_super_admin`** an. Damit
+ist `roles.some(r => r.slug?.includes('predefined_'))` von diesem Moment an dauerhaft `true` und der
+Bootstrap läuft nie. Vorher kann er auch nicht laufen: `GET /roles` liegt hinter `requireAuth`, und
+vor der Ersteinrichtung existiert kein Nutzer.
+
+**Nachweis** (`tests/integration/predefined-roles.int.test.ts`, Testfall
+`OBSERVED (F17): the real setup order leaves the two default roles uncreated`): nach
+`createAdminRole()` und einem anschließenden `getRoles()` enthält die `roles`-Tabelle genau
+`[predefined_super_admin]`.
+
+**Folgen:**
+
+1. **ADR-017s Wirkungsanalyse betrachtet drei Rollen; eine Standardinstallation hat eine.** Die
+   Analyse bleibt richtig — sie ist nur weiter auf der sicheren Seite als gedacht, weil die beiden
+   nicht existierenden Rollen ohnehin keinen `null`-Zweig treffen können.
+2. **`JR-1307`s Prüfanleitung muss das sagen.** „Keine der drei ausgelieferten Rollen ist betroffen"
+   liest sich, als gäbe es drei; ein Betreiber, der nach `predefined_read_only_user` sucht, findet
+   nichts und weiß nicht, ob das ein Fehler ist.
+3. **Es gibt ausgeliefert keine Read-Only-Rolle.** Wer einen eingeschränkten Nutzer braucht — der
+   Auditor aus E11, der Prüfer eines Wirtschaftsprüfers — muss die Policy von Hand schreiben, und
+   zwar genau in der Form von `auditor-specific-mailbox.json`. Das ist die Form, die F7 ins Gegenteil
+   verkehrt. **F7s praktische Schwere steigt damit**, sie sinkt nicht.
+
+**Nicht Teil von E13.** Kein Sicherheitsdefekt, keine Task, und der Fix ist eine Produktänderung
+(welche Rollen liefert Open Archiver aus?), keine Härtung. Entscheidung des Auftraggebers.
+Naheliegend: die Bedingung auf die konkret fehlenden Slugs prüfen statt auf das Präfix, oder die
+Default-Rollen in `createFirstAdmin()` mitanlegen.
+
+## F18 — ADR-017s Aussage über den `null`-Zweig gilt je Aufrufstelle, nicht je Rolle
+
+**Kategorie:** Vorgegebenes Verfahren (Präzision einer ADR-Aussage) · **Schwere:** niedrig ·
+**Ort:** `05-entscheidungen.md` ADR-017, Abschnitt „Auswirkung auf die ausgelieferten Rollen"; die
+Wiederholung in F7 dieses Dokuments · **Status:** offen · **Herkunft:** `JR-1301`
+
+ADR-017 formuliert rollenbezogen und unbedingt: „Keine dieser drei Rollen erreicht den `null`-Zweig
+in `FilterBuilder.ts:49`". Über das gesamte Vokabular ist das falsch. Gemessen (8 Actions × 7
+Subjects, je Rolle, `tests/integration/predefined-roles.int.test.ts`):
+
+| Rolle                       | (Action, Subject)-Paare, die den `null`-Zweig erreichen |
+| --------------------------- | ------------------------------------------------------- |
+| `predefined_super_admin`    | 0 von 56                                                |
+| `predefined_end_user`       | **39** von 56                                           |
+| `predefined_read_only_user` | **46** von 56                                           |
+
+Nur `manage: all` erteilt für jedes Paar ein unbedingtes `can`. Die beiden anderen Rollen haben
+naturgemäß Paare ohne passende Regel — `create archive` bei einer Read-Only-Rolle etwa — und für die
+liefert `rulesToQuery` `null`.
+
+**Harmlos, solange die Aussage richtig gelesen wird:** keine Aufrufstelle baut heute einen Filter für
+eines dieser Paare. Für die drei Paare, die die vier `FilterBuilder.create()`-Aufrufe tatsächlich
+verwenden, hält die Aussage — siehe die Tabelle unter „Rot-Läufe `JR-1301`" in `06-status.md`.
+
+**Warum es trotzdem notiert wird:** eine unausgesprochene Vorbedingung wird falsch, sobald jemand
+eine fünfte Aufrufstelle mit einer anderen Action ergänzt — `export archive` für den Export aus E11
+ist der naheliegende Kandidat. Der Test hält die Vorbedingung jetzt maschinell fest: das
+Aufrufstellen-Inventar in `tests/unit/filter-builder-call-sites.test.ts` wird rot, wenn eine fünfte
+Stelle auftaucht. **Empfehlung:** ADR-017 und F7 um die Einschränkung „für die Paare der heutigen
+Aufrufstellen" ergänzen.
+
+## F19 — Ein `can` mit **leerem** `conditions`-Objekt bedeutet Vollzugriff
+
+**Kategorie:** Bestandscode · **Schwere:** mittel · **Ort:**
+`packages/backend/src/services/FilterBuilder.ts:53`, `src/helpers/mongoToDrizzle.ts` ·
+**Status:** offen — inhaltlich in `JR-1304` zu erledigen · **Herkunft:** `JR-1301`
+
+Gefunden beim Schreiben einer Gegenprobe für den vorhandenen „No access"-Zweig, die fehlschlug. Eine
+Regel `{ action: 'read', subject: 'archive', conditions: {} }` läuft so durch:
+
+1. `hasUnconditionalCan` ist `false`, denn `!{}` ist `false` — Zeile 31 greift nicht.
+2. `rulesToQuery` schiebt die Bedingung in `$or`, weil `{}` truthy ist ⇒ `{ $or: [ {} ] }`.
+3. `Object.keys(query).length` ist `1` — der Deny-Zweig in Zeile 53 greift **nicht**.
+4. `mongoToDrizzle({ $or: [ {} ] })` ⇒ `or()` über eine leere Liste ⇒ `undefined`.
+
+Ergebnis: kein Filter, also alle Zeilen. Belegt gegen echtes Postgres in
+`tests/integration/filter-builder-f1-f3.int.test.ts` (roter Test
+`RED UNTIL JR-1304: a can rule with empty conditions must not mean full access (F19)`).
+
+Eigene Nummer, obwohl es zur F3-Familie gehört: F3 benennt „leeres `$or`/`$and` oder leere Query".
+`{ $or: [ {} ] }` ist keine davon, und eine Behebung, die nur `{}` und `{ $or: [] }` abfängt, lässt
+diese Form offen.
+
+**Nebenbefund, nicht abgesichert: der Deny-Zweig in Zeile 53 ist womöglich unerreichbar.**
+`JR-1302` soll ihn als Vorlage benutzen („wie der bereits vorhandene ‚No access'-Zweig"). Er feuert
+nur, wenn `rulesToQuery` ein **leeres, nicht-`null`** Objekt liefert. Nach der Implementierung von
+`@casl/ability/extra` passiert das genau dann, wenn eine nicht-invertierte Regel **ohne** Bedingungen
+gefunden wird und keine invertierte mit Bedingungen davor lag — und dieser Fall wird schon von Zeile 31
+abgefangen. In keinem der über zwanzig Policy-Zuschnitte, die jetzt unter Test stehen, wurde der Zweig
+erreicht. **Nicht bewiesen:** eine Konstruktion, die ihn erreicht, wurde nicht gefunden, und
+„unerreichbar" lässt sich mit Tests nicht zeigen. Für `JR-1302` heißt das: die Vorlage existiert im
+Quelltext, aber es gibt keinen laufenden Fall und keinen Test, der sie abdeckt.
+
+## F20 — Ein `cannot` **ohne** Bedingungen wird vollständig ignoriert
+
+**Kategorie:** Bestandscode · **Schwere:** mittel (in der HTTP-Kette durch `requirePermission`
+abgefedert, in Serviceaufrufen nicht) · **Ort:**
+`packages/backend/src/services/FilterBuilder.ts:27–33` · **Status:** offen — inhaltlich in `JR-1302`
+zu erledigen · **Herkunft:** `JR-1301`
+
+Der Ausschlussfilter sammelt nur `cannot`-Regeln, die eine Bedingung tragen:
+
+```ts
+const cannotConditions = rules.filter((rule) => rule.inverted === true && rule.conditions);
+```
+
+Ein pauschales `cannot read archive` fällt damit heraus, `cannotConditions.length === 0` gilt, und
+Zeile 31 antwortet mit **Vollzugriff** — für einen Nutzer, dem die Action ausdrücklich entzogen
+wurde. Belegt gegen echtes Postgres (`filter-builder-f1-f3.int.test.ts`, roter Test
+`RED UNTIL JR-1302: an unconditional cannot is not ignored (F20)`).
+
+`ability.can('read', 'archive')` ist für diesen Nutzer `false`, das Route-Gate liefert also `403` —
+Verteidigung in der Tiefe ist vorhanden. Trotzdem ist `FilterBuilder`s eigene Antwort falsch, und
+`JR-1302`s Kriterium („unbeschränkte Rückgabe nur noch bei nachweislich **unbedingtem** `can`") ist
+nicht erfüllt, solange sie so bleibt: ein widerrufenes `can` ist kein unbedingtes.
+
+## F21 — `JR-1306`s Allowlist widerspricht drei bestehenden, grünen Pins
+
+**Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig (Arbeitsplanung, kein Defekt) ·
+**Ort:** `packages/backend/src/helpers/mongoToDrizzle.test.ts` (Suite „column name mapping"),
+`packages/backend/tests/fixtures/mongo-to-drizzle-golden.json` Fall „unknown relation key is emitted
+as one identifier containing a dot" · **Status:** offen — vor `JR-1306` zu entscheiden ·
+**Herkunft:** `JR-1301`
+
+`JR-1306` soll Condition-Keys „gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen".
+Das Akzeptanzkriterium spricht nur von Keys mit `"`. Eine echte Allowlist weist aber auch
+**unbekannte, syntaktisch harmlose** Keys ab, und drei grüne Assertions halten für genau die das
+heutige Verhalten fest: `attachment.name` ⇒ `"attachment.name" = $1`, `foo.bar` ⇒ `"foo.bar" = $1`
+(Golden-Datei), sowie die Aussage „resolves only the relations listed in `relationToTableMap`".
+
+Die Regressionstests aus `JR-1301` fordern **nicht** die Abweisung solcher Keys — bewusst, damit der
+Test nicht eine Entscheidung vorwegnimmt, die die Task offenlässt. Zu klären ist also: gilt die
+Allowlist nur für Keys mit SQL-Syntax (dann bleiben die drei Pins gültig) oder für alle unbekannten
+Keys (dann gehören sie im selben Commit invertiert)? **Empfehlung:** die strenge Variante, mit
+Anpassung der drei Pins — ein unbekannter Key ist ein Policy-Fehler und trifft in SQL ohnehin keine
+Spalte, führt also entweder zu einem Laufzeitfehler oder zu einem falschen Ergebnis.
+
+## F22 — F3s `$or`-Beispiel beschreibt die Wirkungsrichtung falsch
+
+**Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig, aber irreführend ·
+**Ort:** F3 in diesem Dokument, sowie das Akzeptanzkriterium von `JR-1304` („der `$or`-Fall aus F3
+erweitert die Disjunktion nicht mehr") · **Status:** offen · **Herkunft:** `JR-1301`
+
+`{ $or: [ {id:'a'}, {subject:{$regex:'x'}} ] }` ⇒ `"id" = $1`. Beide Texte nennen das eine
+Erweiterung der Disjunktion. Gemessen ist `A` **enger** als `A or B`: der Nutzer sieht weniger
+Zeilen, nicht mehr. Das ist ein Funktionsdefekt (die gespeicherte Policy bedeutet etwas anderes als
+sie sagt), aber fail-**closed**.
+
+Fail-open ist derselbe Mechanismus an zwei anderen Stellen: im `$and` negierter
+`cannot`-Bedingungen — dort ist jeder weggelassene Zweig ein weggelassenes Verbot — und wenn **alle**
+Zweige verschwinden, weil `or()`/`and()` über eine leere Liste `undefined` liefert.
+
+**Warum das zählt:** wer `JR-1304` nach dem Kriterium abarbeitet, kann aus „erweitert die Disjunktion"
+schließen, der `$or`-Fall sei der gefährliche und die Leerheits-Fälle Randfälle. Es ist umgekehrt.
+**Empfehlung:** das Kriterium von `JR-1304` auf „lässt keinen Zweig stillschweigend weg" umformulieren.
+
+## F23 — `tsconfig.test.json` und `tsconfig.json` sind sich über globale Augmentierungen nicht einig
+
+**Kategorie:** Testharness — unsere eigene E1-Arbeit · **Schwere:** niedrig ·
+**Ort:** `packages/backend/tsconfig.test.json` · **Status:** in `JR-1301` umgangen, Ursache offen ·
+**Herkunft:** `JR-1301`
+
+Sobald eine Testdatei einen Express-Controller importiert, meldet
+`pnpm --filter @open-archiver/backend test:types` Fehler in **unberührtem Produktionscode**:
+zehn × `TS2339: Property 't' does not exist on type 'Request'` in `iam.controller.ts`. Der Build ist
+davon nicht betroffen.
+
+Ursache: `req.t` kommt aus einem `declare global { namespace Express { … } }` in der `index.d.ts` von
+`i18next-http-middleware`. Eine solche Augmentierung wirkt nur, wenn **irgendetwas im Programm** das
+Paket importiert. Im Build tut das `src/api/server.ts`; `tsconfig.test.json` schließt
+Produktionscode aber absichtlich aus (`include: ["src/**/*.test.ts", "tests/**/*.ts"]`, siehe
+Vorschlag 2 unten), also fehlt die Augmentierung. `"types": ["node"]` hilft hier nicht, weil das Paket
+keine ambiente Deklaration ausliefert.
+
+Umgangen durch `packages/backend/tests/support/express-i18n-augmentation.d.ts` — ein reiner
+Typ-Import ohne Laufzeitwirkung. Das ist eine Behebung des Symptoms. Die Fehlerklasse bleibt: jede
+weitere globale Augmentierung, die nur über eine Produktionsdatei ins Programm kommt, fehlt im
+Test-Programm ebenfalls, und sie fällt erst auf, wenn eine Testdatei die betroffene Datei importiert.
+Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.
 
 ## Bereits im Backlog erfasste Bestandsprobleme
 

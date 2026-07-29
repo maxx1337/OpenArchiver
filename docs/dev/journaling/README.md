@@ -82,11 +82,15 @@ Auditor-Artefakte ab E9/E11.
 ## Aktueller Stand (Kurzfassung)
 
 Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenommen** (`JR-106a`,
-2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, 197 Tests grün, CI gegen
-PostgreSQL 17, `pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig
-vor E2). **Nächstes Epic: E13** (IAM-Autorisierung härten), beginnend mit `JR-1301`; ADR-017 ist
-entschieden, es blockiert keine Entscheidung mehr. Es existiert noch **kein** Produktionscode für den
-Receiver selbst.
+2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, CI gegen PostgreSQL 17,
+`pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig vor E2).
+
+**E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` ist
+erledigt: die Regressionstests für F1/F3/F7/F8 fordern jetzt den gewünschten Zustand und sind
+**absichtlich rot** — 21 fehlschlagende Tests, `pnpm test` ⇒ Exit 1. Das ist in E13 der geplante
+Zwischenstand (rot → Fix → grün) und **kein** zu reparierender Schaden; wer die Tests abschwächt,
+zerstört den Nachweis. Nächster Schritt: `JR-1303`, dann die übrigen Fixes (Rolle DEV). Es existiert
+noch **kein** Produktionscode für den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 

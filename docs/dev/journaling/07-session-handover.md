@@ -85,10 +85,60 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (ADR-017 entschieden) · **Branch:**
-`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch)
+**Stand:** 2026-07-29 (`JR-1301` erledigt) · **Branch:** `claude/journaling-e13-iam-hardening`
+(Epic-Branch, abgezweigt vom Integrationsbranch bei `efea6bc`)
 
 ### Was zuletzt passiert ist
+
+**`JR-1301` ist erledigt (Rolle `tester`). Der Epic-Branch ist absichtlich rot.**
+
+```
+DATABASE_URL=… OA_TEST_REQUIRE_INFRA=1 pnpm test
+ Test Files  6 failed | 10 passed (16)
+      Tests  21 failed | 203 passed | 2 skipped (226)      EXIT=1
+```
+
+> **Diese 21 roten Tests sind das Arbeitsergebnis, nicht ein Schaden.** E13s Reihenfolge ist
+> rot → Fix → grün; ein Test, der nie rot war, belegt nichts. `ci.yml` feuert auf `push`, der Branch
+> zeigt also rote CI-Läufe, bis `JR-1302`–`JR-1306` gelandet sind. **Nicht durch Abschwächen der Tests
+> „reparieren".** Bis `JR-1301` hielten dieselben Tests F1/F3/F7/F8 als _bestanden_ fest, teils per
+> `it.fails` — ein grüner Test, der eine Sicherheitslücke beschreibt. Genau das war der Defekt.
+
+Jeder rote Test trägt `RED UNTIL JR-13xx` im Namen, ist also im Lauf sichtbar und filterbar:
+`pnpm test -t "RED UNTIL JR-1302"`. Zuordnung: `JR-1302` 5 · `JR-1303` 1 · `JR-1304` 7 ·
+`JR-1305` 3 · `JR-1306` 5. Es gibt **keinen** Opt-out-Schalter — Begründung in `06-status.md`.
+
+**ADR-017s Wirkungsanalyse hält, jetzt belegt statt hergeleitet.**
+`packages/backend/tests/integration/predefined-roles.int.test.ts` legt die drei `predefined_*`-Rollen
+über Produktionscode an und zeigt: keine trifft an einer der drei tatsächlich benutzten
+(Action, Subject)-Paare den `null`-Zweig, und `('archive','read')` und `('archive','search')` liefern
+je Rolle **identische** Ergebnisse. `JR-1303` ist damit für eine Standardinstallation belegbar
+wirkungsfrei. Diese Datei ist grün und muss grün bleiben.
+
+**Sieben neue Befunde `F17`–`F23`**, zwei davon mit Gewicht für E13:
+
+- **F17** — `predefined_end_user` und `predefined_read_only_user` werden in einer echten Installation
+  **nie angelegt**: `createAdminRole()` legt bei der Ersteinrichtung `predefined_super_admin` an und
+  erfüllt damit dauerhaft den Bootstrap-Auslöser `!roles.some(r => r.slug?.includes('predefined_'))`.
+  Folge: ausgeliefert gibt es **keine Read-Only-Rolle**, jede eingeschränkte Rolle ist handgeschrieben
+  und hat die Form von `auditor-specific-mailbox.json` — genau die Form, die F7 unwirksam macht.
+  **`JR-1307` muss das aufnehmen**; die entschärfte Fassung bleibt richtig.
+- **F18** — ADR-017s „keine der drei Rollen trifft den `null`-Zweig" gilt **je Aufrufstelle, nicht je
+  Rolle**: über das volle Vokabular treffen 39 bzw. 46 von 56 Paaren den Zweig. Heute harmlos; das
+  Aufrufstellen-Inventar in `tests/unit/filter-builder-call-sites.test.ts` wacht darüber.
+
+Außerdem: **F1 ist erstmals gegen echtes Postgres ausgenutzt** — von vier Payloads läuft genau einer,
+und er hebt über drizzles unklammerte `and()`-Verkettung auch die Einschränkung des **Aufrufers** auf.
+F3s `$or`-Beispiel beschreibt die Wirkungsrichtung falsch (**F22**: Verengung, nicht Erweiterung; die
+fail-open-Richtung liegt beim `$and` und bei den Leerheits-Fällen). Zwei zusätzliche Fail-open-Formen
+in `FilterBuilder`: **F19** (`can` mit leerem `conditions`) und **F20** (unbedingtes `cannot` wird
+ignoriert) — beide inhaltlich in `JR-1302`/`JR-1304` mitzubehandeln, beide bereits rot.
+
+**Kein Produktionscode geändert** (`git diff --stat -- packages/backend/src ':!*.test.ts'` ist leer),
+`pnpm lint` grün, `pnpm --filter @open-archiver/backend test:types` grün, Backend-Build grün, 0
+`oa_test_*`-Rückstände, lokaler PostgreSQL-16.13-Cluster restlos entfernt.
+
+### Was davor passiert ist
 
 **ADR-017 ist entschieden: Variante B** (Auftraggeber, 2026-07-29). Der Action-Versatz wird dort
 aufgelöst, wo der Filter gebaut wird, nicht am Route-Gate:
@@ -122,7 +172,7 @@ reserviert — **die Nummernlücke ist Absicht, nicht umnummerieren**), `03-back
 geschärft, `JR-1307` entschärft, `JR-1310` angelegt), `09-befunde-bestandscode.md` (F7-Reichweite) und
 diese beiden Statusdateien. **Kein Produktionscode.**
 
-### Was davor passiert ist
+### Und davor
 
 **E1 ist abgenommen.** Die erneute unabhängige Abnahme `JR-106a` (Rolle `tester`, eigene Session,
 HEAD `0a94308`) hat **alle** `JR-106`-Kriterien noch einmal geprüft — nicht nur die Nacharbeit, weil
@@ -189,28 +239,52 @@ Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
 
 ### Nächster konkreter Schritt
 
-**`JR-1301`** — Epic E13 (IAM-Autorisierung härten), Branch
-`claude/journaling-e13-iam-hardening`, abgezweigt vom **Integrationsbranch**:
+**`JR-1303`, dann `JR-1302` / `JR-1304` / `JR-1305` / `JR-1306` — Rolle DEV**, auf demselben Branch
+`claude/journaling-e13-iam-hardening`. Die Reihenfolge steht in `03-backlog.md`; `JR-1303` zuerst, weil
+ADR-017 es zu reiner Umsetzung gemacht hat.
+
+**Die roten Tests sind die Abnahme.** Jede der vier Fix-Tasks hat ihre Zielmenge im Testnamen:
 
 ```bash
-git fetch origin claude/enterprise-product-implementation-cxmmqe
-git checkout -b claude/journaling-e13-iam-hardening \
-    origin/claude/enterprise-product-implementation-cxmmqe
+DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 \
+  pnpm test -t "RED UNTIL JR-1302"      # 5 Fälle
 ```
 
-E1 ist jetzt formal abgenommen, der Harness ist benutzbar, und `FilterBuilder` ist über
-`tests/integration/filter-builder.int.test.ts` abgedeckt — das ist das Regressionsnetz, das `JR-1301`
-braucht. Danach `JR-1302` … `JR-1309` gemäß `03-backlog.md`. **F7** ist der Grund, warum E13 vor E2
-steht und warum E11 ohne E13 nicht abnehmbar ist.
+Fertig ist eine Task, wenn **ihre** roten Fälle grün sind **und** kein bisher grüner Fall rot wurde.
+Der Endstand von E13 ist `pnpm test` ⇒ Exit `0` bei `224 passed | 2 skipped`. Betroffene
+Produktionsdateien je Task:
 
-**ADR-017 ist entschieden**, `JR-1303` blockiert also nichts mehr. Zwei Dinge muss `JR-1301` deshalb
-konkret leisten:
+| Task        | Datei(en)                                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| **JR-1303** | `src/services/SearchService.ts` Zeilen 311 und 423 — **nur** das dritte Argument, sonst nichts            |
+| **JR-1302** | `src/services/FilterBuilder.ts` (`null`-Zweig Zeile 49; dazu **F19** und **F20**)                         |
+| **JR-1304** | `src/helpers/mongoToDrizzle.ts` (Leerheits- und Unbekannt-Fälle), Aufrufer behandeln `undefined` als deny |
+| **JR-1305** | `src/services/FilterBuilder.ts` Zeilen 39–46 (`cannot`-Ausschluss), beide Übersetzer                      |
+| **JR-1306** | `src/helpers/mongoToDrizzle.ts` `getDrizzleColumn()` **und** `src/iam-policy/policy-validator.ts`         |
 
-1. Der Regressionstest für F7 fordert die Semantik aus ADR-017 — der Filter für eine Rolle mit
-   **bedingtem** `search archive` entsteht aus deren `search`-Regeln.
-2. **Die drei `predefined_*`-Rollen gehören als Integrationstest gegen echtes Postgres dazu**, vor und
-   nach dem Fix mit identischem Ergebnis. Das ist der Beleg für „keine Regression in
-   Standardinstallationen" — die Tabelle in ADR-017 ist nur die Herleitung, nicht der Nachweis.
+**Vier Dinge, die der DEV wissen muss, bevor er anfängt:**
+
+1. **`packages/backend/tests/integration/predefined-roles.int.test.ts` ist grün und muss grün
+   bleiben.** Es ist der Nachweis, dass eine Standardinstallation sich nicht ändert. Wird es rot, ist
+   der Fix eine Regression für Bestandsinstallationen — nicht der Test.
+2. **`JR-1306`: vor dem Anfangen F21 entscheiden.** Gilt die Allowlist nur für Keys mit SQL-Syntax
+   oder für alle unbekannten Keys? Die strenge Variante macht drei heute grüne Pins rot
+   (`attachment.name`, `foo.bar` in der Golden-Datei, „resolves only the relations listed in
+   `relationToTableMap`") — die gehören dann im selben Commit invertiert. Die Regressionstests fordern
+   die strenge Variante **nicht**, damit sie die Entscheidung nicht vorwegnehmen.
+3. **`JR-1304`: F22 lesen.** Das Akzeptanzkriterium sagt „der `$or`-Fall erweitert die Disjunktion
+   nicht mehr". Gemessen ist der `$or`-Fall eine **Verengung**; fail-open ist das `$and` negierter
+   `cannot`-Bedingungen und jede Form, in der **alle** Zweige verschwinden. Wer nach dem Wortlaut
+   arbeitet, behebt den harmlosen Fall.
+4. **`JR-1302`: die Vorlage, auf die die Task verweist, feuert nie.** Der „No access"-Zweig in
+   `FilterBuilder.ts:53` wurde in keinem der über zwanzig Policy-Zuschnitte unter Test erreicht und ist
+   nach Lesart von `@casl/ability/extra` wahrscheinlich unerreichbar (Notiz unter F19). Es gibt also
+   keinen laufenden Fall und keinen Test, der sie abdeckt — die Semantik muss aus dem Kriterium kommen,
+   nicht aus der Beobachtung.
+
+Danach `JR-1307` / `JR-1308`, dann `JR-1309` (Abnahme, Rolle TEST → PO). **Rückmerge in den
+Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12 unangetastet; kein PR ohne
+ausdrückliche Aufforderung.
 
 ### Was ein neuer Agent zuerst lesen muss
 
@@ -225,7 +299,18 @@ konkret leisten:
 **F12 ist erledigt und braucht keine Entscheidung mehr.** Behoben in `JR-104a` (`653dd1c`), in
 `JR-106a` unabhängig als behoben bestätigt (10 nebenläufige Runden, 0 Rückstände).
 
-**Blockierend: nichts.** E1 ist mit `JR-106a` abgenommen, `JR-1301` kann beginnen.
+**Blockierend: nichts.** `JR-1303` kann beginnen.
+
+**Neu aus `JR-1301` (2026-07-29), nicht blockierend, aber vor der jeweiligen Task zu entscheiden:**
+
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F17**     | `predefined_end_user` und `predefined_read_only_user` werden in einer echten Installation nie angelegt. Zwei Fragen: (a) **`JR-1307`** muss das in die Prüfanleitung aufnehmen — ausgeliefert gibt es keine Read-Only-Rolle. (b) Soll der Bootstrap **repariert** werden? Das ist eine Produktänderung (welche Rollen liefert Open Archiver aus?), keine Härtung, und gehört nicht in E13. Entscheidung des Auftraggebers. |
+| **F18**     | ADR-017 und der F7-Eintrag um „für die Paare der heutigen Aufrufstellen" ergänzen. Rein redaktionell, aber die unbedingte Fassung wird falsch, sobald eine fünfte `FilterBuilder`-Aufrufstelle mit anderer Action dazukommt (`export archive` aus E11 ist der Kandidat).                                                                                                                                                   |
+| **F21**     | Reichweite der Allowlist aus `JR-1306` — nur Keys mit SQL-Syntax oder alle unbekannten? Vor `JR-1306` zu entscheiden, sonst wird der Fix rot gegen drei bestehende Pins.                                                                                                                                                                                                                                                   |
+| **F22**     | Formulierung des `JR-1304`-Kriteriums korrigieren: „lässt keinen Zweig stillschweigend weg" statt „erweitert die Disjunktion nicht mehr".                                                                                                                                                                                                                                                                                  |
+| **F19/F20** | Zwei weitere Fail-open-Formen in `FilterBuilder`. Kein Entscheidungsbedarf, aber sie erweitern den Umfang von `JR-1302` und `JR-1304` um je einen Fall. Beide sind rot und damit Teil der Abnahme.                                                                                                                                                                                                                         |
+| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                       |
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
 
@@ -286,6 +371,19 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
    aber **nicht als `root`** (`su postgres`) und mit einem **kurzen** `unix_socket_directories` —
    der Scratchpad-Pfad überschreitet die 107-Byte-Grenze für Unix-Sockets. Cluster danach entfernen.
    Achtung: lokal ist es 16.13, die CI fährt 17.10.
+9. **`and()` in drizzle klammert seine Operanden nicht.** `and(a, b)` rendert `(a and b)`, nicht
+   `((a) and (b))`. Enthält `a` ein `or`, verschiebt sich die Präzedenz: `x or y and b` ist
+   `x or (y and b)`. Das hat in `JR-1301` einen Test **grün** gemacht, der einen Angriff belegen sollte —
+   die Injection war so wirksam, dass sie auch die Einschränkung des Testfalls aufhob und damit _mehr_
+   Zeilen lieferte als die erwartete Menge. Wer Zugriffs-Assertions schreibt: auf die konkrete fremde
+   Zeile prüfen („`theirs` darf nicht vorkommen"), nicht auf Gleichheit mit einer Erwartungsmenge.
+10. **Ein Import kann eine Infrastruktur mitziehen, die es nicht gibt.** `src/services/SearchService.ts`
+    importiert `IngestionService`, das `jobs/queues.ts` importiert, das beim Laden drei BullMQ-`Queue`s
+    gegen Redis öffnet. Ebenso wirft `src/config/storage.ts` beim Import ohne `STORAGE_TYPE`. Vor einem
+    Test, der einen Service importiert, dessen Importkette prüfen — sonst hängt der Worker.
+11. **`pnpm --filter @open-archiver/backend test:types` kann an unberührtem Produktionscode scheitern**,
+    sobald eine Testdatei einen Express-Controller importiert: `req.t` existiert im Test-Programm nicht
+    (F23). Der Build ist davon nicht betroffen, die Ursache liegt in `tsconfig.test.json`.
 
 ---
 

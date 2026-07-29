@@ -1,19 +1,13 @@
 import { expect, it } from 'vitest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, inArray } from 'drizzle-orm';
 import { isClassSelected, suiteRequiring } from '@oa-test/classification';
 import { probePostgres } from '@oa-test/infra';
-import { coverageNotice } from '@oa-test/notice';
 import type { CaslPolicy } from '@open-archiver/types';
 import { acquireTestDatabase, loadBackendDatabaseSingleton } from '../support/pg-harness';
 import { loadPolicyFixture } from '../support/policy-fixtures';
 import { renderSql } from '../support/render-sql';
-import {
-	seedArchivedEmail,
-	seedIngestionSource,
-	seedPrincipal,
-	seedUserWithoutRole,
-} from '../support/iam-seed';
-import { archivedEmails, ingestionSources } from '../../src/database/schema';
+import { seedIngestionSource, seedPrincipal } from '../support/iam-seed';
+import { ingestionSources } from '../../src/database/schema';
 
 /**
  * JR-104 -- `FilterBuilder.create()` against real roles and real rows.
@@ -29,6 +23,12 @@ import { archivedEmails, ingestionSources } from '../../src/database/schema';
  *
  * The tests below assert *rows returned*, not just SQL text. For a row-level access-control
  * primitive, "which records come back" is the contract; the SQL is an implementation detail.
+ *
+ * **Scope after JR-1301:** this file holds only the behaviour that is correct today and must stay
+ * correct through E13's fixes -- it is green before and after. The F1/F3/F7/F8 blocks moved to
+ * `filter-builder-f1-f3.int.test.ts`, `filter-builder-f7.int.test.ts` and
+ * `filter-builder-f8.int.test.ts`, where they now demand the fixed behaviour and are red until it
+ * lands.
  *
  * Classification: `ci`.
  */
@@ -47,9 +47,6 @@ if (harness) {
 }
 const FilterBuilder = harness
 	? (await import('../../src/services/FilterBuilder')).FilterBuilder
-	: undefined;
-const mongoToDrizzle = harness
-	? (await import('../../src/helpers/mongoToDrizzle')).mongoToDrizzle
 	: undefined;
 
 suiteRequiring('ci', 'FilterBuilder.create() over real roles (JR-104)', postgresProbe, () => {
@@ -139,185 +136,39 @@ suiteRequiring('ci', 'FilterBuilder.create() over real roles (JR-104)', postgres
 	});
 
 	/**
-	 * FINDING F7 (JR-104) -- `FilterBuilder` is fail-open when no `can` rule matches.
+	 * The F1 / F3 / F7 / F8 blocks that used to live here have been rewritten into standalone
+	 * regression suites in `JR-1301` (epic E13), because they asserted the defect as if it were the
+	 * contract:
 	 *
-	 * `rulesToQuery()` (@casl/ability/extra) returns `null` when the rule list for
-	 * (action, subject) contains no non-inverted rule -- both when there are no rules at all and
-	 * when there are only `cannot` rules. `FilterBuilder.create()` maps `null` to
-	 * `{ drizzleFilter: undefined, searchFilter: undefined }` and comments it "Full access".
+	 *   - F7 (fail-open `null` branch, plus ADR-017's action offset)
+	 *       -> tests/integration/filter-builder-f7.int.test.ts
+	 *   - F8 (`cannot` + operator condition)
+	 *       -> tests/integration/filter-builder-f8.int.test.ts
+	 *   - F1 (condition-key injection) and F3 (fail-open translation), both against real rows
+	 *       -> tests/integration/filter-builder-f1-f3.int.test.ts
 	 *
-	 * So "this principal has no permission on this subject" and "this principal may see
-	 * everything" are represented by the same value, and the unsafe one is the default. This is
-	 * F3's fail-open at the level where it has consequences: `undefined` reaching
-	 * `ArchivedEmailService.findAll` (services/ArchivedEmailService.ts:62) or `SearchService`
-	 * (services/SearchService.ts:311, :423) is an unscoped query over the whole archive.
-	 *
-	 * Reachability is not blocked by the middleware. `requirePermission` never passes a resource
-	 * object (api/middleware/requirePermission.ts), and the search route gates on
-	 * `('search', 'archive')` (api/routes/search.routes.ts:158) while `SearchService` builds its
-	 * filter for `('read', 'archive')`. A role with `can search archive` and no `read archive`
-	 * rule therefore passes the gate and receives an unfiltered search.
-	 *
-	 * Not fixed here -- reported for the senior developer.
+	 * What stays here is the behaviour that is *correct today* and must survive E13's fixes. That
+	 * separation is deliberate: this file must be green before and after the fixes, the three files
+	 * above are red before and green after.
 	 */
-	it('FINDING F7a: a user with no role at all gets an unrestricted filter', async () => {
-		coverageNotice(
-			'FINDING F7 (JR-104): FilterBuilder.create() returns { drizzleFilter: undefined, ' +
-				'searchFilter: undefined } -- "full access" -- for a principal with no matching `can` ' +
-				'rule. A user with no role at all and a user with only `cannot` rules both land there. ' +
-				'Reported for the senior developer; not fixed in the test epic.'
-		);
-		const userId = await seedUserWithoutRole(db());
-		const source = await seedIngestionSource(db(), { userId: null });
-
-		const result = await build(userId, 'ingestion', 'read');
-		expect(result.drizzleFilter).toBeUndefined();
-		expect(result.searchFilter).toBeUndefined();
-
-		// Observable consequence: the row is returned to a principal with zero permissions.
-		const visible = await db()
-			.select({ id: ingestionSources.id })
-			.from(ingestionSources)
-			.where(and(result.drizzleFilter, eq(ingestionSources.id, source.id)));
-		expect(visible).toHaveLength(1);
-	});
-
-	it('FINDING F7b: a cannot-only policy yields access to the very rows it forbids', async () => {
-		// auditor-specific-mailbox grants read/search on `ingestion` and *denies* read/search on
-		// `archive` for userEmail = dev@openarchiver.com. There is no `can` rule for `archive`.
-		const auditor = await seedPrincipal(
-			db(),
-			loadPolicyFixture('auditor-specific-mailbox'),
-			'auditor-mailbox'
-		);
-		const source = await seedIngestionSource(db(), { userId: null });
-		const forbidden = await seedArchivedEmail(db(), {
-			ingestionSourceId: source.id,
-			userEmail: 'dev@openarchiver.com',
-		});
-		const other = await seedArchivedEmail(db(), {
-			ingestionSourceId: source.id,
-			userEmail: 'someone-else@journaling.test.invalid',
-		});
-
-		const result = await build(auditor.userId, 'archive', 'read');
-		expect(result.drizzleFilter).toBeUndefined();
-		expect(result.searchFilter).toBeUndefined();
-
-		const visible = await db()
-			.select({ id: archivedEmails.id })
-			.from(archivedEmails)
-			.where(and(result.drizzleFilter, inArray(archivedEmails.id, [forbidden, other])));
-		// The explicitly denied row comes back. This is the assertion that makes F7 a finding
-		// rather than a style complaint.
-		expect(visible.map((row) => row.id).sort()).toEqual([forbidden, other].sort());
-	});
-
-	/**
-	 * FINDING F8 (JR-104) -- the `cannot` exclusion path mangles operator conditions.
-	 *
-	 * When an unconditional `can` is combined with `cannot` rules, `FilterBuilder.create()` builds
-	 * the exclusion by wrapping each condition *value* in `$ne`:
-	 *
-	 *     newCondition[key] = { $ne: (condition as any)[key] }
-	 *
-	 * If the original condition value is itself an operator object -- `{ $in: [...] }`,
-	 * `{ $gte: n }` -- the result is `{ $ne: { $in: [...] } }`. Neither translator understands
-	 * that: `mongoToDrizzle` binds the operator object as a query *parameter*, and `mongoToMeli`
-	 * interpolates it as `[object Object]`. The exclusion the policy author wrote does not happen.
-	 */
-	it('FINDING F8: cannot + $in produces an object parameter instead of an exclusion', async () => {
-		coverageNotice(
-			'FINDING F8 (JR-104): FilterBuilder wraps `cannot` condition values in { $ne: value } ' +
-				'without regard for value being an operator object. `cannot ... { $in: [...] }` ' +
-				'becomes { $ne: { $in: [...] } }, which binds an object as a SQL parameter and emits ' +
-				'"[object Object]" into the Meilisearch filter. Reported; not fixed here.'
-		);
-		const blockedSource = await seedIngestionSource(db(), { userId: null });
-		const allowedSource = await seedIngestionSource(db(), { userId: null });
-		const policies: CaslPolicy[] = [
-			{ action: 'read', subject: 'archive' },
-			{
-				inverted: true,
-				action: 'read',
-				subject: 'archive',
-				conditions: { ingestionSourceId: { $in: [blockedSource.id] } },
-			},
-		];
-		const principal = await seedPrincipal(db(), policies, 'cannot-in');
-
-		const blocked = await seedArchivedEmail(db(), {
-			ingestionSourceId: blockedSource.id,
-			userEmail: 'blocked@journaling.test.invalid',
-		});
-		const allowed = await seedArchivedEmail(db(), {
-			ingestionSourceId: allowedSource.id,
-			userEmail: 'allowed@journaling.test.invalid',
-		});
-
-		const { drizzleFilter, searchFilter } = await build(principal.userId, 'archive', 'read');
-
-		// The Meilisearch half is deterministic and needs no engine to observe.
-		expect(searchFilter).toContain('[object Object]');
-
-		// The Drizzle half binds the operator object as a parameter.
-		const rendered = renderSql(drizzleFilter);
-		expect(rendered?.sql).toBe('not "ingestion_source_id" = $1');
-		expect(rendered?.params).toEqual([{ $in: [blockedSource.id] }]);
-
-		// Observable outcome: either Postgres rejects the statement, or the blocked row is not
-		// excluded. What must never happen is the exclusion quietly working -- if it did, this
-		// assertion fails and the finding is obsolete.
-		let outcome: 'error' | string[];
-		try {
-			const rows = await db()
-				.select({ id: archivedEmails.id })
-				.from(archivedEmails)
-				.where(and(drizzleFilter, inArray(archivedEmails.id, [blocked, allowed])));
-			outcome = rows.map((row) => row.id).sort();
-		} catch {
-			outcome = 'error';
-		}
-		const exclusionWorked = Array.isArray(outcome) && outcome.join() === [allowed].join();
-		expect(
-			exclusionWorked,
-			`F8 appears fixed: the cannot/$in exclusion now returns exactly the allowed row ` +
-				`(${JSON.stringify(outcome)}). Invert this expectation and close F8.`
-		).toBe(false);
-	});
-
-	/**
-	 * FINDING F3 at integration level (see 09-befunde-bestandscode.md).
-	 *
-	 * The question JR-104 was asked to answer: what does `FilterBuilder` *actually* return when a
-	 * policy condition cannot be translated? Answer: it does not return anything -- it rejects,
-	 * and not because the Drizzle path is safe.
-	 *
-	 * `mongoToDrizzle` drops the untranslatable branch and yields `undefined` (= no filter =
-	 * unrestricted, F3). `mongoToMeli` throws on an unknown operator. Because
-	 * `FilterBuilder.create()` builds both halves in one object literal and awaits the Meili half,
-	 * the throw wins and the caller sees an exception. The fail-closed behaviour of the whole is
-	 * therefore load-bearing on the strictness of the *search* translator: make `mongoToMeli`
-	 * lenient, or give a caller a drizzle-only path that skips it, and the same policy silently
-	 * becomes unrestricted.
-	 */
-	it('FINDING F3: an untranslatable condition makes create() throw, via the Meili half only', async () => {
-		coverageNotice(
-			'FINDING F3 (integration view, JR-104): for an untranslatable policy condition ' +
-				'mongoToDrizzle() yields undefined (unrestricted) while mongoToMeli() throws. ' +
-				'FilterBuilder.create() therefore rejects -- fail-closed by accident, resting entirely ' +
-				'on the search translator staying strict.'
-		);
+	it('an untranslatable condition never yields an unrestricted filter', async () => {
+		// Kept here as the boundary check for this suite: whatever `create()` does with a policy it
+		// cannot translate, it must not resolve to `{ drizzleFilter: undefined }`. Today it rejects
+		// (because `mongoToMeli` throws), which satisfies this. *Why* that is not good enough --
+		// the Drizzle half on its own is fail-open -- is asserted in filter-builder-f1-f3.
 		const conditions = { subject: { $regex: 'confidential' } };
 		const policies: CaslPolicy[] = [{ action: 'read', subject: 'archive', conditions }];
 		const principal = await seedPrincipal(db(), policies, 'regex');
 
-		await expect(build(principal.userId, 'archive', 'read')).rejects.toThrow(
-			/unsupported operator "\$regex"/
-		);
-
-		// And the half that would have been returned had the Meili translator been lenient:
-		// `undefined`, i.e. no restriction at all.
-		expect(mongoToDrizzle!({ $or: [conditions] })).toBeUndefined();
+		let resolved: Awaited<ReturnType<typeof build>> | undefined;
+		try {
+			resolved = await build(principal.userId, 'archive', 'read');
+		} catch {
+			return; // rejected: fail-closed, nothing further to check
+		}
+		expect(
+			resolved.drizzleFilter,
+			'create() resolved with no filter for a policy condition it cannot translate'
+		).toBeDefined();
 	});
 });
