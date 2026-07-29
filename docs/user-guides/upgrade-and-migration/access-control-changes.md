@@ -120,6 +120,27 @@ The supported operators are the ones documented in
 conditions. Anything else — `$regex` and `$nor` are the ones that come up in practice — was never
 supported and is now refused rather than dropped.
 
+### 8. A `conditions` value that must be an object is checked when the role is saved
+
+`conditions` is a JSON object of condition keys, or it is absent. Saving a role whose `conditions` is
+a number, a string, a boolean, `null` or an array now fails with HTTP `400`. Such a value states no
+condition that can be checked against a row, and it was accepted before.
+
+For policies **already** in your database this release changes nothing about the shape check — it
+happens when a role is saved, not when it is read — but what those policies do today depends on the
+value:
+
+- A value JSON reads as empty — `null`, `false`, `0`, `""` — counts as "this rule carries no
+  condition". The rule then applies without restriction, which for a grant means unrestricted access
+  and for a prohibition means the action is revoked. That was the behaviour before this release and
+  it still is.
+- Any other non-object value — a non-zero number, a non-empty string, `true`, an array — counts as a
+  condition. It cannot be translated, so the request is denied. Before this release such a rule
+  either granted unrestricted access or produced a database error, depending on the value.
+
+The second case is change 1 in a different guise: a role that saw everything and sees nothing
+afterwards. Query 2 below reports both, and says which of the two it found.
+
 ## What is still not checked
 
 A condition key that has the shape of a column reference but names **no existing column** is not
@@ -286,6 +307,24 @@ finding AS (
     WHERE p.rule -> 'conditions' = '{}'::jsonb
 
     UNION ALL
+    -- 8. A "conditions" that exists and is not an object. Not walked into -- there are no keys to
+    --    walk -- so the value itself is reported, together with how it is read.
+    SELECT DISTINCT p.role_name, p.role_slug,
+           'conditions is not an object',
+           format('rule #%s (%s %s %s) has "conditions": %s, which is not an object. %s',
+                  p.rule_no, CASE WHEN p.inverted THEN 'cannot' ELSE 'can' END,
+                  p.action, p.subject, p.rule -> 'conditions',
+                  CASE WHEN p.rule -> 'conditions'
+                            IN ('null'::jsonb, 'false'::jsonb, '0'::jsonb, '""'::jsonb)
+                       THEN 'It counts as "no condition at all", as it did before this release.'
+                       ELSE 'It counts as a condition that cannot be translated, so the request is '
+                            || 'denied where it was unrestricted or an error before.'
+                  END)
+    FROM pair p
+    WHERE p.rule ? 'conditions'
+      AND jsonb_typeof(p.rule -> 'conditions') <> 'object'
+
+    UNION ALL
     -- 5. A prohibition whose condition uses an operator: the exclusion starts working.
     SELECT DISTINCT c.role_name, c.role_slug,
            'prohibition with an operator condition',
@@ -345,9 +384,50 @@ FROM finding
 ORDER BY role_name, finding, detail;
 ```
 
-**No rows means no role in your installation is affected by the changes numbered 1 to 7 above.** Every
-row names the role, the rule inside it, and which change applies; the sections above say what to do
-about each.
+Every row names the role, the rule inside it, and which change applies; the sections above say what to
+do about each.
+
+#### How to read an empty result
+
+No rows means the query found none of the shapes it looks for. That is a narrower statement than "no
+role is affected", and the difference matters enough to spell out. `roles.policies` is a JSONB column
+with no schema behind it, so no query over it can be complete against a policy shape nobody has
+written down yet. What the query does and does not examine:
+
+**It examines:**
+
+- every rule in every row of `roles.policies`, expanded per action and per subject. `manage` is
+  matched against each of the three permissions the application builds a row filter for, and
+  `subject: "all"` is matched against each of them too.
+- the three findings that need no condition at all: a prohibition without a matching grant, a
+  prohibition carrying no condition, and archive search granted without archive read.
+- a `conditions` that **is** an object, walked recursively through nested objects and arrays: the
+  empty object, operator keys, condition key shapes, and empty `$or`/`$and` branch lists.
+- a `conditions` that exists and is **not** an object. The value is reported as it stands; there are
+  no keys inside it to walk, so nothing nested in an array-shaped `conditions` is examined.
+
+**It does not examine:**
+
+- **whether a condition key names a column that exists.** Query 3 below covers that, for the subjects
+  it can resolve. Run it as well — an empty result from Query 2 does not stand in for it.
+- **the values inside a condition.** A condition on the right column with the wrong value is a policy
+  mistake, but not one this release changes.
+- **anything outside the `roles` table.** A role in a database this query is not run against is
+  invisible to it, and so is any permission granted by some other mechanism.
+- **a rule whose own structure is not the documented one.** The query assumes each rule is an object
+  carrying `action`, `subject`, optionally `inverted` and optionally `conditions`. A rule that is not
+  that — a bare number or string where a rule object belongs, an `action` or `subject` that is neither
+  a string nor an array of strings — is skipped without a row. If you have hand-edited policies
+  directly in the database, read those roles yourself.
+
+One structural problem is not skipped but reported as a failure: if any `roles.policies` value is not
+a JSON array, the query stops with `ERROR: cannot extract elements from an object`. That is the query
+telling you it cannot answer, not an empty result — find the offending row with
+`SELECT name FROM roles WHERE jsonb_typeof(policies) <> 'array';` and fix it before you read anything
+into either query.
+
+Both queries are worth running again after the upgrade, and neither replaces the last step on this
+page: logging in as a user of each role you changed.
 
 ### Query 3 — condition keys that name no column
 
@@ -357,7 +437,17 @@ table the filter is applied to — archived emails for the `archive` subject, in
 `ingestion` subject and for the `ingestionSource.` prefix — and reports the keys that name no column
 there.
 
-The application does **not** perform this check. The query does, and only for those two subjects.
+A rule whose subject is `all` is resolved against **both** tables, because `all` is not a third
+subject: it maps onto every subject, so such a rule filters the archive and the ingestion source list
+alike. You get one row per table the key fails to resolve against, so a key that exists in neither
+appears twice. A key under `subject: "all"` that exists in one table and not the other is reported for
+the table it is missing from — and that is a real finding, not noise: the request against that other
+subject fails, even though the same rule works for the archive.
+
+The application does **not** perform this check. The query does, and only for the two subjects above
+and for `all`. A condition key on any other subject is not resolved, because the application builds no
+row filter for those. A two-part key whose relation prefix does not resolve is not listed here either;
+Query 2 reports it as a key-shape finding instead.
 
 ```sql
 WITH RECURSIVE rule AS (
@@ -402,20 +492,26 @@ key_use AS (
       AND NOT EXISTS (SELECT 1 FROM unnest(string_to_array(c.key, '.')) AS seg
                       WHERE seg !~ '^[A-Za-z_][A-Za-z0-9_]*$')
 ),
+subject_table (subject, table_name) AS (
+    VALUES ('archive',   'archived_emails'),
+           ('ingestion', 'ingestion_sources'),
+           -- "all" is not a third subject: it maps onto every subject, so a rule written for it
+           -- filters both tables and every key in it has to resolve against both.
+           ('all',       'archived_emails'),
+           ('all',       'ingestion_sources')
+),
 resolved AS (
-    SELECT k.role_name, k.rule_no, k.subject, k.key,
+    SELECT DISTINCT k.role_name, k.rule_no, k.subject, k.key,
            CASE
                WHEN array_length(string_to_array(k.key, '.'), 1) = 2
                     AND split_part(k.key, '.', 1) = 'ingestionSource' THEN 'ingestion_sources'
-               WHEN array_length(string_to_array(k.key, '.'), 1) = 1 AND k.subject = 'archive'
-                    THEN 'archived_emails'
-               WHEN array_length(string_to_array(k.key, '.'), 1) = 1 AND k.subject = 'ingestion'
-                    THEN 'ingestion_sources'
+               WHEN array_length(string_to_array(k.key, '.'), 1) = 1 THEN st.table_name
            END AS table_name,
            lower(regexp_replace(
                split_part(k.key, '.', array_length(string_to_array(k.key, '.'), 1)),
                '([A-Z])', '_\1', 'g')) AS column_name
     FROM key_use k
+    JOIN subject_table st ON st.subject = k.subject
 )
 SELECT role_name, rule_no, subject, key, table_name, column_name
 FROM resolved r
@@ -425,7 +521,7 @@ WHERE table_name IS NOT NULL
       WHERE c.table_schema = 'public'
         AND c.table_name = r.table_name
         AND c.column_name = r.column_name)
-ORDER BY role_name, rule_no, key;
+ORDER BY role_name, rule_no, key, table_name;
 ```
 
 Every row is a rule that does not do what its author expected, in this release and in the previous
