@@ -71,16 +71,17 @@ export class FilterBuilder {
 		let query = rulesToQuery(ability, action, resourceType, (rule) => rule.conditions);
 
 		if (hasUnconditionalCan && cannotConditions.length > 0) {
-			// If there's a broad `can` rule, the final query should be an AND of all
-			// the `cannot` conditions, effectively excluding them.
-			const andConditions = cannotConditions.map((condition) => {
-				const newCondition: Record<string, any> = {};
-				for (const key in condition) {
-					newCondition[key] = { $ne: (condition as any)[key] };
-				}
-				return newCondition;
-			});
-			query = { $and: andConditions };
+			// A broad `can` narrowed by `cannot` rules: the filter is the conjunction of the
+			// negation of every prohibition.
+			//
+			// The negation is formed at *query* level (`$not` around the whole condition) and not
+			// by wrapping each condition value in `$ne`. Wrapping the value breaks as soon as the
+			// value is itself an operator object: `{ $in: [...] }` became `{ $ne: { $in: [...] } }`,
+			// which no translator understands -- Drizzle bound the operator object as a query
+			// parameter and Meilisearch received the string `[object Object]`, so the exclusion the
+			// policy author wrote did not happen (finding F8). `$not` composes with every operator
+			// and both translators already implement it.
+			query = { $and: cannotConditions.map((condition) => ({ $not: condition })) };
 		}
 
 		// `rulesToQuery` returns `null` when the rule list holds no non-inverted rule — no rule at
