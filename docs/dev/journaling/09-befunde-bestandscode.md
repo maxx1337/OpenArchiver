@@ -995,6 +995,180 @@ nach `acquireTestDatabase()`) — der Erwerb liegt vor allem, was ihn absichern 
 fällig ist. Umgehung bis dahin: nach einem gefilterten Lauf einmal vollständig laufen, oder
 `sweepStaleHarnessDatabases()` von Hand aufrufen.
 
+## F25 — Die Statusaussage „F4 **und F5** sind im Code als bewusst offen kommentiert" ist für F5 falsch
+
+**Kategorie:** Doku über den eigenen Code · **Schwere:** niedrig ·
+**Ort:** `06-status.md` („Bewusst nicht angefasst"), `07-session-handover.md` · **Status:** offen ·
+**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+Beide Statusdateien behaupten wörtlich: „F4 (nur der erste Operator wird gelesen) und F5
+(`{field:null}` ⇒ `= NULL`) sind in `mongoToDrizzle` erhalten und **jetzt mit einem Kommentar als
+bewusst offen markiert**". Nachgeprüft am Code:
+
+```
+grep -rn "F4\|F5\|finding F" --include=*.ts packages/backend/src/ | grep -v test
+  packages/backend/src/helpers/mongoToDrizzle.ts:108:  … (finding F4) and is deliberately left as it is: it is outside E13's scope.
+  → kein einziger Treffer für F5
+```
+
+**F4 hat den Kommentar** (`mongoToDrizzle.ts:107–108`, direkt über `Object.keys(value)[0]`).
+**F5 hat keinen.** Der `{field:null}`-Fall entsteht implizit im `else`-Zweig (`mongoToDrizzle.ts:146`,
+`eq(column, value)`), unkommentiert.
+
+**Das Verhalten beider ist unverändert** — unabhängig gemessen, indem der Übersetzer von `efea6bc`
+gegen den von `HEAD` auf denselben Eingaben verglichen wurde:
+
+```
+{"sizeBytes":{"$gte":1,"$lte":5}}        pre = post = "size_bytes" >= $1        params [1]
+{"deletedAt":null}                       pre = post = "deleted_at" = $1         params [null]
+{"userEmail":null}                       pre = post = "user_email" = $1         params [null]
+{"sizeBytes":{"$gt":1,"$lt":9,"$gte":2}} pre = post = "size_bytes" > $1         params [1]
+{"ingestionSource.userId":null}          pre = post = "ingestion_sources"."user_id" = $1  [null]
+```
+
+Beide sind zusätzlich durch grüne Golden-Pins festgehalten (`second operator in the same object is
+dropped`, `literal null becomes = NULL, not IS NULL`). Es ist also **kein** Code- und **kein**
+Verhaltensdefekt, sondern eine unbelegte Aussage über den eigenen Code — genau die Klasse, die
+`JR-1309` gegen den Code prüfen sollte. Behebung: entweder den F5-Kommentar nachziehen oder die
+Aussage in beiden Statusdateien auf F4 einschränken.
+
+## F26 — Ein `can` mit **falsy**, aber vorhandenem `conditions` bedeutet weiter Vollzugriff
+
+**Schwere:** mittel (Voraussetzung: Rollenschreibrecht, also Super Admin — dieselbe Vorbedingung wie
+F1) · **Ort:** `packages/backend/src/services/FilterBuilder.ts:51–53`,
+`packages/backend/src/iam-policy/policy-validator.ts:76` · **Status:** offen ·
+**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+`JR-1302` hat **F19** behoben: ein `can` mit `conditions: {}` gilt nicht mehr als unbedingt. Die
+Prüfung ist aber eine **Truthiness**-Prüfung (`!rule.conditions`), und `{}` ist das einzige _truthy_
+Mitglied dieser Familie. Jeder falsy Wert wird weiter als „unbedingtes `can`" gelesen und liefert
+`{ drizzleFilter: undefined, searchFilter: undefined }` — Vollzugriff. Gegen echtes Postgres 16.13
+gemessen, eine Rolle je Variante, `('archive','read')`:
+
+```
+validator=ACCEPT | THROWS (deny)                              | conditions: {}      (F19, behoben)
+validator=ACCEPT | UNRESTRICTED (2 von 2 Zeilen erreichbar)   | conditions: ""
+validator=ACCEPT | UNRESTRICTED (2 von 2 Zeilen erreichbar)   | conditions: 0
+validator=ACCEPT | UNRESTRICTED (2 von 2 Zeilen erreichbar)   | conditions: false
+validator=ACCEPT | UNRESTRICTED (2 von 2 Zeilen erreichbar)   | conditions: null
+validator=ACCEPT | THROWS (deny)                              | conditions: 5
+validator=ACCEPT | THROWS (deny)                              | conditions: "userEmail"
+```
+
+`PolicyValidator` prüft die Keys hinter `if (policy.conditions)`, also **gar nicht** für einen falsy
+Wert — die Policy ist über `POST /roles` speicherbar.
+
+**Kein Regress:** vor und nach E13 identisch (`FilterBuilderPre` gegen `FilterBuilder` auf derselben
+Rolle, beide `UNRESTRICTED`). Aber es ist dieselbe Familie, die **ADR-016** beseitigen soll: „kein
+Recht auf dieses Subject" und „darf alles sehen" dürfen nicht vom selben Wert dargestellt werden. Für
+`conditions: null` ist Vollzugriff vertretbar („keine Bedingung"); für `""`, `0` und `false` ist es
+ein stillschweigend erweitertes Recht aus einer offensichtlich fehlerhaften Policy.
+
+**Bricht kein Akzeptanzkriterium von `JR-1302`** (dessen Kriterien nennen
+`auditor-specific-mailbox.json` und den Nutzer ohne Rolle, beide erfüllt). Vorschlag: zusammen mit
+`JR-1311` behandeln — dort wird `conditions` ohnehin schärfer geprüft. PO entscheidet über den Ort.
+
+## F27 — Query 2 der Betreiberanleitung hat **falsch-negative**: `conditions` als Skalar oder Array wird nicht gefunden
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
+**Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 2 **und** Query 3,
+jeweils die `cond`-CTE · **Status:** offen · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+Beide `cond`-CTEs sind auf `jsonb_typeof(… -> 'conditions') = 'object'` gefiltert. Ein `conditions`,
+das ein **Skalar** oder ein **Array** ist, ist damit für beide Abfragen unsichtbar — obwohl sich das
+Verhalten ändert. Die Blöcke wurden **aus der veröffentlichten Markdown-Datei extrahiert und wörtlich**
+gegen ein echtes PostgreSQL 16.13 mit 25 gesäten Rollen ausgeführt; parallel wurde die Anwendung vor
+(`efea6bc`) und nach E13 auf derselben Policy gemessen:
+
+```
+CHANGED  pre=SQL-ERROR     post=THROWS(deny)  docQuery=SILENT  | conditions: "userEmail"  (String)
+CHANGED  pre=SQL-ERROR     post=THROWS(deny)  docQuery=SILENT  | conditions: [ {...} ]    (Array)
+CHANGED  pre=UNRESTRICTED  post=THROWS(deny)  docQuery=SILENT  | conditions: 5            (Zahl)
+CHANGED  pre=UNRESTRICTED  post=THROWS(deny)  docQuery=reports | conditions: {}           (Kontrolle)
+```
+
+**Der dritte Fall ist der gefährliche.** `conditions: 5` ist vor E13 **unbeschränkter Zugriff auf das
+ganze Archiv** und danach eine Verweigerung — das ist wörtlich die Kopfzeile von Änderung 1 („a user
+who previously saw everything through such a role now sees nothing"). Die Anleitung sagt dazu:
+
+> **No rows means no role in your installation is affected by the changes numbered 1 to 7 above.**
+
+Dieser Satz ist mit einem Gegenbeispiel widerlegt. Ein Betreiber mit genau dieser Rolle liest „nicht
+betroffen" und verliert nach dem Update den Zugriff, ohne Vorwarnung.
+
+**Einschränkung, damit die Schwere nicht überzeichnet wird:** ein skalares `conditions` ist eine
+**fehlerhafte** Policy, keine übliche. Die Eintrittswahrscheinlichkeit ist niedrig. Falsch ist die
+**Unbedingtheit** der Zusage, nicht die Nützlichkeit der Abfrage: sie findet 13 von 13 absichtlich
+betroffenen Formen und meldet keine der vier Gegenproben. Behebung: `cond` auf jedes `conditions`
+ausdehnen, das existiert und nicht `object` ist, und einen eigenen Befundtyp dafür ausgeben — oder den
+Absolutsatz entschärfen.
+
+## F28 — Query 3 prüft Keys nicht für Regeln mit `subject: "all"`
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig bis mittel ·
+**Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 3, CTE `resolved` ·
+**Status:** offen · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+`resolved.table_name` wird nur für `subject = 'archive'` bzw. `'ingestion'` gesetzt und die
+Ergebniszeile über `WHERE table_name IS NOT NULL` verworfen. Eine Regel mit `subject: "all"` filtert
+aber sehr wohl das Archiv, weil `FilterBuilder`/CASL `all` auf jedes Subject abbildet. Gemessen:
+
+```
+Rolle: [{"action":"manage","subject":"all","conditions":{"userEmial":"x@example.com"}}]
+  Anwendung vor E13:  SQL-ERROR      (Spalte user_emial existiert nicht)
+  Anwendung nach E13: SQL-ERROR      (unverändert)
+  Query 3:            keine Zeile
+  Query 2:            keine Zeile
+```
+
+Zum Vergleich findet Query 3 denselben Tippfehler zuverlässig, sobald das Subject `archive` ist:
+`A11 typo column name | 1 | archive | userEmial | archived_emails | user_emial`.
+
+Die Anleitung **benennt** die Grenze („The application does not perform this check. The query does,
+and only for those two subjects."), aber ein Leser schließt daraus nicht, dass eine `manage all`-Regel
+herausfällt — `all` **ist** für ihn diese beiden Subjects. Behebung: `subject = 'all'` auf beide
+Tabellen abbilden (zwei Zeilen je Key) oder die Grenze ausdrücklich mit `all` benennen.
+
+## F29 — `PolicyValidator` und `mongoToDrizzle` sind sich über die erlaubte Key-Form nicht einig
+
+**Schwere:** niedrig (fail-closed, kein Injektionsweg) · **Ort:**
+`packages/backend/src/iam-policy/policy-validator.ts` `areConditionKeysValid()` gegen
+`packages/backend/src/helpers/mongoToDrizzle.ts` `getDrizzleColumn()` · **Status:** offen ·
+**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+
+Der Validator akzeptiert **beliebig viele** punktgetrennte Identifier-Segmente und **jede**
+Relation; der Übersetzer akzeptiert höchstens zwei Segmente und nur Relationen aus
+`relationToTableMap`. Gemessen, beide Gates auf demselben Key:
+
+```
+key="foo"                       validator=ACCEPT  mongoToDrizzle=TRANSLATED   (ADR-019-Restspalt, JR-1311)
+key="a.b.c"                     validator=ACCEPT  mongoToDrizzle=REFUSED      ← Divergenz
+key="attachment.name"           validator=ACCEPT  mongoToDrizzle=REFUSED      ← Divergenz
+key="foo.bar"                   validator=ACCEPT  mongoToDrizzle=REFUSED      ← Divergenz
+key="ingestionSource.userId"    validator=ACCEPT  mongoToDrizzle=TRANSLATED
+key="id\" or 1=1 --"            validator=REJECT  mongoToDrizzle=REFUSED
+```
+
+Folge: eine Rolle mit `attachment.name` wird mit **HTTP 200** gespeichert und macht danach jede über
+`FilterBuilder` gescopte Anfrage dieser Rolle unbrauchbar. Fail-closed, also kein Sicherheitsproblem —
+aber zwei Aussagen sind damit falsch:
+
+1. **Die veröffentlichte Doku behauptet das Gegenteil.** `access-control-changes.md` §6: „**Saving** a
+   role whose condition key is not of that shape fails with HTTP `400` and a message naming the key",
+   und „Only `ingestionSource` resolves as a relation prefix. A two-part key with any other prefix, and
+   a key with more than two parts, is **refused**." Die Form ist dort als „column name, optionally
+   prefixed by a **resolvable** relation" definiert — `attachment.name` erfüllt sie nicht und wird beim
+   Speichern trotzdem angenommen.
+2. **`JR-1306`s Akzeptanzkriterium** endet auf „Relationszweig ebenso; `PolicyValidator` weist solche
+   Policies **beim Anlegen** ab". Für den Relationszweig und für Keys mit mehr als zwei Segmenten tut
+   er das nicht.
+
+**Nicht von ADR-019 gedeckt.** ADR-019 nimmt ausdrücklich nur die **Spaltenexistenz** aus (`foo`) und
+begründet das damit, dass `mongoToDrizzle` subjektagnostisch ist. Die Relation kennt der Validator
+dagegen genauso gut wie der Übersetzer — `relationToTableMap` ist eine Konstante. Behebung ist klein:
+`areConditionKeysValid()` auf ≤ 2 Segmente und auf `relationToTableMap` prüfen, dann sind beide Gates
+deckungsgleich und die Doku stimmt wieder.
+
 ## Bereits im Backlog erfasste Bestandsprobleme
 
 Diese wurden in E0 gefunden und haben schon eine Task — sie gehören nicht in die Liste oben:

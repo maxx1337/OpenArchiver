@@ -89,16 +89,23 @@ Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenomm
 **E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
 Regressionstests für F1/F3/F7/F8 auf den gewünschten Zustand umgestellt (21 rot), die fünf Fix-Tasks
 `JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt, und der letzte rote Test war ein
-Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelöst. **Die Suite ist grün:
-`224 passed | 2 skipped`, Exit 0**, F1/F3/F7/F8/F19/F20/F22 behoben, kein vorher grüner Test rot
-geworden.
+Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelöst. Die Suite ist grün:
+`224 passed | 2 skipped`, Exit 0, F1/F3/F7/F8/F19/F20/F22 behoben. `JR-1307` (ADR-016 plus
+Betreiberdoku) und `JR-1308` (Upstream-Entwurf in `10-upstream-meldung.md`, **nicht versendet**) sind
+geschrieben.
 
-`JR-1307` (ADR-016 plus Betreiberdoku mit getesteter Prüf-SQL) und `JR-1308` (Upstream-Entwurf in
-`10-upstream-meldung.md`, **nicht versendet**) sind ebenfalls erledigt.
+**Die Abnahme `JR-1309` ist durchgeführt — Ergebnis: E13 ist _nicht_ abgenommen** (2026-07-29). Die
+**Codekorrekturen sind unabhängig belegt**: der Injektionsweg ist an beiden Gates zu (12 Nutzlasten
+inklusive Umgehungsversuchen, 0 fremde Zeilen), `FilterBuilder` ist zeilenscharf fail-closed, alle
+Regressionstests sind ohne den jeweiligen Fix rot, und die Suite läuft auch in der CI auf PostgreSQL
+17.10 grün. Gebrochen ist die **betreibersichtbare Hälfte**: die Prüf-SQL aus `JR-1307` findet eine
+Policy-Form nicht, die von „sieht alles" auf „sieht nichts" umschlägt (**F27**), und die
+veröffentlichte Doku behauptet eine Ablehnung beim Speichern, die nicht stattfindet (**F29**, zugleich
+`JR-1306`s letztes Kriterium). Fünf neue Befunde **F25–F29**.
 
-**E13 ist damit inhaltlich vollständig, aber ausdrücklich _nicht_ abgenommen.** Offen ist **nur noch
-`JR-1309`** — die unabhängige Abnahme, in einer **eigenen** Session. Kein Rückmerge, kein PR. Es
-existiert noch **kein** Produktionscode für den Receiver selbst.
+**Nächster Schritt:** Nacharbeit F29 → F27 → F28 → F25 (F26 ist eine PO-Entscheidung), dann die
+erneute Abnahme **`JR-1309a`**. Kein Rückmerge, kein PR. Es existiert noch **kein** Produktionscode
+für den Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 
