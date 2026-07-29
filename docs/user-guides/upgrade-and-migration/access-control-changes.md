@@ -2,8 +2,8 @@
 
 Read this page **before** upgrading to a release whose release notes point to it. It describes a set
 of changes to the way role policies are evaluated, and it contains SQL you can run against your own
-database — on your current version, before you upgrade — to find out which of your roles behave
-differently afterwards.
+database — on your current version, before you upgrade — to look for the roles that behave differently
+afterwards.
 
 None of the changes touch the policy format. Your stored policies are read exactly as before; what
 changes is the answer the application gives for a few specific shapes of policy.
@@ -19,8 +19,11 @@ whose only statement about archived emails was a prohibition therefore granted u
 the whole archive. That is now a denial: a user who previously saw everything through such a role now
 sees nothing.
 
-The rest of this page lists every shape of policy this affects, and how to find those shapes in your
-own database.
+The rest of this page describes the shapes of policy these changes affect, gives you queries that look
+for them in your own database, and — because a query over a schemaless column cannot be shown to be
+complete — a behaviour check that does not depend on the shapes at all. Read
+[How to read an empty result](#how-to-read-an-empty-result) before you take a query's output as an
+all-clear.
 
 ## What changes
 
@@ -64,6 +67,10 @@ A rule written as `"conditions": {}` states no condition that can be checked aga
 denied rather than treated as an unconditional grant. Either remove the key, which makes the rule
 unconditional on purpose, or fill in the condition you meant.
 
+An empty object states nothing wherever it stands, so the same applies below the top level: a branch of
+an `$or`/`$and` written as `{}`, the body of a `$not`, or the value of a condition key as in
+`{"userEmail": {}}`. Such a condition is refused when the policy is used, which is change 7.
+
 ### 4. Searching the archive uses the search permission
 
 The row filter for a search over the archive is now built from the role's `search` rules. It was
@@ -106,9 +113,12 @@ have no effect at all. It was neither honoured nor reported — the rule silentl
 
 ### 7. A condition that cannot be translated raises an error
 
-A stored policy whose condition cannot be expressed as a database query — an operator outside the
-supported list, an `$or` or `$and` with no branches — now produces an error for the requests that need
-that policy. It is no longer partially translated.
+A stored policy whose condition cannot be expressed as a database query now produces an error for the
+requests that need that policy. It is no longer partially translated. Conditions in this class are: an
+operator outside the supported list; an `$or` or `$and` with no branches, or one whose value is not a
+list of branches; a branch of an `$or`/`$and`, or the body of a `$not`, that is not an object of
+condition keys; and an empty condition object — not only as the rule's own `conditions`, but also as a
+branch or as the value of a condition key, where it is just as untranslatable.
 
 That is deliberate: a partially translated condition means something different from what the policy
 says, in either direction — it can hide rows the role is entitled to, and it can expose rows a
@@ -125,6 +135,10 @@ supported and is now refused rather than dropped.
 `conditions` is a JSON object of condition keys, or it is absent. Saving a role whose `conditions` is
 a number, a string, a boolean, `null` or an array now fails with HTTP `400`. Such a value states no
 condition that can be checked against a row, and it was accepted before.
+
+This check is made on the rule's own `conditions`. A value in the wrong shape **deeper inside** a
+condition — a branch of an `$or`, the body of a `$not`, an empty object as the value of a key — is not
+refused when the role is saved; it is refused when the policy is used, which is change 7.
 
 For policies **already** in your database this release changes nothing about the shape check — it
 happens when a role is saved, not when it is read — but what those policies do today depends on the
@@ -149,8 +163,8 @@ surfaces as a database error. A typo in a column name is the usual cause.
 
 The check cannot be made when the role is saved, because the same policy statement can be written for
 several subjects, and the column set depends on the subject. Do not read this page as "your policies
-are fully validated": the third query below is what covers this case, and you have to run it
-yourself.
+are fully validated": the third query below is what looks for this case, for the subjects it can
+resolve, and you have to run it yourself.
 
 ## The predefined roles are not affected
 
@@ -200,13 +214,21 @@ that they are meant to have no access.
 
 ### Query 2 — roles whose behaviour changes
 
-This is the main check. It expands every rule in `roles.policies`, walks into the `conditions` objects,
-and reports one row per role and finding, with the rule number the finding is in — counted from 1 in
-the order the rules appear in the policy.
+This is the widest of the three queries. It expands every rule in `roles.policies`, walks into the
+`conditions` objects, and reports one row per role and finding, with the rule number the finding is in
+— counted from 1 in the order the rules appear in the policy. What it reports, and what it cannot, is
+spelled out under [How to read an empty result](#how-to-read-an-empty-result) below the query; read
+that before you act on the output, in either direction.
 
 The row-level findings are limited to the three permissions the application actually builds a row
 filter for: reading archived emails, searching the archive, and listing ingestion sources. A role that
-has no rule for some other combination is not reported, because nothing filters on it.
+has no rule for some other combination is not reported, because nothing filters on it. The same limit
+applies to the finding for a `conditions` that is not an object at all, which is reported per action and
+subject.
+
+The findings **inside** a `conditions` object — condition keys, operators, and the shape of the nodes
+below the top level — are not limited that way. They are reported for every rule in the policy, because
+a condition the application refuses is worth fixing whatever action and subject it is attached to.
 
 ```sql
 WITH RECURSIVE rule AS (
@@ -246,12 +268,16 @@ pair AS (
 cond AS (
     SELECT r0.role_name, r0.role_slug, r0.rule_no, r0.inverted,
            NULL::text AS key,
+           '"conditions"'::text AS path,
            r0.rule -> 'conditions' AS node
     FROM (SELECT rule.*, coalesce((rule.rule ->> 'inverted')::boolean, false) AS inverted
           FROM rule) r0
     WHERE jsonb_typeof(r0.rule -> 'conditions') = 'object'
   UNION ALL
-    SELECT c.role_name, c.role_slug, c.rule_no, c.inverted, child.key, child.value
+    SELECT c.role_name, c.role_slug, c.rule_no, c.inverted, child.key,
+           c.path || CASE WHEN child.key IS NULL THEN ' -> []'
+                          ELSE ' -> ' || to_json(child.key)::text END,
+           child.value
     FROM cond c
     CROSS JOIN LATERAL (
         SELECT kv.key, kv.value
@@ -297,14 +323,17 @@ finding AS (
       AND (NOT (p.rule ? 'conditions') OR jsonb_typeof(p.rule -> 'conditions') = 'null')
 
     UNION ALL
-    -- 3. An empty condition object.
-    SELECT DISTINCT p.role_name, p.role_slug,
-           'empty conditions object',
-           format('rule #%s (%s %s %s) has "conditions": {}',
-                  p.rule_no, CASE WHEN p.inverted THEN 'cannot' ELSE 'can' END,
-                  p.action, p.subject)
-    FROM pair p
-    WHERE p.rule -> 'conditions' = '{}'::jsonb
+    -- 3. An empty condition object: the rule's own "conditions", and every node below it that the
+    --    walk reaches. The application refuses one wherever it stands, so a root-only check would
+    --    stay quiet about `{"$or": [{"userEmail": "a@x"}, {}]}`, which fails exactly the way
+    --    `"conditions": {}` does. An ordinary condition value is a scalar or an operator object and
+    --    is not matched here.
+    SELECT DISTINCT c.role_name, c.role_slug,
+           'empty condition object',
+           format('rule #%s: %s is {}, which states no condition that can be checked against a row',
+                  c.rule_no, c.path)
+    FROM cond c
+    WHERE c.node = '{}'::jsonb
 
     UNION ALL
     -- 8. A "conditions" that exists and is not an object. Not walked into -- there are no keys to
@@ -378,6 +407,43 @@ finding AS (
     WHERE c.key IN ('$or', '$and')
       AND jsonb_typeof(c.node) = 'array'
       AND jsonb_array_length(c.node) = 0
+
+    UNION ALL
+    -- 7. A branch of an "$or"/"$and" that is not a condition object. Each branch is a condition in
+    --    its own right and is checked like the rule's own "conditions", so a number, a string, a
+    --    list or null in that position is refused. Only branch positions are read: this is
+    --    deliberately not "any node that is not an object", which would report the value of every
+    --    ordinary condition, and not the elements of an operand list such as the array of an "$in",
+    --    whose elements are values rather than conditions.
+    SELECT DISTINCT c.role_name, c.role_slug,
+           'condition node is not an object',
+           format('rule #%s: a branch of %s is %s, not an object of condition keys',
+                  c.rule_no, c.path, b.value)
+    FROM cond c
+    CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN c.key IN ('$or', '$and') AND jsonb_typeof(c.node) = 'array'
+             THEN c.node ELSE '[]'::jsonb END) AS b(value)
+    WHERE jsonb_typeof(b.value) <> 'object'
+
+    UNION ALL
+    -- 7. The body of a "$not" that is not a condition object, for the same reason.
+    SELECT DISTINCT c.role_name, c.role_slug,
+           'condition node is not an object',
+           format('rule #%s: the body of %s is %s, not an object of condition keys',
+                  c.rule_no, c.path, c.node)
+    FROM cond c
+    WHERE c.key = '$not'
+      AND jsonb_typeof(c.node) <> 'object'
+
+    UNION ALL
+    -- 7. An "$or"/"$and" whose value is not a list of branches at all.
+    SELECT DISTINCT c.role_name, c.role_slug,
+           'condition branch list is not an array',
+           format('rule #%s: %s is %s, not an array of branches',
+                  c.rule_no, c.path, c.node)
+    FROM cond c
+    WHERE c.key IN ('$or', '$and')
+      AND jsonb_typeof(c.node) <> 'array'
 )
 SELECT role_name, coalesce(role_slug, '(none)') AS slug, finding, detail
 FROM finding
@@ -389,29 +455,39 @@ do about each.
 
 #### How to read an empty result
 
-No rows means the query found none of the shapes it looks for. That is a narrower statement than "no
-role is affected", and the difference matters enough to spell out. `roles.policies` is a JSONB column
-with no schema behind it, so no query over it can be complete against a policy shape nobody has
-written down yet. What the query does and does not examine:
+No rows means the query reported none of its findings. It does **not** mean that no role is affected,
+and the difference matters enough to spell out: `roles.policies` is a JSONB column with no schema
+behind it. A policy can be shaped in a way nobody has written down, so **a query over that column
+cannot be shown to be complete** — for any list of shapes, another one can be constructed a level
+deeper. Read an empty result as an indication, not as a clearance, and run the behaviour check in
+[After the upgrade](#after-the-upgrade), which does not depend on knowing the shapes at all.
 
-**It examines:**
+**What it reports:**
 
 - every rule in every row of `roles.policies`, expanded per action and per subject. `manage` is
   matched against each of the three permissions the application builds a row filter for, and
   `subject: "all"` is matched against each of them too.
 - the three findings that need no condition at all: a prohibition without a matching grant, a
   prohibition carrying no condition, and archive search granted without archive read.
-- a `conditions` that **is** an object, walked recursively through nested objects and arrays: the
-  empty object, operator keys, condition key shapes, and empty `$or`/`$and` branch lists.
-- a `conditions` that exists and is **not** an object. The value is reported as it stands; there are
-  no keys inside it to walk, so nothing nested in an array-shaped `conditions` is examined.
+- a `conditions` that exists and is **not** an object, together with which of the two readings under
+  change 8 applies to the value it found. That value is reported as it stands and is not walked into,
+  so a condition nested inside an array-shaped `conditions` gets no finding of its own.
+- findings inside a `conditions` that **is** an object, at the rule's own `conditions` and at the
+  nodes below it the walk descends into: an empty condition object, an operator key, the shape of a
+  condition key, a relation prefix that does not resolve, an `$or`/`$and` with no branches or with a
+  value that is not a list of branches, and an `$or`/`$and` branch or `$not` body that is not an
+  object of condition keys. Each finding names the position it was found at, so
+  `"conditions" -> "$or" -> []` is a branch and `"conditions" -> "userEmail"` is the value of a key.
 
-**It does not examine:**
+**What it does not report:**
 
-- **whether a condition key names a column that exists.** Query 3 below covers that, for the subjects
-  it can resolve. Run it as well — an empty result from Query 2 does not stand in for it.
-- **the values inside a condition.** A condition on the right column with the wrong value is a policy
-  mistake, but not one this release changes.
+- **whether a condition key names a column that exists.** Query 3 below looks for that, for the
+  subjects it can resolve. Run it as well — an empty result from Query 2 does not stand in for it.
+- **a scalar value in the wrong place.** A condition on the right column with a wrong value — an
+  address that is no longer in use, an ID that belongs to something else — is a policy mistake this
+  page's queries cannot tell from a correct one. A value that is itself a **structure** is a different
+  matter: an empty object, or a branch list where a value belongs, changes what the rule does, and it
+  is reported as one of the findings above.
 - **anything outside the `roles` table.** A role in a database this query is not run against is
   invisible to it, and so is any permission granted by some other mechanism.
 - **a rule whose own structure is not the documented one.** The query assumes each rule is an object
@@ -419,6 +495,9 @@ written down yet. What the query does and does not examine:
   that — a bare number or string where a rule object belongs, an `action` or `subject` that is neither
   a string nor an array of strings — is skipped without a row. If you have hand-edited policies
   directly in the database, read those roles yourself.
+- **a shape that is not in the list above.** That is the limit of a query over a schemaless column, not
+  a gap somebody forgot to close: the queries report what has been written down, and the behaviour
+  check is what covers the rest.
 
 One structural problem is not skipped but reported as a failure: if any `roles.policies` value is not
 a JSON array, the query stops with `ERROR: cannot extract elements from an object`. That is the query
@@ -426,8 +505,8 @@ telling you it cannot answer, not an empty result — find the offending row wit
 `SELECT name FROM roles WHERE jsonb_typeof(policies) <> 'array';` and fix it before you read anything
 into either query.
 
-Both queries are worth running again after the upgrade, and neither replaces the last step on this
-page: logging in as a user of each role you changed.
+Query 2 and Query 3 are worth running again after the upgrade, and neither replaces the last step on
+this page: exercising each role you changed.
 
 ### Query 3 — condition keys that name no column
 
@@ -529,6 +608,23 @@ one. Fix the key, or drop the rule.
 
 ## After the upgrade
 
-Log in as a user of each role you changed and confirm that the archive list and the search return what
-that role is meant to see. An empty result where you expect rows means the role has no grant for the
-permission being checked — go back to change 1 above.
+The queries look for shapes in your policies. This check looks at behaviour instead, and that is why it
+does not depend on any list of shapes being complete: it exercises the policies you actually have,
+whatever they look like inside.
+
+1. **Before you upgrade**, write down for each restricted role what a user holding it sees: how many
+   rows the archive list returns, and the result count of one search. A role that has no user of its
+   own can be measured with a test user you assign it to.
+2. **After the upgrade**, or on a copy of the installation if you would rather not find this out in
+   production, log in as a user of each of those roles and take the same two numbers again.
+3. **Compare them.** A role that now returns nothing, or noticeably fewer rows, is affected by one of
+   the changes above — the sections say which one and what to do. A role whose numbers are unchanged is
+   not affected, whatever the queries did or did not report about it.
+
+An empty result where you expect rows means the role has no grant for the permission being checked — go
+back to change 1 above.
+
+This step is cheaper than it was before this release, because a policy the application cannot translate
+no longer fails quietly. The request that needs it returns an error instead of a result set, and the
+reason is in the error response or the server log, depending on the endpoint. A broken condition
+announces itself rather than handing back a plausible but wrong set of rows.
