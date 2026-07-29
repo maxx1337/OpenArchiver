@@ -85,44 +85,50 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (**DEV-Nacharbeit `JR-1313`–`JR-1315` erledigt**) ·
-**Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei
-`efea6bc`), `HEAD` = `5c8a521`, gepusht
+**Stand:** 2026-07-29 (**DEV-Nacharbeit `JR-1313`–`JR-1315` erledigt; `JR-1316` aus E13
+herausgenommen**) · **Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom
+Integrationsbranch bei `efea6bc`), gepusht
 
 ### Der Stand in einem Satz
 
 Die Abnahme `JR-1309` hatte E13 abgelehnt, weil die **betreibersichtbare** Hälfte gebrochen war; die
 drei DEV-Nacharbeiten `JR-1313`, `JR-1314` und `JR-1315` sind erledigt, **die Suite ist von
-`224 passed | 2 skipped` auf `250 passed | 2 skipped` gewachsen** (Exit 0), und offen sind nur noch
-`JR-1316` (TEST, Regressionstest für die Betreiber-SQL) und die erneute Abnahme `JR-1309a`. **Kein
-Rückmerge, kein PR.**
+`224 passed | 2 skipped` auf `250 passed | 2 skipped` gewachsen** (Exit 0), und **offen ist nur noch
+die erneute Abnahme `JR-1309a`**. Danach Rückmerge. **Kein PR.**
 
-### Nächster konkreter Schritt — `JR-1316`, dann `JR-1309a`
+> **`JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden — Entscheidung des Auftraggebers.** Das
+> Epic war von 9 auf 14 Positionen gewachsen, und `JR-1316` sichert kein Autorisierungsverhalten,
+> sondern ein **Doku-Artefakt** ab. Die Lücke dahinter (**F27**) ist behoben und in `JR-1314` durch eine
+> Falsch-negativ-Prüfung gegen echtes Postgres belegt; `JR-1316` schützt gegen ihre **Wiederkehr**. Die
+> Task steht wortgleich unter „Folge-Task nach E13" und ist **kein** Kriterium von `JR-1309a`.
 
-| Task         | Rolle | Datei(en)                                                                                    | Kern                                                                                                                                                 |
-| ------------ | ----- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **JR-1316**  | TEST  | neuer Test + `docs/user-guides/upgrade-and-migration/access-control-changes.md` (nur lesend) | die Betreiber-SQL bekommt einen Regressionstest: Blöcke **aus der Markdown-Datei** extrahieren, gegen dieselben Fixtures fahren wie den Code         |
-| **JR-1309a** | TEST  | —                                                                                            | erneute Abnahme: die zwei in `JR-1309` gebrochenen Kriterien plus `JR-1313`–`JR-1316` plus ein Volllauf. **Eigene Session, nicht die von `JR-1316`** |
+### Nächster konkreter Schritt — `JR-1309a`, dann Rückmerge
 
-Startprompt für `JR-1316`:
+`JR-1309a` ist die **letzte** Task von E13. Rolle TEST, **eigene Session** (`04-testplan.md` §6):
 
 ```
-Arbeite JR-1316 aus docs/dev/journaling/03-backlog.md ab (Nacharbeit aus der Abnahme
-JR-1309). Rolle TEST. Branch claude/journaling-e13-iam-hardening, Stand 5c8a521.
+Nimm Epic 13 erneut ab — Rolle Tester, JR-1309a aus 03-backlog.md.
+Branch claude/journaling-e13-iam-hardening.
 ```
 
-**Was `JR-1316` mitbekommen sollte:** die Wegwerf-Fassung dieses Belegs existierte in dieser Session
-schon und hat gearbeitet — ein Python-Skript, das die ` ```sql `-Blöcke aus der Markdown-Datei zieht und
-sie über `psql -f -` **wörtlich** fährt, gegen eine Datenbank, in die vorher alle 41 Migrationen per
-`psql -f` eingespielt wurden (die Migrationsdateien sind mit `-- ` kommentierten
-`--> statement-breakpoint`-Zeilen direkt psql-taugfähig). Genau dieser Lauf hat ein Falsch-positives in
-meinem eigenen Entwurf von Query 3 gefunden, das beim Lesen unsichtbar war. Für `JR-1316` gilt
-zusätzlich das Kriterium aus dem Backlog: **ein neuer Fixture-Typ, den die Abfrage nicht kennt, muss den
-Test rot machen** — die Wegwerf-Fassung leistet das nicht, sie prüft nur die heute bekannten Formen.
+Prüfumfang: die **zwei in `JR-1309` gebrochenen** Kriterien einzeln (`JR-1306` — wird eine Policy mit
+unauflösbarer Relation und mit nicht-Objekt-`conditions` **beim Anlegen** abgewiesen? `JR-1307` — kann
+ein Betreiber vorher feststellen, wer betroffen ist?), die Kriterien von `JR-1313`/`JR-1314`/`JR-1315`,
+ein Volllauf, und der Nachweis, dass F2/F4/F5/F6/F9/F10 **im Code** unverändert sind. **Nicht** alles
+neu — die 17 in `JR-1309` erfüllten Kriterien nur dort, wo die Nacharbeit sie berührt.
 
-**`JR-1309a` muss wieder in einer eigenen Session laufen** (`04-testplan.md` §6). Erst danach:
-Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, kein Squash), dann `JR-1312` als
-Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
+**Der entscheidende Prüfpunkt bleibt die Betreiber-SQL:** die Blöcke **aus der Markdown-Datei**
+extrahieren und wörtlich fahren, mit Falsch-negativ-Prüfung gegen die Vorher/Nachher-Tabelle weiter
+unten. Genau dort hat `JR-1309` den Bruch gefunden. Werkzeug dafür existierte in dieser Session schon:
+ein Skript, das die ` ```sql `-Blöcke zieht und über `psql -f -` fährt, gegen eine Datenbank mit allen
+41 Migrationen per `psql -f` (die Migrationsdateien sind mit `-- ` kommentierten
+`--> statement-breakpoint`-Zeilen direkt psql-taugfähig). Dieser Lauf hat ein Falsch-positives
+gefunden, das beim Lesen des Diffs unsichtbar war.
+
+**Nach der Annahme:** Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, **kein Squash** — ein
+Squash würde die dokumentierte Ablehnung `5e081df` tilgen und damit den Beleg, dass die Abnahme
+funktioniert hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
+Nächstes Epic ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
 
 **Nicht Teil dieser Nacharbeit, unverändert offen:** die **Laufzeitseite von F26** — ein bereits
 gespeichertes `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil

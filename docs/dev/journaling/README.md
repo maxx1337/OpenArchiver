@@ -103,9 +103,14 @@ Policy-Form nicht, die von „sieht alles" auf „sieht nichts" umschlägt (**F2
 veröffentlichte Doku behauptet eine Ablehnung beim Speichern, die nicht stattfindet (**F29**, zugleich
 `JR-1306`s letztes Kriterium). Fünf neue Befunde **F25–F29**.
 
-**Nächster Schritt:** Nacharbeit F29 → F27 → F28 → F25 (F26 ist eine PO-Entscheidung), dann die
-erneute Abnahme **`JR-1309a`**. Kein Rückmerge, kein PR. Es existiert noch **kein** Produktionscode
-für den Receiver selbst.
+**Die Nacharbeit ist erledigt** (`JR-1313` F29 und F26s Schreibseite, `JR-1314` F27/F28, `JR-1315`
+F25): Suite `250 passed | 2 skipped`, Exit 0.
+
+**Nächster Schritt: `JR-1309a`** — die erneute Abnahme, **die letzte Task von E13**, in einer eigenen
+Session. Danach Rückmerge in den Integrationsbranch, dann **E2** (davor fällig: `JR-105c`). Kein PR.
+`JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden und steht bei den Folge-Tasks — sie sichert
+ein Doku-Artefakt ab, kein Autorisierungsverhalten. Es existiert noch **kein** Produktionscode für den
+Receiver selbst.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 
