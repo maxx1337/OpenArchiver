@@ -103,12 +103,13 @@ stattfindet. **Kein Rückmerge, kein PR.**
 Alle vier Tasks stehen mit Akzeptanzkriterien in `03-backlog.md` unter „Nacharbeit aus der Abnahme
 `JR-1309`". Reihenfolge und betroffene Dateien:
 
-| Task         | Rolle | Datei(en)                                                                                         | Kern                                                                                          |
-| ------------ | ----- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **JR-1313**  | DEV   | `packages/backend/src/iam-policy/policy-validator.ts`                                             | **F29**: `areConditionKeysValid()` auf ≤ 2 Segmente **und** `relationToTableMap` prüfen       |
-| **JR-1314**  | DEV   | `docs/user-guides/upgrade-and-migration/access-control-changes.md` (Query 2 und Query 3)          | **F27**: `conditions`, das nicht `object` ist, melden · **F28**: `subject = 'all'` in Query 3 |
-| **JR-1315**  | DEV   | `packages/backend/src/helpers/mongoToDrizzle.ts` **oder** `06-status.md`/`07-session-handover.md` | **F25**: F5-Kommentar nachziehen oder die Behauptung auf F4 einschränken                      |
-| **JR-1309a** | TEST  | —                                                                                                 | erneute Abnahme: die zwei gebrochenen Kriterien plus `JR-1313`–`JR-1315` plus ein Volllauf    |
+| Task         | Rolle | Datei(en)                                                                                         | Kern                                                                                                                                                          |
+| ------------ | ----- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JR-1313**  | DEV   | `packages/backend/src/iam-policy/policy-validator.ts`                                             | **F29**: `areConditionKeysValid()` auf ≤ 2 Segmente **und** `relationToTableMap` prüfen; **dazu F26/F27s Ursache**: `conditions` muss Objekt sein oder fehlen |
+| **JR-1314**  | DEV   | `docs/user-guides/upgrade-and-migration/access-control-changes.md` (Query 2 und Query 3)          | **F27**: `conditions`, das nicht `object` ist, melden · **F28**: `subject = 'all'` in Query 3 · **und** der Absolutsatz fällt (PO-Entscheidung: beides)       |
+| **JR-1315**  | DEV   | `packages/backend/src/helpers/mongoToDrizzle.ts` **oder** `06-status.md`/`07-session-handover.md` | **F25**: F5-Kommentar nachziehen oder die Behauptung auf F4 einschränken                                                                                      |
+| **JR-1316**  | TEST  | neuer Test + `docs/user-guides/upgrade-and-migration/access-control-changes.md` (nur lesend)      | die Betreiber-SQL bekommt einen Regressionstest gegen dieselben Fixtures wie der Code — **nach `JR-1314`**                                                    |
+| **JR-1309a** | TEST  | —                                                                                                 | erneute Abnahme: die zwei gebrochenen Kriterien plus `JR-1313`–`JR-1316` plus ein Volllauf. **Eigene Session, nicht die von `JR-1316`**                       |
 
 Startprompt für die Nacharbeit:
 
