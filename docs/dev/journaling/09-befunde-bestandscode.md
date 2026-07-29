@@ -1261,7 +1261,8 @@ deckungsgleich und die Doku stimmt wieder.
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 2 (Befundtyp
 `empty conditions object` und `conditions is not an object`) sowie der Abschnitt „How to read an
-empty result" · **Status:** **offen** · **Herkunft:** Abnahme `JR-1309a` (2026-07-29)
+empty result" · **Status:** **behoben** in `JR-1317` (2026-07-29) · **Herkunft:** Abnahme `JR-1309a`
+(2026-07-29)
 
 `JR-1314` hat **F27** für die Wurzel behoben: ein `conditions`, das existiert und kein Objekt ist,
 wird gemeldet. Die Prüfung, die `mongoToDrizzle` seit `JR-1313` vornimmt, gilt aber **rekursiv** —
@@ -1325,6 +1326,66 @@ aus `pair` speisen (die CTE trägt den Knoten in `node` schon mit) — ein `json
 weder `object` noch ein Operandenwert ist, plus `c.node = '{}'::jsonb` für jeden Knoten, nicht nur
 für die Wurzel. Dazu die zwei zitierten Sätze berichtigen. Solange das offen ist, darf die Seite den
 leeren Objektknoten nicht als geprüft aufführen.
+
+### Behoben in `JR-1317` (`07ac661`, 2026-07-29) — und der Anspruch ist mit weg (ADR-020)
+
+**(a) Die zwei Formbefunde stehen auf Knotenebene.** Query 2s `cond` trägt jetzt eine Spalte `path`
+(Wurzel `"conditions"`, Objektkind `-> "key"`, Arrayelement `-> []`), und die Befunde speisen aus
+`cond`:
+
+| Befundtyp                               | Prädikat                                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `empty condition object`                | `c.node = '{}'::jsonb` — **jede** Position, Wurzel eingeschlossen (ersetzt `empty conditions object`)         |
+| `condition node is not an object`       | Element eines `$or`/`$and`-Arrays bzw. Rumpf eines `$not` mit `jsonb_typeof <> 'object'`                      |
+| `condition branch list is not an array` | `$or`/`$and`, dessen Wert kein Array ist                                                                      |
+| `conditions is not an object`           | **unverändert** an der Wurzel, mit den zwei Lesarten je Wert (der Wert wird nicht betreten — Array bleibt so) |
+
+Die Prädikate sind aus `checkConditionsShape()`/`mongoToDrizzle` abgeleitet, nicht geraten: geprüft
+wird nur ein Knoten, der als **Bedingungsobjekt** gelesen wird. Ein pauschales
+„`jsonb_typeof(node) <> 'object'`" wäre der Fehler aus Fallstrick 20 gewesen — es hätte jedes Blatt
+jeder normalen Bedingung gemeldet.
+
+**Nachweis, Blöcke wörtlich aus der `.md` extrahiert, PostgreSQL 16.13 mit den 41 Migrationen,
+26 gesäte Rollen:** alle **acht** F30-Formen werden gemeldet, je mit Position
+(`"conditions" -> "$or" -> [] -> "$and" -> []`); Gegenprobe `{"$or": []}`/`{"$and": []}` weiter
+gemeldet, ebenso `conditions: 5`, `conditions: {}` und die Key-Formbefunde. **Keine Falsch-positiven:**
+die drei `predefined_*`-Rollen und acht Kontrollen (`{"userEmail":"a@x"}`, `{"id":{"$in":[…]}}`,
+`{"ingestionSource.userId":"…"}`, ein `can` mit Operator, `$or` aus Objekten, verschachteltes
+`$and`/`$or`, `$not` um eine Gleichheit, unbedingter Grant) erscheinen in **keiner** der drei
+Ausgaben — maschinell verglichen, nicht gelesen. Eine `cannot`-Regel mit Operator liefert genau die
+**beabsichtigte** Zeile `prohibition with an operator condition` (Änderung 5) und **keinen** Formbefund.
+
+**Gegen den Übersetzer gekreuzt** (`dist/helpers/mongoToDrizzle.js`, 37 Bedingungswerte): jede von
+`mongoToDrizzle` **verweigerte** Form wird von Query 2 gemeldet, mit einer bewusst dokumentierten
+Ausnahme, und jede **übersetzbare** Form schweigt, mit einer:
+
+- `conditions: 5` an einer Regel für ein Subject, für das **kein** Zeilenfilter gebaut wird
+  (`read settings`), wird **nicht** gemeldet — der Wurzelbefund ist wie bisher an `pair` gebunden. Das
+  ist richtig: dort ändert sich kein Verhalten. Die Seite sagt das jetzt ausdrücklich.
+- `{"id": {"$in": [{}]}}` **wird** gemeldet, obwohl der Übersetzer es akzeptiert: ein leeres Objekt in
+  einer **Operandenliste** ist keine Bedingung. Bewusst in Kauf genommen — die Regel „leerer
+  Objektknoten in jeder Position" ist die Vorgabe, die Position steht in der Meldung, und die Policy
+  ist ohnehin unsinnig. Über-, nicht Untermeldung.
+
+**(b) Der Abdeckungsanspruch ist weg — das ist der eigentliche Fix.** „It examines" ⇒ „What it
+reports"; das Wort „recursively" steht nicht mehr als Zusage; der widerlegte Satz „the values inside a
+condition … not one this release changes" ist ersetzt (ein Wert, der selbst eine **Struktur** ist,
+ändert die Wirkung und wird gemeldet); ausdrücklich ergänzt, dass eine Abfrage über schemaloses JSONB
+**nicht als vollständig gezeigt werden kann** und ein leeres Ergebnis ein **Hinweis, keine Freigabe**
+ist. An die Stelle der Zusage tritt eine **verifizierbare Gegenprobe ohne Aufzählung von JSON-Formen**:
+je eingeschränkte Rolle vor dem Update zwei Zahlen notieren (Archivliste, eine Suche), nach dem Update
+oder auf einer Kopie erneut messen, vergleichen — plus der Hinweis, dass eine unübersetzbare Bedingung
+jetzt einen **Fehler** erzeugt statt still ein falsches Ergebnis.
+
+Vier weitere Abdeckungssätze derselben Klasse standen auf der Seite und sind mit ersetzt: „lists
+**every** shape of policy this affects", „to **find out which** of your roles behave differently", „the
+third query below is what **covers** this case" und „Query 3 below **covers** that". Zusätzlich sagt die
+Seite jetzt, was sie vorher offenließ: der Wurzel-Formbefund ist an (Action, Subject) gebunden, die
+Befunde **innerhalb** von `conditions` nicht; und die Formprüfung beim Speichern (`400`) gilt nur für
+das `conditions` der Regel selbst, ein verschachtelter Formfehler fällt erst zur Abfragezeit auf.
+
+**Kein Produktionscode, kein Test, keine Migration.** `conditionKey.ts` war die Referenz, nicht das
+Ziel. Suite unverändert `250 passed | 2 skipped`, Exit 0.
 
 ## Bereits im Backlog erfasste Bestandsprobleme
 

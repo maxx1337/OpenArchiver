@@ -116,9 +116,14 @@ offenlassen musste, sind damit zu. Gebrochen ist erneut ein Kriterium der betrei
 schweigt die Anleitung zu acht verschachtelten Formen, von denen vier von „sieht alles" auf „jede
 Anfrage scheitert" kippen; zwei positive Sätze der Seite sind damit widerlegt.
 
-**Nächster Schritt: Entscheidung des Auftraggebers zu F30** (Behebung ist klein: die beiden Formbefunde
-in Query 2 aus der rekursiven CTE `cond` speisen statt aus `pair`, plus zwei Sätze berichtigen), dann
-eine dritte Abnahmerunde. **Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`).
+**F30 ist behoben (`JR-1317`, 2026-07-29).** Die zwei Formbefunde von Query 2 speisen aus der rekursiven
+CTE `cond` statt aus `pair` und melden jede der acht Formen mit Positionsangabe; wichtiger noch: **die
+Seite behauptet keine Abdeckung mehr, sondern sagt, was sie meldet** (**ADR-020**) und stellt eine
+verhaltensbasierte Gegenprobe daneben, die keine Aufzählung von JSON-Formen braucht. Keine
+Falsch-positiven, beide Nachweise wörtlich aus der `.md` gegen echtes Postgres.
+
+**Nächster Schritt: die schmale dritte Abnahme `JR-1309b`** (nur `JR-1307`s Kriterium 12 und `JR-1317`,
+nicht die 23 Kriterien erneut). **Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`).
 `JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden und steht bei den Folge-Tasks — sie sichert
 ein Doku-Artefakt ab, kein Autorisierungsverhalten, und sie war **kein** Kriterium von `JR-1309a`. Es
 existiert noch **kein** Produktionscode für den Receiver selbst.

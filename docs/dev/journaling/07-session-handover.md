@@ -85,16 +85,18 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (**Abnahme `JR-1309a` durchgeführt — E13 erneut _nicht_ abgenommen, Befund
-F30**) · **Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom
-Integrationsbranch bei `efea6bc`), gepusht
+**Stand:** 2026-07-29 (**`JR-1317` erledigt — F30 behoben, der Abdeckungsanspruch der Betreiberseite ist
+weg (ADR-020); E13 ist inhaltlich fertig und wartet auf die schmale Abnahme `JR-1309b`**) ·
+**Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei
+`efea6bc`), gepusht
 
 ### Der Stand in einem Satz
 
-Die Nacharbeit `JR-1313`–`JR-1315` hat F25–F29 behoben und die Suite auf `250 passed | 2 skipped`
-(Exit 0) gebracht; die erneute Abnahme **`JR-1309a` hat E13 wieder abgelehnt**: von 23 geprüften
-Kriterien sind **22 erfüllt**, gebrochen ist erneut `JR-1307`s Kriterium — **F30**, dieselbe Klasse wie
-F27, eine Ebene tiefer. **Kein Rückmerge, kein PR.**
+`JR-1309a` hatte E13 zum zweiten Mal abgelehnt (22 von 23 Kriterien erfüllt, gebrochen war `JR-1307`s
+Kriterium über **F30**); **`JR-1317` hat beides erledigt** — die zwei Formbefunde von Query 2 stehen auf
+**Knotenebene**, und die Seite behauptet keine Abdeckung mehr, sondern sagt, was sie **meldet** (ADR-020).
+**E13 hat damit keine offene inhaltliche Task mehr; offen ist nur die dritte, schmale Abnahme
+`JR-1309b`. Kein Rückmerge, kein PR.**
 
 > **Zwei Lücken, die `JR-1309` offenlassen musste, sind in `JR-1309a` geschlossen:** der **HTTP-400-Pfad**
 > ist end-to-end gemessen (`IamController.createRole` direkt aufgerufen, 11 × `400` mit dem Key bzw. Wert
@@ -110,36 +112,46 @@ F27, eine Ebene tiefer. **Kein Rückmerge, kein PR.**
 > ist weiterhin das einzige sicherheitsrelevante Artefakt in E13 ohne Test, und sie ist jetzt zum
 > zweiten Mal die Stelle, an der die Abnahme scheitert. Das ist ein Argument für ein Vorziehen, keine
 > Entscheidung des Testers.
+>
+> > **Nachtrag `JR-1317` (DEV):** die Abfrage hat nach diesem Fix **drei** neue Befundtypen und eine neue
+> > CTE-Spalte und ist weiterhin ohne Test. ADR-020 nimmt ihr die Beweislast — sie **meldet** nur noch —,
+> > aber die Regression, gegen die `JR-1316` schützt, bleibt möglich: ein späterer Eingriff kann sie
+> > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
+> > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — F30 entscheiden, beheben, dritte Abnahmerunde
+### Nächster konkreter Schritt — die schmale dritte Abnahme `JR-1309b`
 
-**Blockierend, und es braucht zuerst eine Entscheidung des Auftraggebers** (Vorlage unten unter
-„Offene Fragen"): F30 beheben, oder F30 als Restrisiko akzeptieren und E13 abnehmen. Der Tester hat
-eine Präferenz und nennt sie: **beheben**, weil nicht die Unvollständigkeit der Abfrage der Befund ist,
-sondern zwei **positive** Sätze der veröffentlichten Seite, die widerlegt sind.
-
-Die Behebung ist klein und liegt an einer Stelle (Rolle DEV, `access-control-changes.md`):
-
-1. In **Query 2** die zwei Formbefunde aus der rekursiven CTE **`cond`** speisen statt aus `pair`. Die
-   CTE trägt den Knoten schon in `node`; gebraucht wird ein Befund für „`node` ist weder ein Objekt noch
-   ein Operandenwert" und einer für „`node = '{}'::jsonb`" auf **jeder** Ebene, nicht nur an der Wurzel.
-   Vorsicht dabei: `cond` läuft auch in Operandenwerte hinein (`{"userEmail": "a@x"}` hat den Knoten
-   `"a@x"`), ein naives `jsonb_typeof(node) <> 'object'` erzeugt also ein Falsch-positives für **jede**
-   normale Bedingung — genau der Fehler aus Fallstrick 20. Der Wächter ist, dass nur ein Knoten geprüft
-   wird, der als Bedingungsobjekt gelesen wird: die Wurzel, ein `$or`/`$and`-Zweig, der Rumpf eines
-   `$not`.
-2. Die zwei zitierten Sätze berichtigen: „the empty object" darf nicht in der „It examines"-Liste als
-   rekursiv geprüft stehen, solange es das nicht ist, und „the values inside a condition … not one this
-   release changes" ist mit `{"userEmail": {}}` widerlegt.
-
-Danach eine dritte Abnahmerunde (Rolle TEST, eigene Session). **Nicht** alles neu: die 22 erfüllten
-Kriterien nur dort, wo die Nacharbeit sie berührt — praktisch also Kriterien 7–12 der Tabelle in
-`06-status.md` („Abnahme `JR-1309a`") plus ein Volllauf.
+**Nichts wartet mehr auf eine Entscheidung.** `JR-1317` ist erledigt und gepusht (`07ac661` die
+Betreiberseite, der Folgecommit die Statuspflege); der Umfang von `JR-1309b` steht in `03-backlog.md`.
+**Schmal** heißt: `JR-1307`s Kriterium 12 und die Kriterien von `JR-1317`, **nicht** die 23 Kriterien
+erneut.
 
 ```
-Nimm Epic 13 ein drittes Mal ab — Rolle Tester.
-Branch claude/journaling-e13-iam-hardening. Umfang: F30 und die Kriterien von JR-1307/JR-1314.
+Nimm Epic 13 ein drittes Mal ab — Rolle Tester, schmaler Umfang (JR-1309b).
+Branch claude/journaling-e13-iam-hardening. Umfang: JR-1307 Kriterium 12 und JR-1317.
 ```
+
+Was `JR-1309b` prüfen muss, und wo der Hebel liegt:
+
+1. **Die acht F30-Formen werden gemeldet** — Blöcke **aus der `.md`** extrahiert und wörtlich gefahren
+   (Fallstrick 17), nicht aus dem Diff gelesen. Gegenprobe `{"$or": []}`/`{"$and": []}` und die
+   Wurzelformen aus `JR-1314`.
+2. **Keine Falsch-positiven — das ist der Hauptrisikopunkt dieses Fixes.** Die drei `predefined_*`, die
+   handgeschriebenen Kontrollen **und** normale Bedingungsformen müssen in **jeder** Ausgabe schweigen.
+   Die gefährliche Fehlerform wäre ein pauschales `jsonb_typeof(node) <> 'object'` (Fallstrick 20); die
+   ausgelieferte Fassung prüft nur Knoten in **struktureller** Position. Eine `cannot`-Regel mit
+   Operator-Bedingung liefert weiter genau **eine** Zeile `prohibition with an operator condition` —
+   Änderung 5, beabsichtigt, kein Formbefund.
+3. **Zwei bewusste Abweichungen sind dokumentiert und sollten als solche geprüft, nicht als Befund
+   gewertet werden** (Belege in `06-status.md` unter „`JR-1317` erledigt"): `conditions: 5` an einer
+   Regel für ein Subject **ohne** Zeilenfilter wird nicht gemeldet (dort ändert sich nichts), und
+   `{"id": {"$in": [{}]}}` **wird** gemeldet, obwohl der Übersetzer es akzeptiert (Übermeldung, Position
+   steht in der Meldung).
+4. **Textprüfung gegen ADR-020:** kein Satz der Seite darf Abdeckung behaupten. Geprüft werden sollten
+   auch die Stellen, die `JR-1317` **neu** geschrieben hat — vier weitere Abdeckungssätze waren auf der
+   Seite und sind ersetzt.
+5. Volllauf mit **zitierter** Testzahl (`250 passed | 2 skipped`, Exit 0),
+   `predefined-roles.int.test.ts` 7/7, `FilterBuilder.ts`/`mongoToMeli.ts` unberührt.
 
 **Erst nach der Annahme:** Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, **kein Squash** — ein
 Squash würde die dokumentierten Ablehnungen tilgen und damit den Beleg, dass die Abnahme funktioniert
@@ -152,7 +164,50 @@ unverändert `!rule.conditions` liest. In `JR-1309a` nachgemessen (`UNRESTRICTED
 und als erfülltes Kriterium verbucht; die Datei ist blob-identisch zu `13a7114`. Gehört zu `JR-1311`.
 `JR-1310`, `JR-1311`, `JR-1312`, `JR-1316` waren und bleiben **nicht** Teil von E13s Abnahme.
 
-### Was zuletzt passiert ist — die Abnahme `JR-1309a`
+### Was zuletzt passiert ist — `JR-1317` (F30 behoben, ADR-020 umgesetzt)
+
+Rolle `senior-dev`, zwei Commits: **`07ac661`** die einzige inhaltliche Datei
+(`docs/user-guides/upgrade-and-migration/access-control-changes.md`), der **Folgecommit** die Statuspflege
+(`06-status.md`, `07-session-handover.md`, `09-befunde-bestandscode.md`, `README.md`).
+Vollständige Fassung mit Kommandos und Ausgaben in `06-status.md` unter „`JR-1317` erledigt", die
+Befundauflösung in `09-befunde-bestandscode.md` unter **F30**.
+
+**(a) Knotenebene.** `cond` trägt eine neue Spalte `path` (Wurzel `"conditions"`, Objektkind
+`-> "key"`, Arrayelement `-> []`), und drei Befundtypen speisen aus `cond` statt aus `pair`:
+
+| Befundtyp                               | Prädikat                                                                         |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| `empty condition object`                | `c.node = '{}'::jsonb` in **jeder** Position (ersetzt `empty conditions object`) |
+| `condition node is not an object`       | `$or`/`$and`-Arrayelement bzw. `$not`-Rumpf mit `jsonb_typeof <> 'object'`       |
+| `condition branch list is not an array` | `$or`/`$and`, dessen Wert kein Array ist                                         |
+| `conditions is not an object`           | **unverändert** aus `pair`, Wurzel, mit den zwei Lesarten je Wert                |
+
+Die Prädikate sind aus `checkConditionsShape()` und den Rekursionsstellen in `mongoToDrizzle`
+**abgeleitet**. Geprüft wird nur ein Knoten in **struktureller** Position; ein pauschales
+`jsonb_typeof(node) <> 'object'` hätte jedes Blatt jeder normalen Bedingung gemeldet (Fallstrick 20).
+
+**Beide Nachweise, Blöcke wörtlich aus der `.md` gegen PostgreSQL 16.13, 41 Migrationen, 26 Rollen:**
+alle **acht** F30-Formen werden gemeldet, je mit Position; `{"$or": []}`/`{"$and": []}` und alle
+Wurzelformen weiter; **keine Falsch-positiven** — drei `predefined_*` und acht Kontrollen in **keiner**
+der drei Ausgaben, maschinell verglichen. Zusätzlich gegen den Übersetzer gekreuzt (37 Werte über
+`dist/helpers/mongoToDrizzle.js`): verweigert ⇒ gemeldet, übersetzbar ⇒ still, mit zwei benannten
+bewussten Abweichungen (siehe Punkt 3 oben).
+
+**(b) Der Abdeckungsanspruch ist weg** — das war der eigentliche Fix (ADR-020). „It examines" ⇒ „What it
+reports"; „recursively" steht nicht mehr als Zusage; der widerlegte Satz zu „the values inside a
+condition" ist ersetzt; ausdrücklich ergänzt, dass eine Abfrage über schemaloses JSONB **nicht als
+vollständig gezeigt werden kann** und ein leeres Ergebnis ein **Hinweis, keine Freigabe** ist; an die
+Stelle der Zusage tritt eine **verifizierbare Gegenprobe ohne Formliste** (zwei Zahlen je Rolle
+vorher/nachher vergleichen) samt dem Hinweis, dass eine unübersetzbare Bedingung jetzt einen **Fehler**
+erzeugt. **Vier weitere Abdeckungssätze** derselben Klasse waren auf der Seite und sind mit ersetzt.
+
+**Kein Produktionscode, kein Test, keine Migration, kein i18n-Key.** `conditionKey.ts` war Referenz,
+nicht Ziel; kein Defekt darin gefunden. `pnpm lint`, `test:types`, Backend-Build und `pnpm docs:build`
+grün, `docs/.vitepress/dist/dev/` fehlt weiterhin, Suite unverändert `250 passed | 2 skipped`, Exit 0.
+Proben liefen in `/var/tmp` und im Scratchpad, **nicht** im Repository; 0 `oa_test_*`-Rückstände nach dem
+Volllauf, Cluster und Prüfdatenbanken restlos entfernt.
+
+### Was davor passiert ist — die Abnahme `JR-1309a`
 
 Unabhängige Session, Rolle `tester`, HEAD `2a8df48`, zuerst gegen das Remote abgeglichen (identisch).
 Vollständige Kriterientabelle mit Kommandos und Ausgaben in `06-status.md` unter „Abnahme `JR-1309a`".
@@ -666,30 +721,23 @@ Statuslisten: `pnpm test --reporter=json --outputFile=<datei>` auf beiden Ständ
 
 ### Offene Fragen an den Auftraggeber
 
-**Blockierend, genau eine Frage: `F30`.** Die erneute Abnahme `JR-1309a` hat E13 wieder abgelehnt.
-Zu entscheiden ist:
+**Keine blockierende Frage.** Die eine blockierende Frage war **F30**; der Auftraggeber hat sie mit
+**ADR-020** entschieden (beheben **und** den Anspruch aufgeben), und `JR-1317` hat sie umgesetzt. Nächster
+Schritt ist reine Prüfarbeit (`JR-1309b`).
 
-**(a) F30 beheben** — Query 2 prüft die Form eines Bedingungsknotens nur an der **Wurzel**, der
-Übersetzer an **jedem** Knoten; acht verschachtelte Formen werden nicht gemeldet, vier davon kippen von
-„sieht alles / alle Zeilen" auf „jede Anfrage scheitert". Zwei **positive** Sätze der veröffentlichten
-Seite sind damit widerlegt. Aufwand: die zwei Formbefunde aus `cond` statt aus `pair` speisen, plus zwei
-Sätze berichtigen. Danach eine dritte Abnahmerunde über die Kriterien 7–12.
+**Zwei Punkte aus `JR-1317`, beide nicht blockierend, beide Entscheidung des Auftraggebers:**
 
-**(b) F30 als Restrisiko akzeptieren** und E13 abnehmen, weil die Codehälfte in `JR-1309` **und**
-`JR-1309a` unabhängig belegt ist und alle acht Formen fehlerhafte, handgeschriebene Policies sind.
-
-**Der Tester hat diesmal eine Präferenz: (a).** Nicht wegen der Unvollständigkeit — die Seite darf und
-soll sagen, dass eine Abfrage über schemaloses JSONB nicht beweisbar vollständig ist. Sondern weil zwei
-Sätze der Seite eine Abdeckung **behaupten**, die es nicht gibt („walked recursively … the empty object")
-und weil ein Satz in der beruhigenden Richtung falsch ist („the values inside a condition … not one this
-release changes"). Ein Betreiber mit `{"$or": [{"userEmail": "a@x"}, {}]}` liest dort „ist geprüft",
-erhält keine Zeile und verliert nach dem Update den Zugriff dieser Rolle. Das ist wörtlich derselbe
-Fehlermodus, für den F27 zur Ablehnung geführt hat.
-
-**Damit verbunden, zur Erwägung: `JR-1316` vorziehen.** Die Betreiber-SQL ist das einzige
-sicherheitsrelevante Artefakt in E13 ohne Test und jetzt zum **zweiten** Mal die Stelle, an der die
-Abnahme scheitert — beide Male an einer Form, die niemand aufgeschrieben hatte. Das ist genau die Lücke,
-die `JR-1316` maschinell schließen soll. Entscheidung des Auftraggebers; der Tester legt es nur vor.
+1. **`JR-1316` vorziehen?** Unverändert vorgelegt, jetzt mit einem Argument mehr: die Abfrage hat nach
+   `JR-1317` drei neue Befundtypen und eine neue CTE-Spalte, und sie ist weiterhin das einzige
+   sicherheitsrelevante Artefakt in E13 ohne Test. ADR-020 nimmt ihr die Beweislast, nicht die
+   Regressionsgefahr.
+2. **Zwei bewusst hingenommene Abweichungen** in der neuen Fassung, beide in `06-status.md` und in F30
+   belegt: `conditions: 5` an einer Regel für ein Subject **ohne** Zeilenfilter wird nicht gemeldet (dort
+   ändert sich nichts — der Wurzelbefund bleibt an (Action, Subject) gebunden), und ein leeres Objekt in
+   einer **Operandenliste** (`{"id": {"$in": [{}]}}`) **wird** gemeldet, obwohl der Übersetzer es
+   akzeptiert. Die zweite ist eine Übermeldung mit Positionsangabe; die Vorgabe „leerer Objektknoten in
+   jeder Position" lässt sie zu. Wer das anders will, braucht eine Entscheidung dazu — DEV hat sie nicht
+   von sich aus enger gezogen.
 
 **Zur Kenntnis, kein Entscheidungsbedarf für die Abnahme:** **F26** (ein `can` mit falsy `conditions`
 liefert weiter Vollzugriff) ist **kein** Regress und bricht kein Kriterium. Er gehört inhaltlich zu
@@ -915,6 +963,26 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     Danach ein zweiter Cluster auf einem **anderen Port** (`-p 5433`, eigenes `unix_socket_directories`),
     dieselben Migrationen, dieselben Fixtures, und die Ausgaben beider Versionen zeichenweise diffen.
     Paketquelle, Keyring und Cluster hinterher entfernen.
+
+25. **Wenn eine Prüfanleitung zweimal an derselben Klasse scheitert, ist der Satz das Problem, nicht die
+    Abfrage.** F27 und F30 waren beide „die Abfrage kennt eine Form nicht" — und beide Male hätte eine
+    ehrliche Grenzangabe die Ablehnung verhindert. Die dritte Runde hat deshalb den **Anspruch** aufgegeben
+    (ADR-020) und die Abfrage nur nebenbei erweitert. Praktische Regel für jede Betreiberdoku über
+    schemalose Daten: erst prüfen, ob es eine Aussage gibt, die **verhaltensbasiert** und damit vollständig
+    ist (hier: jede Rolle einmal ausüben und vergleichen), und die Abfrage als Suchhilfe daneben stellen —
+    nicht als Beweis. Beim Umbau reicht es **nicht**, die zwei benannten Sätze zu ersetzen: auf derselben
+    Seite standen vier weitere Abdeckungssätze (`lists **every** shape`, `find out which`, zweimal
+    `covers`), von denen keiner im Befund stand.
+
+26. **Ein Prädikat, das im Code an mehreren Stellen wirkt, wird aus dem Code abgelesen — und die
+    Positionen mit.** Für `JR-1317` war die Referenz `checkConditionsShape()` **plus** die drei Stellen, an
+    denen `mongoToDrizzle` sich selbst aufruft (Wurzel, `$or`/`$and`-Element, `$not`-Rumpf). Genau diese
+    Liste ist das Prädikat der Abfrage geworden. Wer stattdessen „Knoten ist kein Objekt" schreibt, meldet
+    jedes Blatt jeder normalen Bedingung (Fallstrick 20); wer nur die Wurzel prüft, ist bei F30. Der
+    Gegentest dazu ist billig und hat beide Fehler ausgeschlossen: dieselben Bedingungswerte durch den
+    **gebauten** Übersetzer (`dist/helpers/mongoToDrizzle.js`, ein `node`-Einzeiler, kein Test im Repo)
+    schicken und „verweigert" gegen „gemeldet" stellen. Jede Abweichung muss man dann benennen können — bei
+    `JR-1317` waren es zwei, beide erklärbar.
 
 ---
 
