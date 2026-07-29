@@ -85,18 +85,86 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (E13 implementiert, Suite grün — **Abnahme `JR-1309` offen**) · **Branch:**
-`claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei `efea6bc`),
-`HEAD` = `704e8d1` plus der PO-Doku-Commit dieser Runde
+**Stand:** 2026-07-29 (E13 implementiert **und dokumentiert**, Suite grün — **Abnahme `JR-1309`
+offen**) · **Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom
+Integrationsbranch bei `efea6bc`), `HEAD` = `9b407db` plus dieser Handover-Commit
 
 ### Der Stand in einem Satz
 
-**E13s Code ist fertig und die Suite ist grün (`224 passed | 2 skipped`, Exit 0) — aber E13 ist
-_nicht_ abgenommen.** Offen sind `JR-1307` (Betreiberdoku plus ADR-016), `JR-1308`
-(Upstream-Meldung, Entwurf, **nicht** versenden) und `JR-1309` (unabhängige Abnahme, **eigene
+**E13s Code ist fertig, die Betreiberdoku steht, und die Suite ist grün (`224 passed | 2 skipped`,
+Exit 0) — aber E13 ist _nicht_ abgenommen.** Offen sind nur noch `JR-1308` (Upstream-Meldung,
+Entwurf, **nicht** versenden, Rolle PO) und `JR-1309` (unabhängige Abnahme, Rolle TEST → PO, **eigene
 Session**). Kein Rückmerge, kein PR.
 
-### Was zuletzt passiert ist
+### Was zuletzt passiert ist — `JR-1307`
+
+**`JR-1307` ist erledigt (Rolle `senior-dev`), zwei Commits.** `efb5582` liefert ADR-016 und die
+Betreiberdoku, `9b407db` die Statuspflege.
+
+**ADR-016 ersetzt den Platzhalter in `05-entscheidungen.md`.** Status entschieden, Entscheider PO. Das
+Argument ist wie vorgegeben nicht „Sicherheit geht vor": **„kein Recht auf dieses Subject" und „darf
+alles sehen" wurden vom selben Wert dargestellt, und der unsichere war der Default** — ein Zustand, in
+dem keine Zugriffsaussage über das Archiv belegbar ist, weil man einer Rolle nicht ansehen kann, ob sie
+einschränkt. Verworfen ist die Alternative „Verhalten beibehalten und nur dokumentieren", auch in der
+Schalter-Variante, mit dem konkreten Grund: **E11s Auditor-Rolle ist auf genau diesen Mechanismus
+gebaut**, `auditor-specific-mailbox.json` erteilt für `archive` kein `can` und traf damit exakt den
+`null`-Zweig — E11 wäre mit dem alten Verhalten nicht abnehmbar. Die Nummernlücke zwischen ADR-015 und
+ADR-017 bleibt; der Hinweis „nicht umnummerieren" steht jetzt **im ADR selbst** statt im Platzhalter.
+
+**Die Betreiberdoku liegt in der öffentlichen Doku, englisch (ADR-003):**
+
+| Datei                                                              | Änderung                                                                          |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `docs/user-guides/upgrade-and-migration/access-control-changes.md` | **neu** — Release-Hinweis plus Prüfanleitung mit drei SQL-Abfragen                |
+| `docs/.vitepress/config.mts`                                       | Sidebar-Eintrag „Access Control Changes" unter „Upgrading and Migration"          |
+| `docs/services/iam-service/iam-policy.md`                          | zwei neue Abschnitte „Condition Keys" und „When No Rule Applies", mit Querverweis |
+
+**Begründung der Ablage:** die Prüfung findet **vor** einem Update statt, gehört also in die
+Sidebar-Sektion, die ein Betreiber genau dann öffnet. `iam-policy.md` musste zusätzlich angefasst
+werden, weil dort die geänderte Semantik nachgeschlagen wird — die Seite beschrieb bisher nicht, was
+passiert, wenn **keine** Regel greift. `srcExclude: ['dev/**']` ist unangetastet;
+`docs/.vitepress/dist/dev/` existiert nach `pnpm docs:build` weiterhin **nicht** (geprüft).
+
+**Sieben Verhaltensänderungen sind benannt**, jede mit betroffener Policy-Form und Handlungsanweisung:
+kein `can` ⇒ deny (mit allen drei Formen); unbedingtes `cannot` ⇒ deny; `conditions: {}` ⇒ deny; die
+Suche filtert über `search` statt `read`; ein `cannot` mit Operator-Bedingung schließt jetzt
+**wirklich** aus, Nutzer sehen also **weniger** Zeilen (aus `JR-1305`/F8 — stand nicht in der
+Auftragsliste, ist aber betreibersichtbar und deshalb aufgenommen); Condition-Keys werden gegen die
+Form geprüft (`400` beim Speichern, Fehler zur Abfragezeit bei Bestandsrollen); eine unübersetzbare
+Bedingung führt zu einem **Fehler** statt zu einem stillschweigend falschen Ergebnis (ADR-018).
+
+**Der ADR-019-Restspalt hat einen eigenen Abschnitt** („What is still not checked") und wird
+ausdrücklich **nicht** als geprüft dargestellt: „The application does **not** perform this check. The
+query does, and only for those two subjects." **F17 ist aufgenommen** — in einer frischen Installation
+existiert nur die Super-Admin-Rolle, die beiden anderen `predefined_*`-Policies sind Vorlagen in der
+Doku und keine Datenbankzeilen, und eine fehlende Read-Only-Rolle ist **kein Fehler der Installation**.
+**Keine Pauschalwarnung**, mit dem Beleg, dass ein automatisierter Test die Unbetroffenheit der
+`predefined_*`-Rollen gegen eine echte Datenbank prüft.
+
+**Die Prüf-SQL ist gegen echtes Postgres ausgeführt** (16.13, lokaler Cluster ohne Docker, Fallstricke
+Punkt 8) und **aus der Markdown-Datei extrahiert und wörtlich gelaufen**, nicht aus dem Entwurf:
+Query 2 meldet **10 von 10** absichtlich betroffenen Rollen je mit Regelnummer, Query 3 findet den
+Tippfehler-Key, den die Anwendung nicht prüft, Query 1 den Nutzer ohne Rolle. **Die drei
+`predefined_*`-Rollen und die unbetroffene Gegenprobe erscheinen in keiner Ausgabe** — das trägt die
+Aussage „keine Pauschalwarnung". Sieben Randfälle ohne Fehler und ohne Falschtreffer: Skalar als
+Policy-Element, leeres `policies`-Array, `manage`/`all` als einelementiges Array, `a.b.c`, `$nor`,
+`$not` um eine Operator-Bedingung, `conditions: null` an einem `cannot`. Vollständige Ausgaben in
+`06-status.md` unter „E13 — `JR-1307` erledigt".
+
+**Kein Produktionscode, keine Teständerung, keine Migration, kein i18n-Key** (die Doku enthält keine
+UI-Zeichenkette). Keine `JR-*`-ID, keine F-Nummer, kein Ausnutzungsbeispiel und keine
+Compliance-Behauptung in der öffentlichen Doku. `docs/api/openapi.json` ist durch `docs:build` nicht
+verändert worden. `pnpm lint` grün, `pnpm docs:build` grün, `pnpm test` `224 passed | 2 skipped`,
+Exit 0, 0 `oa_test_*`-Rückstände, Cluster restlos entfernt.
+
+**Ein Befund beim Schreiben, gemeldet und nicht behoben:**
+`docs/services/iam-service/iam-policy.md` listet die Action `export` weiterhin nicht und beschreibt
+`manage` als Expansion auf `create/read/update/delete/search/sync` statt als echten CASL-Wildcard —
+die in `CLAUDE.md` §5.4 benannte stale Stelle (3) des Permission-Vokabulars. Sie liegt in derselben
+Datei, die `JR-1307` angefasst hat, gehört aber nicht zu dieser Task; (1) und (2) sind bereits einig,
+es ist reine Doku-Nacharbeit. **Vorschlag: eigene Task, PO entscheidet.**
+
+### Was davor passiert ist — die fünf Fix-Tasks
 
 **Die fünf Fix-Tasks von E13 sind erledigt (Rolle `senior-dev`): `JR-1303`, `JR-1302`, `JR-1304`,
 `JR-1305`, `JR-1306`.** Ein Commit je Task, in dieser Reihenfolge:
@@ -335,42 +403,28 @@ Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
 
 ### Nächster konkreter Schritt
 
-**`JR-1307` — Rolle DEV**, auf demselben Branch `claude/journaling-e13-iam-hardening`: die
-Verhaltensänderung dokumentieren (Release-Hinweis **plus** Prüfanleitung für Bestandsinstallationen)
-und als **ADR-016** festhalten, dass fail-closed den Bruch rechtfertigt. Die Nummernlücke zwischen
-ADR-015 und ADR-017 ist dafür reserviert — **nicht umnummerieren**. Was die Anleitung sagen muss:
+**`JR-1308` — Rolle PO**, auf demselben Branch `claude/journaling-e13-iam-hardening`: die
+Upstream-Meldung **vorbereiten** — Beschreibung, Reproduktion, Fix-Vorschlag, betroffene Versionen
+(released ist 0.5.2). **Nicht versenden**; Kanal und Zeitpunkt entscheidet der Auftraggeber.
+Akzeptanzkriterium ist genau das: „Entwurf liegt vor und ist **nicht** versendet."
 
-- Wer den `null`-Zweig traf, sieht künftig **nichts** statt alles. Die drei betroffenen Formen
-  konkret benennen: Nutzer **ohne Rolle**, Policy mit **ausschließlich** `cannot`-Regeln auf einem
-  Subject, handgeschriebene Rolle mit `search` ohne `read` auf `archive`. Keine Pauschalwarnung.
-- Neu hinzugekommen und ebenfalls verhaltensändernd: ein **unbedingtes `cannot`** und ein `can` mit
-  **leerem `conditions`** verweigern jetzt (F20/F19), eine Policy mit einem Condition-Key, den die
-  Allowlist nicht kennt, **schlägt beim Anlegen fehl** (`400`) und bei einer bestehenden Rolle beim
-  Abfragen (`JR-1306`) — für einen Betreiber ist das der sichtbarste Bruch, weil ein Tippfehler in
-  einer gespeicherten Policy vorher wirkungslos war und jetzt laut ist.
-- **F17 mit aufnehmen:** ausgeliefert existiert nur `predefined_super_admin`; wer nach
-  `predefined_read_only_user` sucht, findet nichts, und das ist kein Fehler seiner Installation.
-- Keine der drei `predefined_*`-Rollen ist betroffen — belegt durch
-  `tests/integration/predefined-roles.int.test.ts`, das durch alle Fixes grün geblieben ist.
-- **Aus ADR-018:** eine gespeicherte Policy mit einer **unübersetzbaren** Bedingung (unbekannter
-  Operator, etwa `$regex`) führt jetzt zu einem **Fehler** statt zu einem stillschweigend falschen
-  Ergebnis. Das ist Absicht — ein Fehler ist auffindbar, ein falsches Ergebnis nicht —, aber es ist für
-  einen Betreiber ein sichtbarer Bruch und gehört in die Anleitung, mit dem Hinweis, wie er seine
-  gespeicherten Policies vorab durchsieht.
-- **Aus ADR-019:** ein Condition-Key, der nur die **Spaltenexistenz** verletzt (`foo`), fällt weiterhin
-  erst zur Abfragezeit auf, nicht beim Anlegen. Das ist der bekannte Restspalt (`JR-1311`) und darf in
-  der Anleitung nicht als „vollständig geprüft" dargestellt werden.
+Material dafür liegt vollständig vor und muss nicht neu erarbeitet werden: F7 in
+`09-befunde-bestandscode.md` (Befund, Erreichbarkeit, Bewertung, gegen echtes Postgres verifiziert),
+ADR-016 (Begründung der gewählten Semantik), ADR-017 (der Action-Versatz als zweiter Weg),
+`tests/integration/filter-builder-f7.int.test.ts` (Reproduktion) und die vier Commits `bcac6bd`,
+`a309fd1`, `45ac0e9`, `2311996`, `dcec017` (Fix-Vorschlag). **Für die Reproduktion in einer
+öffentlichen Meldung gilt dieselbe Zurückhaltung wie in der Betreiberdoku:** F1s vierter Payload ist
+lauffähig und gehört nicht in einen offenen Kanal, solange der Auftraggeber nicht über den Kanal
+entschieden hat.
 
-Danach `JR-1308` (Rolle PO, Entwurf, **nicht versenden**), dann `JR-1309` (Abnahme, Rolle TEST → PO).
-**Rückmerge in den Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12
-unangetastet; kein PR ohne ausdrückliche Aufforderung.
+Danach `JR-1309` (Abnahme, Rolle TEST → PO, **eigene Session**). **Rückmerge in den
+Integrationsbranch erst nach `JR-1309`** (ADR-014); `main` bleibt bis E12 unangetastet; kein PR ohne
+ausdrückliche Aufforderung.
 
-**Vor `JR-1309` braucht der PO eine Entscheidung** zum verbleibenden roten Test (siehe „Offene Fragen
-an den Auftraggeber"). Solange sie aussteht, endet `pnpm test` mit Exit 1, und `ci.yml` zeigt auf
-`push` rote Läufe.
+**Für `JR-1309` steht keine Entscheidung mehr aus.** Der frühere Blocker — der eine rote Test — ist in
+ADR-018 entschieden und in `704e8d1` aufgelöst; die Suite endet mit Exit 0.
 
-**Das Kommando, mit dem beide Läufe protokolliert wurden** — Postgres lokal ohne Docker, siehe
-Fallstricke Punkt 8:
+**Das Kommando für den Suitenlauf** — Postgres lokal ohne Docker, siehe Fallstricke Punkt 8:
 
 ```bash
 DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
@@ -390,16 +444,16 @@ Statuslisten: `pnpm test --reporter=json --outputFile=<datei>` auf beiden Ständ
 
 ### Offene Fragen an den Auftraggeber
 
-**Blockierend für die Abnahme `JR-1309`, nicht für `JR-1307`: der eine rote Test.**
-`RED UNTIL JR-1304: the Drizzle half alone is fail-closed for an untranslatable condition (F3)` und
-`src/helpers/mongoToDrizzle.test.ts:203` fordern für dieselbe Eingabeform Gegenteiliges — der
-Integrationstest ein Prädikat, das Zeilen liefert, der Unit-Test „throw oder never-true". Der Fix hat
-sich für **werfen** entschieden (Begründung in `06-status.md`, u. a. weil `mongoToMeli` für dieselbe
-Form schon heute wirft und ein grüner Test das festhält). **Zu entscheiden: wird der Integrationstest
-korrigiert?** Empfehlung: ja — Zeile 223 und 236 in `expectFailClosed` bzw. `try`/`catch` fassen und
-die Erwartung `[rows.mine]` streichen, weil sie die F22-Verengung pinnt, die `JR-1304` beseitigen
-soll. **Das ist eine Teständerung und gehört zur Rolle `tester`**, nicht zum DEV; sie wurde deshalb
-nicht vorgenommen. Danach `224 passed | 2 skipped`, Exit 0.
+**Nichts blockiert die Abnahme `JR-1309` mehr.** Der frühere Blocker — die zwei unvereinbaren
+`RED UNTIL JR-1304`-Erwartungen — ist in ADR-018 entschieden und in `704e8d1` aufgelöst; die Suite
+endet mit `224 passed | 2 skipped`, Exit 0.
+
+**Neu vorgelegt aus `JR-1307`, nicht blockierend: eine Doku-Nacharbeit.**
+`docs/services/iam-service/iam-policy.md` listet die Action `export` weiterhin nicht und beschreibt
+`manage` als Expansion auf `create/read/update/delete/search/sync` statt als echten CASL-Wildcard —
+die in `CLAUDE.md` §5.4 benannte stale Stelle (3) des Permission-Vokabulars. `JR-1307` hat dieselbe
+Datei angefasst, den Punkt aber **nicht** behoben, weil er nicht zur Task gehört. (1) und (2) sind
+bereits einig; es ist reine Doku-Nacharbeit. **Zu entscheiden: eigene Task, und in welchem Epic?**
 
 **Zur Kenntnis, kein Entscheidungsbedarf: eine benannte Abweichung in `JR-1306`.** Die Allowlist prüft
 Form des Keys plus Relation, nicht die Existenz der Spalte; ein einzelner unbekannter Key (`foo`) wird
@@ -413,9 +467,10 @@ zuletzt passiert ist" und in F21.
 Paare der heutigen Aufrufstellen" ergänzt, plus der F17-Nachtrag), **F21** (strenge Variante
 entschieden und in `JR-1306` festgeschrieben, die drei Pins im selben Commit invertiert),
 **F22** (`JR-1304`s Kriterium auf „kein Zweig wird stillschweigend weggelassen" umformuliert, mit der
-richtigen Gefahrenrichtung), **F17(a)** (`JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle
-existiert). **F19/F20** brauchten ohnehin keine Entscheidung und sind über die roten Tests Teil der
-Abnahme.
+richtigen Gefahrenrichtung), **F17(a)** (in `JR-1307` erledigt: die Betreiberdoku sagt, dass
+ausgeliefert nur die Super-Admin-Rolle existiert und eine fehlende Read-Only-Rolle kein Fehler der
+Installation ist). **F19/F20** brauchten ohnehin keine Entscheidung und sind über die roten Tests Teil
+der Abnahme.
 
 **Offen und wirklich beim Auftraggeber: nur `F17(b)`** — soll der Rollen-Bootstrap repariert werden?
 Das ist eine Produktentscheidung (welche Rollen liefert Open Archiver aus?), keine Härtung, und sie
@@ -423,14 +478,14 @@ gehört nicht in E13. **Blockiert nichts.**
 
 **Restliche Punkte aus `JR-1301`, zur Kenntnis:**
 
-| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F17**     | (a) **Erledigt (PO):** `JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle existiert, und ADR-017 hat den Nachtrag. (b) **Offen beim Auftraggeber:** soll der Bootstrap repariert werden? Produktänderung, keine Härtung, nicht in E13. PO-Nachprüfung am Code bestätigt: `createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`, der Bootstrap kann danach nie mehr feuern. |
-| **F18**     | **Erledigt (PO).** ADR-017 hat einen Nachtrag: die Aussage gilt für die Paare der heutigen vier Aufrufstellen, nicht für jede (Action, Subject) je Rolle. Das Aufrufstellen-Inventar wacht darüber.                                                                                                                                                                                                                                             |
-| **F21**     | **Umgesetzt in `JR-1306` (`dcec017`).** Die drei Pins sind im Fix-Commit invertiert. Eine benannte Abweichung: die Allowlist prüft die Form des Keys plus die Relation, nicht die Existenz der Spalte — ein einzelner unbekannter Key (`foo`) wird weiter übersetzt, weil `mongoToDrizzle` keinen Tabellenkontext hat. Vorschlag: spaltengenau bei `JR-1310`.                                                                                   |
-| **F22**     | **Erledigt (PO).** `JR-1304`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit dem Hinweis, dass die fail-open-Richtung im `$and` und bei leerer Zweigliste liegt, nicht im `$or`.                                                                                                                                                                                                                                     |
-| **F19/F20** | **Behoben** in `JR-1302` (`a309fd1`) bzw. mit `JR-1304` (`45ac0e9`): ein unbedingtes `cannot` verweigert, und ein `can` mit leerem `conditions` gilt nicht mehr als unbedingt. Beide Tests sind grün.                                                                                                                                                                                                                                           |
-| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                                            |
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F17**     | (a) **Erledigt:** die Betreiberdoku aus `JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle existiert, und ADR-017 hat den Nachtrag. (b) **Offen beim Auftraggeber:** soll der Bootstrap repariert werden? Produktänderung, keine Härtung, nicht in E13. PO-Nachprüfung am Code bestätigt: `createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`, der Bootstrap kann danach nie mehr feuern. |
+| **F18**     | **Erledigt (PO).** ADR-017 hat einen Nachtrag: die Aussage gilt für die Paare der heutigen vier Aufrufstellen, nicht für jede (Action, Subject) je Rolle. Das Aufrufstellen-Inventar wacht darüber.                                                                                                                                                                                                                                                              |
+| **F21**     | **Umgesetzt in `JR-1306` (`dcec017`).** Die drei Pins sind im Fix-Commit invertiert. Eine benannte Abweichung: die Allowlist prüft die Form des Keys plus die Relation, nicht die Existenz der Spalte — ein einzelner unbekannter Key (`foo`) wird weiter übersetzt, weil `mongoToDrizzle` keinen Tabellenkontext hat. Vorschlag: spaltengenau bei `JR-1310`.                                                                                                    |
+| **F22**     | **Erledigt (PO).** `JR-1304`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit dem Hinweis, dass die fail-open-Richtung im `$and` und bei leerer Zweigliste liegt, nicht im `$or`.                                                                                                                                                                                                                                                      |
+| **F19/F20** | **Behoben** in `JR-1302` (`a309fd1`) bzw. mit `JR-1304` (`45ac0e9`): ein unbedingtes `cannot` verweigert, und ein `can` mit leerem `conditions` gilt nicht mehr als unbedingt. Beide Tests sind grün.                                                                                                                                                                                                                                                            |
+| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                                                             |
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
 
@@ -520,6 +575,13 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     als vier Fixes gelandet waren und einer nicht grün werden konnte. **Der Tell war, dass beide
     dieselbe Task nannten.** Wer rote Tests vorab schreibt, prüft die Erwartungen eines Tags
     **gegeneinander**, bevor der Fix beginnt — nicht erst gegen den Code. Aufgelöst in ADR-018.
+14. **SQL in der Doku wird aus der Doku ausgeführt, nicht aus dem Entwurf.** In `JR-1307` wich die
+    veröffentlichte Fassung der Prüfabfrage an einer Stelle vom getesteten Entwurf ab (eine
+    CTE-Referenz musste beim Einfügen qualifiziert werden). Der Beleg ist deshalb ein Skript, das die
+    ` ```sql `-Blöcke aus der Markdown-Datei extrahiert und **wörtlich** gegen Postgres laufen lässt —
+    sonst belegt der grüne Lauf den Entwurf und nicht das, was ein Betreiber kopiert. Zusätzlich
+    gehören zu einer solchen Abfrage **Negativfälle**: dass die drei `predefined_*`-Rollen in **keiner**
+    Ausgabe erscheinen, trägt die Aussage „keine Pauschalwarnung".
 
 ---
 
