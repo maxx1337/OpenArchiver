@@ -93,11 +93,12 @@ export class FilterBuilder {
 			return FilterBuilder.deny();
 		}
 
-		const drizzleFilter = mongoToDrizzle(query);
+		// Both translators are contractually fail-closed: they throw rather than drop a condition,
+		// so `mongoToDrizzle` is typed to always return a predicate. The possibility of `undefined`
+		// is kept in the local type on purpose -- it would silently lift the restriction for every
+		// caller, so it is turned into a deny here instead of being trusted not to occur.
+		const drizzleFilter: SQL | undefined = mongoToDrizzle(query);
 		const searchFilter = await mongoToMeli(query);
-		// Belt and braces: both translators are contractually fail-closed (they throw rather than
-		// drop a condition), but `undefined` reaching a caller would silently lift the restriction,
-		// so it is turned into a deny here rather than trusted not to occur.
 		if (drizzleFilter === undefined) {
 			return FilterBuilder.deny();
 		}

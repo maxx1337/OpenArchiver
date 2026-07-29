@@ -8,6 +8,19 @@ const relationToTableMap: Record<string, string> = {
 	// TBD: Add other relations here as needed
 };
 
+/**
+ * Refuse to translate.
+ *
+ * This helper turns the MongoDB-syntax `conditions` of an IAM policy into a SQL predicate, so its
+ * output is a row-level access control decision. Dropping a condition it cannot express does not
+ * produce a wrong filter, it produces **no** filter — and `FilterBuilder`'s callers read the
+ * absence of a filter as "do not restrict this query". Every untranslatable input is therefore
+ * refused loudly, the way `mongoToMeli` already refuses an unknown operator.
+ */
+function refuse(reason: string): never {
+	throw new Error(`mongoToDrizzle: ${reason}`);
+}
+
 function getDrizzleColumn(key: string): SQL {
 	const keyParts = key.split('.');
 	if (keyParts.length > 1) {
@@ -21,33 +34,49 @@ function getDrizzleColumn(key: string): SQL {
 	return sql`${sql.identifier(camelToSnakeCase(key))}`;
 }
 
-export function mongoToDrizzle(query: Record<string, any>): SQL | undefined {
-	const conditions: (SQL | undefined)[] = [];
+export function mongoToDrizzle(query: Record<string, any>): SQL {
+	if (typeof query !== 'object' || query === null || Array.isArray(query)) {
+		refuse(`expected a condition object, got ${JSON.stringify(query)}`);
+	}
+
+	const conditions: SQL[] = [];
 
 	for (const key in query) {
 		const value = query[key];
 
-		if (key === '$or') {
-			conditions.push(or(...(value as any[]).map(mongoToDrizzle).filter(Boolean)));
-			continue;
-		}
-
-		if (key === '$and') {
-			conditions.push(and(...(value as any[]).map(mongoToDrizzle).filter(Boolean)));
+		if (key === '$or' || key === '$and') {
+			if (!Array.isArray(value)) {
+				refuse(`"${key}" expects an array of branches, got ${JSON.stringify(value)}`);
+			}
+			if (value.length === 0) {
+				// An empty disjunction is satisfied by nothing and an empty conjunction restricts
+				// nothing; either way "no branches" must not become "no filter".
+				refuse(`"${key}" has no branches`);
+			}
+			// No `.filter(Boolean)`: a branch that cannot be translated makes the whole condition
+			// untranslatable. Dropping one branch of an `$or` narrows the permission the policy
+			// author wrote (finding F22), and dropping one branch of the `$and` that
+			// `FilterBuilder` builds from `cannot` rules drops a prohibition outright.
+			const branches = value.map((branch) => mongoToDrizzle(branch));
+			const combined = key === '$or' ? or(...branches) : and(...branches);
+			if (combined === undefined) {
+				refuse(`"${key}" produced no predicate`);
+			}
+			conditions.push(combined);
 			continue;
 		}
 
 		if (key === '$not') {
-			const subQuery = mongoToDrizzle(value);
-			if (subQuery) {
-				conditions.push(not(subQuery));
-			}
+			// The negation is never optional: losing it turns a deny into an allow.
+			conditions.push(not(mongoToDrizzle(value)));
 			continue;
 		}
 
 		const column = getDrizzleColumn(key);
 
 		if (typeof value === 'object' && value !== null) {
+			// Only the first operator is read. That loses the second bound of a range condition
+			// (finding F4) and is deliberately left as it is: it is outside E13's scope.
 			const operator = Object.keys(value)[0];
 			const operand = value[operator];
 
@@ -80,7 +109,10 @@ export function mongoToDrizzle(query: Record<string, any>): SQL | undefined {
 					conditions.push(operand ? not(isNull(column)) : isNull(column));
 					break;
 				default:
-				// Unsupported operator
+					refuse(
+						`unsupported operator ${JSON.stringify(operator)} on condition key ` +
+							`${JSON.stringify(key)}`
+					);
 			}
 		} else {
 			conditions.push(eq(column, value));
@@ -88,8 +120,12 @@ export function mongoToDrizzle(query: Record<string, any>): SQL | undefined {
 	}
 
 	if (conditions.length === 0) {
-		return undefined;
+		refuse('the condition object is empty and therefore places no restriction on the query');
 	}
 
-	return and(...conditions.filter((c): c is SQL => c !== undefined));
+	const combined = and(...conditions);
+	if (combined === undefined) {
+		refuse('the condition object produced no predicate');
+	}
+	return combined;
 }
