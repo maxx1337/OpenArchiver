@@ -85,47 +85,42 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-30 (**`JR-1309b` hat E13 zum _dritten_ Mal abgelehnt — F31; ADR-020 ist berichtigt,
-`JR-1318` ist committet, die vierte Abnahme `JR-1309c` ist beauftragt aber _nicht durchgeführt_. Dazu drei
-Prozessentscheidungen: ADR-021, Subagenten auf Sonnet, Planungsdokumente entschlackt**) ·
-**Branch:** `claude/journaling-e13-iam-hardening` · **Prüfgegenstand von `JR-1309c` ist `939df10`**,
-darüber liegen nur Statuspflege- und Prozess-Commits (`git log --oneline -8` zeigt sie) ·
-Arbeitsbaum **sauber** · **gepusht und gegen das Remote abgeglichen**
+**Stand:** 2026-07-30 (**E13 ist ABGENOMMEN** — `JR-1309c` in der vierten Runde; **Rückmerge vollzogen**
+(`89d701f`, `--no-ff`), **`JR-1312` erledigt** (`dca1f1a`). Der einzige Vorbehalt des Prüfberichts ist
+nachgemessen und **widerlegt**: F36) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
+(der Epic-Branch ist zurückgemergt und wird nicht mehr gebraucht) · Arbeitsbaum **sauber** ·
+Volllauf auf dem Integrationsbranch **250 passed | 2 skipped** bei 17 Dateien, Exit 0
 
 ### Der Stand in einem Satz
 
-`JR-1309b` hat E13 zum dritten Mal abgelehnt (17 von 18 Kriterien erfüllt): der Abdeckungsanspruch war
-nicht verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewandert (**F31**) — Ursache war
-**ADR-020 selbst**, die den Verhaltenscheck „vollständig" nannte. Die ADR ist berichtigt, **`JR-1318`
-(`939df10`) setzt es um**, und **die vierte Abnahme `JR-1309c` ist der einzige offene Schritt**.
+**E13 ist fertig.** Vier Abnahmerunden, drei Ablehnungen (F27/F28/F29 → F30 → F31), dann die Annahme;
+der Rückmerge ist als echter Merge-Commit vollzogen, und `JR-1312` hat die dritte Stelle des
+Berechtigungsvokabulars berichtigt. **Nächster Schritt ist `JR-105c`** (F14–F16, F24) — fällig **vor** E2.
 
-> ### Warum die Session hier endet — und was das für den Start bedeutet
+> ### Was diese Session gemacht hat
 >
-> **Der Tester-Subagent ist mitten im Auftrag `JR-1309c` an ein Session-Limit gelaufen**
-> („You've hit your session limit · resets 3:30am"). Die Abnahme ist **beauftragt, aber nicht
-> durchgeführt** — es liegt **kein** Ergebnis vor, auch kein teilweises. Der vollständige Auftragstext
-> steht unten; er kann wörtlich erneut vergeben werden.
+> 1. **`JR-1309c` hat E13 abgenommen.** Umfang war `JR-1307`s Kriterium 12 und `JR-1318`; der Prüfer hat
+>    **ohne DEV-Bericht** gearbeitet und jede Zahl selbst gemessen. Protokoll in `06-status.md` unter
+>    „Abnahme `JR-1309c`". Besonders bemerkenswert: der **Anker der Textprüfung** war durch `JR-1318`
+>    entfernt worden, der Prüfer hat ihn mit einer vergifteten Wegwerf-Kopie neu gesetzt, **bevor** er dem
+>    sauberen Lauf geglaubt hat.
+> 2. **Der eine gemeldete Neubefund ist widerlegt** — nachgemessen vom PO. Der Bericht hielt eine
+>    Prettier-Warnung für einen eigenen Defekt („tab-eingerückter JSON-Block, überlebt die
+>    CRLF-Normalisierung"). Beides falsch: `.prettierrc` setzt **`useTabs: true`**, und eine LF-Kopie
+>    derselben Datei ist `prettier --check` **grün**. Es ist reines **F35**. Geführt als **F36
+>    (widerlegt)**, damit die nächste Session den Kandidaten nicht erneut für echt hält — **und dieselbe
+>    Falle hat an einem Tag zweimal zugeschlagen**, siehe Fallstrick 27.
+> 3. **Rückmerge `89d701f`, `--no-ff`, kein Squash.** Der Baum ist danach identisch mit dem abgenommenen
+>    Stand (`git diff` gegen den Epic-Branch ist leer), der Commit hat zwei Eltern. **Kein Squash war
+>    Absicht:** er hätte die drei dokumentierten Ablehnungen getilgt — und damit den Beleg, dass die
+>    Abnahme ihre Arbeit getan hat.
+> 4. **`JR-1312` erledigt** (`dca1f1a`, Grundlagenarbeit direkt auf dem Integrationsbranch, wie im Backlog
+>    vorgesehen). Alle drei Stellen des Vokabulars stimmen jetzt überein — **maschinell verglichen**, 8
+>    Actions und 7 Subjects. Die drei neuen Faktenaussagen über `manage` sind gegen den **gebauten** Code
+>    gemessen, nicht gegen den Entwurf. `CLAUDE.md` §5.4 sagte „the docs are stale"; das stimmt nicht mehr
+>    und ist im selben Commit mitgezogen.
 >
-> **Zwei Dinge sind dadurch ungewöhnlich und dürfen nicht als Nachlässigkeit missverstanden werden:**
->
-> 1. **`JR-1318` hat keinen DEV-Bericht.** Der Agent hat committet und sich dann zweimal als verfügbar
->    gemeldet, ohne zu berichten; die Nachforderung blieb unbeantwortet. Was in `06-status.md` unter
->    „`JR-1318` committet" steht, ist die **Lesart des PO aus dem Diff**, nicht gemessen. `JR-1309c` muss
->    daher **alles selbst messen**. Das ist kein Schaden — es gibt keine Behauptung, die ein Prüfer
->    versehentlich übernehmen könnte.
-> 2. **Die Statuspflege ist committet** (sieben Dateien: die sechs Planungsdokumente plus
->    `.claude/agents/tester.md`), der Arbeitsbaum ist sauber. Prüfgegenstand von `JR-1309c` ist allein
->    `939df10`; alles darüber ist Statuspflege und Rollendefinition, kein Prüfgegenstand.
-> 3. **Alles ist gepusht und der Remote-Abgleich ist nachgeholt** — er war den größten Teil der Session
->    unbestätigt, weil `git ls-remote` nicht durchlief. Er ist es nicht mehr: Der Auftraggeber hat den
->    SSH-Key entsperrt, der Abgleich ergab **identische Stände**, kein Rollback. Wie es geht, steht unten
->    in der Umgebungstabelle.
->
-> **Und drei Prozessentscheidungen des Auftraggebers vom 2026-07-30**, alle drei umgesetzt und committet:
-> **ADR-021** (Abnahmeeinheit ist die Scheibe — die direkte Lehre aus E13s vier Abnahmerunden), die
-> Subagenten laufen auf **Sonnet**, und die Planungsdokumente sind **entschlackt** (dieser Handover
-> 1085 → 556 Zeilen, `06-status.md` 2029 → 1359, E1-Protokoll nach `11-archiv-e1.md`). **Nichts ist
-> gekürzt worden, nur verschoben.**
+> **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt.
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -179,12 +174,25 @@ git ls-remote origin refs/heads/<branch>
 > `embedded-postgres` zieht die neueste Version (hier 18.4), was eine unnötige Versionslücke zur CI
 > aufreißt.
 
-**Der Cluster dieser Session ist am Ende gestoppt und der Datadir gelöscht.** Die Prüfwerkzeuge von
-`JR-1309b` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `fixtures.cjs`, `run.cjs`,
-`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`) liegen unter
-`C:\Users\Maxim\AppData\Local\Temp\claude\X--NEW-DEVELOP-GIT-OpenArchiver\7b5a77e0-2ad8-461a-a03c-5648527b2cf7\scratchpad`
-— **nicht** im Repository. Sie sind gegen den Vor-Fix-Stand kalibriert und für `JR-1309c` wertvoll; ist
-das Verzeichnis weg, sind sie neu zu bauen (dann Punkt 1 des nächsten Schritts besonders beachten).
+**Die Binaries überleben die Session, der Datadir nicht.** Am 2026-07-30 lag das
+`@embedded-postgres/windows-x64`-Paket der Vorsession noch auf der Platte — das hat den `npm install`
+gespart, und `postgres.exe --version` hat 17.10 bestätigt, bevor `initdb` lief. **Erst prüfen, dann neu
+installieren.** Die Scratchpads der Vorsessions liegen unter
+`C:\Users\Maxim\AppData\Local\Temp\claude\X--NEW-DEVELOP-GIT-OpenArchiver\<session-id>\scratchpad`;
+`Get-ChildItem <basis> -Directory` zeigt sie mit Datum. Dort liegen auch die Prüfwerkzeuge von `JR-1309b`
+und `JR-1309c` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `fixtures.cjs`, `run.cjs`,
+`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`, dazu aus dieser Session `vocab.cjs`, `manage.cjs`,
+`lintcheck.cjs`, `lintfix.cjs`, `leftovers.cjs`) — **nicht** im Repository.
+
+> **Werkzeuge einer Vorsession sind gegen deren Stand kalibriert.** Ein grüner Lauf belegt nichts, wenn
+> der Anker, an dem das Werkzeug hing, inzwischen entfernt wurde. `JR-1309c` hat das richtig gemacht: den
+> gesuchten Satz in einer Wegwerf-Kopie **absichtlich wieder einsetzen**, zeigen dass das Werkzeug ihn
+> findet, und erst dann dem sauberen Lauf glauben.
+
+**Nützlich und schnell nachgebaut:** `lintcheck.cjs` prüft übergebene Dateien Prettier-konform **ohne**
+über F35 zu stolpern (LF-Normalisierung in Node, Vergleich über die Prettier-API), `lintfix.cjs`
+formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind der praktische Ausweg aus
+„`pnpm lint` ist auf diesem Host immer rot".
 
 > **Zwei Lücken, die `JR-1309` offenlassen musste, sind in `JR-1309a` geschlossen:** der **HTTP-400-Pfad**
 > ist end-to-end gemessen (`IamController.createRole` direkt aufgerufen, 11 × `400` mit dem Key bzw. Wert
@@ -207,61 +215,39 @@ das Verzeichnis weg, sind sie neu zu bauen (dann Punkt 1 des nächsten Schritts 
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — die vierte Abnahme `JR-1309c`
+### Nächster konkreter Schritt — `JR-105c`
 
-**Nichts wartet auf eine Entscheidung.** `JR-1318` ist committet (`939df10`), ADR-020 ist berichtigt, der
-Umfang von `JR-1309c` steht in `03-backlog.md`. **Noch schmaler** heißt: `JR-1307`s Kriterium 12 und die
-Kriterien von `JR-1318`, **nicht** die Abfrageseite erneut — `JR-1309b` hat sie unabhängig belegt und
-`JR-1318` fasst keine SQL an.
+**Nichts wartet auf eine Entscheidung, und nichts blockiert.** E13 ist abgenommen und zurückgemergt,
+`JR-1312` ist erledigt. Fällig ist jetzt **`JR-105c`** — die drei Befunde am **Messinstrument** aus
+`JR-106a` (**F14–F16**) plus **F24**. Umfang und Begründung stehen in `03-backlog.md` unter „Nach der
+Abnahme aufgetreten", die Befunde in `09-befunde-bestandscode.md`.
 
 ```
-Nimm Epic 13 ein viertes Mal ab — Rolle Tester, Umfang JR-1309c.
-Branch claude/journaling-e13-iam-hardening, HEAD 939df10.
-Umfang: JR-1307 Kriterium 12 und JR-1318 (F31 tragend, F32-F34 mit).
-Es liegt KEIN DEV-Bericht vor - alles selbst messen.
+Arbeite JR-105c ab — Rolle senior-dev, Umfang F14, F15, F16 und F24
+aus docs/dev/journaling/09-befunde-bestandscode.md.
+Grundlagenarbeit, direkt auf dem Integrationsbranch.
 ```
 
-Was `JR-1309c` prüfen muss, und wo der Hebel liegt:
+**Warum das vor E2 kommt und nicht danach:** der Inventar-Wächter zählt **Dateien statt ausgeführter
+Tests**. Wer die vier Integrationsdateien auf `nightly` umklassifiziert, schaltet die Suite ab, und
+**beide** Wächter melden weiter grün. Solange das offen ist, belegt ein grüner CI-Lauf **nicht**, dass die
+Integration-Suite gelaufen ist — und ab E2 hängt genau daran die Aussage über Durabilität und
+Krypto-Kette. Inhaltlich gehören alle drei nach `JR-1305`, wo `JR-106` den „Ausweg" für diese Klasse schon
+eingeplant hat.
 
-1. **Der Anker der Textprüfung ist weg — er muss neu gesetzt werden.** `JR-1318` hat genau den Satz
-   entfernt, an dem der Selbsttest des Scanners hing; ein sauberer Lauf belegt damit wieder nichts.
-   Vorgehen (vom Prüfer selbst vorgeschlagen): Wegwerf-Kopie der behobenen Seite, den F31-Satz
-   **absichtlich wieder einsetzen**, zeigen dass das Werkzeug ihn noch findet. **Whitespace zuerst
-   normalisieren** — die Prosa ist hart umbrochen, und genau daran hat die Prüfung in `JR-1309b` schon
-   einmal ein falsches „behoben" gemeldet (Fallstricke unten).
-2. **Die Textprüfung läuft über die _ganze_ Seite, nicht über den Diff.** Dreimal in Folge saß der Defekt
-   in Text, der **in derselben Runde neu geschrieben** wurde. Erwartung: kein bekannter Bruch **und** kein
-   neuer Abdeckungssatz. Ein neuer Fund geht **unbewertet** an den PO — der Prüfer meldet Ort, Wortlaut
-   und Regel, er entscheidet nicht.
-3. **Beide F31-Hälften getrennt prüfen, keine trägt die andere.** Der Absolutsatz muss weg **und** die
-   dritte zeilengefilterte Oberfläche (Ingestion-Quellenliste) muss benannt sein. Ein reines Streichen
-   wäre Text ohne Reichweite. Die dritte Zahl ist über `FilterBuilder.create` zu **messen**: an einer
-   Rolle mit Archiv-Grants und nur einem Verbot auf der `ingestion`-Seite bleiben beide Archivzahlen
-   stehen, während der Filter auf `ingestionSourceId = "-1"` umschlägt.
-4. **Die fünf neuen Faktenaussagen von `JR-1318` sind ungeprüft** und präziser als der alte Text, damit
-   leichter falsch: dass der Befund „archive search granted without archive read" **keine** Regelnummer
-   nennt; F33s Aufteilung in verlorene und ankommende Befunde samt „names the rule number with no action
-   or subject beside it"; F32s „finds all five"; F34s „just as readily"; und dass `manage` **und**
-   `subject: "all"` gegen jede der drei Berechtigungen gematcht werden. Vollständig aufgelistet in
-   `06-status.md` unter „`JR-1318` committet".
-5. **Umfang und Volllauf:** `git show --stat` gegen „ausschließlich `access-control-changes.md`"; Suite
-   `250 passed | 2 skipped` bei **17** Dateien (die temporäre Sonde ist entfernt — eine andere Zahl oder
-   eine zusätzliche Testdatei ist eine **Abweichung und zu berichten**); `lint`, `docs:build`,
-   `dist/dev/` existiert nicht; `FilterBuilder.ts`/`mongoToMeli.ts` blob-identisch zu `13a7114`.
+**Danach:** **E2** (der SMTP-Receiver, das eigentliche Projekt). Vorher sind für E2 zwei Dinge zu klären,
+beide in dieser Umgebung neu: **Redis, Meilisearch und Tika fehlen auf diesem Host** (für E13 nicht
+gebraucht, für den Receiver schon), und die zwei ADRs **ADR-006** (kanonische Kodierung, Genesis-String)
+und **ADR-007** (eine Kette global oder eine je Mandant) müssen **vor** der ersten Zeile Kettencode
+entschieden sein — sie invalidieren später jede bestehende Kette.
 
-**Erst nach der Annahme:** Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, **kein Squash** — ein
-Squash würde die **drei** dokumentierten Ablehnungen tilgen und damit den Beleg, dass die Abnahme
-funktioniert hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
-Nächstes Epic ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
+**Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert:** `JR-1316` (die
+Betreiber-SQL bekommt einen Regressionstest — sie ist weiterhin das einzige sicherheitsrelevante Artefakt
+aus E13 ohne Test), dann `JR-1311` (spaltengenaue Key-Prüfung, schließt den Restspalt aus ADR-019 und die
+**Laufzeitseite von F26**), dann `JR-1310` (ADR-017 Variante C). Keine davon blockiert E2.
 
-> **Der Rückmerge ist am 2026-07-30 ausdrücklich zurückgestellt worden — Entscheidung des
-> Auftraggebers, nicht Versäumnis.** Zur Frage gestellt war, die 33 Commits sofort zu mergen; der
-> Integrationsbranch steht unverändert bei `efea6bc`. Begründung: der Merge würde `939df10`
-> mitbringen — die Betreiberseite, an der **drei von drei** Abnahmen gescheitert sind und deren
-> vierte Prüfung offen ist. Eine Ablehnung müsste dann im **Integrationsbranch** nachgearbeitet
-> werden. Der Autorisierungscode ist dagegen dreimal unabhängig belegt. Ein technischer Zwang
-> besteht nicht: die Prozessänderungen (ADR-021, `model: sonnet`, `CLAUDE.md`) wirken auf diesem
-> Branch, weil `JR-1309c` hier stattfindet. **Nach bestandener Abnahme mergen, nicht davor.**
+> **`main` bleibt bis E12 unangetastet.** Der Integrationsbranch ist jetzt der Arbeitsbranch für
+> Grundlagenarbeit; das nächste Epic bekommt wieder einen eigenen Branch nach ADR-014.
 
 **Unverändert offen und richtig so:** die **Laufzeitseite von F26** — ein bereits gespeichertes
 `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil `FilterBuilder.ts:51–53`
@@ -297,9 +283,9 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Keine blockierende Frage.** Die eine blockierende Frage war **F30**; der Auftraggeber hat sie mit
-**ADR-020** entschieden (beheben **und** den Anspruch aufgeben), und `JR-1317` hat sie umgesetzt. Nächster
-Schritt ist reine Prüfarbeit (`JR-1309b`).
+**Keine blockierende Frage.** E13 ist abgenommen; der nächste Schritt (`JR-105c`) ist reine Arbeit und
+braucht keine Entscheidung. Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und
+umgesetzt in `JR-1317`/`JR-1318`.
 
 **Zwei Punkte aus `JR-1317`, beide nicht blockierend, beide Entscheidung des Auftraggebers:**
 
@@ -319,12 +305,9 @@ Schritt ist reine Prüfarbeit (`JR-1309b`).
 liefert weiter Vollzugriff) ist **kein** Regress und bricht kein Kriterium. Er gehört inhaltlich zu
 `JR-1311`. Vorziehen ja/nein ist eine Produktentscheidung, nicht E13s Abnahme.
 
-**Neu vorgelegt aus `JR-1307`, nicht blockierend: eine Doku-Nacharbeit.**
-`docs/services/iam-service/iam-policy.md` listet die Action `export` weiterhin nicht und beschreibt
-`manage` als Expansion auf `create/read/update/delete/search/sync` statt als echten CASL-Wildcard —
-die in `CLAUDE.md` §5.4 benannte stale Stelle (3) des Permission-Vokabulars. `JR-1307` hat dieselbe
-Datei angefasst, den Punkt aber **nicht** behoben, weil er nicht zur Task gehört. (1) und (2) sind
-bereits einig; es ist reine Doku-Nacharbeit. **Zu entscheiden: eigene Task, und in welchem Epic?**
+**~~Doku-Nacharbeit am Permission-Vokabular~~ — erledigt am 2026-07-30 als `JR-1312`** (`dca1f1a`),
+Grundlagenarbeit direkt auf dem Integrationsbranch, wie im Backlog vorgesehen. Kein Entscheidungsbedarf
+mehr.
 
 **Zur Kenntnis, kein Entscheidungsbedarf: eine benannte Abweichung in `JR-1306`.** Die Allowlist prüft
 Form des Keys plus Relation, nicht die Existenz der Spalte; ein einzelner unbekannter Key (`foo`) wird
@@ -393,9 +376,13 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 2. **`apps/open-archiver-enterprise` und `packages/enterprise` fehlen**, werden aber von Root-Scripts
    referenziert. `pnpm build:enterprise` und `dev:enterprise` funktionieren hier nicht — die
    `:oss`-Varianten nehmen.
-3. **Die IAM-Doku ist stale, nicht der Code.** `docs/services/iam-service/iam-policy.md` listet die
-   Action `export` nicht; `iam.types.ts` und `policy-validator.ts` enthalten sie beide. Wer der Doku
-   glaubt, „fixt" einen Bug, der nicht existiert.
+3. **~~Die IAM-Doku ist stale, nicht der Code.~~ Erledigt am 2026-07-30 durch `JR-1312`.** Alle drei
+   Stellen des Berechtigungsvokabulars stimmen jetzt überein (8 Actions, 7 Subjects, maschinell
+   verglichen). Der Fallstrick bleibt als **Muster** stehen, weil er sich wiederholen wird: eine
+   Vokabelliste, die an drei Stellen geführt wird, läuft auseinander, und die **Doku** ist die Stelle,
+   die niemand testet. Wer künftig eine Action oder ein Subject hinzufügt, ändert `iam.types.ts`,
+   `policy-validator.ts` **und** `docs/services/iam-service/iam-policy.md` — `CLAUDE.md` §5.4 nennt alle
+   drei.
 4. **Neue Drizzle-Schema-Dateien müssen in den Barrel** `packages/backend/src/database/schema.ts`.
    Sonst meldet `pnpm db:generate` „keine Änderungen" und man sucht lange.
 5. **Backend-i18n-Strings brauchen einen Rebuild**, um im Container zu erscheinen: der
@@ -559,6 +546,24 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     **gebauten** Übersetzer (`dist/helpers/mongoToDrizzle.js`, ein `node`-Einzeiler, kein Test im Repo)
     schicken und „verweigert" gegen „gemeldet" stellen. Jede Abweichung muss man dann benennen können — bei
     `JR-1317` waren es zwei, beide erklärbar.
+
+27. **Auf Windows zerstört eine Shell-Umleitung die Kodierung — und der anschließende Vergleich lügt.**
+    Wer eine Datei mit `>` oder `Out-File` in PowerShell 5.1 umleitet, um sie zu normalisieren oder gegen
+    ein Soll zu diffen, schreibt sie in einer anderen Kodierung zurück: die Em-Dashes und Anführungszeichen
+    der englischen Betreiberdoku kommen zerstört an, und `Compare-Object` meldet danach Dutzende
+    „inhaltlicher" Abweichungen, die keine sind. **Das hat am 2026-07-30 zweimal an einem Tag zugeschlagen**
+    — beim Prüfer von `JR-1309c`, der daraus einen Befund gemacht hat (**F36**, widerlegt), und beim PO
+    beim ersten Nachmessen. Regel: **jede Aussage über Zeilenenden, Einrückung oder Formatierung wird in
+    Node gefahren**, nicht in der Shell — `fs.readFileSync(f, 'utf8')`, selbst normalisieren, Prettier über
+    die API oder mit explizitem `--config` gegen eine selbst geschriebene Kopie. Die Gegenprobe, die den
+    Fall entscheidet, ist billig: **eine LF-Kopie und eine CRLF-Kopie derselben Datei durch
+    `prettier --check` schicken.** Ist nur die CRLF-Kopie rot, ist es F35 und sonst nichts.
+
+28. **`git merge --no-squash` ist kein Flag.** Der Wunsch, „kein Squash" ausdrücklich hinzuschreiben, ist
+    verständlich (ADR-014 verlangt es), aber `git merge` kennt nur `--squash`; `--no-squash` verschiebt die
+    Argumente und endet in `merge: matching - not something we can merge`. **Kein Squash ist der Default** —
+    `--no-ff` allein ist richtig und ausreichend. Und: eine mehrzeilige Commit-Message auf diesem Host
+    lieber über `-F <datei>` als über einen PowerShell-Here-String übergeben.
 
 ---
 
