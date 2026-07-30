@@ -110,22 +110,22 @@ Betreiberseite ist weg (ADR-020); nächster Schritt ist die schmale Abnahme `JR-
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                            | Fertig / Gesamt          |
-| ----------- | ---- | ---------------------------------- | ----------------------------------------------------------------- | ------------------------ |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                        | 6 / 6                    |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2)  | 9 / 10                   |
-| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — F30 behoben (`JR-1317`), Abnahme `JR-1309b` offen | 8 / 9 + 5 / 6 Nacharbeit |
-| 3           | E2   | Ledger und Hash-Chain              | offen                                                             | 0 / 10                   |
-| 4           | E3   | Spool und Acceptance-Contract      | offen                                                             | 0 / 8                    |
-| 5           | E4   | `smtp-ingress`-Service             | offen                                                             | 0 / 13                   |
-| 6           | E5   | Journal-Report-Parser              | offen                                                             | 0 / 9                    |
-| 7           | E6   | Phase-B-Worker                     | offen                                                             | 0 / 8                    |
-| 8           | E7   | WORM-Storage                       | offen                                                             | 0 / 6                    |
-| 9           | E8   | Anchoring                          | offen                                                             | 0 / 6                    |
-| 10          | E9   | `verify`-CLI                       | offen                                                             | 0 / 8                    |
-| 11          | E10  | Completeness-Monitoring            | offen                                                             | 0 / 8                    |
-| 12          | E11  | Compliance-Features                | offen                                                             | 0 / 10                   |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                             | 0 / 9                    |
+| Reihenfolge | Epic | Titel                              | Status                                                           | Fertig / Gesamt          |
+| ----------- | ---- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------ |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                       | 6 / 6                    |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, 1 Nacharbeit offen (`JR-105c`, vor E2) | 9 / 10                   |
+| 2           | E13  | IAM-Autorisierung härten           | **in Arbeit** — 3× abgelehnt; `JR-1318` läuft, dann `JR-1309c`   | 8 / 9 + 6 / 8 Nacharbeit |
+| 3           | E2   | Ledger und Hash-Chain              | offen                                                            | 0 / 10                   |
+| 4           | E3   | Spool und Acceptance-Contract      | offen                                                            | 0 / 8                    |
+| 5           | E4   | `smtp-ingress`-Service             | offen                                                            | 0 / 13                   |
+| 6           | E5   | Journal-Report-Parser              | offen                                                            | 0 / 9                    |
+| 7           | E6   | Phase-B-Worker                     | offen                                                            | 0 / 8                    |
+| 8           | E7   | WORM-Storage                       | offen                                                            | 0 / 6                    |
+| 9           | E8   | Anchoring                          | offen                                                            | 0 / 6                    |
+| 10          | E9   | `verify`-CLI                       | offen                                                            | 0 / 8                    |
+| 11          | E10  | Completeness-Monitoring            | offen                                                            | 0 / 8                    |
+| 12          | E11  | Compliance-Features                | offen                                                            | 0 / 10                   |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                            | 0 / 9                    |
 
 111 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu). Dazu **`JR-1310`** als Folge-Task nach
 E13 (Variante C aus ADR-017) — er gehört zu keinem Epic und zählt nicht in die Abnahme von `JR-1309`.
@@ -850,24 +850,33 @@ in ein Test-Epic.
 
 ---
 
-## E13 — IAM-Autorisierung härten (in Arbeit, **F30 behoben, dritte Abnahme offen**)
+## E13 — IAM-Autorisierung härten (in Arbeit, **dreimal abgelehnt, Nacharbeit `JR-1318` läuft**)
 
 **Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`.
 **Kein Rückmerge** — `JR-1309` hat E13 am 2026-07-29 abgelehnt (F27, F28, F29), die DEV-Nacharbeit
 `JR-1313`–`JR-1315` hat diese drei behoben, und die **erneute Abnahme `JR-1309a` hat E13 am
 2026-07-29 wieder abgelehnt**: ein neuer Befund **F30** derselben Klasse eine Ebene tiefer. Alle
-anderen 22 geprüften Kriterien sind erfüllt, die Codehälfte ist unabhängig belegt. **`JR-1317` hat F30
-behoben und den Abdeckungsanspruch der Seite entfernt (ADR-020)**; offen ist die schmale dritte Abnahme
-`JR-1309b`.
+anderen 22 geprüften Kriterien sind erfüllt, die Codehälfte ist unabhängig belegt. `JR-1317` hat F30
+behoben und den Abdeckungsanspruch der **Abfrage** entfernt (ADR-020) — und die **dritte Abnahme
+`JR-1309b` hat E13 am 2026-07-29 zum dritten Mal abgelehnt** (**F31**): der Anspruch war nicht
+verschwunden, sondern auf den **Verhaltenscheck** gewandert. 17 von 18 Kriterien erfüllt.
 
-| Nacharbeit | Task                                                                                 | Rolle |
-| ---------- | ------------------------------------------------------------------------------------ | ----- |
-| [x]        | JR-1313 F29 + F26s Schreibseite: ein Prädikat für beide Gates — `cfb1462`            | DEV   |
-| [x]        | JR-1314 F27 + F28: Abfragen erweitert **und** Absolutsatz ersetzt — `c17144e`        | DEV   |
-| [x]        | JR-1315 F25: Behauptung eingeschränkt **und** F5-Kommentar nachgezogen — `5c8a521`   | DEV   |
-| [x]        | JR-1309a Erneute Abnahme E13 — **durchgeführt; Ergebnis: nicht abgenommen (F30)**    | TEST  |
-| [x]        | JR-1317 F30: Formbefunde auf Knotenebene **und** Abdeckungsanspruch weg — `07ac661`  | DEV   |
-| [ ]        | JR-1309b **Schmale** dritte Abnahme — Kriterium 12 und `JR-1317`, nicht 23 Kriterien | TEST  |
+> **Diesmal lag die Ursache beim PO, nicht in der Umsetzung.** ADR-020 nannte den Verhaltenscheck selbst
+> „vollständig"; `JR-1317` hat den Satz folgerichtig auf die Betreiberseite übernommen. Die ADR ist
+> berichtigt („Berichtigung (2026-07-29, nach der Abnahme `JR-1309b` — F31)"), `JR-1318` setzt es um,
+> `JR-1309c` prüft es. **Die Abfrageseite von `JR-1317` (a) hält** und ist in `JR-1309b` unabhängig
+> belegt — sie wird nicht erneut geprüft.
+
+| Nacharbeit | Task                                                                                     | Rolle |
+| ---------- | ---------------------------------------------------------------------------------------- | ----- |
+| [x]        | JR-1313 F29 + F26s Schreibseite: ein Prädikat für beide Gates — `cfb1462`                | DEV   |
+| [x]        | JR-1314 F27 + F28: Abfragen erweitert **und** Absolutsatz ersetzt — `c17144e`            | DEV   |
+| [x]        | JR-1315 F25: Behauptung eingeschränkt **und** F5-Kommentar nachgezogen — `5c8a521`       | DEV   |
+| [x]        | JR-1309a Erneute Abnahme E13 — **durchgeführt; Ergebnis: nicht abgenommen (F30)**        | TEST  |
+| [x]        | JR-1317 F30: Formbefunde auf Knotenebene **und** Abdeckungsanspruch weg — `07ac661`      | DEV   |
+| [x]        | JR-1309b **Schmale** dritte Abnahme — **durchgeführt; Ergebnis: nicht abgenommen (F31)** | TEST  |
+| [x]        | JR-1318 F31 (mit F32–F34) — `939df10`, **ohne DEV-Bericht**, PO-Lesart aus dem Diff      | DEV   |
+| [ ]        | JR-1309c **Noch schmalere** vierte Abnahme — Kriterium 12 und `JR-1318`                  | TEST  |
 
 > **`JR-1316` ist aus dieser Liste herausgenommen** (Auftraggeber, 2026-07-29) und steht wortgleich
 > unter „Folge-Task nach E13" in `03-backlog.md`. Sie sichert ein **Doku-Artefakt** ab, kein
@@ -885,6 +894,145 @@ behoben und den Abdeckungsanspruch der Seite entfernt (ADR-020)**; offen ist die
 | [~] | JR-1307 Verhaltensänderung dokumentieren (ADR-016) — geschrieben 2026-07-29, in `JR-1309` **abgelehnt** (F27, F28, F29)                            | DEV       |
 | [x] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden) — **erledigt 2026-07-29**, in `JR-1309` bestätigt                                           | PO        |
 | [x] | JR-1309 Abnahme E13 — **durchgeführt 2026-07-29; Ergebnis: E13 nicht abgenommen**                                                                  | TEST → PO |
+
+### E13 — `JR-1318` committet (2026-07-29, Rolle `senior-dev`) — **ohne DEV-Bericht**, Abnahme offen
+
+**Commit `939df10`** („docs(upgrade): let each check report its own surfaces, and no more"), **eine**
+Datei: `docs/user-guides/upgrade-and-migration/access-control-changes.md`, 79 Zeilen ergänzt / 45
+entfernt. `git show --stat` bestätigt den Umfang; die temporäre Messsonde
+`packages/backend/tests/integration/f31-third-number.int.test.ts` ist aus dem Arbeitsbaum entfernt.
+
+> **Es liegt kein Bericht der Rolle `senior-dev` vor.** Der Agent hat sich zweimal als verfügbar
+> gemeldet, ohne die Nacharbeit zu berichten; eine ausdrückliche Nachforderung blieb unbeantwortet.
+> **Alles unten ist die Lesart des PO aus dem Diff, nicht gemessen** — insbesondere fehlen der Nachweis
+> über `FilterBuilder.create` für die dritte Zahl, die Ergebnisse von `lint`/`docs:build`/`dist/dev` und
+> die Angabe, wie der Autor seinen eigenen neuen Text gegen ADR-020 geprüft hat. `JR-1309c` muss deshalb
+> **alles selbst messen** und darf nichts übernehmen. Das ist für diese Runde eher ein Vorteil: es gibt
+> keine Behauptung, die ein Prüfer versehentlich durchwinken könnte.
+
+**Was der Diff zeigt (PO-Lesart, zu verifizieren):**
+
+| Befund  | Umsetzung im Diff                                                                                                                                                                                                                                                                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F31** | Die **dritte Zahl** ist aufgenommen: „rows the archive list returns, the result count of one search, and how many entries the ingestion sources list shows. **All three, because they are filtered separately and can move separately**"                                                                                                             |
+| **F31** | Der Absolutsatz ist durch sein **Gegenteil** ersetzt und nennt den F31-Fall als Warnung: „**Do not read one number for another**: a role with archive grants whose only statement about ingestion sources is a prohibition — the shape change 1 describes — keeps both archive numbers and loses the ingestion sources list entirely"                |
+| **F31** | Neuer Abschnitt **„What this check does not show you"**: „Three unchanged numbers are three unchanged numbers. That is what was measured, and **it is not a verdict on the role**", dazu vier benannte unsichtbare Fälle und „a moved number does not name its own cause"                                                                            |
+| **F31** | Die Bürgschaft ist in **beiden** Richtungen negiert: „neither stands in for the other: each reports what it can measure and says what it cannot" · „is worth running for that reason, **not because it stands in for this list**" · „**neither result excuses you from the other**"                                                                  |
+| **F32** | Beide Fehlertexte genannt (`an object` für ein Objekt, `a scalar` für String/Zahl/Boolean/JSON-`null`), Heilmittel „**which finds all five**"                                                                                                                                                                                                        |
+| **F33** | „reported **in part**" mit Angabe, welche Befunde verloren gehen (die drei bedingungsfreien und der für ein nicht-objektartiges `conditions`) und welche ankommen (die aus dem `conditions`, „because those are read from the rule rather than from the pair"); die bare Skalar-Regel bleibt „skipped without a row, and without stopping the query" |
+| **F34** | „That is **a class of position rather than a single case**", mit der Erweiterung, dass ein Operatorname, ein Condition-Key oder ein leeres `$or` an derselben wertseitigen Stelle „just as readily" gemeldet wird                                                                                                                                    |
+
+**Der Verhaltenscheck nennt seinen Umfang jetzt selbst:** „What it measures are **the three surfaces the
+application builds a row filter for** — the same three the row-level findings of Query 2 are limited to —
+and nothing besides them." Damit ist die Konstruktion aus ADR-020s Berichtigung umgesetzt: jedes
+Verfahren benennt, was es messen kann, und keines bürgt für das andere.
+
+**Fünf neue Faktenaussagen sind mit dem Fix entstanden und sind ungeprüft** — sie sind präziser als der
+alte Text und deshalb leichter falsch. `JR-1309c` muss jede einzeln nachmessen: dass der Befund „archive
+search granted without archive read" **keine** Regelnummer nennt; die F33-Aufteilung in verlorene und
+ankommende Befunde inklusive „names the rule number with no action or subject beside it"; F32s „finds all
+five"; F34s „just as readily"; und dass `manage` sowie `subject: "all"` gegen **jede** der drei
+Berechtigungen gematcht werden.
+
+### Abnahme `JR-1309b` (2026-07-29) — Ergebnis: **E13 zum dritten Mal nicht abgenommen**
+
+Unabhängige Session, Rolle `tester`, HEAD `2a4ea80`, **schmaler Umfang**: `JR-1307`s Kriterium 12 und die
+Kriterien von `JR-1317`, nicht die 23 Kriterien von `JR-1309a` erneut. 18 Kriterien einzeln,
+**17 erfüllt**.
+
+**Gebrochen ist Kriterium 12 — die Textprüfung gegen ADR-020. Neuer Befund F31**, dieselbe Klasse wie
+F27 und F30. Der Absolutsatz ist nicht verschwunden, sondern von der Abfrage in den **Verhaltenscheck**
+gewandert, den `JR-1317` neu geschrieben hat. Details in `09-befunde-bestandscode.md` unter **F31**, die
+Ursachenanalyse in ADR-020s Berichtigung. Drei weitere niedrige Befunde: **F32**, **F33**, **F34**.
+
+**Die Abfrageseite von `JR-1317` (a) ist unabhängig belegt und in Ordnung** — das ist der Teil, den
+`JR-1309a` als gebrochen gemeldet hatte:
+
+| Kriterium                                                         | Beleg                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Blöcke **wörtlich** aus der `.md` (Fallstrick 17)                 | `fenced blocks total: 5 (json, bash, sql, sql, sql)` · `sql blocks: 3` · `query1.sql` Zeilen 205–209 / 115 B / `sha256=d17c3469…` · `query2.sql` Zeilen 234–450 / 9843 B / `sha256=d9a3542f…` · `query3.sql` Zeilen 542–613 / 2997 B / `sha256=0afb4a14…`                                                          |
+| psql-Meta-Befehle in den Blöcken                                  | `0` in allen fünf Fences (Muster `^\s*\\[a-zA-Z?!]`) — es ist nichts psql-Spezifisches im Spiel                                                                                                                                                                                                                    |
+| **Alle acht** F30-Formen gemeldet, je mit Position                | 8 × `REPORTED`, u. a. `[empty condition object] rule #1: "conditions" -> "$not" is {}` · `[condition node is not an object] … the body of "conditions" -> "$not" is 5` · `"conditions" -> "$or" -> [] -> "$and" -> [] is {}` · `a branch of "conditions" -> "$or" is 5`                                            |
+| Gegenproben und die Wurzelformen aus `JR-1314`                    | 15 Gegenproben, alle `REPORTED`: `condition branch list is empty` für `{"$or": []}`/`{"$and": []}`; die 9 Wurzelwerte je 2 Zeilen `conditions is not an object` **mit der richtigen der zwei Lesarten**; `{}` an der Wurzel; `attachment.name`; `$regex`; `{"$or": 5}` als `condition branch list is not an array` |
+| **Keine Falsch-positiven** (der Hauptrisikopunkt)                 | 18 Kontrollen `silent OK` in **allen drei** Ausgaben — die drei `predefined_*` wörtlich aus dem Produktionscode (`UserService.ts:259–274`, `iam.controller.ts:108–146`) plus 15 normale Formen inkl. F4-Form, F5-Form, tief verschachtelt, `$exists:false`, „Regel ist kein Objekt"                                |
+| Fallstrick 20 vermieden                                           | `jsonb_typeof(b.value) <> 'object'` steht nur unter `c.key IN ('$or','$and')` bzw. `c.key = '$not'` — geprüft wird nur ein Knoten in **struktureller** Position                                                                                                                                                    |
+| `cannot` mit Operator-Bedingung ⇒ genau **eine** Zeile            | `-> 1 row(s)`: `[prohibition with an operator condition] rule #2 uses the operator $ne inside a "cannot" condition` — kein Formbefund daneben (Änderung 5, beabsichtigt)                                                                                                                                           |
+| Kreuzvergleich gegen den **echten** Übersetzer                    | 42 Bedingungswerte durch `dist/helpers/mongoToDrizzle.js` gegen die Q2-Ausgabe: **`false negatives (refused but silent): 0`**, `over-reports (accepted but reported): 1` — und das ist die dokumentierte Übermeldung                                                                                               |
+| Bewusste Abweichung 1 (`conditions: 5` ohne Zeilenfilter)         | `DEV-1 … (dashboard) -> 0 row(s) in Q2` — wie dokumentiert, kein Befund                                                                                                                                                                                                                                            |
+| Bewusste Abweichung 2 (`{"id":{"$in":[{}]}}`)                     | `-> 1 row(s)`: `[empty condition object] rule #1: "conditions" -> "id" -> "$in" -> [] is {}` — Übermeldung mit Position, wie dokumentiert                                                                                                                                                                          |
+| F28 unberührt                                                     | Q3 zwei Zeilen, `key=userEmial` → `archived_emails.user_emial` **und** `ingestion_sources.user_emial`                                                                                                                                                                                                              |
+| Query 1 funktioniert weiter                                       | `{"email":"no-role@example.com"}` — der Nutzer **mit** Rolle erscheint nicht                                                                                                                                                                                                                                       |
+| Volllauf, Exit 0, zitierte Testzahl                               | `Test Files 17 passed (17)` · `Tests 250 passed \| 2 skipped (252)` · `Duration 19.72s` · `TEST_EXIT=0`                                                                                                                                                                                                            |
+| Die 2 Skips identifiziert                                         | `SKIPPED SUITE [nightly] mongoToDrizzle() adversarial -- 25000 seeded trees` · `SKIPPED SUITE [manual] … 30000 ms soak`, beide in `tests/adversarial/mongo-to-drizzle.adv.test.ts`                                                                                                                                 |
+| `predefined-roles.int.test.ts` 7/7                                | `✓ integration … predefined-roles.int.test.ts (7 tests) 2255ms`, 0 Fehler                                                                                                                                                                                                                                          |
+| `FilterBuilder.ts` / `mongoToMeli.ts` blob-identisch zu `13a7114` | `f7efead24dc7935b67d5cb68210a4496f71dfe0d` bzw. `9e1ba29fefb11c536678c69441d3420e4ff025af`, je in beiden Revisionen                                                                                                                                                                                                |
+| Keine Rückstände                                                  | `git status --short` leer · `oa_test_* databases: 0` nach jeder Probe und nach der Suite                                                                                                                                                                                                                           |
+
+**Kriterium 13 (`JR-1307`s Kriterium 12) ist auf der Abfrageseite erfüllt und im selben Dokument wieder
+entwertet:** Query 2 meldet alle acht F30-Formen **und** die F31-Rolle korrekt
+(`prohibition without a matching grant: read ingestion is forbidden by rule #2, but no rule grants it`) —
+die Seite sagt dem Betreiber aber, er dürfe genau diese Meldung verwerfen. Deshalb bricht F31 dieses
+Kriterium, obwohl die SQL stimmt.
+
+**Umgebung dieser Abnahme — sie unterscheidet sich von allen vorherigen.** Windows-11-Host statt
+Linux-Container. PostgreSQL **17.10** (`on x86_64-windows, compiled by msvc-19.44.35226`), Wegwerf-Cluster
+aus `@embedded-postgres/windows-x64@17.10.0-beta.17` im Scratchpad — keine Systeminstallation, kein
+Docker, kein Dienst. **41 Migrationen / 141 Statements** direkt aus `src/database/migrations` in
+Journal-Reihenfolge, 22 Tabellen in `public`. `corepack pnpm` 10.13.1 (pnpm ist nicht im PATH),
+Node 24.14.0. **`psql.exe` fehlt** in der Windows-Binärdistribution — die SQL-Blöcke liefen über einen
+Node-`postgres`-Client.
+
+**Was in dieser Umgebung nicht prüfbar war:**
+
+- **Der Remote-Abgleich.** `git ls-remote origin refs/heads/claude/journaling-e13-iam-hardening` →
+  `fatal: Could not read from remote repository. Please make sure you have the correct access rights`
+  (dritter erfolgloser Versuch der Session). `HEAD` = `2a4ea80` = lokale `origin/…`-Ref und deckt sich mit
+  dem Handover; dass der Remote denselben Stand trägt, ist **unbestätigt**. Entscheidung des
+  Auftraggebers: auf dem lokalen Stand arbeiten, **kein Push vor dem Abgleich**.
+- **`psql` selbst.** Die Blöcke enthalten keine Meta-Befehle, es ist also nichts psql-Spezifisches im
+  Spiel — dass psql zeichengleich ausgibt, ist aber nicht gemessen (`JR-1309a` hatte das auf 16.13/17.10
+  getan).
+- **Die Vor-E13-Hälfte von F31.** Gemessen ist nur `HEAD`. Dass dieselbe Rolle vor dem Update alle
+  Ingestion-Quellen sah, steht in Änderung 1 der Seite und ist durch die E13-Regressionssuite belegt,
+  wurde hier aber nicht gegen den `FilterBuilder` von `efea6bc` nachgemessen. Der Befund hängt nicht
+  daran — er betrifft die **Vollständigkeit der zwei vorgeschriebenen Zahlen**, und die ist aus der Seite
+  selbst belegt.
+- **Die 7 Fälle von `predefined-roles.int.test.ts`** sind auf Dateiebene grün, nicht einzeln über einen
+  JSON-Report ausgewiesen.
+- **Meilisearch, Redis, Tika, Docker** fehlen; für diesen Umfang nicht gebraucht.
+
+**Kein Produktionscode, kein Test, keine öffentliche Doku geändert.** Proben nur im Scratchpad.
+Zwei unversionierte Dateien mit kaputten Namen (Shell-Quoting-Reste aus der Umgebungsprüfung dieser
+Session, 0 B bzw. `---`) lagen im Repository-Wurzelverzeichnis und sind entfernt. Neu auf der Platte,
+`.gitignore`-gedeckt: `packages/backend/dist`, `packages/types/dist` (für den Übersetzer-Kreuzvergleich
+gebaut). Der Cluster läuft weiter, auf Anweisung des PO.
+
+> **Fallstrick für Folge-Sessions (kein Produktbefund).** `postgres.js` serialisiert einen an einen
+> `jsonb`-Parameter gebundenen JS-Wert **selbst**. Ein vorher mit `JSON.stringify` erzeugter String wird
+> damit doppelt kodiert und landet als jsonb-_String_ in `roles.policies`; Query 2 **und** Query 3 brechen
+> dann bei **jeder** Rolle mit `cannot extract elements from a scalar` ab — was exakt wie ein
+> Abfragedefekt aussieht und in dieser Abnahme eine Diagnoserunde gekostet hat. Richtig: Bindung als
+> `$3::text::jsonb` **plus** Selbstprüfung `jsonb_typeof(policies) = 'array'` direkt nach dem Insert.
+> Ohne die Selbstprüfung kommt derselbe Fehler still wieder.
+
+> **Zweiter Fallstrick, gefährlicher als der erste: eine Textprüfung gegen diese Seite ist fail-open,
+> wenn sie den Whitespace nicht normalisiert.** Die Prosa in `access-control-changes.md` ist **hart
+> umbrochen**; der F31-Satz steht über zwei Zeilen (`… unchanged is\n not affected …`). Das erste Muster
+> des Prüfers enthielt dort ein einfaches Leerzeichen und meldete deshalb
+> `still carries the F31 absolute: false` — **das Werkzeug erklärte den bekannten Defekt für behoben.**
+> Aufgefallen ist es nur, weil beide Werkzeuge gegen den **noch unbehobenen** Stand kalibriert wurden
+> (`KNOWN BREAK 2`, Selbsttest `F31 sentence still present: true` / `scanner flags it: true`). Das ist
+> dieselbe Fehlerklasse wie „ein Test, der nie rot war, belegt nichts", eine Ebene höher: nicht der
+> Prüfgegenstand war fail-open, sondern die **Prüfung**. Jede künftige Textzusicherung gegen diese Datei
+> normalisiert zuerst den Whitespace und weist einen Selbsttest gegen den Vor-Fix-Stand aus.
+>
+> **Verallgemeinert und in `.claude/agents/tester.md` aufgenommen** („Calibrate every negative finding"):
+> die Fehlerklasse ist nicht „hart umbrochene Prosa", sondern **ein Negativbefund ohne Kalibrierung**.
+> „Ich habe nichts gefunden" ist erst ein Ergebnis, wenn dasselbe Werkzeug den bekannten Fall findet.
+> Daraus folgt eine zweite Regel, die in `JR-1309c` greift: **entfernt der Fix genau den Satz, an dem der
+> Selbsttest hängt, verliert die Prüfung ihren Anker** und ein sauberer Lauf belegt wieder nichts. Dann
+> ist der Anker neu zu setzen — Wegwerf-Kopie des behobenen Artefakts, den Fall absichtlich wieder
+> einsetzen, zeigen dass das Werkzeug ihn noch meldet.
 
 ### E13 — `JR-1317` erledigt (2026-07-29, Rolle `senior-dev`) — F30 behoben, ADR-020 umgesetzt
 

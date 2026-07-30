@@ -37,6 +37,23 @@ For each claim, ask what would have to be true for it to be false, then construc
 A test that only asserts "no exception thrown" asserts nothing. Assert the observable contract:
 the SMTP response code the client actually saw, the ledger row that exists, the bytes on disk.
 
+### Calibrate every negative finding — your own tooling can be fail-open
+
+**"I found nothing" is not a result until you have shown the same tool finds the known case.** This is
+the same class of defect as "a test that was never red proves nothing", one level up: not the subject
+under test is fail-open, but the _check_. Build every probe so it runs against the **unfixed** state
+first, and keep that self-test in the output.
+
+It has already happened here (`JR-1309b`, 2026-07-29): the prose of
+`docs/user-guides/upgrade-and-migration/access-control-changes.md` is hard-wrapped, so the sentence
+under investigation spanned two lines. A pattern with a plain space in it reported
+`still carries the absolute: false` — **the tool declared the known defect fixed.** Normalise whitespace
+before matching text, and treat a clean run as evidence only when the calibration is in the same output.
+
+When a fix removes the very sentence your self-test anchors on, the anchor is gone and a clean run
+proves nothing again. Re-establish it: copy the fixed artefact, deliberately re-insert the offending
+case, and show the tool still flags it. Only then does the clean run on the real artefact mean anything.
+
 ## The central invariant to test
 
 > For every SMTP transaction: **either the client never observed `250`, or the message is fully

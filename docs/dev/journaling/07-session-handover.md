@@ -85,18 +85,77 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (**`JR-1317` erledigt — F30 behoben, der Abdeckungsanspruch der Betreiberseite ist
-weg (ADR-020); E13 ist inhaltlich fertig und wartet auf die schmale Abnahme `JR-1309b`**) ·
-**Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt vom Integrationsbranch bei
-`efea6bc`), gepusht
+**Stand:** 2026-07-29 (**`JR-1309b` hat E13 zum _dritten_ Mal abgelehnt — F31; ADR-020 ist berichtigt,
+`JR-1318` ist committet, die vierte Abnahme `JR-1309c` ist beauftragt aber _nicht durchgeführt_**) ·
+**Branch:** `claude/journaling-e13-iam-hardening`, HEAD **`939df10`** · **nicht gepusht** ·
+fünf Doku-Dateien **uncommitted** im Baum
 
 ### Der Stand in einem Satz
 
-`JR-1309a` hatte E13 zum zweiten Mal abgelehnt (22 von 23 Kriterien erfüllt, gebrochen war `JR-1307`s
-Kriterium über **F30**); **`JR-1317` hat beides erledigt** — die zwei Formbefunde von Query 2 stehen auf
-**Knotenebene**, und die Seite behauptet keine Abdeckung mehr, sondern sagt, was sie **meldet** (ADR-020).
-**E13 hat damit keine offene inhaltliche Task mehr; offen ist nur die dritte, schmale Abnahme
-`JR-1309b`. Kein Rückmerge, kein PR.**
+`JR-1309b` hat E13 zum dritten Mal abgelehnt (17 von 18 Kriterien erfüllt): der Abdeckungsanspruch war
+nicht verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewandert (**F31**) — Ursache war
+**ADR-020 selbst**, die den Verhaltenscheck „vollständig" nannte. Die ADR ist berichtigt, **`JR-1318`
+(`939df10`) setzt es um**, und **die vierte Abnahme `JR-1309c` ist der einzige offene Schritt**.
+
+> ### Warum die Session hier endet — und was das für den Start bedeutet
+>
+> **Der Tester-Subagent ist mitten im Auftrag `JR-1309c` an ein Session-Limit gelaufen**
+> („You've hit your session limit · resets 3:30am"). Die Abnahme ist **beauftragt, aber nicht
+> durchgeführt** — es liegt **kein** Ergebnis vor, auch kein teilweises. Der vollständige Auftragstext
+> steht unten; er kann wörtlich erneut vergeben werden.
+>
+> **Zwei Dinge sind dadurch ungewöhnlich und dürfen nicht als Nachlässigkeit missverstanden werden:**
+>
+> 1. **`JR-1318` hat keinen DEV-Bericht.** Der Agent hat committet und sich dann zweimal als verfügbar
+>    gemeldet, ohne zu berichten; die Nachforderung blieb unbeantwortet. Was in `06-status.md` unter
+>    „`JR-1318` committet" steht, ist die **Lesart des PO aus dem Diff**, nicht gemessen. `JR-1309c` muss
+>    daher **alles selbst messen**. Das ist kein Schaden — es gibt keine Behauptung, die ein Prüfer
+>    versehentlich übernehmen könnte.
+> 2. **Fünf Dateien liegen uncommitted im Baum** (Statuspflege + ADR-Berichtigung, Rolle PO). Sie sind
+>    Prettier-konform und gehören **nicht** zum Prüfgegenstand von `JR-1309c`.
+
+### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
+
+**Diese Session lief auf einem Windows-11-Host, nicht in einem Linux-Container.** Die Anleitung unter
+„Immer zuerst" und alle früheren Sessionprotokolle (`/var/tmp`, `apt`, pgdg, `psql -f`) setzen Linux
+voraus. Was hier tatsächlich gilt — jeder Punkt gemessen, nicht vermutet:
+
+| Sache                    | Zustand auf diesem Host                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm`                   | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                              |
+| PostgreSQL               | **nicht installiert.** Kein Dienst, kein `psql`, kein Docker/Podman. Lösung unten                                                                                                                                                                                                                                   |
+| `psql.exe`               | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                               |
+| WSL `Ubuntu-24.04`       | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                       |
+| Redis, Meilisearch, Tika | fehlen. Für E13 nicht gebraucht; für E2 ff. zu klären                                                                                                                                                                                                                                                               |
+| `git fetch/push`         | **funktioniert nicht.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git`, `~/.ssh/id_rsa` ist **passphrase-geschützt**, der Dienst `ssh-agent` ist `Stopped`/`Manual`. Ein nicht-interaktiver Aufruf endet mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage |
+| `pnpm lint`              | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                      |
+
+**Wegwerf-Cluster ohne Systeminstallation** — so ist er in dieser Session entstanden, PostgreSQL
+**17.10**, dieselbe Version wie die CI und wie `JR-1309a`:
+
+```powershell
+# in einem Verzeichnis ausserhalb des Repositorys (Scratchpad):
+npm install embedded-postgres "@embedded-postgres/windows-x64@17.10.0-beta.17"
+# Binaries dann unter node_modules/@embedded-postgres/windows-x64/native/bin
+#   -> nur initdb.exe, pg_ctl.exe, postgres.exe (KEIN psql.exe)
+initdb -D <datadir> -U postgres --auth=trust --auth-local=trust --auth-host=trust -E UTF8 --locale=C
+pg_ctl -D <datadir> -l <logfile> -o "-p 5432 -c listen_addresses=127.0.0.1" start
+```
+
+`DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres` · `OA_TEST_REQUIRE_INFRA=1`
+
+> **Zwei Fallstricke bei `pg_ctl` auf Windows:** der Aufruf **kehrt nicht zurück**, wenn stdout an eine
+> Pipe hängt — in eine Datei umleiten und den Serverstart am Log bzw. an `postmaster.pid` prüfen, nicht am
+> Rückgabewert. Und `postgres.exe --version` **vor** dem `initdb` prüfen: das Standardpaket
+> `embedded-postgres` zieht die neueste Version (hier 18.4), was eine unnötige Versionslücke zur CI
+> aufreißt.
+
+**Der Cluster dieser Session ist am Ende gestoppt und der Datadir gelöscht.** Die Prüfwerkzeuge von
+`JR-1309b` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `fixtures.cjs`, `run.cjs`,
+`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`) liegen unter
+`C:\Users\Maxim\AppData\Local\Temp\claude\X--NEW-DEVELOP-GIT-OpenArchiver\7b5a77e0-2ad8-461a-a03c-5648527b2cf7\scratchpad`
+— **nicht** im Repository. Sie sind gegen den Vor-Fix-Stand kalibriert und für `JR-1309c` wertvoll; ist
+das Verzeichnis weg, sind sie neu zu bauen (dann Punkt 1 des nächsten Schritts besonders beachten).
 
 > **Zwei Lücken, die `JR-1309` offenlassen musste, sind in `JR-1309a` geschlossen:** der **HTTP-400-Pfad**
 > ist end-to-end gemessen (`IamController.createRole` direkt aufgerufen, 11 × `400` mit dem Key bzw. Wert
@@ -119,44 +178,52 @@ Kriterium über **F30**); **`JR-1317` hat beides erledigt** — die zwei Formbef
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — die schmale dritte Abnahme `JR-1309b`
+### Nächster konkreter Schritt — die vierte Abnahme `JR-1309c`
 
-**Nichts wartet mehr auf eine Entscheidung.** `JR-1317` ist erledigt und gepusht (`07ac661` die
-Betreiberseite, der Folgecommit die Statuspflege); der Umfang von `JR-1309b` steht in `03-backlog.md`.
-**Schmal** heißt: `JR-1307`s Kriterium 12 und die Kriterien von `JR-1317`, **nicht** die 23 Kriterien
-erneut.
+**Nichts wartet auf eine Entscheidung.** `JR-1318` ist committet (`939df10`), ADR-020 ist berichtigt, der
+Umfang von `JR-1309c` steht in `03-backlog.md`. **Noch schmaler** heißt: `JR-1307`s Kriterium 12 und die
+Kriterien von `JR-1318`, **nicht** die Abfrageseite erneut — `JR-1309b` hat sie unabhängig belegt und
+`JR-1318` fasst keine SQL an.
 
 ```
-Nimm Epic 13 ein drittes Mal ab — Rolle Tester, schmaler Umfang (JR-1309b).
-Branch claude/journaling-e13-iam-hardening. Umfang: JR-1307 Kriterium 12 und JR-1317.
+Nimm Epic 13 ein viertes Mal ab — Rolle Tester, Umfang JR-1309c.
+Branch claude/journaling-e13-iam-hardening, HEAD 939df10.
+Umfang: JR-1307 Kriterium 12 und JR-1318 (F31 tragend, F32-F34 mit).
+Es liegt KEIN DEV-Bericht vor - alles selbst messen.
 ```
 
-Was `JR-1309b` prüfen muss, und wo der Hebel liegt:
+Was `JR-1309c` prüfen muss, und wo der Hebel liegt:
 
-1. **Die acht F30-Formen werden gemeldet** — Blöcke **aus der `.md`** extrahiert und wörtlich gefahren
-   (Fallstrick 17), nicht aus dem Diff gelesen. Gegenprobe `{"$or": []}`/`{"$and": []}` und die
-   Wurzelformen aus `JR-1314`.
-2. **Keine Falsch-positiven — das ist der Hauptrisikopunkt dieses Fixes.** Die drei `predefined_*`, die
-   handgeschriebenen Kontrollen **und** normale Bedingungsformen müssen in **jeder** Ausgabe schweigen.
-   Die gefährliche Fehlerform wäre ein pauschales `jsonb_typeof(node) <> 'object'` (Fallstrick 20); die
-   ausgelieferte Fassung prüft nur Knoten in **struktureller** Position. Eine `cannot`-Regel mit
-   Operator-Bedingung liefert weiter genau **eine** Zeile `prohibition with an operator condition` —
-   Änderung 5, beabsichtigt, kein Formbefund.
-3. **Zwei bewusste Abweichungen sind dokumentiert und sollten als solche geprüft, nicht als Befund
-   gewertet werden** (Belege in `06-status.md` unter „`JR-1317` erledigt"): `conditions: 5` an einer
-   Regel für ein Subject **ohne** Zeilenfilter wird nicht gemeldet (dort ändert sich nichts), und
-   `{"id": {"$in": [{}]}}` **wird** gemeldet, obwohl der Übersetzer es akzeptiert (Übermeldung, Position
-   steht in der Meldung).
-4. **Textprüfung gegen ADR-020:** kein Satz der Seite darf Abdeckung behaupten. Geprüft werden sollten
-   auch die Stellen, die `JR-1317` **neu** geschrieben hat — vier weitere Abdeckungssätze waren auf der
-   Seite und sind ersetzt.
-5. Volllauf mit **zitierter** Testzahl (`250 passed | 2 skipped`, Exit 0),
-   `predefined-roles.int.test.ts` 7/7, `FilterBuilder.ts`/`mongoToMeli.ts` unberührt.
+1. **Der Anker der Textprüfung ist weg — er muss neu gesetzt werden.** `JR-1318` hat genau den Satz
+   entfernt, an dem der Selbsttest des Scanners hing; ein sauberer Lauf belegt damit wieder nichts.
+   Vorgehen (vom Prüfer selbst vorgeschlagen): Wegwerf-Kopie der behobenen Seite, den F31-Satz
+   **absichtlich wieder einsetzen**, zeigen dass das Werkzeug ihn noch findet. **Whitespace zuerst
+   normalisieren** — die Prosa ist hart umbrochen, und genau daran hat die Prüfung in `JR-1309b` schon
+   einmal ein falsches „behoben" gemeldet (Fallstricke unten).
+2. **Die Textprüfung läuft über die _ganze_ Seite, nicht über den Diff.** Dreimal in Folge saß der Defekt
+   in Text, der **in derselben Runde neu geschrieben** wurde. Erwartung: kein bekannter Bruch **und** kein
+   neuer Abdeckungssatz. Ein neuer Fund geht **unbewertet** an den PO — der Prüfer meldet Ort, Wortlaut
+   und Regel, er entscheidet nicht.
+3. **Beide F31-Hälften getrennt prüfen, keine trägt die andere.** Der Absolutsatz muss weg **und** die
+   dritte zeilengefilterte Oberfläche (Ingestion-Quellenliste) muss benannt sein. Ein reines Streichen
+   wäre Text ohne Reichweite. Die dritte Zahl ist über `FilterBuilder.create` zu **messen**: an einer
+   Rolle mit Archiv-Grants und nur einem Verbot auf der `ingestion`-Seite bleiben beide Archivzahlen
+   stehen, während der Filter auf `ingestionSourceId = "-1"` umschlägt.
+4. **Die fünf neuen Faktenaussagen von `JR-1318` sind ungeprüft** und präziser als der alte Text, damit
+   leichter falsch: dass der Befund „archive search granted without archive read" **keine** Regelnummer
+   nennt; F33s Aufteilung in verlorene und ankommende Befunde samt „names the rule number with no action
+   or subject beside it"; F32s „finds all five"; F34s „just as readily"; und dass `manage` **und**
+   `subject: "all"` gegen jede der drei Berechtigungen gematcht werden. Vollständig aufgelistet in
+   `06-status.md` unter „`JR-1318` committet".
+5. **Umfang und Volllauf:** `git show --stat` gegen „ausschließlich `access-control-changes.md`"; Suite
+   `250 passed | 2 skipped` bei **17** Dateien (die temporäre Sonde ist entfernt — eine andere Zahl oder
+   eine zusätzliche Testdatei ist eine **Abweichung und zu berichten**); `lint`, `docs:build`,
+   `dist/dev/` existiert nicht; `FilterBuilder.ts`/`mongoToMeli.ts` blob-identisch zu `13a7114`.
 
 **Erst nach der Annahme:** Rückmerge in den Integrationsbranch (ADR-014, `--no-ff`, **kein Squash** — ein
-Squash würde die dokumentierten Ablehnungen tilgen und damit den Beleg, dass die Abnahme funktioniert
-hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet. Nächstes Epic
-ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
+Squash würde die **drei** dokumentierten Ablehnungen tilgen und damit den Beleg, dass die Abnahme
+funktioniert hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
+Nächstes Epic ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
 
 **Unverändert offen und richtig so:** die **Laufzeitseite von F26** — ein bereits gespeichertes
 `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil `FilterBuilder.ts:51–53`

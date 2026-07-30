@@ -19,11 +19,19 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29 |
 | **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22              |
 | **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24               |
-| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30              |
+| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34     |
+| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35                             |
 
 Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
 Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16), `JR-1301` (F17–F23), die Abnahme
-`JR-1309` (F24–F29) und die Abnahme `JR-1309a` (F30), Rolle `tester`, 2026-07-27 bis 2026-07-29.
+`JR-1309` (F24–F29), die Abnahme `JR-1309a` (F30) und die Abnahme `JR-1309b` (F31–F34), Rolle
+`tester`, 2026-07-27 bis 2026-07-29.
+
+> **F31 ist der einzige Befund dieser Liste, dessen Ursache in einer ADR liegt und nicht im Code oder
+> in seiner Umsetzung.** ADR-020 hat den Verhaltenscheck selbst „vollständig" genannt; `JR-1317` hat
+> diesen Anspruch folgerichtig auf die Betreiberseite übernommen. Die Berichtigung steht in ADR-020
+> unter „Berichtigung (2026-07-29, nach der Abnahme `JR-1309b` — F31)". Wer F31 liest, ohne sie zu
+> lesen, hält den Befund für einen Schreibfehler — er ist ein Denkfehler des PO.
 
 > **Seit `JR-1301` (2026-07-29) markiert der Testcode die vier E13-Befunde nicht mehr als bestanden.**
 > F1, F3, F7 und F8 waren bis dahin mit `it.fails` bzw. mit Assertions auf den **Ist**-Zustand
@@ -1386,6 +1394,156 @@ das `conditions` der Regel selbst, ein verschachtelter Formfehler fällt erst zu
 
 **Kein Produktionscode, kein Test, keine Migration.** `conditionKey.ts` war die Referenz, nicht das
 Ziel. Suite unverändert `250 passed | 2 skipped`, Exit 0.
+
+## F31 — Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
+**Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md:625–632`, `:621–623` und
+`:498–500`, alle drei von `JR-1317` neu geschrieben · **Status:** offen, Behebung in `JR-1318` ·
+**Herkunft:** Abnahme `JR-1309b` (2026-07-29) · **Ursache:** ADR-020 selbst, siehe deren Berichtigung
+
+`JR-1317` hat den Abdeckungsanspruch der **Abfrage** gestrichen — korrekt und unabhängig belegt. Er ist
+dabei nicht verschwunden, sondern auf den **Verhaltenscheck** gewandert, den dieselbe Task neu
+geschrieben hat. Die tragende Stelle:
+
+> `3. **Compare them.** … A role whose numbers are unchanged is not affected, whatever the queries did
+or did not report about it.`
+
+„numbers" sind laut Schritt 1 genau **zwei** Zahlen: „how many rows the archive list returns, and the
+result count of one search". Dieselbe Seite benennt in Zeile 223–224 aber **drei** Oberflächen, für die
+die Anwendung einen Zeilenfilter baut — „reading archived emails, searching the archive, and **listing
+ingestion sources**". Die dritte kommt im Verhaltenscheck nicht vor.
+
+Gemessen an einer Rolle in genau der Form, die Änderung 1 der Seite selbst als typisch beschreibt
+(Archiv-Grants mit übersetzbarer Bedingung, zur `ingestion`-Seite nur ein Verbot):
+
+```
+Query 2 auf diese Rolle:
+    [prohibition without a matching grant] read ingestion is forbidden by rule #2, but no rule grants it
+
+FilterBuilder.create(user, archive, read)    -> drizzleFilter=SQL present  searchFilter="(userEmail = \"3ef6…\")"
+FilterBuilder.create(user, archive, search)  -> drizzleFilter=SQL present  searchFilter="(userEmail = \"3ef6…\")"
+FilterBuilder.create(user, ingestion, read)  -> drizzleFilter=SQL present  searchFilter="ingestionSourceId = \"-1\""
+```
+
+Beide vorgeschriebenen Zahlen sind strukturell unverändert — `read` und `search` stehen in derselben
+Regel mit derselben Bedingung, was die Seite in Zeile 86 selbst als von Änderung 4 unberührt nennt —,
+während die Liste der Ingestion-Quellen fail-closed auf den Sperrfilter umschlägt. **Ein Betreiber, der
+die Anleitung befolgt, notiert zwei unveränderte Zahlen und verwirft eine zutreffende Meldung von
+Query 2.** Das ist die von ADR-020 verbotene Satzform mit anderem Signalträger und der gefährlichste
+mögliche Schluss — genau der, den die ADR verhindern soll.
+
+Zweite Stelle, dieselbe Bürgschaft in umgekehrter Richtung: „the queries report what has been written
+down, and **the behaviour check is what covers the rest**." Dritte: „This check looks at behaviour
+instead, and that is why it does not depend on any list of shapes being complete" — als Aussage über
+Unabhängigkeit von Formlisten wahr, als Vollständigkeit gelesen falsch.
+
+**Nicht behebbar durch einen Satzfix allein.** ADR-020 trug die Prämisse („Diese Prüfung ist
+vollständig, weil sie das Verhalten misst statt die Datenform zu raten"), also hätte die nächste Runde
+den Satz wieder hingeschrieben. Aufzugeben ist die **Konstruktion** „ein Teil der Seite bürgt für den
+Rest", nicht der jeweilige Satz. Die ADR ist berichtigt.
+
+## F32 — Der zitierte Fehlertext gilt nur für ein `policies`, das ein Objekt ist
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig ·
+**Ort:** `access-control-changes.md:512–516` · **Status:** offen, Behebung in `JR-1318` ·
+**Herkunft:** Abnahme `JR-1309b` (2026-07-29)
+
+Die Seite zitiert genau einen Fehlertext für den Abbruchfall. Gemessen für alle fünf Nicht-Array-Typen:
+
+```
+policies = {"action":"read"}   jsonb_typeof=object   -> cannot extract elements from an object
+policies = "abc"               jsonb_typeof=string   -> cannot extract elements from a scalar
+policies = 5                   jsonb_typeof=number   -> cannot extract elements from a scalar
+policies = true                jsonb_typeof=boolean  -> cannot extract elements from a scalar
+policies = null                jsonb_typeof=null     -> cannot extract elements from a scalar
+```
+
+Das angegebene Heilmittel `jsonb_typeof(policies) <> 'array'` findet **alle fünf**, ist also richtig.
+Falsch ist nur der Wortlaut: in vier von fünf Fällen lautet die Meldung `a scalar`, und wer nach dem
+zitierten Text sucht, findet ihn nicht. (`policies` ist `NOT NULL DEFAULT '[]'::jsonb`, ein
+SQL-`NULL` ist ausgeschlossen.)
+
+## F33 — „is skipped without a row" untertreibt, was die Abfrage tut
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig, Richtung sicher ·
+**Ort:** `access-control-changes.md:493–497` · **Status:** offen, Behebung in `JR-1318` ·
+**Herkunft:** Abnahme `JR-1309b` (2026-07-29)
+
+Unter _What it does not report_ steht, eine Regel mit `action`/`subject`, das weder String noch
+String-Array ist, werde „skipped without a row". Gemessen:
+
+```
+action/subject not a string or array of strings -> Q2 rows: 2
+    [empty condition object] rule #1: "conditions" is {}, …   (action: 5)
+    [empty condition object] rule #2: "conditions" is {}, …   (subject: {"s":1})
+```
+
+Bedingungsbefunde erscheinen trotzdem, weil die CTE `cond` aus `rule` speist und nicht aus `pair` —
+seit `JR-1317` (a) ist das gerade der Zweck der Umstellung. Eine **bare Skalar-Regel** (`5`,
+`"nonsense"` im Policy-Array) wird tatsächlich ohne Zeile übersprungen und bricht die Abfrage **nicht**
+ab; dieser Teil der Aussage hält. Die Richtung ist harmlos — die Seite verspricht weniger, als sie
+liefert —, die Aussage ist trotzdem falsch.
+
+## F34 — „The known case" liest sich als Aufzählung, ist aber keine
+
+**Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig, Richtung sicher ·
+**Ort:** `access-control-changes.md:502–510` · **Status:** offen, Behebung in `JR-1318` ·
+**Herkunft:** Abnahme `JR-1309b` (2026-07-29)
+
+Der Abschnitt über Übermeldungen nennt **einen** Fall. Gemessen sind sechs derselben Klasse, alle
+wertseitig und alle mit Position:
+
+```
+OVER-REPORT accepted | reported | {"id":{"$in":[{}]}}            (der dokumentierte Fall)
+OVER-REPORT accepted | reported | {"id":{"$in":[{"bad key":1}]}}
+OVER-REPORT accepted | reported | {"id":{"$in":[{"a.b.c":1}]}}
+OVER-REPORT accepted | reported | {"id":{"$in":[{"$regex":1}]}}
+OVER-REPORT accepted | reported | {"id":{"$nin":[{"$or":[]}]}}
+OVER-REPORT accepted | reported | {"userEmail":{"$eq":{}}}
+            accepted | silent   | {"id":{"$in":[{"a":1}]}} · {"subject":{"$in":[[]]}} · {"userEmail":{"$in":[null]}}
+```
+
+Vier sind älter als `JR-1317`; **neu** durch die Knotenebene sind `{"id":{"$in":[{}]}}` (dokumentiert)
+und `{"userEmail":{"$eq":{}}}` (nicht dokumentiert). Der generelle Vorbehalt darüber deckt die Klasse
+ab — nur die Formulierung „The known case" suggeriert Vollständigkeit. Dieselbe Lesefalle wie F31,
+hier ohne Schaden.
+
+## F35 — `pnpm lint` ist auf einem Windows-Host strukturell rot: keine `.gitattributes`
+
+**Kategorie:** Entwicklungsumgebung (kein Produktdefekt, kein Testharness-Defekt) · **Schwere:** mittel
+für die Arbeitsfähigkeit, **null** für das Produkt · **Ort:** fehlende `.gitattributes`, `.prettierrc`
+ohne `endOfLine` · **Status:** offen, Task-Vorschlag unten · **Herkunft:** PO, 2026-07-29, beim
+Sessionabschluss von E13
+
+Das Repository hat **keine `.gitattributes`**, und `.prettierrc` setzt `endOfLine` nicht — Prettiers
+Standard ist `"lf"`. Auf einem Windows-Host mit `core.autocrlf=true` (dem Git-for-Windows-Default) wird
+damit **jede** Textdatei mit CRLF ausgecheckt, und `pnpm lint` meldet:
+
+```
+[warn] Code style issues found in 388 files. Run Prettier with --write to fix.
+ ELIFECYCLE  Command failed with exit code 1.
+```
+
+**Das ist kein Formatierungsfehler im Repository.** Im Index und in `origin` stehen LF-Zeilenenden; die
+CRLF entstehen erst beim Checkout, und `git diff --stat` zeigt entsprechend nur inhaltliche Änderungen
+(Gegenprobe: `939df10` ist 79+/45− bei 674 Zeilen, keine Ganzdatei-Umschreibung). Git sagt es beim
+Stagen sogar selbst: `LF will be replaced by CRLF the next time Git touches it`.
+
+**Warum es trotzdem zählt:** `pnpm lint` ist laut `CLAUDE.md` §4 das Gate, das **die CI nicht fährt** —
+es muss von Hand laufen. Ein Gate, das auf einer ganzen Plattform immer rot ist, wird übersprungen oder,
+schlimmer, mit `prettier --write` „behoben": das schreibt 388 Dateien um, erzeugt einen Diff über das
+halbe Repository und macht jede Codearchäologie unmöglich. **Diesen Fehler nicht machen.**
+
+**Arbeitsweise bis zur Behebung:** `corepack pnpm exec prettier --check <die eigenen Dateien>` statt
+`pnpm lint`. Das ist in dieser Session so gemacht worden (7 Dateien, grün).
+
+**Task-Vorschlag, PO entscheidet — nicht in E13:** eine `.gitattributes` mit `* text=auto eol=lf` ist die
+richtige Lösung, weil sie unabhängig von der lokalen `core.autocrlf` gilt. Der Preis ist ein einmaliger
+Normalisierungs-Commit über den Bestand (`git add --renormalize .`), der **allein stehen** muss, wie
+`JR-105a`. Die billige Alternative `endOfLine: "auto"` in `.prettierrc` schwächt die Prüfung und lässt
+gemischte Zeilenenden im Repository zu. **Gehört auf den Integrationsbranch, nicht in ein Epic**, und
+nicht in denselben Commit wie eine inhaltliche Änderung.
 
 ## Bereits im Backlog erfasste Bestandsprobleme
 

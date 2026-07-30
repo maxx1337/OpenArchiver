@@ -122,11 +122,27 @@ Seite behauptet keine Abdeckung mehr, sondern sagt, was sie meldet** (**ADR-020*
 verhaltensbasierte Gegenprobe daneben, die keine Aufzählung von JSON-Formen braucht. Keine
 Falsch-positiven, beide Nachweise wörtlich aus der `.md` gegen echtes Postgres.
 
-**Nächster Schritt: die schmale dritte Abnahme `JR-1309b`** (nur `JR-1307`s Kriterium 12 und `JR-1317`,
-nicht die 23 Kriterien erneut). **Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`).
-`JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden und steht bei den Folge-Tasks — sie sichert
-ein Doku-Artefakt ab, kein Autorisierungsverhalten, und sie war **kein** Kriterium von `JR-1309a`. Es
-existiert noch **kein** Produktionscode für den Receiver selbst.
+**Die dritte Abnahme `JR-1309b` ist durchgeführt — Ergebnis: E13 ist zum _dritten_ Mal nicht abgenommen**
+(2026-07-29). 18 Kriterien, **17 erfüllt**; die Abfrageseite von `JR-1317` (a) ist unabhängig belegt (alle
+acht Formen mit Position gemeldet, **keine** Falsch-positiven, 42 Werte gegen den Übersetzer gekreuzt,
+**0** falsch-negative). Gebrochen ist erneut die Textseite: **F31** — der Abdeckungsanspruch war nicht
+verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewandert, der zwei Zahlen vorschreibt,
+während die Anwendung **drei** Oberflächen filtert. **Die Ursache lag in ADR-020 selbst**, die den
+Verhaltenscheck „vollständig" nannte; sie ist berichtigt (**kein Element der Seite bürgt für ein
+anderes**). Drei niedrige Befunde dazu: F32, F33, F34.
+
+**`JR-1318` ist committet (`939df10`)** — die dritte Zahl ist aufgenommen, der Absolutsatz durch sein
+Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Bericht liegt nicht vor**
+(Agent endete ohne Bericht), die Statusnotiz ist die Lesart des PO aus dem Diff.
+
+**Nächster Schritt: die vierte Abnahme `JR-1309c`** (nur `JR-1307`s Kriterium 12 und `JR-1318`, nicht die
+Abfrageseite erneut) — **beauftragt, aber nicht durchgeführt**: der Prüfer lief in ein Session-Limit.
+**Kein Rückmerge**, kein PR, **nicht gepusht**. Danach **E2** (davor fällig: `JR-105c`). `JR-1316` steht
+weiter bei den Folge-Tasks. Es existiert noch **kein** Produktionscode für den Receiver selbst.
+
+> **Die Umgebung ist nicht mehr der Linux-Container der Vorsessions**, sondern ein Windows-Host ohne
+> PostgreSQL, ohne `pnpm` im PATH und mit gesperrtem SSH-Key. Der Handover beschreibt unter „Die Umgebung
+> hat sich geändert", wie ein Wegwerf-Cluster in PostgreSQL 17.10 entsteht — **vor** „Immer zuerst" lesen.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 

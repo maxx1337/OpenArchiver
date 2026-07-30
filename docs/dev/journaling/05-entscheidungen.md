@@ -625,7 +625,8 @@ bekommt, zieht dann den gefährlichsten möglichen Schluss.
 **Was an die Stelle tritt:** die Liste der gemeldeten Befundtypen, der ausdrückliche Satz, dass ein
 leeres Ergebnis ein **Hinweis und keine Freigabe** ist, und eine Gegenprobe, die **nicht** von einer
 Aufzählung von JSON-Formen abhängt — jede eingeschränkte Rolle einmal ausüben und das Ergebnis
-vergleichen. Diese Prüfung ist vollständig, weil sie das Verhalten misst statt die Datenform zu raten.
+vergleichen. Diese Gegenprobe hängt nicht an einer Formliste; **vollständig ist sie damit nicht** —
+sie misst genau die Oberflächen, die sie ausübt, und nur die (siehe Berichtigung unten).
 
 **Verworfene Alternative:** die Abfragen so lange erweitern, bis sie vollständig sind. Zweimal
 versucht, zweimal von einer tieferen Form eingeholt; die dritte Runde hätte dasselbe Ergebnis. Die
@@ -635,6 +636,39 @@ Grundlage für eine Zusage.
 **Konsequenz:** `JR-1316` (Regressionstest für diese Abfragen) bleibt nach E13 und ist damit eine
 Verbesserung statt einer Abnahmevoraussetzung — genau deshalb war es richtig, ihn aus E13 zu nehmen.
 Wer künftig einen Abdeckungssatz in diese Seite schreibt, braucht eine ADR, die diese ersetzt.
+
+### Berichtigung (2026-07-29, nach der Abnahme `JR-1309b` — F31)
+
+**Der Satz „Diese Prüfung ist vollständig, weil sie das Verhalten misst statt die Datenform zu raten"
+ist gestrichen. Er war selbst ein Abdeckungssatz** — derselbe, den diese ADR verbietet, nur über den
+Verhaltenscheck statt über die Abfrage. Der Fehler liegt damit **in dieser ADR**, nicht in ihrer
+Umsetzung: `JR-1317` hat den Anspruch folgerichtig auf die Betreiberseite übernommen
+(`access-control-changes.md:621–623`, `:498–500`, `:631–632`), und `JR-1309b` hat ihn dort widerlegt.
+
+**Wie er widerlegt ist.** Der vorgeschriebene Vergleich nennt **zwei** Zahlen (Zeilen der Archivliste,
+Trefferzahl einer Suche). Dieselbe Seite benennt in Zeile 223–224 **drei** Oberflächen, für die die
+Anwendung einen Zeilenfilter baut: Archiv lesen, Archiv suchen, **Ingestion-Quellen auflisten**. Eine
+Rolle mit Archiv-Grants und nur einem Verbot auf der Ingestion-Seite — die Form, die Änderung 1 selbst
+als typisch beschreibt — lässt beide Zahlen unverändert, während die Quellenliste fail-closed auf
+`ingestionSourceId = "-1"` umschlägt. Die Seite lud ausdrücklich dazu ein, die **zutreffende** Meldung
+von Query 2 daraufhin zu verwerfen („whatever the queries did or did not report about it"). Das ist der
+gefährlichste mögliche Schluss, also genau der, den diese ADR verhindern soll.
+
+**Was stattdessen gilt: kein Element dieser Seite bürgt für ein anderes.** Weder die Abfragen für den
+Verhaltenscheck noch der Verhaltenscheck für die Abfragen. Jedes von beiden meldet, was es messen kann,
+und **benennt die Oberflächen, die es messen kann**; „deckt den Rest ab" ist in **jeder** Richtung
+unzulässig. Für den Verhaltenscheck kommt eine zweite Pflicht hinzu: er muss **alle** Oberflächen
+nennen, für die die Anwendung einen Zeilenfilter baut — sonst misst er nicht einmal das, was er zu
+messen behauptet.
+
+**Die Lehre nach drei Ablehnungen derselben Klasse.** Streicht man den falsifizierbaren Anspruch nur an
+einer Stelle, **wandert er** (Abfrage ⇒ Verhaltenscheck) statt zu verschwinden. Aufzugeben ist die
+**Konstruktion** „ein Teil der Seite bürgt für den Rest", nicht der jeweilige Satz. Eine vierte
+Ersatzbürgschaft ist damit ausgeschlossen.
+
+**Was diese Berichtigung nicht ändert:** die Streichung der Abdeckungsansprüche der Abfrage und die
+Knotenebene aus `JR-1317` (a) bleiben richtig und sind in `JR-1309b` unabhängig belegt (alle acht
+F30-Formen gemeldet, keine Falsch-positiven). Umgesetzt wird die Berichtigung in **`JR-1318`**.
 
 ---
 
