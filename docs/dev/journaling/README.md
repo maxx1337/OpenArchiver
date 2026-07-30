@@ -43,6 +43,7 @@ SEC 17a-4, FINRA 4511, MiFID II).
 | 08  | `08-risiken.md`              | Risiken mit Gegenmaßnahme                                          | bei Planungsänderungen                  |
 | 09  | `09-befunde-bestandscode.md` | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes          | bevor man einen davon „nebenbei" behebt |
 | 10  | `10-upstream-meldung.md`     | **Entwurf** der Upstream-Sicherheitsmeldung — **nicht versendet**  | nur wenn der Auftraggeber sie versendet |
+| 11  | `11-archiv-e1.md`            | Protokoll des abgenommenen Epics E1, unverändert ausgegliedert     | nur bei Fragen zur E1-Historie          |
 
 ## Team und Rollen
 
@@ -137,8 +138,21 @@ Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Beric
 
 **Nächster Schritt: die vierte Abnahme `JR-1309c`** (nur `JR-1307`s Kriterium 12 und `JR-1318`, nicht die
 Abfrageseite erneut) — **beauftragt, aber nicht durchgeführt**: der Prüfer lief in ein Session-Limit.
-**Kein Rückmerge**, kein PR, **nicht gepusht**. Danach **E2** (davor fällig: `JR-105c`). `JR-1316` steht
-weiter bei den Folge-Tasks. Es existiert noch **kein** Produktionscode für den Receiver selbst.
+**Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`). `JR-1316` steht weiter bei den
+Folge-Tasks. Es existiert noch **kein** Produktionscode für den Receiver selbst.
+
+**Am 2026-07-30 hat der Auftraggeber drei Prozessentscheidungen getroffen:**
+
+1. **`ADR-021` — Abnahmeeinheit ist die Scheibe, nicht das Epic.** Ein Artefakt, eine Fehlerklasse,
+   höchstens ~8 Kriterien, in **einer** Session abschließbar; Code und betreibersichtbare Doku sind
+   getrennte Scheiben, und was einmal belegt ist, wird nicht neu geprüft. Die Zerlegung geschieht, wenn
+   ein Epic **ansteht** — `03-backlog.md` bleibt bis dahin unverändert.
+2. **Die Subagenten `senior-dev` und `tester` laufen auf Sonnet** (`model: sonnet` in beiden
+   Rollendateien).
+3. **Die Planungsdokumente sind entschlackt:** die doppelt geführte Sessionhistorie ist aus
+   `07-session-handover.md` entfernt (1085 → 556 Zeilen, sie stand vollständig in `06-status.md`), und
+   das Protokoll von E1 liegt jetzt in `11-archiv-e1.md` (`06-status.md` 2029 → 1359 Zeilen). **Inhalt
+   ist nirgends gekürzt worden, nur verschoben.**
 
 > **Die Umgebung ist nicht mehr der Linux-Container der Vorsessions**, sondern ein Windows-Host ohne
 > PostgreSQL, ohne `pnpm` im PATH und mit gesperrtem SSH-Key. Der Handover beschreibt unter „Die Umgebung

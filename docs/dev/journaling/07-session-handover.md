@@ -85,11 +85,12 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-29 (**`JR-1309b` hat E13 zum _dritten_ Mal abgelehnt — F31; ADR-020 ist berichtigt,
-`JR-1318` ist committet, die vierte Abnahme `JR-1309c` ist beauftragt aber _nicht durchgeführt_**) ·
+**Stand:** 2026-07-30 (**`JR-1309b` hat E13 zum _dritten_ Mal abgelehnt — F31; ADR-020 ist berichtigt,
+`JR-1318` ist committet, die vierte Abnahme `JR-1309c` ist beauftragt aber _nicht durchgeführt_. Dazu drei
+Prozessentscheidungen: ADR-021, Subagenten auf Sonnet, Planungsdokumente entschlackt**) ·
 **Branch:** `claude/journaling-e13-iam-hardening` · **Prüfgegenstand von `JR-1309c` ist `939df10`**,
-darüber liegen nur Statuspflege-Commits (`git log --oneline -3` zeigt sie) · Arbeitsbaum **sauber** ·
-**nicht gepusht** (SSH-Key gesperrt, siehe Umgebung)
+darüber liegen nur Statuspflege- und Prozess-Commits (`git log --oneline -8` zeigt sie) ·
+Arbeitsbaum **sauber** · **gepusht und gegen das Remote abgeglichen**
 
 ### Der Stand in einem Satz
 
@@ -115,9 +116,16 @@ nicht verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewander
 > 2. **Die Statuspflege ist committet** (sieben Dateien: die sechs Planungsdokumente plus
 >    `.claude/agents/tester.md`), der Arbeitsbaum ist sauber. Prüfgegenstand von `JR-1309c` ist allein
 >    `939df10`; alles darüber ist Statuspflege und Rollendefinition, kein Prüfgegenstand.
-> 3. **Nichts ist gepusht.** `939df10` und `e22b5af` liegen nur lokal. Der Remote-Stand ist zuletzt bei
->    `2a4ea80` bekannt — **unbestätigt**, weil `git ls-remote` nicht durchläuft. Vor dem ersten Push:
->    Abgleich nachholen (`git merge --ff-only origin/<branch>`, nie `reset --hard`).
+> 3. **Alles ist gepusht und der Remote-Abgleich ist nachgeholt** — er war den größten Teil der Session
+>    unbestätigt, weil `git ls-remote` nicht durchlief. Er ist es nicht mehr: Der Auftraggeber hat den
+>    SSH-Key entsperrt, der Abgleich ergab **identische Stände**, kein Rollback. Wie es geht, steht unten
+>    in der Umgebungstabelle.
+>
+> **Und drei Prozessentscheidungen des Auftraggebers vom 2026-07-30**, alle drei umgesetzt und committet:
+> **ADR-021** (Abnahmeeinheit ist die Scheibe — die direkte Lehre aus E13s vier Abnahmerunden), die
+> Subagenten laufen auf **Sonnet**, und die Planungsdokumente sind **entschlackt** (dieser Handover
+> 1085 → 556 Zeilen, `06-status.md` 2029 → 1359, E1-Protokoll nach `11-archiv-e1.md`). **Nichts ist
+> gekürzt worden, nur verschoben.**
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -125,15 +133,15 @@ nicht verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewander
 „Immer zuerst" und alle früheren Sessionprotokolle (`/var/tmp`, `apt`, pgdg, `psql -f`) setzen Linux
 voraus. Was hier tatsächlich gilt — jeder Punkt gemessen, nicht vermutet:
 
-| Sache                    | Zustand auf diesem Host                                                                                                                                                                                                                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm`                   | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                              |
-| PostgreSQL               | **nicht installiert.** Kein Dienst, kein `psql`, kein Docker/Podman. Lösung unten                                                                                                                                                                                                                                   |
-| `psql.exe`               | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                               |
-| WSL `Ubuntu-24.04`       | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                       |
-| Redis, Meilisearch, Tika | fehlen. Für E13 nicht gebraucht; für E2 ff. zu klären                                                                                                                                                                                                                                                               |
-| `git fetch/push`         | **funktioniert nicht.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git`, `~/.ssh/id_rsa` ist **passphrase-geschützt**, der Dienst `ssh-agent` ist `Stopped`/`Manual`. Ein nicht-interaktiver Aufruf endet mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage |
-| `pnpm lint`              | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                      |
+| Sache                    | Zustand auf diesem Host                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm`                   | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                                    |
+| PostgreSQL               | **nicht installiert.** Kein Dienst, kein `psql`, kein Docker/Podman. Lösung unten                                                                                                                                                                                                                                         |
+| `psql.exe`               | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                                     |
+| WSL `Ubuntu-24.04`       | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                             |
+| Redis, Meilisearch, Tika | fehlen. Für E13 nicht gebraucht; für E2 ff. zu klären                                                                                                                                                                                                                                                                     |
+| `git fetch/push`         | **braucht zwei Handgriffe.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git` über SSH, `~/.ssh/id_rsa` ist **passphrase-geschützt**. Ohne geladenen Key endet ein nicht-interaktiver Aufruf mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage. Lösung siehe unten |
+| `pnpm lint`              | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                            |
 
 **Wegwerf-Cluster ohne Systeminstallation** — so ist er in dieser Session entstanden, PostgreSQL
 **17.10**, dieselbe Version wie die CI und wie `JR-1309a`:
@@ -148,6 +156,22 @@ pg_ctl -D <datadir> -l <logfile> -o "-p 5432 -c listen_addresses=127.0.0.1" star
 ```
 
 `DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres` · `OA_TEST_REQUIRE_INFRA=1`
+
+**Git gegen das Remote — so hat es am 2026-07-30 funktioniert.** Der Windows-Dienst `ssh-agent` hält den
+Key; Git-for-Windows bringt aber ein eigenes `ssh.exe` mit, das diesen Agent **nicht** kennt. Beides
+zusammen gehört dazu:
+
+```powershell
+Start-Service ssh-agent            # StartupType ist Manual; der Start braucht keine Adminrechte
+C:\Windows\System32\OpenSSH\ssh-add.exe $HOME\.ssh\id_rsa   # NICHT das ssh-add aus Git Bash
+$env:GIT_SSH_COMMAND = "C:/Windows/System32/OpenSSH/ssh.exe"  # pro Aufruf, oder core.sshCommand setzen
+git ls-remote origin refs/heads/<branch>
+```
+
+> Zwei Fallen: das `ssh-add` **aus Git Bash** spricht einen anderen Agent an (`SSH_AUTH_SOCK`) als den,
+> den Windows-OpenSSH benutzt — es meldet `Error connecting to agent: No such file or directory`, solange
+> kein eigener Agent in **derselben** Shell läuft. Und Shell-Zustand überlebt einen Tool-Aufruf nicht:
+> `GIT_SSH_COMMAND` muss je Aufruf gesetzt werden, sonst greift wieder das mingw-`ssh`.
 
 > **Zwei Fallstricke bei `pg_ctl` auf Windows:** der Aufruf **kehrt nicht zurück**, wenn stdout an eine
 > Pipe hängt — in eine Datei umleiten und den Serverstart am Log bzw. an `postmaster.pid` prüfen, nicht am
@@ -236,552 +260,23 @@ unverändert `!rule.conditions` liest. In `JR-1309a` nachgemessen (`UNRESTRICTED
 und als erfülltes Kriterium verbucht; die Datei ist blob-identisch zu `13a7114`. Gehört zu `JR-1311`.
 `JR-1310`, `JR-1311`, `JR-1312`, `JR-1316` waren und bleiben **nicht** Teil von E13s Abnahme.
 
-### Was zuletzt passiert ist — `JR-1317` (F30 behoben, ADR-020 umgesetzt)
-
-Rolle `senior-dev`, zwei Commits: **`07ac661`** die einzige inhaltliche Datei
-(`docs/user-guides/upgrade-and-migration/access-control-changes.md`), der **Folgecommit** die Statuspflege
-(`06-status.md`, `07-session-handover.md`, `09-befunde-bestandscode.md`, `README.md`).
-Vollständige Fassung mit Kommandos und Ausgaben in `06-status.md` unter „`JR-1317` erledigt", die
-Befundauflösung in `09-befunde-bestandscode.md` unter **F30**.
-
-**(a) Knotenebene.** `cond` trägt eine neue Spalte `path` (Wurzel `"conditions"`, Objektkind
-`-> "key"`, Arrayelement `-> []`), und drei Befundtypen speisen aus `cond` statt aus `pair`:
-
-| Befundtyp                               | Prädikat                                                                         |
-| --------------------------------------- | -------------------------------------------------------------------------------- |
-| `empty condition object`                | `c.node = '{}'::jsonb` in **jeder** Position (ersetzt `empty conditions object`) |
-| `condition node is not an object`       | `$or`/`$and`-Arrayelement bzw. `$not`-Rumpf mit `jsonb_typeof <> 'object'`       |
-| `condition branch list is not an array` | `$or`/`$and`, dessen Wert kein Array ist                                         |
-| `conditions is not an object`           | **unverändert** aus `pair`, Wurzel, mit den zwei Lesarten je Wert                |
-
-Die Prädikate sind aus `checkConditionsShape()` und den Rekursionsstellen in `mongoToDrizzle`
-**abgeleitet**. Geprüft wird nur ein Knoten in **struktureller** Position; ein pauschales
-`jsonb_typeof(node) <> 'object'` hätte jedes Blatt jeder normalen Bedingung gemeldet (Fallstrick 20).
-
-**Beide Nachweise, Blöcke wörtlich aus der `.md` gegen PostgreSQL 16.13, 41 Migrationen, 26 Rollen:**
-alle **acht** F30-Formen werden gemeldet, je mit Position; `{"$or": []}`/`{"$and": []}` und alle
-Wurzelformen weiter; **keine Falsch-positiven** — drei `predefined_*` und acht Kontrollen in **keiner**
-der drei Ausgaben, maschinell verglichen. Zusätzlich gegen den Übersetzer gekreuzt (37 Werte über
-`dist/helpers/mongoToDrizzle.js`): verweigert ⇒ gemeldet, übersetzbar ⇒ still, mit zwei benannten
-bewussten Abweichungen (siehe Punkt 3 oben).
-
-**(b) Der Abdeckungsanspruch ist weg** — das war der eigentliche Fix (ADR-020). „It examines" ⇒ „What it
-reports"; „recursively" steht nicht mehr als Zusage; der widerlegte Satz zu „the values inside a
-condition" ist ersetzt; ausdrücklich ergänzt, dass eine Abfrage über schemaloses JSONB **nicht als
-vollständig gezeigt werden kann** und ein leeres Ergebnis ein **Hinweis, keine Freigabe** ist; an die
-Stelle der Zusage tritt eine **verifizierbare Gegenprobe ohne Formliste** (zwei Zahlen je Rolle
-vorher/nachher vergleichen) samt dem Hinweis, dass eine unübersetzbare Bedingung jetzt einen **Fehler**
-erzeugt. **Vier weitere Abdeckungssätze** derselben Klasse waren auf der Seite und sind mit ersetzt.
-
-**Kein Produktionscode, kein Test, keine Migration, kein i18n-Key.** `conditionKey.ts` war Referenz,
-nicht Ziel; kein Defekt darin gefunden. `pnpm lint`, `test:types`, Backend-Build und `pnpm docs:build`
-grün, `docs/.vitepress/dist/dev/` fehlt weiterhin, Suite unverändert `250 passed | 2 skipped`, Exit 0.
-Proben liefen in `/var/tmp` und im Scratchpad, **nicht** im Repository; 0 `oa_test_*`-Rückstände nach dem
-Volllauf, Cluster und Prüfdatenbanken restlos entfernt.
-
-### Was davor passiert ist — die Abnahme `JR-1309a`
-
-Unabhängige Session, Rolle `tester`, HEAD `2a8df48`, zuerst gegen das Remote abgeglichen (identisch).
-Vollständige Kriterientabelle mit Kommandos und Ausgaben in `06-status.md` unter „Abnahme `JR-1309a`".
-
-**F30 in einer Tabelle** — `FilterBuilder` von `efea6bc` gegen den von `HEAD` im selben Prozess, echtes
-PostgreSQL 16.13 mit den 41 Migrationen, 54 gesäte Rollen, Paar `('archive','read')`, die drei
-` ```sql `-Blöcke wörtlich aus der veröffentlichten Datei:
-
-```
-pre               post     Q2/Q3     conditions
-UNRESTRICTED      THROWS   SILENT    {"$not": {}}
-UNRESTRICTED      THROWS   SILENT    {"$not": 5}
-UNRESTRICTED      THROWS   SILENT    {"$or": [{"$and": [{}]}]}
-FILTER(2/2 rows)  THROWS   SILENT    can archive + cannot archive {"userEmail": {}}
-FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{"userEmail": "…"}, 5]}
-FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{}, {"userEmail": "…"}]}
-FILTER(0/2 rows)  THROWS   SILENT    {"$or": [{"userEmail": "…"}, {}]}
-FILTER(0/2 rows)  THROWS   SILENT    {"$and": [{"userEmail": "…"}, {}]}
-```
-
-Gegenprobe im selben Lauf: `{"$or": []}` und `{"$and": []}` **werden** gemeldet, ein Formfehler an einem
-**Key** in beliebiger Tiefe ebenfalls, und die drei `predefined_*` plus drei handgeschriebene Kontrollen
-erscheinen in **keiner** Ausgabe. Der Ausfall betrifft die **Knotenform**, nicht die Rekursion.
-
-**Was gehalten hat, gemessen statt übernommen:** die zwei Gates urteilen deckungsgleich **und** richtig
-(26 Keys × 2 Gates × eigene Erwartung, 0 Divergenzen — darunter fünf Keys, die die ausgelieferte
-Testdatei nicht führt, etwa die Groß-/Kleinschreibung der Relationstabelle); alle 10 Nicht-Objekt-Formen
-von `conditions` werden beim Anlegen mit `400` abgewiesen, vor E13 waren alle 10 `ACCEPT`; die
-Vorher/Nachher-Tabelle aus `JR-1314` hält an allen 17 Wurzelwerten; `predefined-roles.int.test.ts` 7/7
-grün; `FilterBuilder.ts` und `mongoToMeli.ts` blob-identisch zu `13a7114`; F2/F9/F10-Dateien
-blob-identisch zu `efea6bc`, F4/F5/F6 pre gegen post gleich; genau **ein** vorher grüner Pin ist
-umgedreht (alter `policy-validator.test.ts` gegen neuen Validator ⇒ `1 failed | 52 passed`); Suite
-`250 passed | 2 skipped`, Exit 0, die 2 Skips aus dem JSON-Report als `[nightly]`/`[manual]`
-identifiziert; öffentliche Doku ohne interne IDs, Nutzlast und Compliance-Behauptung;
-`docs/.vitepress/dist/dev/` existiert nicht und der Suchindex enthält keinen `dev/`-Pfad; `main` =
-`a560b8c`, kein PR aus E13.
-
-**Kein Produktionscode, kein Test, keine öffentliche Doku geändert.** Proben in
-`packages/backend/.probe/` (danach gelöscht) und in Wegwerf-Datenbanken. 0 `oa_test_*`-Rückstände nach
-dem **Volllauf**; beide Cluster (16.13 auf 5432, 17.10 auf 5433), die Prüfdatenbanken und die
-pgdg-Paketquelle sind restlos entfernt.
-
-### Was davor passiert ist — die Nacharbeit `JR-1313`–`JR-1315`
-
-Rolle `senior-dev`, drei Commits, je einer pro Task, gepusht. Vollständige Fassung mit allen Ausgaben in
-`06-status.md` unter „E13 — Nacharbeit `JR-1313`–`JR-1315` erledigt".
-
-| Commit    | Task      | Kern                                                                                                               |
-| --------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
-| `cfb1462` | `JR-1313` | neues, **importfreies** Modul `src/helpers/conditionKey.ts`; beide Gates fragen es; `conditions` muss Objekt sein  |
-| `c17144e` | `JR-1314` | Query 2 neuer Befundtyp, Query 3 `subject = 'all'` → beide Tabellen, Absolutsatz **ersatzlos** weg, Änderung 8 neu |
-| `5c8a521` | `JR-1315` | Behauptung auf F4 eingeschränkt **und** F5-Kommentar nachgezogen — beides, mit Begründung                          |
-
-**Warum `conditionKey.ts` und nicht eines der beiden Gates:** der Validator darf `mongoToDrizzle` nicht
-importieren (zieht `drizzle-orm` in eine Klasse, die nur Typen importiert, und damit in jeden
-Policy-Unit-Test), und ein SQL-Übersetzer hat nichts im IAM-Modul zu suchen; `relationToTableMap` gehört
-neben den Code, der Tabellennamen rendert.
-
-**Belege, die eine Abnahme nachrechnen kann:**
-
-- **Suite vorher/nachher:** `224 passed | 2 skipped` ⇒ `250 passed | 2 skipped`, 16 ⇒ 17 Dateien, `unit`
-  `minimumFiles` 7 ⇒ 8. Beides Exit 0, 0 `oa_test_*`-Rückstände nach dem Volllauf.
-- **Der eine getroffene Pin, einzeln nachgemessen:** alter `policy-validator.test.ts` gegen den neuen
-  Validator ⇒ `1 failed | 52 passed`, genau „accepts conditions it does not understand" (`a.b.c`). Er
-  dokumentierte F29 und ist ersetzt, nicht gelöscht.
-- **Die Betreiber-SQL wörtlich aus der Datei gefahren**, PostgreSQL 16.13, 29 gesäte Rollen: Query 1 → 1
-  Zeile, Query 2 → 25, Query 3 → 9. Die drei `predefined_*`, die Kontrolle und die Sonde
-  `P2 rule is not an object` erscheinen in **keiner** Ausgabe.
-- **Falsch-negativ-Prüfung:** Übersetzer `efea6bc` gegen HEAD auf 17 `conditions`-Werten im selben
-  Prozess; jeder Wert mit `pre ≠ post` wird von einer der Abfragen gemeldet, **0 Ausnahmen**.
-- **Kein neuer i18n-Key, keine Migration, kein Schemaeingriff.** `FilterBuilder.ts` und `mongoToMeli.ts`
-  sind in allen drei Commits nicht angefasst.
-
-### Was davor passiert ist — die Abnahme `JR-1309`
-
-Unabhängige Session, Rolle `tester`, HEAD `54536cd` **zuerst gegen das Remote abgeglichen** (identisch
-— kein Rollback). 21 Kriterien einzeln: **17 erfüllt**, 1 teilweise, 1 bewusst nicht erfüllt und durch
-ADR-019 gedeckt, **2 nicht erfüllt**. Vollständige Tabelle mit Kommandos und Ausgaben in `06-status.md`
-unter „Abnahme `JR-1309`".
-
-**Was gehalten hat — und wie es gemessen wurde, nicht übernommen:**
-
-- **`JR-1301`s Kernkriterium („ein Test, der nie rot war, belegt nichts").** Produktionscode in einer
-  **Wegwerf-Kopie** auf `efea6bc` zurückgedreht ⇒ `23 failed | 201 passed | 2 skipped`. Zusätzlich vier
-  **Einzelreverts**: `mongoToDrizzle` 11 rot, `FilterBuilder` 8, `policy-validator` 2, `SearchService`
-  1 — jeder Fix ist einzeln tragend. Ein Fall (F19) braucht **zwei** Reverts, das ist Tiefenverteidigung.
-  Statusdiff `8984ce9` ⇄ HEAD je `fullName`: rot⇒grün **21**, grün⇒nicht-grün **0**.
-- **Die Suite ist wirklich vollständig gelaufen** (Fallstrick 6, F14/F15): 16 Dateien, 226 Fälle, die
-  **2 Skips aus dem JSON-Report identifiziert** als genau die `[nightly]`- und `[manual]`-Suiten, alle
-  8 `integration`-Dateien mit Fallzahlen, `minimumFiles` ohne Spiel (7/7, 8/8, 1/1).
-- **Die Versionslücke 16.13/17.10 ist für die Suite geschlossen:** CI-Run **30456242256** auf `54536cd`
-  gegen `PostgreSQL 17.10`, 14/14 Schritte grün, `224 passed | 2 skipped`. Die roten CI-Läufe der
-  Rot-Phase (`f6a55c0`, `8984ce9`, `bbcd3e5`) sind ebenfalls belegt.
-- **`predefined-roles.int.test.ts` ist kein Tautologie-Test.** Zwei Mutationen am Produktionscode der
-  Rollendefinition ⇒ 4 von 7 bzw. 6 von 7 Fällen rot, inklusive der „green but empty test"-Falle.
-- **Der Injektionsweg ist zu.** 12 Nutzlasten (F1 #4 plus NUL-Byte, Newline, Fullwidth-Homoglyph,
-  Relationszweig, mehrteilige Keys), drei Gates, eine **Legacy-Rolle direkt in die Datenbank
-  geschrieben** ⇒ jedes Mal Deny, **0** fremde Zeilen, kein unbeschränkter Filter.
-- **F7 fail-closed auf Zeilenebene**, nicht am Rückgabewert: `auditor-specific-mailbox.json` (Fixture
-  **von der Platte**) und ein Nutzer ohne Rolle liefern für `read` **und** `search` 0 Zeilen, und der
-  Deny ist ein echtes Prädikat (`1=0` / `ingestionSourceId = "-1"`), kein fehlender Filter.
-- **F2/F4/F5/F6/F9/F10 unverändert.** F2/F9/F10-Dateien blob-identisch zu `efea6bc`; F4/F5/F6 pre gegen
-  post auf denselben Eingaben identisch gemessen. Produktionscode-Diff des Branches: **genau vier
-  Dateien**, keine davon eine Datei dieser Befunde.
-- **Öffentliche Doku sauber:** keine internen IDs, keine Compliance-Behauptung, keine Nutzlast.
-  `10-upstream-meldung.md` ist **nicht** gebaut (`dist/dev` existiert nicht) und **nicht** im
-  Suchindex (49 indexierte Seiten, kein Pfad unter `dev/`; Gegenkontrolle: der neue öffentliche Satz
-  **ist** darin).
-- **`main` = `a560b8c`**, kein E13-Commit darin, kein Rückmerge, **kein** neuer PR.
-
-**Fünf neue Befunde, alle offen** (Details in `09-befunde-bestandscode.md`):
-
-| Befund  | Kern                                                                                                                                        | Schwere        |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **F25** | Die Statusaussage „F4 **und F5** sind im Code als bewusst offen kommentiert" ist für **F5 falsch** — F4 hat den Kommentar, F5 nicht         | niedrig        |
-| **F26** | Ein `can` mit **falsy** `conditions` (`""`, `0`, `false`, `null`) liefert weiter **Vollzugriff**; der Validator akzeptiert es. Kein Regress | mittel         |
-| **F27** | Query 2 der Betreiberdoku ist **falsch-negativ** für ein `conditions`, das kein Objekt ist: `conditions: 5` war vorher **unbeschränkt**     | mittel         |
-| **F28** | Query 3 prüft Keys nicht für Regeln mit `subject: "all"` — ein Tippfehler dort wird nicht gemeldet, filtert aber das Archiv                 | niedrig–mittel |
-| **F29** | `PolicyValidator` und `mongoToDrizzle` sind uneins über die Key-Form; die **veröffentlichte Doku** behauptet die strengere Variante         | niedrig        |
-
-**Was nicht prüfbar war** (vollständig in `06-status.md`): die **Prüf-SQL gegen PostgreSQL 17.10**
-(lokal nur 16er-Binaries — die Abfragen benutzen nur Sprachmittel ab PG 9.4, gemessen ist es aber
-nicht); die **Meilisearch-Hälfte von `JR-1305` in Ausführung** (keine Engine — geprüft ist die erzeugte
-Filterzeichenkette); der **HTTP-Pfad `400` end-to-end** (nur `PolicyValidator.isValid()` gemessen, ein
-Servertest scheitert an der Importkette, Fallstrick 10); und **ob eine reale Installation eine Rolle
-mit skalarem `conditions` besitzt** (F27s Auslöser ist eine fehlerhafte Policy — belegt ist nur, dass
-der Absolutsatz der Anleitung falsch ist).
-
-**Kein Produktionscode, kein Test, keine öffentliche Doku geändert.** Alle Proben liefen in
-Wegwerf-Kopien unter `/var/tmp`; Cluster, Kopien und die Prüfdatenbank sind restlos entfernt,
-0 `oa_test_*`-Rückstände nach dem Volllauf.
-
-### Was davor passiert ist — `JR-1308`
-
-**`JR-1308` ist erledigt (Rolle PO): der Entwurf liegt in `10-upstream-meldung.md`, ist _nicht_
-versendet und _nicht_ veröffentlicht.** Englischer Meldetext, wie er versendet würde, plus eine
-deutsche Entscheidungsvorlage darüber.
-
-> **Kein Agent versendet diesen Text, öffnet damit ein Issue oder einen Pull Request.** Kanal,
-> Zeitpunkt und Absender entscheidet der Auftraggeber. Die Datei liegt bewusst unter
-> `docs/dev/journaling/` — sie beschreibt **nicht behobene** Lücken einer veröffentlichten Version und
-> enthält eine funktionierende Injection-Nutzlast; `srcExclude: ['dev/**']` hält sie von der
-> Doku-Website fern und muss das weiter tun.
-
-Inhalt: vier Befunde (fail-open ohne `can`-Regel samt F19/F20, Injection über Condition-Keys,
-stilles Verwerfen unübersetzbarer Bedingungen samt der Richtungskorrektur aus F22, wirkungsloser
-`cannot`-Ausschluss bei Operator-Bedingungen), dazu **F17** als getrennter Bug statt als Teil des
-Advisories. Zu entscheiden sind: **Kanal** (Upstream hat keine `SECURITY.md` ⇒ privates GitHub
-Security Advisory, **kein** öffentliches Issue), **Zeitpunkt und Frist**, **Absender und ob eine CVE
-beantragt wird**, und ob die Nutzlast bei einer öffentlichen Meldung entfernt wird.
-
-**F2/F4/F5/F6/F9/F10 sind bewusst nicht enthalten** — offen dokumentiert, in diesem Fork nicht behoben;
-eine Meldung ohne Fix und ohne eigene Prüfung wäre dünn. Ein Patch-Set für Upstream ist **noch nicht**
-erzeugt: es müsste erst von den E1-Harness-Abhängigkeiten getrennt werden, die Upstream nicht hat.
-
-**Zusätzlich `JR-1312` angelegt** für die veraltete IAM-Doku (`export` fehlt in der Action-Liste,
-`manage` als Aufzählung statt als Wildcard beschrieben — die dritte Stelle aus `CLAUDE.md` §5.4). Reine
-Dokumentation, gehört auf den **Integrationsbranch nach dem Rückmerge**. Bewusst **nicht** in `JR-1307`
-mitgenommen, obwohl DEV dieselbe Datei angefasst hat: das hätte den Diff eines Sicherheits-Epics um
-eine sachfremde Korrektur erweitert.
-
-### Was davor passiert ist — `JR-1307`
-
-**`JR-1307` ist erledigt (Rolle `senior-dev`), zwei Commits.** `efb5582` liefert ADR-016 und die
-Betreiberdoku, `9b407db` die Statuspflege.
-
-**ADR-016 ersetzt den Platzhalter in `05-entscheidungen.md`.** Status entschieden, Entscheider PO. Das
-Argument ist wie vorgegeben nicht „Sicherheit geht vor": **„kein Recht auf dieses Subject" und „darf
-alles sehen" wurden vom selben Wert dargestellt, und der unsichere war der Default** — ein Zustand, in
-dem keine Zugriffsaussage über das Archiv belegbar ist, weil man einer Rolle nicht ansehen kann, ob sie
-einschränkt. Verworfen ist die Alternative „Verhalten beibehalten und nur dokumentieren", auch in der
-Schalter-Variante, mit dem konkreten Grund: **E11s Auditor-Rolle ist auf genau diesen Mechanismus
-gebaut**, `auditor-specific-mailbox.json` erteilt für `archive` kein `can` und traf damit exakt den
-`null`-Zweig — E11 wäre mit dem alten Verhalten nicht abnehmbar. Die Nummernlücke zwischen ADR-015 und
-ADR-017 bleibt; der Hinweis „nicht umnummerieren" steht jetzt **im ADR selbst** statt im Platzhalter.
-
-**Die Betreiberdoku liegt in der öffentlichen Doku, englisch (ADR-003):**
-
-| Datei                                                              | Änderung                                                                          |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `docs/user-guides/upgrade-and-migration/access-control-changes.md` | **neu** — Release-Hinweis plus Prüfanleitung mit drei SQL-Abfragen                |
-| `docs/.vitepress/config.mts`                                       | Sidebar-Eintrag „Access Control Changes" unter „Upgrading and Migration"          |
-| `docs/services/iam-service/iam-policy.md`                          | zwei neue Abschnitte „Condition Keys" und „When No Rule Applies", mit Querverweis |
-
-**Begründung der Ablage:** die Prüfung findet **vor** einem Update statt, gehört also in die
-Sidebar-Sektion, die ein Betreiber genau dann öffnet. `iam-policy.md` musste zusätzlich angefasst
-werden, weil dort die geänderte Semantik nachgeschlagen wird — die Seite beschrieb bisher nicht, was
-passiert, wenn **keine** Regel greift. `srcExclude: ['dev/**']` ist unangetastet;
-`docs/.vitepress/dist/dev/` existiert nach `pnpm docs:build` weiterhin **nicht** (geprüft).
-
-**Sieben Verhaltensänderungen sind benannt**, jede mit betroffener Policy-Form und Handlungsanweisung:
-kein `can` ⇒ deny (mit allen drei Formen); unbedingtes `cannot` ⇒ deny; `conditions: {}` ⇒ deny; die
-Suche filtert über `search` statt `read`; ein `cannot` mit Operator-Bedingung schließt jetzt
-**wirklich** aus, Nutzer sehen also **weniger** Zeilen (aus `JR-1305`/F8 — stand nicht in der
-Auftragsliste, ist aber betreibersichtbar und deshalb aufgenommen); Condition-Keys werden gegen die
-Form geprüft (`400` beim Speichern, Fehler zur Abfragezeit bei Bestandsrollen); eine unübersetzbare
-Bedingung führt zu einem **Fehler** statt zu einem stillschweigend falschen Ergebnis (ADR-018).
-
-**Der ADR-019-Restspalt hat einen eigenen Abschnitt** („What is still not checked") und wird
-ausdrücklich **nicht** als geprüft dargestellt: „The application does **not** perform this check. The
-query does, and only for those two subjects." **F17 ist aufgenommen** — in einer frischen Installation
-existiert nur die Super-Admin-Rolle, die beiden anderen `predefined_*`-Policies sind Vorlagen in der
-Doku und keine Datenbankzeilen, und eine fehlende Read-Only-Rolle ist **kein Fehler der Installation**.
-**Keine Pauschalwarnung**, mit dem Beleg, dass ein automatisierter Test die Unbetroffenheit der
-`predefined_*`-Rollen gegen eine echte Datenbank prüft.
-
-**Die Prüf-SQL ist gegen echtes Postgres ausgeführt** (16.13, lokaler Cluster ohne Docker, Fallstricke
-Punkt 8) und **aus der Markdown-Datei extrahiert und wörtlich gelaufen**, nicht aus dem Entwurf:
-Query 2 meldet **10 von 10** absichtlich betroffenen Rollen je mit Regelnummer, Query 3 findet den
-Tippfehler-Key, den die Anwendung nicht prüft, Query 1 den Nutzer ohne Rolle. **Die drei
-`predefined_*`-Rollen und die unbetroffene Gegenprobe erscheinen in keiner Ausgabe** — das trägt die
-Aussage „keine Pauschalwarnung". Sieben Randfälle ohne Fehler und ohne Falschtreffer: Skalar als
-Policy-Element, leeres `policies`-Array, `manage`/`all` als einelementiges Array, `a.b.c`, `$nor`,
-`$not` um eine Operator-Bedingung, `conditions: null` an einem `cannot`. Vollständige Ausgaben in
-`06-status.md` unter „E13 — `JR-1307` erledigt".
-
-**Kein Produktionscode, keine Teständerung, keine Migration, kein i18n-Key** (die Doku enthält keine
-UI-Zeichenkette). Keine `JR-*`-ID, keine F-Nummer, kein Ausnutzungsbeispiel und keine
-Compliance-Behauptung in der öffentlichen Doku. `docs/api/openapi.json` ist durch `docs:build` nicht
-verändert worden. `pnpm lint` grün, `pnpm docs:build` grün, `pnpm test` `224 passed | 2 skipped`,
-Exit 0, 0 `oa_test_*`-Rückstände, Cluster restlos entfernt.
-
-**Ein Befund beim Schreiben, gemeldet und nicht behoben:**
-`docs/services/iam-service/iam-policy.md` listet die Action `export` weiterhin nicht und beschreibt
-`manage` als Expansion auf `create/read/update/delete/search/sync` statt als echten CASL-Wildcard —
-die in `CLAUDE.md` §5.4 benannte stale Stelle (3) des Permission-Vokabulars. Sie liegt in derselben
-Datei, die `JR-1307` angefasst hat, gehört aber nicht zu dieser Task; (1) und (2) sind bereits einig,
-es ist reine Doku-Nacharbeit. **Vorschlag: eigene Task, PO entscheidet.**
-
-### Was davor passiert ist — die fünf Fix-Tasks
-
-**Die fünf Fix-Tasks von E13 sind erledigt (Rolle `senior-dev`): `JR-1303`, `JR-1302`, `JR-1304`,
-`JR-1305`, `JR-1306`.** Ein Commit je Task, in dieser Reihenfolge:
-
-| Commit    | Task      | Kern der Änderung                                                                                                      |
-| --------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `bcac6bd` | `JR-1303` | `SearchService.ts:311`/`:423` bauen den Filter für `('archive','search')` (ADR-017 B). Kein Route-Gate berührt         |
-| `a309fd1` | `JR-1302` | `null` von `rulesToQuery` ⇒ deny; unbedingtes `cannot` ⇒ deny (**F20**); `undefined` vom Übersetzer ⇒ deny (**F19**)   |
-| `45ac0e9` | `JR-1304` | `mongoToDrizzle` wirft statt zu verwerfen; Rückgabetyp `SQL`                                                           |
-| `2311996` | `JR-1305` | `cannot`-Ausschluss über `{ $not: condition }` statt `{ $ne: value }`                                                  |
-| `dcec017` | `JR-1306` | Allowlist für Condition-Keys, `sql.raw` entfernt, `PolicyValidator` prüft Condition-Keys; die drei F21-Pins invertiert |
-
-```
-DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
-  vorher (8984ce9)   Tests  21 failed | 203 passed | 2 skipped (226)   EXIT=1
-  nachher (dcec017)  Tests   1 failed | 223 passed | 2 skipped (226)   EXIT=1
-```
-
-**20 der 21 roten Tests sind grün, und kein vorher grüner Test ist rot geworden** — maschinell
-geprüft, nicht gezählt: beide Läufe mit `--reporter=json` protokolliert und die Statusliste je
-Testname verglichen (0 Übergänge grün ⇒ nicht grün). `predefined-roles.int.test.ts` ist mit allen
-sieben Fällen **grün geblieben**. Die vollständige Tabelle steht in `06-status.md` unter „Grün-Lauf
-der Fixes".
-
-> **Der eine verbleibende rote Test ist ein Widerspruch zwischen zwei `JR-1301`-Tests, kein
-> unfertiger Fix — und er braucht eine Entscheidung.**
-> `RED UNTIL JR-1304: the Drizzle half alone is fail-closed for an untranslatable condition (F3)` in
-> `tests/integration/filter-builder-f1-f3.int.test.ts` fordert für die teilweise übersetzbare
-> Disjunktion ein Prädikat, das Zeilen liefert (Zeile 236: `[rows.mine]`), und ruft `mongoToDrizzle`
-> in Zeile 223 ohne `try` auf. `src/helpers/mongoToDrizzle.test.ts:203` fordert für die
-> **strukturell identische** Eingabe „throw oder `1=0`/`false`". Beides ist nicht gleichzeitig
-> erfüllbar. Gewählt ist **werfen**, weil (a) `JR-1304`s Kriterium „kein Zweig wird stillschweigend
-> weggelassen" lautet und die zweite Assertion gerade die F22-Verengung festhält, die das Kriterium
-> verbietet, (b) `mongoToMeli` für dieselbe Form schon heute wirft und ein **grüner** Test das
-> festhält (`mongo-to-meli.int.test.ts:147`), (c) ein never-true-Prädikat je Zweig am `$not` kippt:
-> `not(false)` ist wahr. **Der Test wurde nicht angepasst** — Teständerungen sind Rolle `tester`.
-> Empfehlung und Begründung in `06-status.md`; danach ist der Endstand `224 passed | 2 skipped`,
-> Exit 0.
-
-**Erledigt: der Widerspruch ist entschieden und aufgelöst (`704e8d1`, ADR-018).** Der PO hat so
-entschieden wie oben vorgeschlagen — die Unit-Erwartung gilt. Der Tester hat **alle drei
-Begründungen nachgemessen statt sie zu übernehmen** und eine verstärkt: die beiden Erwartungen sind
-unter **jeder** Implementierung unvereinbar, weil keine prinzipielle Regel `{id:'a'}` anders behandelt
-als `{userEmail:…}` — beide sind Gleichheit auf einer erlaubten Spalte. Die Korrektur ist **in beide
-Richtungen mutationsgeprüft**, ist also kein Test, der bloß aufgehört hat zu scheitern. Endstand:
-`224 passed | 2 skipped`, Exit **0**, 16/16 Dateien grün.
-
-> **Dabei ist eine Aussage des PO korrigiert worden.** „Im `$or` nur verengend" (F22 und, in meiner
-> Fassung vom 2026-07-29, `JR-1304`s Kriterium) gilt **nur**, solange die Disjunktion oben in einer
-> `can`-Komposition steht. Unter dem `$not` — und `FilterBuilder.ts:84` setzt **jede**
-> `cannot`-Bedingung genau dorthin — ist derselbe Wegfall **fail-open**: `not A` ist wahr für jede
-> Zeile, die der verlorene Zweig verbieten sollte. Richtig ist der unbedingte Satz: **ein weggelassener
-> Zweig ist nie harmlos; die Richtung hängt von der Komposition ab, und die kennt der Übersetzer
-> nicht.** F22 und `JR-1304`s Kriterium sind berichtigt, ADR-018 hält fest, dass `mongoToDrizzle`
-> deshalb auch später keinen milden Modus bekommen darf.
-
-**Eine benannte Abweichung von der F21-Entscheidung.** „Abgewiesen wird jeder unbekannte Key" ist als
-Allowlist über die **Form** des Keys plus die Relation umgesetzt: ein einzelner Identifier oder
-`<relation>.<identifier>` mit Relation aus `relationToTableMap`. Damit fallen alle SQL-Syntax-Keys und
-alle Keys mit unbekannter Relation heraus (`attachment.name`, `foo.bar`, `a.b.c`). Ein einzelner,
-unbekannter, syntaktisch harmloser Key (`foo`) wird **weiter übersetzt**: `mongoToDrizzle` kennt die
-Zieltabelle nicht, und eine spaltengenaue Allowlist hätte drei weitere heute grüne Pins gebrochen
-(`{a:1}`, `{b:2}`, `{n:{$gt:1}}` plus die `FIELDS`-Liste der adversarialen Suite) — was der Auftrag
-ausschloss. Vorschlag: spaltengenaue Prüfung dort, wo das Subject bekannt ist, also bei `JR-1310`.
-
-**Vom PO angenommen und festgeschrieben (ADR-019), mit einer Korrektur am Vorschlag.** Die Abweichung
-ist tragfähig: der Zweck von F1 war der Injektionsweg, und der ist an **zwei** Stellen zu — der
-`PolicyValidator` weist eine Policy mit nicht-identifierartigem Key beim Anlegen ab, `mongoToDrizzle`
-erneut zur Abfragezeit, und `sql.raw` ist aus dem Relationszweig entfernt. Der Restspalt ist ein
-Policy-Schreibfehler, kein Angriffsweg. Er wird als **`JR-1311`** geführt — und zwar **nicht** bei
-`JR-1310`: die spaltengenaue Prüfung gehört in `FilterBuilder.create()`, das `resourceType` bereits als
-Parameter bekommt, und braucht Variante C dafür nicht. Meine F21-Formulierung „jeder unbekannte Key"
-war zu absolut geschrieben, ohne zu berücksichtigen, dass `mongoToDrizzle` subjektagnostisch ist.
-
-**Geänderter Produktionscode: vier Dateien.** `src/services/SearchService.ts`,
-`src/services/FilterBuilder.ts`, `src/helpers/mongoToDrizzle.ts`,
-`src/iam-policy/policy-validator.ts`. **`mongoToMeli.ts` ist unverändert.** Geänderter Testcode: nur
-die vom PO freigegebene F21-Invertierung in `src/helpers/mongoToDrizzle.test.ts` und
-`tests/fixtures/mongo-to-drizzle-golden.json`. **Keine Migration, kein Schemaeingriff, kein neuer
-i18n-Key** — der Ablehnungsgrund des Validators wird wie die bestehenden Gründe auf Englisch hinter
-`req.t('iam.invalidPolicy')` angehängt; dass diese Gründe nicht lokalisiert sind, ist Bestandszustand.
-
-**Bewusst nicht angefasst:** F2, F4, F5, F6, F9, F10, F17, F18, F22, F23. F4 und F5 sind in
-`mongoToDrizzle` im Verhalten erhalten; **berichtigt (F25, `JR-1315`):** als bewusst offen kommentiert
-wurde in diesem Commit nur **F4**, der F5-Kommentar kam erst mit `JR-1315`. `pnpm lint` grün,
-`pnpm --filter @open-archiver/backend test:types` grün, Backend-Build grün, 0 `oa_test_*`-Rückstände,
-lokaler PostgreSQL-16.13-Cluster restlos entfernt. Kein Rückmerge, kein PR.
-
-### Was davor passiert ist — `JR-1301`
-
-**`JR-1301` ist erledigt (Rolle `tester`). Der Epic-Branch war absichtlich rot.**
-
-```
-DATABASE_URL=… OA_TEST_REQUIRE_INFRA=1 pnpm test
- Test Files  6 failed | 10 passed (16)
-      Tests  21 failed | 203 passed | 2 skipped (226)      EXIT=1
-```
-
-> **Diese 21 roten Tests sind das Arbeitsergebnis, nicht ein Schaden.** E13s Reihenfolge ist
-> rot → Fix → grün; ein Test, der nie rot war, belegt nichts. `ci.yml` feuert auf `push`, der Branch
-> zeigt also rote CI-Läufe, bis `JR-1302`–`JR-1306` gelandet sind. **Nicht durch Abschwächen der Tests
-> „reparieren".** Bis `JR-1301` hielten dieselben Tests F1/F3/F7/F8 als _bestanden_ fest, teils per
-> `it.fails` — ein grüner Test, der eine Sicherheitslücke beschreibt. Genau das war der Defekt.
-
-Jeder rote Test trägt `RED UNTIL JR-13xx` im Namen, ist also im Lauf sichtbar und filterbar:
-`pnpm test -t "RED UNTIL JR-1302"`. Zuordnung: `JR-1302` 5 · `JR-1303` 1 · `JR-1304` 7 ·
-`JR-1305` 3 · `JR-1306` 5. Es gibt **keinen** Opt-out-Schalter — Begründung in `06-status.md`.
-
-**ADR-017s Wirkungsanalyse hält, jetzt belegt statt hergeleitet.**
-`packages/backend/tests/integration/predefined-roles.int.test.ts` legt die drei `predefined_*`-Rollen
-über Produktionscode an und zeigt: keine trifft an einer der drei tatsächlich benutzten
-(Action, Subject)-Paare den `null`-Zweig, und `('archive','read')` und `('archive','search')` liefern
-je Rolle **identische** Ergebnisse. `JR-1303` ist damit für eine Standardinstallation belegbar
-wirkungsfrei. Diese Datei ist grün und muss grün bleiben.
-
-**Sieben neue Befunde `F17`–`F23`**, zwei davon mit Gewicht für E13:
-
-- **F17** — `predefined_end_user` und `predefined_read_only_user` werden in einer echten Installation
-  **nie angelegt**: `createAdminRole()` legt bei der Ersteinrichtung `predefined_super_admin` an und
-  erfüllt damit dauerhaft den Bootstrap-Auslöser `!roles.some(r => r.slug?.includes('predefined_'))`.
-  Folge: ausgeliefert gibt es **keine Read-Only-Rolle**, jede eingeschränkte Rolle ist handgeschrieben
-  und hat die Form von `auditor-specific-mailbox.json` — genau die Form, die F7 unwirksam macht.
-  **`JR-1307` muss das aufnehmen**; die entschärfte Fassung bleibt richtig.
-- **F18** — ADR-017s „keine der drei Rollen trifft den `null`-Zweig" gilt **je Aufrufstelle, nicht je
-  Rolle**: über das volle Vokabular treffen 39 bzw. 46 von 56 Paaren den Zweig. Heute harmlos; das
-  Aufrufstellen-Inventar in `tests/unit/filter-builder-call-sites.test.ts` wacht darüber.
-
-Außerdem: **F1 ist erstmals gegen echtes Postgres ausgenutzt** — von vier Payloads läuft genau einer,
-und er hebt über drizzles unklammerte `and()`-Verkettung auch die Einschränkung des **Aufrufers** auf.
-F3s `$or`-Beispiel beschreibt die Wirkungsrichtung falsch (**F22**: Verengung, nicht Erweiterung; die
-fail-open-Richtung liegt beim `$and` und bei den Leerheits-Fällen). Zwei zusätzliche Fail-open-Formen
-in `FilterBuilder`: **F19** (`can` mit leerem `conditions`) und **F20** (unbedingtes `cannot` wird
-ignoriert) — beide inhaltlich in `JR-1302`/`JR-1304` mitzubehandeln, beide bereits rot.
-
-**Kein Produktionscode geändert** (`git diff --stat -- packages/backend/src ':!*.test.ts'` ist leer),
-`pnpm lint` grün, `pnpm --filter @open-archiver/backend test:types` grün, Backend-Build grün, 0
-`oa_test_*`-Rückstände, lokaler PostgreSQL-16.13-Cluster restlos entfernt.
-
-### Und davor — ADR-017
-
-**ADR-017 ist entschieden: Variante B** (Auftraggeber, 2026-07-29). Der Action-Versatz wird dort
-aufgelöst, wo der Filter gebaut wird, nicht am Route-Gate:
-
-```diff
-  # packages/backend/src/services/SearchService.ts, Zeilen 311 und 423
-- const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'read');
-+ const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'search');
-```
-
-`api/routes/search.routes.ts` bleibt unverändert. `ArchivedEmailService.ts:62` bleibt auf `'read'`
-(seine Routen gaten auf `read`), `IngestionService.ts:137` ebenfalls (Subject `ingestion`, kein
-Versatz). Variante A ist verworfen, Variante C verworfen für E13 und als **`JR-1310`** nach E13
-vorgemerkt — ausdrücklich **nicht** Teil der Abnahme `JR-1309`.
-
-**Damit ist keine Entscheidung mehr blockierend für E13.** `JR-1303` ist von „PO entscheidet" auf
-reine Umsetzung geschärft und gibt `JR-1302` frei.
-
-**Eine frühere Aussage des PO ist korrigiert.** „Der F7-Fix bricht Bestandsinstallationen" war zu
-scharf. Am Code nachgeprüft (`iam.controller.ts` `createDefaultRoles`, `UserService.ts:270`): keine der
-drei `predefined_*`-Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` — zwei erteilen
-unbedingte `can`-Regeln und werden schon von Zeile 31 abgefangen, `predefined_end_user` hat
-`manage archive` **mit** Bedingungen, woraus `rulesToQuery` eine echte Query liefert. Erreichbar ist
-der Zweig über einen Nutzer **ohne Rolle**, eine `cannot`-only-Policy auf `archive`, und eine
-handgeschriebene Rolle mit `search` ohne `read`. **F7 bleibt Schwere hoch** — die ersten zwei Formen
-sind real, und die zweite ist genau die Form jeder scope-einschränkenden Auditor-Policy aus E11.
-`JR-1307` ist entsprechend entschärft: die Prüfanleitung bleibt, die Pauschalwarnung fällt.
-
-Geändert wurden nur `05-entscheidungen.md` (ADR-017 plus ein Platzhalter, der ADR-016 für `JR-1307`
-reserviert — **die Nummernlücke ist Absicht, nicht umnummerieren**), `03-backlog.md` (`JR-1303`
-geschärft, `JR-1307` entschärft, `JR-1310` angelegt), `09-befunde-bestandscode.md` (F7-Reichweite) und
-diese beiden Statusdateien. **Kein Produktionscode.**
-
-### Und davor
-
-**E1 ist abgenommen.** Die erneute unabhängige Abnahme `JR-106a` (Rolle `tester`, eigene Session,
-HEAD `0a94308`) hat **alle** `JR-106`-Kriterien noch einmal geprüft — nicht nur die Nacharbeit, weil
-`JR-104a`/`JR-105b` `vitest.config.ts`, `classification.ts`, `pg-harness.ts` und `ci.yml` angefasst
-hatten — plus die Kriterien von `JR-104a` und `JR-105b`. **Ergebnis: alle 20 geprüften Kriterien
-erfüllt.** Die vollständige Tabelle mit Kommandos und Ausgaben steht in `06-status.md` unter „Abnahme
-`JR-106a`".
-
-Die Belege in Kurzform: `pnpm test` ⇒ `10 passed`, `197 passed | 2 skipped`, Exit `0`; Sonden in
-`packages/types/` und `packages/frontend/` werden ohne Config-Änderung gefunden, dieselbe Sonde mit
-fehlschlagender Assertion ⇒ Exit `1`; **F12 bestätigt behoben** über 10 nebenläufige Runden
-(5 Doppel-, 3 versetzte, 2 Dreifachläufe) mit 0 Rückständen; alle acht IAM-Fixtures einzeln umbenannt
-⇒ jedes Mal Exit `1`; CI-Run **30368442950** auf HEAD grün gegen **PostgreSQL 17.10** mit allen vier
-`integration`-Dateien sichtbar gelaufen; die vier Bestandsworkflows blob-identisch; `pnpm lint` grün;
-ein erzwungener `pnpm db:generate` (⇒ `0041_whole_sally_floyd.sql`) lässt `pnpm lint` grün. Der
-Produktionscode ist unberührt: echter Pre-E1-Build gegen HEAD-Build verglichen — **233** `dist`-Dateien,
-Dateilisten identisch, eine Datei byteverschieden und nur im Zeilenumbruch.
-
-**Drei neue Befunde am Messinstrument, keiner davon ein Kriteriumsbruch** (Details in
-`09-befunde-bestandscode.md`):
-
-- **F14** — die Suite-Inventur wacht über **Dateien**, nicht über gelaufene Tests. `suiteRequiring('ci', …)`
-  in den vier `integration`-Dateien zu `'nightly'` zu ändern schaltet die ganze Suite ab
-  (`163 passed | 36 skipped`), und beide Wächter melden „verifiziert", Exit `0`. `OA_TEST_REQUIRE_INFRA=1`
-  greift nicht, weil die Klassenauswahl **vor** der Infrastrukturprüfung liegt. Dieselbe Klasse:
-  eine Datei, deren Tests alle `it.skip` sind, zählt voll zur Mindestzahl.
-- **F15** — `minimumFiles` ist eine Untergrenze. Heute steht sie exakt auf dem Bestand, also macht
-  jede Löschung rot. Sobald eine Suite darüber wächst, geht eine Löschung in Höhe des Spiels still
-  durch — belegt durch Löschen von `pg-harness.int.test.ts` (13 Tests) bei grünem Lauf.
-- **F16** — wirft eine `integration`-Datei im Modul-Scope **nach** ihrem `acquireTestDatabase()`,
-  bleibt die Datenbank liegen und die vorgesehene Meldung `… still present` erscheint **nicht**
-  (Wurf im geforkten Worker). CI fängt es, lokal verschwindet der Rückstand lautlos.
-
-**Was gehalten hat:** Verzeichnis umbenannt **und** gelöscht ⇒ rot; `foo.test.ts` unter
-`tests/integration/` ⇒ rot; `.spec.ts`/`.test.mts`/`.test.tsx` ⇒ rot; Testdatei außerhalb `packages/`
-(auch in `apps/`) ⇒ rot; leere Testdatei ⇒ rot. Und die **lazy-Guard-Fehlerklasse ist konstruktiv
-geschlossen**: `OA_TEST_REQUIRE_INFRA=yes` bricht **auch bei laufender Datenbank** ab, weil
-`isInfraRequired()` beim Laden von `classification.ts` eifrig aufgerufen wird.
-
-**F13 ausdrücklich nachgeprüft und als schwach bestätigt:** die Zwischenregel aus `04-testplan.md` §2.6
-steht **nicht** in den Backlog-Zeilen `JR-208`/`JR-607`/`JR-410` und **nicht** in §12.6 — also nirgends
-dort, wo jemand nachschlägt, der einen Soak schreibt. Es gibt auch keine Laufzeitprüfung. Empfehlung:
-die Regel in die Akzeptanzkriterien von `JR-208` und `JR-607` aufnehmen, unabhängig von der Wahl des
-F13-Entwurfs.
-
-**Kein Produktionscode geändert, kein Befund F1–F13 behoben, kein PR angefasst.**
-Der lokale PostgreSQL-16.13-Cluster ist restlos entfernt.
-
-**Danach, durch den PO (nicht mehr durch den Tester):**
-
-- **E1 ist in den Integrationsbranch gemergt** — `efb769c`, `--no-ff`, gepusht als `b4ae8f7`. ADR-014
-  gibt den Rückmerge nach unabhängiger Abnahme frei; **`main` bleibt bis E12 unangetastet.** Der
-  Integrationsbranch enthält damit den Test-Harness, weshalb E13 von dort abzweigen kann.
-  **Kein Squash**, bewusst: die aufgeräumte Sicht liefert schon
-  `git log --first-parent origin/main..HEAD` (ein Merge-Commit je Epic), und ein Squash würde
-  `cab0e38` („five tasks accepted, JR-104 rejected") tilgen sowie `JR-105a` seine mechanisch
-  beweisbare Formatierungs-Reinheit nehmen (ADR-015). Ob beim späteren Merge nach `main` gesquasht
-  wird, ist dort zu entscheiden.
-- **`JR-105c` angelegt** für F14–F16, fällig **vor E2**.
-- **F13-Zwischenregel in die Akzeptanzkriterien von `JR-208` und `JR-607`** übernommen — genau die
-  Empfehlung des Testers, weil sie vorher an keiner Stelle stand, die jemand liest.
-- Korrigiert: die erste Fassung von `06-status.md` verwies F14–F16 auf `JR-1305`. Das ist E13s Task
-  für F8; richtig ist `JR-105c`.
-
-### Material, das `JR-1308` verwendet hat (erledigt — der aktuelle nächste Schritt steht oben)
-
-> Dieser Abschnitt beschrieb `JR-1308` als nächsten Schritt. **`JR-1308` ist erledigt** (und in
-> `JR-1309` als erfüllt bestätigt), der Entwurf liegt in `10-upstream-meldung.md`. Der nächste Schritt
-> ist die Nacharbeit `JR-1313`–`JR-1315` — siehe oben. Die Materialliste bleibt stehen, weil sie beim
-> Versenden noch gebraucht wird.
->
-> **Ergänzung aus `JR-1309`:** wenn der Auftraggeber die Meldung versendet, gehört **F29** mit hinein —
-> der `PolicyValidator` weist einen Key mit unbekannter Relation beim Anlegen **nicht** ab, obwohl das
-> die naheliegende Erwartung ist. Für Upstream ist das keine eigene Lücke (der dortige Code prüft
-> Condition-Keys überhaupt nicht), aber es gehört in den **Fix-Vorschlag**, damit der nicht unvollständig
-> übernommen wird. **F25–F28** sind Befunde an **diesem** Fork und gehören nicht in die Meldung.
-
-Material lag vollständig vor und musste nicht neu erarbeitet werden: F7 in
-`09-befunde-bestandscode.md` (Befund, Erreichbarkeit, Bewertung, gegen echtes Postgres verifiziert),
-ADR-016 (Begründung der gewählten Semantik), ADR-017 (der Action-Versatz als zweiter Weg),
-`tests/integration/filter-builder-f7.int.test.ts` (Reproduktion) und die vier Commits `bcac6bd`,
-`a309fd1`, `45ac0e9`, `2311996`, `dcec017` (Fix-Vorschlag). **Für die Reproduktion in einer
-öffentlichen Meldung gilt dieselbe Zurückhaltung wie in der Betreiberdoku:** F1s vierter Payload ist
-lauffähig und gehört nicht in einen offenen Kanal, solange der Auftraggeber nicht über den Kanal
-entschieden hat.
-
-**Rückmerge in den Integrationsbranch erst nach einer _angenommenen_ Abnahme** (ADR-014) — `JR-1309`
-**und** `JR-1309a` haben E13 abgelehnt; `main` bleibt bis E12 unangetastet; kein PR ohne ausdrückliche
-Aufforderung.
-
-**Das Kommando für den Suitenlauf** — Postgres lokal ohne Docker, siehe Fallstricke Punkt 8:
-
-```bash
-DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres OA_TEST_REQUIRE_INFRA=1 pnpm test
-```
-
-Für den Nachweis „kein vorher grüner Test ist rot geworden" nicht die Zahlen vergleichen, sondern die
-Statuslisten: `pnpm test --reporter=json --outputFile=<datei>` auf beiden Ständen und die Paare
-`status` / `fullName` gegeneinander diffen. Die Gesamtzahl allein verdeckt einen Tausch.
+### Was davor passiert ist — die Historie steht in `06-status.md`
+
+**Diese Datei führt keine Sessionhistorie mehr.** Bis zum 2026-07-30 trug sie neun „Was davor passiert
+ist"-Abschnitte mit rund 550 Zeilen — jeder von ihnen die Kurzfassung eines Protokolls, das in
+`06-status.md` mit Kommandos und Ausgaben vollständig steht, und jeder Block verwies dafür selbst
+dorthin. Der Kopf dieser Datei verlangt seit dem ersten Tag, dass der untere Teil **überschrieben** wird
+statt angehängt; die Regel war verletzt, und eine doppelt geführte Historie ist die verlässlichste
+Quelle für Widersprüche (am 2026-07-28 genau so passiert).
+
+Wer die Vorgeschichte braucht, liest `06-status.md` — dort in dieser Reihenfolge (neueste zuerst):
+`JR-1318`, Abnahme `JR-1309b`, `JR-1317`, Abnahme `JR-1309a`, Nacharbeit `JR-1313`–`JR-1315`, Abnahme
+`JR-1309`, `JR-1307`, Grün-Lauf der Fixes `JR-1302`–`JR-1306`, der Testwiderspruch (ADR-018), Rot-Läufe
+`JR-1301`, dazu E1 in `11-archiv-e1.md`. `JR-1308` steht ebenfalls in `06-status.md`.
+
+**Was hier bleibt** und nicht nach `06-status.md` gehört, weil es kein Protokoll ist: der aktuelle Stand
+und der nächste Schritt (oben), die Umgebungsbeschreibung, die **Fallstricke** (unten — sie werden
+projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftraggeber und die Vorlage.
 
 ### Was ein neuer Agent zuerst lesen muss
 
