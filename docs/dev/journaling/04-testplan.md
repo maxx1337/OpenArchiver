@@ -1,8 +1,10 @@
 # Testplan
 
-Ausgangslage: **Das Repository hat heute null Tests und keinen Test-Runner.** Kein vitest, jest oder
-playwright, kein `test`-Script, kein Test-Job in der CI. `CONTRIBUTING.md` verlangt Tests rein
-aspirativ. E1 baut die Infrastruktur; dieses Dokument definiert, was danach geprüft wird.
+Ausgangslage **bei Abfassung dieses Dokuments (2026-07-27)**: das Repository hatte null Tests und keinen
+Test-Runner — kein vitest, jest oder playwright, kein `test`-Script, kein Test-Job in der CI;
+`CONTRIBUTING.md` verlangte Tests rein aspirativ. **E1 hat die Infrastruktur gebaut und ist abgenommen**
+(`JR-106a`, 2026-07-28; Messinstrument-Nacharbeit `JR-105c` am 2026-07-30). Was in §2 steht, beschreibt
+also den **Ist-Zustand**; ab §3 definiert dieses Dokument, was noch zu prüfen ist.
 
 RFC §12 ist der Maßstab: _„Vollständigkeitsaussagen brauchen adversariale Tests, keine
 Happy-Path-Tests."_
@@ -50,17 +52,53 @@ Projects stehen in `tests/support/suite-inventory.ts`; `vitest.config.ts` import
 gibt sie also nur einmal. Derselbe Modul prüft in `globalSetup` — vor dem ersten Test, in **jedem**
 Lauf und in jeder Umgebung — zwei positive Erwartungen:
 
-1. **Jede Suite trifft mindestens `minimumFiles` Dateien.** Null Dateien ist ein Fehlschlag. Eine
+1. **Jede Suite trifft genau `expectedFiles` Dateien.** Null Dateien ist ein Fehlschlag. Eine
    umbenannte oder gelöschte Suite macht damit rot, statt als „grün, weil nichts zu tun" zu gelten.
+   Bis `JR-105c` war das eine **Untergrenze**; siehe unten, warum die Gleichheit gebraucht wird.
 2. **Keine testartig benannte Datei ohne Project.** Alles, was `*.test.ts` / `*.spec.ts` (und die
    `.js`/`.mjs`/`.tsx`-Varianten) heißt und von keinem Include-Glob getroffen wird, bricht den Lauf
    mit Pfadangabe ab. Eine Datei `foo.test.ts` unter `tests/integration/` läuft also nicht bloß nicht
    — sie fällt auf.
 
 Die Zahlen werden auf **jedem** Lauf gemeldet, auch auf einem grünen:
-`[TEST-INVENTORY] unit: 5 file(s) (min 5) · integration: 4 file(s) (min 4) · adversarial: 1 file(s) (min 1) · unclassified: 0`.
-Wer eine Suite absichtlich verkleinert, senkt `minimumFiles` im selben Commit — sichtbar im Diff,
+`[TEST-INVENTORY] unit: 10 file(s) (expected 10) · integration: 8 file(s) (expected 8) · adversarial: 1 file(s) (expected 1) · unclassified: 0`.
+Wer eine Suite absichtlich verkleinert, ändert `expectedFiles` im selben Commit — sichtbar im Diff,
 statt unbemerkt.
+
+**Diese beiden Erwartungen sehen den Filesystem-Zustand, und genau darin liegt ihre Grenze.** Drei
+Wege, Abdeckung zu entfernen, lassen das Filesystem unverändert und waren deshalb grün (**F14**,
+**F15**): eine Suite von `ci` auf `nightly` umetikettieren, eine Datei mit ausschließlich `it.skip`
+füllen, eine Datei löschen und gleichzeitig eine andere hinzufügen. Der erste Weg war der schlimmste —
+ein Token je Datei schaltet die ganze `integration`-Suite ab, und **beide** Wächter melden „verified"
+(am 2026-07-30 am Elternstand nachgemessen: Exit 0).
+
+**Ab `JR-105c` gibt es deshalb eine dritte Erwartung, nach dem Lauf** (`tests/support/executed-tests.ts`):
+
+3. **Je Suite und je Klasse müssen genau `expectedTests[klasse]` Tests _ausgeführt_ worden sein.**
+   Ausgeführt heißt `passed` oder `failed`; `skipped` und `todo` zählen nicht. Eine nicht gewählte
+   Klasse muss 0 beitragen. Gemeldet auf jedem Lauf als
+   `[TEST-EXECUTED] unit: ci 216/216 … · selection: ci`.
+
+Warum **Gleichheit** und nicht Untergrenze: eine Untergrenze ist Spiel, und eine Löschung in Höhe des
+Spiels geht lautlos durch — das ist F15. Der Preis ist eine Zahl je Commit, der die Testzahl ändert;
+die Fehlermeldung nennt die einzutragende Zahl. Warum **je Klasse**: eine Umetikettierung lässt die
+Gesamtzahl unverändert und verschiebt die Tests nur in eine Klasse, die die Standardauswahl nicht
+fährt. Dieselbe Tabelle trägt damit auch `pnpm test:nightly`, ohne eine zweite zu brauchen.
+
+**Mechanik, weil sie nicht offensichtlich ist.** Zählen kann erst nach dem Lauf passieren, und vitest
+hat dort keinen Assertions-Haken. Ein Reporter misst und schreibt die Messung, der
+`globalSetup`-Teardown liest sie und wirft. Reihenfolge in 3.2.7 gemessen: `globalSetup` → Tests →
+`onTestRunEnd` → Zusammenfassung → `onFinished` → Teardown; ein werfender Teardown endet mit Exit 1.
+Die Messdatei wird **vor** dem Lauf gelöscht und **nach** dem Lauf verlangt — wer den Reporter aus
+`vitest.config.ts` entfernt, macht den Lauf rot, statt den Wächter abzuschalten.
+
+**Ein absichtlich verengter Lauf prüft nichts und sagt das.** `-t`, ein Dateifilter, `--project`,
+`--shard`: die Zahlen sind dann nicht vergleichbar. Der Lauf bleibt grün und gibt einen
+Coverage-Hinweis aus („verified NOTHING"), denn ein Wächter, der `pnpm test -t` rot macht, ist ein
+Wächter, den man abzuschalten lernt. `assert-inventory-report.mjs` verlangt in der CI, dass die
+Prüfung **anwendbar** war — dort ist das Zugeständnis also keins. Die CI liest zudem das **Urteil**
+aus der Messdatei, statt es nachzurechnen: zwei Implementierungen einer Regel laufen auseinander
+(**F29**).
 
 Zwei Abweichungen vom ersten Entwurf, beide bewusst:
 
@@ -175,13 +213,15 @@ weil `CREATE TYPE` mit explizitem Schema `search_path` ignoriert. Migrationen da
 ausgeschlossen (CLAUDE.md 5.2). In einer frischen Datenbank ist `"public"` dagegen deren eigenes
 `public`, und das Problem verschwindet.
 
-| Env-Variable                | Default    | Zweck                                                                     |
-| --------------------------- | ---------- | ------------------------------------------------------------------------- |
-| `DATABASE_URL`              | —          | Server **und** Zugangsdaten. Ohne sie überspringt die Suite sichtbar      |
-| `OA_TEST_PG_MAINTENANCE_DB` | `postgres` | Datenbank für `CREATE`/`DROP DATABASE`                                    |
-| `OA_TEST_PG_STALE_MS`       | `7200000`  | Ab welchem Alter ein `oa_test_*`-Rest als verwaist gilt und gelöscht wird |
-| `OA_TEST_REQUIRE_INFRA`     | `0`        | `1` ⇒ fehlende Infrastruktur **schlägt fehl**, statt sichtbar zu skippen  |
-| `OA_TEST_INVENTORY_REPORT`  | —          | Pfad, unter dem `globalSetup` die Suite-Inventur als JSON ablegt          |
+| Env-Variable                | Default    | Zweck                                                                                                                                                                           |
+| --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | —          | Server **und** Zugangsdaten. Ohne sie überspringt die Suite sichtbar                                                                                                            |
+| `OA_TEST_PG_MAINTENANCE_DB` | `postgres` | Datenbank für `CREATE`/`DROP DATABASE`                                                                                                                                          |
+| `OA_TEST_PG_STALE_MS`       | `7200000`  | Ab welchem Alter ein `oa_test_*`-Rest als verwaist gilt und gelöscht wird                                                                                                       |
+| `OA_TEST_REQUIRE_INFRA`     | `0`        | `1` ⇒ fehlende Infrastruktur **schlägt fehl**, statt sichtbar zu skippen                                                                                                        |
+| `OA_TEST_INVENTORY_REPORT`  | —          | Pfad, unter dem `globalSetup` die Suite-Inventur als JSON ablegt                                                                                                                |
+| `OA_TEST_EXECUTED_REPORT`   | —          | Pfad für Messung **und Urteil** der ausgeführten Tests (`JR-105c`). Ohne ihn `node_modules/.cache/oa-test/executed-tests.json`                                                  |
+| `OA_TEST_HARNESS_LEDGER`    | —          | Wird von `globalSetup` je Lauf gesetzt. Verzeichnis, in dem der Harness seine geholten Datenbanken einträgt. **Nicht von Hand setzen**, außer man fährt den Harness ohne vitest |
 
 **Rechteanforderung (relevant für ADR-009).** Die Rolle in `DATABASE_URL` braucht `CREATEDB` sowie
 das Recht, in der neuen Datenbank DDL auszuführen. Das ist die **Bootstrap**-Rolle der Tests, nicht
@@ -213,6 +253,24 @@ nimmt `{ staleMs?, restrictTo? }`; `restrictTo` filtert im SQL, ein gesenkter `s
 fremde sind damit nicht „verschont", sondern unerreichbar. Fixture-Namen für die Sweeper-Tests kommen
 aus `buildForeignFixtureName()`: fremdes PID-Feld (sonst greift der Eigen-PID-Wächter und der Test
 prüft nichts), Eindeutigkeit über `process.pid` + Zufallsbytes im Tag.
+
+**Seit `JR-105c` besitzt der Hauptprozess den Rückstand dieses Laufs — er rät ihn nicht.** Der Sweeper
+oben räumt Reste **fremder, toter** Läufe auf; er sagt aber nichts über den eigenen. Und der eigene
+entstand regelmäßig: `acquireTestDatabase()` läuft im **Modul-Scope** (es muss, siehe Import-Throw
+oben), das Teardown hängt an `afterAll`. Wirft der Modul-Scope danach, läuft das `afterAll` nie
+(**F16**); überspringt ein `-t`-Filter alle Fälle der Datei, ebenso (**F24**). Die versprochene
+Sichtbarkeit gab es in beiden Fällen nicht: die `process.on('exit')`-Warnung feuert im geforkten
+Worker, dessen Ausgabe nicht in der Zusammenfassung landet.
+
+Jetzt schreibt der Worker jede geholte Datenbank in ein **Ledger-Verzeichnis** dieses Laufs
+(`OA_TEST_HARNESS_LEDGER`, von `globalSetup` gesetzt, im Worker über die geerbte Umgebung erreichbar)
+und löscht den Eintrag erst, wenn der Drop tatsächlich stattgefunden hat. Der Teardown liest, was übrig
+ist: das ist **genau** der Rückstand dieses Laufs — kein Zeitstempel, keine Heuristik, und keine
+Möglichkeit, die lebende Datenbank eines **fremden** Laufs dafür zu halten (das war F12). Er meldet ihn
+mit Namen, Label und Worker-PID, **droppt** ihn, und macht den Lauf **rot, wenn der Lauf nicht verengt
+war** — sonst würde das Aufräumen die Zusicherung des CI-Schritts „Assert no leftover test databases"
+kassieren. Ein gefilterter Lauf meldet und räumt nur. `acquireTestDatabase()` verweigert den Dienst,
+wenn kein Ledger-Verzeichnis gesetzt ist, **bevor** es etwas anlegt.
 
 **Verbleibende Lücke — `F13`, für E2/E3 relevant.** Der unbeschränkte Sweep aus `acquireTestDatabase()`
 läuft weiter mit der Standardfrist. Ein fremder Lauf, der **länger als die Frist** dauert, ist für ihn

@@ -85,9 +85,15 @@ Auditor-Artefakte ab E9/E11.
 
 Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenommen** (`JR-106a`,
 2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, CI gegen PostgreSQL 17,
-`pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig vor E2).
+`pnpm lint` repo-weit sauber. **Die letzte Nacharbeit `JR-105c` ist am 2026-07-30 erledigt** (`b5b2190`)
+— der Inventar-Wächter zählt jetzt **ausgeführte Tests je Suite und Klasse** statt Dateien, und der
+Hauptprozess besitzt den Datenbank-Rückstand des Laufs (F14, F15, F16, F24 behoben). Damit belegt ein
+grüner Lauf, dass die `integration`-Suite gelaufen ist — die Voraussetzung dafür, dass die
+Durabilitäts- und Kettenaussagen ab E2 überhaupt auf etwas ruhen. **E1 ist damit vollständig
+abgeschlossen: 10 / 10.**
 
-**E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
+**E13 (IAM-Autorisierung härten) ist abgenommen und zurückgemergt** — der Weg dorthin, weil er vier
+Runden gebraucht hat: gearbeitet wurde auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
 Regressionstests für F1/F3/F7/F8 auf den gewünschten Zustand umgestellt (21 rot), die fünf Fix-Tasks
 `JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt, und der letzte rote Test war ein
 Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelöst. Die Suite ist grün:
@@ -136,10 +142,15 @@ anderes**). Drei niedrige Befunde dazu: F32, F33, F34.
 Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Bericht liegt nicht vor**
 (Agent endete ohne Bericht), die Statusnotiz ist die Lesart des PO aus dem Diff.
 
-**Nächster Schritt: die vierte Abnahme `JR-1309c`** (nur `JR-1307`s Kriterium 12 und `JR-1318`, nicht die
-Abfrageseite erneut) — **beauftragt, aber nicht durchgeführt**: der Prüfer lief in ein Session-Limit.
-**Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`). `JR-1316` steht weiter bei den
-Folge-Tasks. Es existiert noch **kein** Produktionscode für den Receiver selbst.
+**Die vierte Abnahme `JR-1309c` hat E13 abgenommen** (2026-07-30). Der **Rückmerge** ist vollzogen
+(`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
+Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
+
+**Nächster Schritt: E2** — der Receiver selbst. Es existiert dafür noch **kein** Produktionscode. Vor der
+ersten Zeile Kettencode müssen **ADR-006** (kanonische Kodierung, Genesis-String — Task `JR-203`) und
+**ADR-007** (eine Kette global oder je Mandant) entschieden sein; eine späte Änderung invalidiert jede
+bestehende Kette. Ebenfalls offen für diesen Host: **Redis, Meilisearch und Tika fehlen.** `JR-1316`,
+`JR-1311` und `JR-1310` stehen weiter bei den Folge-Tasks und blockieren E2 nicht.
 
 **Am 2026-07-30 hat der Auftraggeber drei Prozessentscheidungen getroffen:**
 

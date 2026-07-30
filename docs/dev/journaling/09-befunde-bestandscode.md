@@ -615,7 +615,7 @@ Laufzeit heben. Die CI ist unberührt: ein Job hat seinen eigenen Service-Contai
 **Kategorie:** Testharness — unsere eigene E1-Arbeit ·
 **Schwere:** mittel (kein Kriteriumsbruch, aber genau die Fehlerklasse, gegen die `JR-105b` existiert) ·
 **Ort:** `tests/support/suite-inventory.ts` zusammen mit `tests/support/classification.ts` ·
-**Status:** **offen** — gehört nach `JR-1305` · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
 
 `JR-105b` hat die zwei in `JR-106` gefundenen Löcher geschlossen: eine abwesende Suite und eine
 falsch benannte Testdatei machen den Lauf rot. Beide Kriterien sind erfüllt und beidseitig belegt.
@@ -658,12 +658,34 @@ Test), gehört aber genannt.
    `ci`" neben den Include-Globs), sodass eine Umetikettierung im Diff **und** zur Laufzeit auffällt.
 3. **Skip-Budget**: eine Obergrenze übersprungener Tests im `ci`-Lauf, überschritten ⇒ rot.
 
+**Behoben in `JR-105c` (`b5b2190`, 2026-07-30) — Variante 1, plus eine Ergänzung.** Der Wächter zählt
+jetzt **ausgeführte Tests je Suite _und je Klasse_** (`tests/support/executed-tests.ts`), verglichen mit
+`SUITES[].expectedTests`. Je Klasse ist der Teil, der Weg (a) trifft: die Umetikettierung lässt die
+Gesamtzahl unverändert und verschiebt die Tests nur in eine Klasse, die die Standardauswahl nicht fährt,
+also fällt `expectedTests.ci` der Suite auf 0. Weg (b) fällt auf, weil `skipped`/`todo` nicht als
+ausgeführt gelten. Ein Reporter misst, der `globalSetup`-Teardown urteilt und wirft — vitest hat nach
+dem Lauf keinen Assertions-Haken; die Messdatei wird vor dem Lauf gelöscht und danach verlangt, sodass
+das Entfernen des Reporters rot macht statt abzuschalten.
+
+Beide Zustände am 2026-07-30 gegen PostgreSQL 17.10 gemessen, jeweils **vorher und nachher**:
+
+| Zustand                                | Elternstand `e09b981`       | mit `JR-105c`                                   |
+| -------------------------------------- | --------------------------- | ----------------------------------------------- | ---------- |
+| alle 8 Integrationsdateien → `nightly` | **Exit 0**, beide grün      | **Exit 1**, `integration: ci 0/55`, Dateien 8/8 |
+| eine Datei nur `it.skip`               | (Klasse belegt, s. F14 (b)) | **Exit 1**, `integration: ci 52/55`             |
+| legitimer Zustand                      | Exit 0                      | Exit 0, `274 passed                             | 2 skipped` |
+
+**Die Restlücke am Rand bleibt offen und ist es wert, genannt zu werden:** eine Datei namens
+`probe-test.ts` oder `probe.integration.ts` ist für vitest **und** für beide Wächter unsichtbar. Sie
+zählt zu keiner Suite, also senkt sie auch keine Testzahl. Wer so benennt, tut es absichtlich; die
+Erkennungsregel bleibt bei vitests Namenskonvention.
+
 ## F15 — `minimumFiles` verdeckt eine gelöschte Testdatei, sobald die Suite wächst
 
 **Kategorie:** Testharness — unsere eigene E1-Arbeit ·
 **Schwere:** niedrig heute (Spiel = 0), **mittel ab E2** (wird durch jede neue Testdatei erreichbar) ·
 **Ort:** `tests/support/suite-inventory.ts`, `SUITES[].minimumFiles` ·
-**Status:** **offen** — gehört nach `JR-1305` · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
 
 Die Mindestzahlen sind hartkodiert und stehen heute **genau** auf dem Bestand (`unit` 5/5,
 `integration` 4/4, `adversarial` 1/1). Deshalb macht jede Löschung heute rot — das ist belegt und
@@ -688,12 +710,22 @@ Konsolidierung danach verliert Abdeckung, ohne dass etwas rot wird. Behebung sin
 zusammen mit F14 (Variante 1 dort deckt beides ab); minimal: die Zahlen als **Gleichheit** statt als
 Untergrenze prüfen, mit einer Meldung, die zum Anpassen in derselben Änderung auffordert.
 
+**Behoben in `JR-105c` (`b5b2190`, 2026-07-30) — beide vorgeschlagenen Wege, nicht nur einer.**
+`minimumFiles` heißt jetzt `expectedFiles` und wird auf **Gleichheit** geprüft; die Testzahlen aus F14
+ebenso. Damit gibt es kein Spiel mehr, in dem eine Löschung Platz findet. Der Preis ist genau der
+benannte: eine Zahl je Commit, der die Zählung ändert — und beide Fehlermeldungen nennen die
+einzutragende Zahl, damit der ehrliche Weg ein Copy-paste ist und nicht eine Suche.
+
+Der Zustand des Befundes selbst nachgemessen: `pg-harness.int.test.ts` (13 Tests) gelöscht **und**
+gleichzeitig eine Datei mit einem Test hinzugefügt ⇒ Dateien weiter `8/8` grün, aber
+`integration: ci 43/55` und **Exit 1**. Am Elternstand war derselbe Eingriff Exit 0.
+
 ## F16 — Rückstand nach einem Modul-Throw wird lokal nicht angekündigt
 
 **Kategorie:** Testharness — unsere eigene E1-Arbeit ·
 **Schwere:** niedrig (CI fängt es, lokaler Rückstand verfällt nach 2 h) ·
 **Ort:** `packages/backend/tests/support/pg-harness.ts`, `installExitWarning()` ·
-**Status:** **offen** — gehört nach `JR-1305` · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
 
 Eine `integration`-Datei ruft `acquireTestDatabase()` im **Modul-Scope** — sie muss das, weil
 `src/database` sein Singleton beim Import baut (Testplan §2.6). Das Teardown hängt dagegen an einem
@@ -725,6 +757,23 @@ Weg zur Ausgabe des Hauptprozesses landet. Der Handler selbst wird korrekt **eif
 im Hauptprozess feststellen statt im Worker — etwa eine `globalTeardown`, die dieselbe Abfrage fährt
 wie der CI-Schritt und ihr Ergebnis ausgibt. Das würde zugleich den lokalen Lauf auf dieselbe
 Zusicherung heben, die die CI schon hat.
+
+**Behoben in `JR-105c` (`b5b2190`, 2026-07-30) — auf dem vorgeschlagenen Weg: der Rückstand wird im
+Hauptprozess festgestellt.** Nicht über eine erneute Abfrage aller `oa_test_*`-Namen, sondern über ein
+**Ledger-Verzeichnis je Lauf** (`tests/support/harness-ledger.ts`): der Worker schreibt jede geholte
+Datenbank hinein und löscht den Eintrag erst, wenn der Drop stattgefunden hat. Was übrig bleibt, ist
+**genau** der Rückstand dieses Laufs — die Variante „alles abfragen und die Differenz bilden" hätte die
+lebende Datenbank eines fremden, parallelen Laufs für Rückstand halten können, und das war F12.
+
+Der Teardown meldet den Rückstand mit Namen, Label und Worker-PID, **droppt** ihn und macht den Lauf
+rot, sofern er nicht absichtlich verengt war. Die `process.on('exit')`-Warnung im Worker bleibt stehen,
+mit einem Kommentar, der sagt, dass sie **nicht** die Zusicherung ist — sie spricht nur noch für den
+Fall, dass ein Worker stirbt, ohne dass der Lauf den Teardown erreicht.
+
+Nachgemessen mit demselben injizierten `throw` wie im Befund, direkt vor dem `suiteRequiring(...)` in
+`filter-builder.int.test.ts`: `Test Files 1 failed | 18 passed`, die Datenbank **namentlich gemeldet**,
+gedroppt, danach `leftovers: 0`. Zusätzlich zeigte die F14-Reproduktion (alle acht Dateien auf
+`nightly`) **sechs** Rückstände, die vorher lokal lautlos geblieben wären.
 
 ## F17 — Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt
 
@@ -988,7 +1037,7 @@ Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.
 
 **Kategorie:** Testharness · **Schwere:** niedrig (Entwicklerkomfort, kein Produktdefekt) ·
 **Ort:** `packages/backend/tests/support/pg-harness.ts` im Zusammenspiel mit vitests `-t`-Filter ·
-**Status:** offen · **Herkunft:** `JR-1302`–`JR-1306` (Rolle DEV, 2026-07-29)
+**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** `JR-1302`–`JR-1306` (Rolle DEV, 2026-07-29)
 
 `acquireTestDatabase()` wird im **Modul-Scope** der Integrationsdateien aufgerufen, also beim Laden —
 und das passiert **vor** der Auswertung des `-t`-Filters. Der Teardown einer Suite, deren Fälle der
@@ -1003,6 +1052,22 @@ nach `acquireTestDatabase()`) — der Erwerb liegt vor allem, was ihn absichern 
 **Gehört nach `JR-105c`**, das ohnehin die Messinstrument-Befunde F14–F16 zusammenfasst und **vor E2**
 fällig ist. Umgehung bis dahin: nach einem gefilterten Lauf einmal vollständig laufen, oder
 `sweepStaleHarnessDatabases()` von Hand aufrufen.
+
+**Behoben in `JR-105c` (`b5b2190`, 2026-07-30), zusammen mit F16 — dieselbe Wurzel, dieselbe Lösung.**
+Das Ledger sieht die im Modul-Scope geholten Datenbanken unabhängig davon, ob der Filter später alle
+Fälle der Datei überspringt. Der Teardown meldet und droppt sie; **rot wird ein gefilterter Lauf davon
+nicht** — ein Wächter, der `pnpm test -t` rot macht, ist ein Wächter, den man abzuschalten lernt.
+
+Vorher/nachher mit demselben Kommando (`pnpm test -t "idempotent"`) am 2026-07-30 gemessen:
+
+|                    | Elternstand `e09b981` | mit `JR-105c`                             |
+| ------------------ | --------------------- | ----------------------------------------- |
+| Exit               | 0                     | 0                                         |
+| `oa_test_*` danach | **6**                 | **0**                                     |
+| Meldung            | keine                 | 6 Namen, Label, Worker-PID, „dropped now" |
+
+Die Umgehung aus dem Befund („nach einem gefilterten Lauf einmal vollständig laufen") ist damit
+gegenstandslos.
 
 ## F25 — Die Statusaussage „F4 **und F5** sind im Code als bewusst offen kommentiert" ist für F5 falsch
 

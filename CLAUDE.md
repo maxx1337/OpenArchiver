@@ -81,12 +81,16 @@ Queues live in `packages/backend/src/jobs/queues.ts` (`ingestion`, `indexing`,
 ```bash
 pnpm dev:oss              # frontend + backend + all workers, watch mode
 pnpm build:oss            # build packages/* and apps/open-archiver
-pnpm lint                 # prettier --check .   (CI does NOT run this — run it yourself)
+pnpm lint                 # prettier --check .   (ci.yml runs this too, since E1)
 pnpm format               # prettier --write .
+pnpm test                 # vitest run, all three projects. Needs DATABASE_URL for `integration`
+pnpm test:unit            # one project only — prints "verified NOTHING", checks no counts (§5.1)
+pnpm test:nightly         # OA_TEST_CLASSES=ci,nightly
 pnpm db:generate          # drizzle-kit generate — creates a new migration
 pnpm db:migrate           # apply migrations (compiled); db:migrate:dev for ts-node-dev
 pnpm docs:dev             # VitePress on :3009 (regenerates the OpenAPI spec first)
-pnpm --filter @open-archiver/frontend check   # svelte-check
+pnpm --filter @open-archiver/frontend check       # svelte-check
+pnpm --filter @open-archiver/backend test:types   # tsc over the test files
 ```
 
 All root scripts are wrapped in `dotenv -- …`, so they read the root `.env`. `.env.example` is the
@@ -94,16 +98,43 @@ authoritative env-var list.
 
 ## 5. Non-obvious conventions
 
-### 5.1 There are no tests
+### 5.1 There is a test harness, and it is opinionated
 
-**Zero test files, no test runner, no test script anywhere in this repo.** No vitest, jest, or
-playwright. CI (`.github/workflows/`) has only `cla`, `deploy-docs`, `docker-deployment`,
-`release-tag` — no lint, typecheck, or test job. `CONTRIBUTING.md` asks for tests aspirationally.
+> This section said "there are no tests" until 2026-07-30. That was true when this file was written and
+> stopped being true with epic E1. **Do not build a second harness** — the one below is the harness.
 
-If your task needs tests, you are also building the harness. `packages/backend/src/iam-policy/test-policies/*.json`
-are unreferenced fixtures — the intended input for a policy test suite that was never written.
-`PolicyValidator`, `createAbilityFor`, and `FilterBuilder` are pure/near-pure and are the obvious
-first targets.
+`vitest` 3.2 from **one** root config (`vitest.config.ts`) defining three **projects**:
+`unit`, `integration`, `adversarial`. `pnpm test` runs all of them; `test:unit`, `test:integration`,
+`test:adversarial`, `test:nightly`, `test:manual` narrow. CI (`.github/workflows/ci.yml`) runs lint,
+build, `svelte-check`, `test:types` and the suite against a `postgres:17-alpine` service container.
+
+| Where                                           | What                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| `packages/*/src/**/*.test.ts`                   | `unit` — must not import `src/database` (it throws at import) |
+| `packages/*/tests/unit/**/*.test.ts`            | `unit` — units of the harness itself                          |
+| `packages/*/tests/integration/**/*.int.test.ts` | `integration` — needs `DATABASE_URL`, own database per file   |
+| `packages/*/tests/adversarial/**/*.adv.test.ts` | `adversarial`                                                 |
+| `tests/support/` (repo root)                    | cross-package harness, imported as `@oa-test/*`               |
+
+Four things about it are easy to trip over:
+
+- **Every suite is declared through `suite(cls, …)` / `suiteRequiring(cls, …, probe, …)`** from
+  `@oa-test/classification`, with `cls` one of `ci` / `nightly` / `manual`. A bare `describe` is a
+  violation the guard reports — the class is what makes a log say what a run covered.
+- **The counts in `tests/support/suite-inventory.ts` are exact, not minima.** Adding or removing a test
+  file _or a test_ means updating `expectedFiles` / `expectedTests` in the same commit. The failure
+  message states the number to write. `globalSetup` checks the files before the run; a reporter plus the
+  `globalSetup` teardown check the **executed** test counts after it (JR-105c, findings F14/F15).
+- **A green run can be a disabled run** — the reason all of the above exists. Quote test counts, not
+  just "green": a full local run is `274 passed | 2 skipped`. A run narrowed with `-t`, a file filter,
+  `--project` or `--shard` prints `verified NOTHING` and checks no counts.
+- **Integration tests acquire a real database** via `acquireTestDatabase()` in the **module scope**, and
+  the harness records it in a per-run ledger so the main process can announce and drop anything a
+  failed teardown left behind. Details and the required env vars: `docs/dev/journaling/04-testplan.md`
+  §2.2 and §2.6.
+
+`packages/backend/src/iam-policy/test-policies/*.json` are still unreferenced fixtures.
+`CONTRIBUTING.md` asks for tests, and now there is somewhere to put them.
 
 ### 5.2 Database migrations are generated, never hand-written
 

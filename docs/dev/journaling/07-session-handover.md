@@ -85,40 +85,44 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-30 (**E13 ist ABGENOMMEN** — `JR-1309c` in der vierten Runde; **Rückmerge vollzogen**
-(`89d701f`, `--no-ff`), **`JR-1312` erledigt** (`dca1f1a`). Der einzige Vorbehalt des Prüfberichts ist
-nachgemessen und **widerlegt**: F36) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
-(der Epic-Branch ist zurückgemergt und wird nicht mehr gebraucht) · Arbeitsbaum **sauber** ·
-Volllauf auf dem Integrationsbranch **250 passed | 2 skipped** bei 17 Dateien, Exit 0
+**Stand:** 2026-07-30 (**`JR-105c` ist erledigt** — E1 hat keine offene Nacharbeit mehr, F14/F15/F16/F24
+behoben. Davor in derselben Session-Kette: **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`,
+**`JR-1312`** `dca1f1a`) · **Branch:** `claude/enterprise-product-implementation-cxmmqe` ·
+Arbeitsbaum **sauber** · Volllauf auf dem Integrationsbranch **274 passed | 2 skipped** bei 19 Dateien,
+Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
-**E13 ist fertig.** Vier Abnahmerunden, drei Ablehnungen (F27/F28/F29 → F30 → F31), dann die Annahme;
-der Rückmerge ist als echter Merge-Commit vollzogen, und `JR-1312` hat die dritte Stelle des
-Berechtigungsvokabulars berichtigt. **Nächster Schritt ist `JR-105c`** (F14–F16, F24) — fällig **vor** E2.
+**E1 und E13 sind beide fertig, und das Messinstrument trägt jetzt, was ab E2 daran hängt.** Der
+Inventar-Wächter zählte Dateien; seit `JR-105c` zählt er **ausgeführte Tests je Suite und je Klasse**,
+also belegt ein grüner Lauf endlich, dass die `integration`-Suite gelaufen ist. **Nächster Schritt ist
+E2** — der SMTP-Receiver, das eigentliche Projekt.
 
 > ### Was diese Session gemacht hat
 >
-> 1. **`JR-1309c` hat E13 abgenommen.** Umfang war `JR-1307`s Kriterium 12 und `JR-1318`; der Prüfer hat
->    **ohne DEV-Bericht** gearbeitet und jede Zahl selbst gemessen. Protokoll in `06-status.md` unter
->    „Abnahme `JR-1309c`". Besonders bemerkenswert: der **Anker der Textprüfung** war durch `JR-1318`
->    entfernt worden, der Prüfer hat ihn mit einer vergifteten Wegwerf-Kopie neu gesetzt, **bevor** er dem
->    sauberen Lauf geglaubt hat.
-> 2. **Der eine gemeldete Neubefund ist widerlegt** — nachgemessen vom PO. Der Bericht hielt eine
->    Prettier-Warnung für einen eigenen Defekt („tab-eingerückter JSON-Block, überlebt die
->    CRLF-Normalisierung"). Beides falsch: `.prettierrc` setzt **`useTabs: true`**, und eine LF-Kopie
->    derselben Datei ist `prettier --check` **grün**. Es ist reines **F35**. Geführt als **F36
->    (widerlegt)**, damit die nächste Session den Kandidaten nicht erneut für echt hält — **und dieselbe
->    Falle hat an einem Tag zweimal zugeschlagen**, siehe Fallstrick 27.
-> 3. **Rückmerge `89d701f`, `--no-ff`, kein Squash.** Der Baum ist danach identisch mit dem abgenommenen
->    Stand (`git diff` gegen den Epic-Branch ist leer), der Commit hat zwei Eltern. **Kein Squash war
->    Absicht:** er hätte die drei dokumentierten Ablehnungen getilgt — und damit den Beleg, dass die
->    Abnahme ihre Arbeit getan hat.
-> 4. **`JR-1312` erledigt** (`dca1f1a`, Grundlagenarbeit direkt auf dem Integrationsbranch, wie im Backlog
->    vorgesehen). Alle drei Stellen des Vokabulars stimmen jetzt überein — **maschinell verglichen**, 8
->    Actions und 7 Subjects. Die drei neuen Faktenaussagen über `manage` sind gegen den **gebauten** Code
->    gemessen, nicht gegen den Entwurf. `CLAUDE.md` §5.4 sagte „the docs are stale"; das stimmt nicht mehr
->    und ist im selben Commit mitgezogen.
+> 1. **`JR-105c` erledigt** (`b5b2190`, Grundlagenarbeit direkt auf dem Integrationsbranch). Umfang war
+>    F14, F15, F16 und F24 — alle vier behoben. Volles Protokoll in `06-status.md` unter „`JR-105c`
+>    erledigt", Behebung je Befund in `09-befunde-bestandscode.md`, Verfahren im Testplan §2.2/§2.6.
+>    Kurzform der Konstruktion: ein Reporter misst die **ausgeführten** Tests je (Suite, Klasse), der
+>    `globalSetup`-Teardown urteilt und wirft; Dateizahl **und** Testzahlen sind **Gleichheiten**; ein
+>    absichtlich verengter Lauf prüft nichts und sagt das; die CI verlangt, dass die Prüfung anwendbar
+>    war. F16/F24 lösen ein **Ledger-Verzeichnis je Lauf**, in das der Worker jede geholte Datenbank
+>    einträgt — der Hauptprozess meldet den Rest namentlich, droppt ihn und macht einen unverengten Lauf
+>    davon rot.
+> 2. **Jeder Angriff wurde zuerst am Elternstand `e09b981` wiederholt**, statt den grünen
+>    Ausgangszustand aus dem Befundtext zu übernehmen. Beides bestätigt: die Umetikettierung aller acht
+>    Integrationsdateien war dort **Exit 0** mit „verified" von **beiden** Wächtern, und
+>    `pnpm test -t "idempotent"` hinterließ **6** Datenbanken. Danach: Exit 1 bei unveränderten `8/8`
+>    Dateien, und 0 Rückstände. Das ist der Grund, `git stash` einmal zu benutzen — die Messung „vorher"
+>    ist billiger als die Diskussion darüber, ob der Befund noch stimmt.
+> 3. **`CLAUDE.md` §5.1 war falsch und ist berichtigt.** Sie behauptete „zero test files, no test runner,
+>    no test script anywhere in this repo" und eine CI ohne Test-Job — seit E1 unwahr. Das ist die
+>    gefährlichste Sorte veralteter Doku: eine Folge-Session hätte einen **zweiten** Harness gebaut. §4
+>    hat jetzt die Testkommandos, und die Lint-Notiz („CI does NOT run this") ist ebenfalls korrigiert.
+>    Über den Umfang von `JR-105c` hinaus, deshalb hier ausdrücklich genannt.
+> 4. **Eine Lücke im Sessionprotokoll geschlossen:** die Sessions zwischen `JR-1317` und dem Rückmerge
+>    hatten ihre `###`-Abschnitte in `06-status.md`, aber keine Zeile in der Protokolltabelle. Nachgetragen
+>    als eine Sammelzeile, gekennzeichnet als Nachtrag des PO.
 >
 > **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt.
 
@@ -181,8 +185,13 @@ installieren.** Die Scratchpads der Vorsessions liegen unter
 `C:\Users\Maxim\AppData\Local\Temp\claude\X--NEW-DEVELOP-GIT-OpenArchiver\<session-id>\scratchpad`;
 `Get-ChildItem <basis> -Directory` zeigt sie mit Datum. Dort liegen auch die Prüfwerkzeuge von `JR-1309b`
 und `JR-1309c` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `fixtures.cjs`, `run.cjs`,
-`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`, dazu aus dieser Session `vocab.cjs`, `manage.cjs`,
-`lintcheck.cjs`, `lintfix.cjs`, `leftovers.cjs`) — **nicht** im Repository.
+`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`, `vocab.cjs`, `manage.cjs`) und aus `JR-105c`
+`pg-up.ps1`, `lintcheck.cjs`, `lintfix.cjs`, `leftovers.cjs` (`--drop` räumt auf), `counts.cjs`
+(Testzahlen je Suite und Klasse aus einem `--reporter=json`-Lauf) — **nicht** im Repository.
+
+> **Am 2026-07-30 bestätigt:** die Binaries der Vorsession `7b5a77e0` lagen noch da, die Versionsabfrage
+> sagte 17.10, und ein `initdb` in den eigenen Scratchpad genügte — kein `npm install`. Die vier
+> Werkzeuge oben sind gegen **diesen** Host kalibriert und funktionieren unverändert.
 
 > **Werkzeuge einer Vorsession sind gegen deren Stand kalibriert.** Ein grüner Lauf belegt nichts, wenn
 > der Anker, an dem das Werkzeug hing, inzwischen entfernt wurde. `JR-1309c` hat das richtig gemacht: den
@@ -215,36 +224,45 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — `JR-105c`
+### Nächster konkreter Schritt — **E2**, und davor zwei Entscheidungen
 
-**Nichts wartet auf eine Entscheidung, und nichts blockiert.** E13 ist abgenommen und zurückgemergt,
-`JR-1312` ist erledigt. Fällig ist jetzt **`JR-105c`** — die drei Befunde am **Messinstrument** aus
-`JR-106a` (**F14–F16**) plus **F24**. Umfang und Begründung stehen in `03-backlog.md` unter „Nach der
-Abnahme aufgetreten", die Befunde in `09-befunde-bestandscode.md`.
+**Nichts wartet auf Arbeit, aber zwei Dinge warten auf eine Entscheidung**, und beide müssen **vor der
+ersten Zeile Kettencode** fallen, weil sie später **jede bestehende Kette invalidieren**:
+
+| ADR         | Frage                                                                          |
+| ----------- | ------------------------------------------------------------------------------ |
+| **ADR-006** | Kanonische Kodierung und Genesis-String endgültig fixieren (Task **`JR-203`**) |
+| **ADR-007** | Eine Kette global oder eine je Mandant                                         |
+
+Der Vorschlag zur Reihenfolge: **`JR-203` zuerst** (PO, reine Doku, ADR auf Status „entschieden"), dann
+die übrigen E2-Tasks aus `03-backlog.md`.
 
 ```
-Arbeite JR-105c ab — Rolle senior-dev, Umfang F14, F15, F16 und F24
-aus docs/dev/journaling/09-befunde-bestandscode.md.
-Grundlagenarbeit, direkt auf dem Integrationsbranch.
+Arbeite JR-201 bis JR-20x aus docs/dev/journaling/03-backlog.md ab —
+Rolle senior-dev, Branch claude/journaling-e2-ledger vom Integrationsbranch.
+Vorher: ADR-006 und ADR-007 in 05-entscheidungen.md entscheiden.
 ```
 
-**Warum das vor E2 kommt und nicht danach:** der Inventar-Wächter zählt **Dateien statt ausgeführter
-Tests**. Wer die vier Integrationsdateien auf `nightly` umklassifiziert, schaltet die Suite ab, und
-**beide** Wächter melden weiter grün. Solange das offen ist, belegt ein grüner CI-Lauf **nicht**, dass die
-Integration-Suite gelaufen ist — und ab E2 hängt genau daran die Aussage über Durabilität und
-Krypto-Kette. Inhaltlich gehören alle drei nach `JR-1305`, wo `JR-106` den „Ausweg" für diese Klasse schon
-eingeplant hat.
+**Was für E2 an dieser Umgebung noch fehlt:** **Redis, Meilisearch und Tika sind auf diesem Host nicht
+installiert.** Für E1/E13 waren sie nicht nötig, für den Receiver sind sie es. Zu klären, wenn die erste
+Task sie braucht — Postgres läuft als Wegwerf-Cluster (Anleitung oben), für Redis wäre derselbe Weg
+(`node_modules`-Binärpaket statt Systemdienst) die naheliegende Variante.
 
-**Danach:** **E2** (der SMTP-Receiver, das eigentliche Projekt). Vorher sind für E2 zwei Dinge zu klären,
-beide in dieser Umgebung neu: **Redis, Meilisearch und Tika fehlen auf diesem Host** (für E13 nicht
-gebraucht, für den Receiver schon), und die zwei ADRs **ADR-006** (kanonische Kodierung, Genesis-String)
-und **ADR-007** (eine Kette global oder eine je Mandant) müssen **vor** der ersten Zeile Kettencode
-entschieden sein — sie invalidieren später jede bestehende Kette.
+**Was das Messinstrument jetzt hergibt, und was ab E2 daran hängt:** ein grüner Lauf belegt seit
+`JR-105c`, dass **die deklarierten Tests je Suite und Klasse ausgeführt wurden** — nicht nur, dass die
+Dateien existieren. Ab E2 ruhen die Aussagen über Durabilität und Hash-Kette genau darauf. Zwei
+Konsequenzen für jede E2-Task:
 
-**Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert:** `JR-1316` (die
-Betreiber-SQL bekommt einen Regressionstest — sie ist weiterhin das einzige sicherheitsrelevante Artefakt
-aus E13 ohne Test), dann `JR-1311` (spaltengenaue Key-Prüfung, schließt den Restspalt aus ADR-019 und die
-**Laufzeitseite von F26**), dann `JR-1310` (ADR-017 Variante C). Keine davon blockiert E2.
+- **Jede neue Testdatei ändert zwei Zahlen** in `tests/support/suite-inventory.ts` (`expectedFiles` und
+  `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
+- **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
+  prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
+  **274 passed | 2 skipped** bei 19 Dateien.
+
+**Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
+können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin
+das einzige sicherheitsrelevante Artefakt aus E13 ohne Test), dann `JR-1311` (spaltengenaue Key-Prüfung,
+schließt den Restspalt aus ADR-019 und die **Laufzeitseite von F26**), dann `JR-1310` (ADR-017 Variante C).
 
 > **`main` bleibt bis E12 unangetastet.** Der Integrationsbranch ist jetzt der Arbeitsbranch für
 > Grundlagenarbeit; das nächste Epic bekommt wieder einen eigenen Branch nach ADR-014.
@@ -283,9 +301,14 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Keine blockierende Frage.** E13 ist abgenommen; der nächste Schritt (`JR-105c`) ist reine Arbeit und
-braucht keine Entscheidung. Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und
-umgesetzt in `JR-1317`/`JR-1318`.
+**Zwei Fragen, beide für E2 und beide unvermeidbar vor der ersten Zeile Kettencode: ADR-006**
+(kanonische Kodierung und Genesis-String, Task `JR-203`) und **ADR-007** (eine Kette global oder eine je
+Mandant). Sie sind nicht neu — sie stehen seit E0 als offene ADRs — aber ab jetzt blockieren sie, weil
+eine spätere Änderung **jede bestehende Kette invalidiert**. Alles andere ist Arbeit ohne
+Entscheidungsbedarf.
+
+Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und umgesetzt in
+`JR-1317`/`JR-1318`.
 
 **Zwei Punkte aus `JR-1317`, beide nicht blockierend, beide Entscheidung des Auftraggebers:**
 
@@ -343,16 +366,16 @@ gehört nicht in E13. **Blockiert nichts.**
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
 
-| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.**              |
-| **ADR-017** | **Erledigt am 2026-07-29: Variante B, umgesetzt in `JR-1303` (`bcac6bd`).** Braucht keine Entscheidung mehr. Folgearbeit als `JR-1310` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                                |
-| **F14–F16** | Drei Befunde am Messinstrument aus `JR-106a`, alle **offen** und alle **ohne Kriteriumsbruch**: die Suite-Inventur zählt Dateien statt gelaufene Tests (eine Umetikettierung `ci` → `nightly` schaltet die `integration`-Suite ab und bleibt grün), `minimumFiles` verdeckt eine Löschung sobald die Suite wächst, und ein Rückstand nach Modul-Throw wird lokal nicht angekündigt. Inhaltlich gehören alle drei nach **`JR-1305`**, wo `JR-106` den „Ausweg" für genau diese Klasse schon eingeplant hat. Vor E2 zu entscheiden, ob dort mitbehoben wird. |
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.** |
+| **ADR-017** | **Erledigt am 2026-07-29: Variante B, umgesetzt in `JR-1303` (`bcac6bd`).** Braucht keine Entscheidung mehr. Folgearbeit als `JR-1310` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                   |
+| **F14–F16** | **Alle drei behoben in `JR-105c`** (`b5b2190`, 2026-07-30), zusammen mit **F24**. Kein Entscheidungsbedarf mehr. Der Wächter zählt jetzt ausgeführte Tests je Suite **und je Klasse**, die Dateizahl ist eine Gleichheit, und der Hauptprozess besitzt den Rückstand dieses Laufs über ein Ledger-Verzeichnis. Jeder Angriff zuerst am Elternstand wiederholt (Umetikettierung dort Exit 0, jetzt Exit 1). Protokoll in `06-status.md`.                                                                                                       |
 
 | Punkt                                                    | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **~~Zwei offene Pull Requests nach `main`~~ — erledigt** | **In `JR-1309` nachgeprüft (2026-07-29): beide sind geschlossen und _nicht_ gemergt.** `PR #1` (`claude/enterprise-product-implementation-cxmmqe` → `main`) und `PR #2` (`claude/journaling-e1-test-foundation` → `main`) stehen auf `state: closed`, `merged: false`, geschlossen am 2026-07-28. Es gibt **keinen** weiteren PR im Repository, insbesondere keinen aus E13. Damit ist auch die Nebenwirkung weg: ein Push löst wieder **einen** CI-Lauf aus (nur `push`), was an den E13-Läufen sichtbar ist. Kein Entscheidungsbedarf mehr. |
-| **`JR-105c`** (F14–F16)                                  | **Fällig vor E2, kein Entscheidungsbedarf — nur Arbeit.** Der Inventar-Wächter zählt **Dateien statt ausgeführter Tests**: wer die vier Integrationsdateien auf `nightly` umklassifiziert, schaltet die Suite ab und **beide** Wächter melden grün. Solange das offen ist, belegt ein grüner CI-Lauf nicht, dass die Integration-Suite gelaufen ist. Details in `03-backlog.md` unter „Nach der Abnahme aufgetreten".                                                                                                                         |
+| **~~`JR-105c`~~ (F14–F16, F24) — erledigt**              | **Erledigt am 2026-07-30 (`b5b2190`).** Ein grüner CI-Lauf belegt jetzt, dass die deklarierten Tests je Suite und Klasse **ausgeführt** wurden. Zwei Folgen für jede weitere Task: eine neue Testdatei ändert `expectedFiles` **und** `expectedTests` im selben Commit, und ein `-t`-Lauf taugt nicht als Beleg (er meldet „verified NOTHING"). Details in `03-backlog.md` und `06-status.md`.                                                                                                                                                |
 
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
@@ -389,13 +412,17 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
    `copy-assets`-Buildschritt kopiert `src/locales` nach `dist/locales`. Im Dev-Modus funktioniert es
    sofort, in Produktion erst nach `build`.
 6. **Eine grüne Testsuite kann eine abgeschaltete Testsuite sein.** Ohne `DATABASE_URL` endet
-   `pnpm test` mit Exit **0** bei „163 passed | 36 skipped". Dagegen gibt es zwei Wächter:
-   `OA_TEST_REQUIRE_INFRA=1` (in `ci.yml` gesetzt) macht fehlende Infrastruktur zum Fehlschlag, und
-   die Suite-Inventur im `globalSetup` verlangt Mindestdateizahlen je Suite. **Beide zählen nicht,
-   wie viele Tests gelaufen sind** — siehe F14/F15. Wer einen grünen Lauf als Beleg zitiert, muss
-   die Testzahl mitzitieren: **197 passed | 2 skipped** ist vollständig, alles darunter nicht. Die
-   2 Skips sind die `nightly`- und `manual`-Suite in `mongo-to-drizzle.adv.test.ts`; jede weitere
-   übersprungene Suite ist erklärungsbedürftig.
+   `pnpm test` mit Exit **0** bei „163 passed | 36 skipped". Dagegen gibt es drei Wächter:
+   `OA_TEST_REQUIRE_INFRA=1` (in `ci.yml` gesetzt) macht fehlende Infrastruktur zum Fehlschlag, die
+   Suite-Inventur im `globalSetup` verlangt **exakte** Dateizahlen je Suite, und seit `JR-105c`
+   verlangt ein dritter die **exakten Zahlen ausgeführter Tests je Suite und Klasse** (das ist die
+   Behebung von F14/F15 — die ersten zwei zählten keine Tests). Vollständig ist heute
+   **274 passed | 2 skipped** bei 19 Dateien; die 2 Skips sind die `nightly`- und `manual`-Suite in
+   `mongo-to-drizzle.adv.test.ts`, jede weitere übersprungene Suite ist erklärungsbedürftig.
+   **Die Regel bleibt trotzdem, dass man die Testzahl mitzitiert** — und zwar aus einem neuen Grund:
+   ein **verengter** Lauf (`-t`, Dateifilter, `--project`, `--shard`) prüft die Zahlen absichtlich
+   **nicht** und gibt `verified NOTHING` aus. Ein grüner `pnpm test:unit` belegt über die
+   `integration`-Suite genau nichts.
 7. **Lokale Build-Artefakte verdecken Fehler, die CI findet.** `packages/types/dist` und
    `packages/*/tsconfig.tsbuildinfo` sind gitignoriert und liegen im Container aus früheren Sessions
    vor. Für jede Aussage über einen frischen Checkout müssen **beide** gelöscht werden — wegen
@@ -417,15 +444,16 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 11. **`pnpm --filter @open-archiver/backend test:types` kann an unberührtem Produktionscode scheitern**,
     sobald eine Testdatei einen Express-Controller importiert: `req.t` existiert im Test-Programm nicht
     (F23). Der Build ist davon nicht betroffen, die Ursache liegt in `tsconfig.test.json`.
-12. **Ein gefilterter Lauf (`pnpm test -t "…"`) lässt `oa_test_*`-Datenbanken liegen.** Die
-    `integration`-Dateien rufen `acquireTestDatabase()` im **Modul-Scope** auf, also bevor vitest die
-    Fälle nach `-t` filtert; wird die Suite dann komplett übersprungen, läuft der zugehörige Teardown
-    nicht. Ein **vollständiger** `pnpm test`-Lauf hinterlässt nachweislich **0** Rückstände. Wer
-    zwischendurch mit `-t` arbeitet, muss vor der Abschlussprüfung aufräumen — sonst liest sich der
-    eigene Zwischenstand wie ein Leck. Verwandt mit **F16**, aber nicht dieselbe Ursache; gehört in
-    die Betrachtung von `JR-105c`. **Als F24 erfasst** und in `JR-105c`s Umfang aufgenommen.
-    ```bash
-    psql -tAc "select datname from pg_database where datname like 'oa\_test\_%'"
+12. **~~Ein gefilterter Lauf (`pnpm test -t "…"`) lässt `oa_test_*`-Datenbanken liegen.~~ Behoben in
+    `JR-105c` (F24).** Die Ursache bleibt richtig zu wissen, weil sie jede Task betrifft, die einen
+    Harness im Modul-Scope holt: `acquireTestDatabase()` läuft beim **Laden** der Datei, also bevor
+    vitest die Fälle nach `-t` filtert; wird danach jeder Fall übersprungen, läuft das `afterAll` nie.
+    Neu meldet der Hauptprozess diese Datenbanken namentlich und **droppt** sie; ein unverengter Lauf
+    wird davon zusätzlich rot. Gemessen: derselbe `-t`-Lauf hinterließ am Elternstand **6**
+    Datenbanken, jetzt **0**. Die Nachprüfung von Hand ist damit unnötig, aber wer sie doch braucht —
+    auf diesem Host gibt es **kein `psql`**, also über einen Node-`postgres`-Client:
+    ```sql
+    select datname from pg_database where datname like 'oa\_test\_%'
     ```
 13. **Ein in einem Zug geschriebener `RED UNTIL`-Satz kann sich selbst widersprechen — und keiner der
     beiden Tests sieht für sich falsch aus.** In `JR-1301` forderten zwei Erwartungen mit demselben
@@ -564,6 +592,35 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     Argumente und endet in `merge: matching - not something we can merge`. **Kein Squash ist der Default** —
     `--no-ff` allein ist richtig und ausreichend. Und: eine mehrzeilige Commit-Message auf diesem Host
     lieber über `-F <datei>` als über einen PowerShell-Here-String übergeben.
+
+29. **Wer behaupten will, ein Befund sei behoben, misst den Zustand _vorher_ — mit `git stash`, nicht mit
+    dem Befundtext.** In `JR-105c` war der grüne Ausgangszustand für F14 und F24 im Befund dokumentiert;
+    ihn am Elternstand trotzdem selbst zu reproduzieren hat 5 Minuten gekostet und zwei Aussagen belastbar
+    gemacht, die sonst zitiert statt belegt gewesen wären (Umetikettierung ⇒ Exit 0 **mit** „verified" von
+    beiden Wächtern; `-t`-Lauf ⇒ 6 liegengebliebene Datenbanken). Der Ablauf, der dabei sicher war:
+    `(git diff; git status --porcelain) | sha256sum` **vor** `git stash push -u`, nach `git stash pop`
+    denselben Hash prüfen — dann ist bewiesen, dass das Zurückholen vollständig war, statt es zu hoffen.
+
+30. **vitest hat nach dem Lauf keinen Assertions-Haken, aber einen Umweg — und die Reihenfolge muss man
+    messen.** Ein Reporter kann nicht rot machen; ein `globalSetup`-Teardown kann es. Gemessen in 3.2.7:
+    `globalSetup` → Tests → `onTestRunEnd` → Zusammenfassung → `onFinished` → **Teardown**, und ein
+    werfender Teardown endet mit **Exit 1**. Also: Reporter misst und schreibt, Teardown liest und urteilt.
+    Ebenfalls gemessen statt geglaubt: eine in `globalSetup` gesetzte Env-Variable **erreicht** die
+    geforkten Worker (`pool: 'forks'`, `ppid` des Workers = pid des Hauptprozesses). Beides mit einer
+    Wegwerf-Config in 2 Minuten prüfbar — und beides trug in `JR-105c` je eine tragende Konstruktion.
+
+31. **Ein Wächter, der die normalen Entwicklungskommandos rot macht, ist ein Wächter, den man abschaltet.**
+    Die Testzahl-Prüfung aus `JR-105c` müsste `pnpm test -t "…"`, `pnpm test:unit` und jeden Dateifilter
+    rot machen, weil dort weniger läuft. Sie tut es nicht: solche Läufe melden `verified NOTHING` und
+    prüfen keine Zahl. Damit das Zugeständnis nicht die Zusicherung frisst, verlangt die CI-Klebeschicht,
+    dass die Prüfung **anwendbar** war — in der Umgebung, um die es geht, gibt es die Ausnahme also nicht.
+    Dieselbe Frage stellt sich bei jedem neuen Wächter: **wo darf er nachgeben, ohne dort nachzugeben, wo
+    die Aussage gebraucht wird?**
+
+32. **`-t` ist ein Regex, kein Substring.** `pnpm test -t "release() drops the database"` trifft **nichts**
+    — die Klammern sind eine leere Gruppe, also verlangt das Muster „release" direkt gefolgt von „ drops".
+    Der Lauf meldet dann „19 skipped" und Exit 0, was sich wie ein Fehler im Harness liest und keiner ist.
+    Bei Testnamen mit `()`, `[]`, `$` oder `.` ein klammerfreies Teilstück nehmen (`-t "idempotent"`).
 
 ---
 

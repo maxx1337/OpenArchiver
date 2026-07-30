@@ -70,7 +70,7 @@ Durability-Aussage in E2/E3.
 | JR-105b | **Die zwei Lücken der CI-Nachlaufprüfung schließen**, mit einer **positiven** Erwartung statt einer Negativsuche im Log: (a) eine _abwesende_ `integration`-Suite muss rot machen, nicht nur eine übersprungene; (b) eine Datei in `tests/integration/`, die auf kein Project-Glob passt, darf nicht unbemerkt bleiben | TEST  | —      | Verzeichnis umbenennen ⇒ rot. Datei `foo.test.ts` in `tests/integration/` mit fehlschlagender Assertion ⇒ rot. Beide Fälle auch in der Gegenrichtung geprüft (legitimer Zustand ⇒ grün)    |
 | JR-106a | Erneute Abnahme E1 nach der Nacharbeit                                                                                                                                                                                                                                                                                 | TEST  | —      | Alle Kriterien aus `JR-106` erneut, plus die Kriterien von `JR-104a` und `JR-105b`                                                                                                         |
 
-### Nach der Abnahme aufgetreten: der Wächter selbst ist umgehbar (F14–F16)
+### Nach der Abnahme aufgetreten: der Wächter selbst ist umgehbar (F14–F16) — **erledigt 2026-07-30**
 
 `JR-106a` hat E1 **abgenommen** — alle 20 Kriterien erfüllt. Beim Angriff auf die neue
 Inventarprüfung (neun Wege, sechs hielten) sind aber drei Wege gefunden worden, die durchgehen. Keiner
@@ -86,6 +86,22 @@ schaltet die ganze Suite ab — und **beide** Wächter melden grün.
 **Fälligkeit:** vor E2. Der Wächter ist die Zusicherung, dass die Tests, auf denen jede
 Durability-Aussage in E2/E3 ruht, überhaupt laufen. Solange F14 offen ist, ist ein grüner CI-Lauf
 kein Beleg dafür, dass die Integration-Suite ausgeführt wurde.
+
+> **`JR-105c` ist erledigt** (`b5b2190`, 2026-07-30, Grundlagenarbeit direkt auf dem
+> Integrationsbranch). Alle fünf Akzeptanzkriterien sind gegen PostgreSQL 17.10 gemessen, und die drei
+> Angriffe wurden **zuerst am Elternstand** `e09b981` wiederholt, damit der grüne Ausgangszustand
+> belegt ist und nicht bloß behauptet: Umetikettierung aller acht Integrationsdateien war dort
+> **Exit 0** mit „verified" von beiden Wächtern, danach **Exit 1** bei unveränderten `8/8` Dateien;
+> `it.skip`-Datei ⇒ Exit 1 (`ci 52/55`); Löschen-plus-Hinzufügen ⇒ Exit 1 (`ci 43/55`); legitimer
+> Zustand ⇒ Exit 0 (`274 passed | 2 skipped`); Modul-Scope-Wurf ⇒ Datenbank namentlich gemeldet **und**
+> abgeräumt. **F24** dazu: `pnpm test -t "idempotent"` hinterließ am Elternstand **6** Datenbanken und
+> hinterlässt jetzt **0**. Protokoll in `06-status.md`, Behebung je Befund in
+> `09-befunde-bestandscode.md`, Verfahren im Testplan §2.2/§2.6.
+>
+> Zwei Dinge, die dabei über den Umfang hinausgingen und benannt gehören: die Dateizahl ist jetzt
+> ebenfalls eine **Gleichheit** (F15 hatte genau das vorgeschlagen), und ein absichtlich verengter Lauf
+> (`-t`, Dateifilter, `--project`, `--shard`) prüft die Testzahlen **nicht** und sagt das laut — die CI
+> verlangt dafür, dass die Prüfung anwendbar war, sodass das Zugeständnis dort keins ist.
 
 > `JR-105b` überschreitet bewusst die DEV/TEST-Grenze: die Prüfung liegt in
 > `.github/workflows/ci.yml` (DEV-Territorium laut `JR-105`), ist aber inhaltlich
@@ -471,7 +487,8 @@ braucht Variante C nicht, weil `FilterBuilder.create()` das Subject schon als Pa
 
 **Reihenfolge unter den Folge-Tasks:** ~~`JR-1312` zuerst~~ **(erledigt 2026-07-30)**, dann `JR-1316`
 (Absicherung der Betreiber-SQL), dann `JR-1311`, dann `JR-1310`. Keine davon blockiert **E2** — der
-Receiver kann parallel beginnen, sobald `JR-105c` erledigt ist.
+Receiver kann parallel beginnen, ~~sobald `JR-105c` erledigt ist~~ **(`JR-105c` ist seit 2026-07-30
+erledigt, `b5b2190`)**.
 
 **`JR-1312` ist reine Dokumentation** und gehört deshalb **nicht** auf einen Epic-Branch, sondern als
 Grundlagenarbeit direkt auf den Integrationsbranch — allerdings **erst nach dem Rückmerge von E13**,
