@@ -87,7 +87,8 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 **Stand:** 2026-07-29 (**`JR-1309b` hat E13 zum _dritten_ Mal abgelehnt — F31; ADR-020 ist berichtigt,
 `JR-1318` ist committet, die vierte Abnahme `JR-1309c` ist beauftragt aber _nicht durchgeführt_**) ·
-**Branch:** `claude/journaling-e13-iam-hardening`, HEAD **`e22b5af`** · Arbeitsbaum **sauber** ·
+**Branch:** `claude/journaling-e13-iam-hardening` · **Prüfgegenstand von `JR-1309c` ist `939df10`**,
+darüber liegen nur Statuspflege-Commits (`git log --oneline -3` zeigt sie) · Arbeitsbaum **sauber** ·
 **nicht gepusht** (SSH-Key gesperrt, siehe Umgebung)
 
 ### Der Stand in einem Satz
@@ -111,9 +112,9 @@ nicht verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewander
 >    „`JR-1318` committet" steht, ist die **Lesart des PO aus dem Diff**, nicht gemessen. `JR-1309c` muss
 >    daher **alles selbst messen**. Das ist kein Schaden — es gibt keine Behauptung, die ein Prüfer
 >    versehentlich übernehmen könnte.
-> 2. **Die Statuspflege ist committet** (`e22b5af`, sieben Dateien: die sechs Planungsdokumente plus
->    `.claude/agents/tester.md`). Der Arbeitsbaum ist sauber. Prüfgegenstand von `JR-1309c` ist allein
->    `939df10`; `e22b5af` ist Statuspflege und Rollendefinition, kein Prüfgegenstand.
+> 2. **Die Statuspflege ist committet** (sieben Dateien: die sechs Planungsdokumente plus
+>    `.claude/agents/tester.md`), der Arbeitsbaum ist sauber. Prüfgegenstand von `JR-1309c` ist allein
+>    `939df10`; alles darüber ist Statuspflege und Rollendefinition, kein Prüfgegenstand.
 > 3. **Nichts ist gepusht.** `939df10` und `e22b5af` liegen nur lokal. Der Remote-Stand ist zuletzt bei
 >    `2a4ea80` bekannt — **unbestätigt**, weil `git ls-remote` nicht durchläuft. Vor dem ersten Push:
 >    Abgleich nachholen (`git merge --ff-only origin/<branch>`, nie `reset --hard`).
