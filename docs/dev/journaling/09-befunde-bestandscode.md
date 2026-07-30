@@ -1545,6 +1545,38 @@ Normalisierungs-Commit über den Bestand (`git add --renormalize .`), der **alle
 gemischte Zeilenenden im Repository zu. **Gehört auf den Integrationsbranch, nicht in ein Epic**, und
 nicht in denselben Commit wie eine inhaltliche Änderung.
 
+## F36 — **widerlegt:** die Prettier-Warnung an `access-control-changes.md` ist reines F35
+
+**Kategorie:** Messfehler in einem Prüfbericht (kein Produktdefekt) · **Schwere:** keine ·
+**Status:** **widerlegt, kein Befund** — hier geführt, damit der Kandidat nicht erneut „gefunden" wird ·
+**Herkunft:** Prüfbericht `JR-1309c` (2026-07-30), widerlegt vom PO am selben Tag
+
+Der Bericht zu `JR-1309c` meldete einen neuen niedrigen Befund: `prettier --check` warne an
+`docs/user-guides/upgrade-and-migration/access-control-changes.md`, und zwar **auch nach**
+CRLF→LF-Normalisierung, verursacht durch einen mit **Tabs statt Leerzeichen** eingerückten JSON-Block
+(Zeilen 44–54). **Beide Hälften sind falsch:**
+
+1. **Die Tabs sind vorgeschrieben, nicht fehlerhaft.** `.prettierrc` setzt `"useTabs": true`. Ein
+   tab-eingerückter Block ist genau das, was Prettier in diesem Repository verlangt.
+2. **Die Normalisierung hat nicht gehalten.** Drei unabhängige Messungen:
+    - Prettier-**API**, Eingabe und Soll beide auf LF normalisiert: **0** abweichende Zeilen bei 675,
+      `identisch nach CRLF-Normalisierung: true`.
+    - Prettier-**CLI** gegen eine LF-Kopie derselben Datei: **Exit 0**, „All matched files use Prettier
+      code style!".
+    - Dieselbe CLI gegen die CRLF-Kopie: **Exit 1**, Warnung.
+
+Die Warnung entsteht **ausschließlich** aus den Zeilenenden und ist damit **F35**, nicht ein zusätzlicher
+Defekt. Sie ist auch unabhängig davon nicht `939df10` zuzurechnen: die sieben tab-eingerückten Zeilen
+stehen vor **und** nach dem Commit unverändert da (`git show 939df10^:…` liefert dieselben sieben).
+
+> **Die Ursache ist ein Windows-Fallstrick, und er hat an einem Tag zweimal zugeschlagen** — beim Prüfer
+> und beim PO. Wer eine Datei in PowerShell mit `>` oder `Out-File` umleitet, um sie zu normalisieren oder
+> zu vergleichen, ändert dabei die **Kodierung**: die Em-Dashes dieser Seite werden zerstört, und der
+> anschließende Vergleich meldet Dutzende „inhaltlicher" Abweichungen, die keine sind. **Für jede Aussage
+> über Zeilenenden oder Formatierung auf diesem Host: den Vergleich in Node fahren**, nicht in der Shell —
+> `fs.readFileSync(f, 'utf8')`, selbst normalisieren, und Prettier über die API oder mit explizitem
+> `--config` gegen eine selbst geschriebene Kopie. Als **Fallstrick 27** im Handover geführt.
+
 ## Bereits im Backlog erfasste Bestandsprobleme
 
 Diese wurden in E0 gefunden und haben schon eine Task — sie gehören nicht in die Liste oben:

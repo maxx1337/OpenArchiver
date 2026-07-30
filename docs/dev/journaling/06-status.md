@@ -6,9 +6,15 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-07-29 (**`JR-1317` erledigt — F30 behoben, der Abdeckungsanspruch der
-Betreiberseite ist weg (ADR-020); nächster Schritt ist die schmale Abnahme `JR-1309b`**) ·
-**Branch:** `claude/journaling-e13-iam-hardening` (Epic-Branch, abgezweigt bei `efea6bc`)
+**Letzte Aktualisierung:** 2026-07-30 (**`JR-1309c` hat E13 in der vierten Runde ABGENOMMEN — alle
+Kriterien erfüllt, kein offener Befund; Rückmerge in den Integrationsbranch vollzogen, danach
+`JR-1312`**) · **Branch:** `claude/enterprise-product-implementation-cxmmqe` (E13 ist zurückgemergt)
+
+> **E13 ist abgenommen (2026-07-30, `JR-1309c`).** Vier Abnahmerunden, drei Ablehnungen (F27/F28/F29 →
+> F30 → F31), dann die Annahme. Der Prüfer hat ohne DEV-Bericht gearbeitet und **jede** Zahl selbst
+> gemessen. Der einzige Vorbehalt seines Berichts — ein vermuteter neuer Befund an der Prettier-Prüfung
+> — ist vom PO **nachgemessen und widerlegt** worden (siehe **F36** in `09-befunde-bestandscode.md`);
+> er ist reines F35 (CRLF) und kein zusätzlicher Defekt. Damit steht die Annahme ohne Einschränkung.
 
 > **`JR-1317` ist erledigt (Rolle `senior-dev`, 2026-07-29) — die letzte inhaltliche Task von E13.**
 > (a) Query 2 der Betreiberseite stellt die zwei Formbefunde auf **Knotenebene** (aus der rekursiven CTE
@@ -180,16 +186,20 @@ nicht verdecken soll. Dort: `JR-101`–`JR-105`, die Nacharbeit `JR-104a`/`JR-10
 
 ---
 
-## E13 — IAM-Autorisierung härten (in Arbeit, **dreimal abgelehnt, Nacharbeit `JR-1318` läuft**)
+## E13 — IAM-Autorisierung härten (**fertig, abgenommen 2026-07-30 mit `JR-1309c`**)
 
-**Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`.
-**Kein Rückmerge** — `JR-1309` hat E13 am 2026-07-29 abgelehnt (F27, F28, F29), die DEV-Nacharbeit
+**Branch:** `claude/journaling-e13-iam-hardening`, abgezweigt vom Integrationsbranch bei `efea6bc`,
+**am 2026-07-30 nach der Annahme mit `--no-ff` zurückgemergt** (kein Squash — ein Squash hätte die drei
+dokumentierten Ablehnungen getilgt und damit den Beleg, dass die Abnahme funktioniert hat).
+
+**Der Weg dorthin, vier Runden:** `JR-1309` hat E13 am 2026-07-29 abgelehnt (F27, F28, F29), die DEV-Nacharbeit
 `JR-1313`–`JR-1315` hat diese drei behoben, und die **erneute Abnahme `JR-1309a` hat E13 am
 2026-07-29 wieder abgelehnt**: ein neuer Befund **F30** derselben Klasse eine Ebene tiefer. Alle
 anderen 22 geprüften Kriterien sind erfüllt, die Codehälfte ist unabhängig belegt. `JR-1317` hat F30
 behoben und den Abdeckungsanspruch der **Abfrage** entfernt (ADR-020) — und die **dritte Abnahme
 `JR-1309b` hat E13 am 2026-07-29 zum dritten Mal abgelehnt** (**F31**): der Anspruch war nicht
-verschwunden, sondern auf den **Verhaltenscheck** gewandert. 17 von 18 Kriterien erfüllt.
+verschwunden, sondern auf den **Verhaltenscheck** gewandert. 17 von 18 Kriterien erfüllt. `JR-1318` hat
+F31 (mit F32–F34) behoben, und die **vierte Abnahme `JR-1309c` hat E13 am 2026-07-30 angenommen**.
 
 > **Diesmal lag die Ursache beim PO, nicht in der Umsetzung.** ADR-020 nannte den Verhaltenscheck selbst
 > „vollständig"; `JR-1317` hat den Satz folgerichtig auf die Betreiberseite übernommen. Die ADR ist
@@ -206,7 +216,7 @@ verschwunden, sondern auf den **Verhaltenscheck** gewandert. 17 von 18 Kriterien
 | [x]        | JR-1317 F30: Formbefunde auf Knotenebene **und** Abdeckungsanspruch weg — `07ac661`      | DEV   |
 | [x]        | JR-1309b **Schmale** dritte Abnahme — **durchgeführt; Ergebnis: nicht abgenommen (F31)** | TEST  |
 | [x]        | JR-1318 F31 (mit F32–F34) — `939df10`, **ohne DEV-Bericht**, PO-Lesart aus dem Diff      | DEV   |
-| [ ]        | JR-1309c **Noch schmalere** vierte Abnahme — Kriterium 12 und `JR-1318`                  | TEST  |
+| [x]        | JR-1309c **Noch schmalere** vierte Abnahme — **durchgeführt; Ergebnis: ABGENOMMEN**      | TEST  |
 
 > **`JR-1316` ist aus dieser Liste herausgenommen** (Auftraggeber, 2026-07-29) und steht wortgleich
 > unter „Folge-Task nach E13" in `03-backlog.md`. Sie sichert ein **Doku-Artefakt** ab, kein
@@ -224,6 +234,55 @@ verschwunden, sondern auf den **Verhaltenscheck** gewandert. 17 von 18 Kriterien
 | [~] | JR-1307 Verhaltensänderung dokumentieren (ADR-016) — geschrieben 2026-07-29, in `JR-1309` **abgelehnt** (F27, F28, F29)                            | DEV       |
 | [x] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden) — **erledigt 2026-07-29**, in `JR-1309` bestätigt                                           | PO        |
 | [x] | JR-1309 Abnahme E13 — **durchgeführt 2026-07-29; Ergebnis: E13 nicht abgenommen**                                                                  | TEST → PO |
+
+### Abnahme `JR-1309c` (2026-07-30) — Ergebnis: **E13 ABGENOMMEN**
+
+**Rolle Tester, Umfang `JR-1307` Kriterium 12 und `JR-1318` (F31 tragend, F32–F34 mit).** Prüfgegenstand
+`939df10`. **Ohne DEV-Bericht** — es gab keine Entwicklerbehauptung, die der Prüfer hätte übernehmen
+können; jede Zahl stammt aus einem eigenen Lauf. Host war ein **Windows-11-Rechner**, nicht der
+Linux-Container der Vorsessions; PostgreSQL **17.10** als Wegwerf-Cluster (dieselbe Version wie die CI).
+
+**Umfang.** `git show --stat 939df10`: **eine** Datei,
+`docs/user-guides/upgrade-and-migration/access-control-changes.md`, 79 eingefügt / 45 entfernt — vom PO
+unabhängig nachgeprüft. `git log --oneline --name-only 939df10..31bed24` bestätigt, dass die sieben
+Commits darüber ausschließlich Planungsdokumente und `.claude/agents/*.md` anfassen, nie die geprüfte
+Seite und nie Produktionscode.
+
+| #   | Kriterium                                              | Ergebnis                                                                                                                                                                          |
+| --- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Anker der Textprüfung neu gesetzt                      | **erfüllt** — vergiftete Wegwerf-Kopie mit dem exakten F31-Satz, Scanner feuert dort (1/7); erst danach der reale Lauf gewertet: **0/7** bekannte Brüche                          |
+| 2   | Ganze Seite, nicht nur der Diff                        | **erfüllt** — 675 Zeilen gegen ein breiteres, unkalibriertes Raster; zwei Treffer, beide **Negationen** („neither stands in for the other"), also ADR-020-konform. Kein Neufund   |
+| 3   | Beide F31-Hälften getrennt                             | **erfüllt** — Absolutsatz weg **und** dritte Oberfläche benannt (Z. 649). Dritte Zahl **gemessen**: Archiv `read`/`search` bleiben `undefined`, `ingestion/read` kippt auf `"-1"` |
+| 4   | Die fünf neuen Faktenaussagen von `JR-1318`            | **erfüllt** — alle fünf einzeln mit Fixture-Rollen gegen die **wörtlich aus der `.md` extrahierte** Query 2 gemessen (Belege unten)                                               |
+| 5   | Umfang, Volllauf, `lint`, `docs:build`, Blob-Identität | **erfüllt** — `250 passed \| 2 skipped` bei **17** Dateien, Exit 0; Sonde entfernt; `docs:build` Exit 0, kein `dist/dev/`; `FilterBuilder.ts`/`mongoToMeli.ts` blob-identisch     |
+
+**Die fünf Faktenaussagen im Einzelnen**, jede gegen echtes Postgres gefahren:
+
+- **(a)** Der Befund „archive search granted without archive read" nennt **keine** Regelnummer — die
+  Ausgabe enthält keine Ziffer.
+- **(b)** F33s Aufteilung stimmt: eine verunstaltete Aktion mit Skalar-`conditions` erzeugt **keine**
+  Zeile (verloren), dieselbe Aktion mit `$regex` **erscheint** (kommt an, weil aus der Regel statt aus
+  dem Paar gelesen). Zusatzprobe: ein blanker Skalar an Stelle einer Regel **stoppt die Abfrage nicht**,
+  die folgende Regel wird korrekt als „#2" gezählt.
+- **(c)** F32 „finds all five": alle fünf Nicht-Array-Formen von `policies` (Objekt, String, Zahl,
+  Boolean, `null`) kommen zurück. Die zitierten Fehlertexte sind real geprüft — Objekt →
+  `cannot extract elements from an object`, Zahl → `cannot extract elements from a scalar`.
+- **(d)** F34 „just as readily": alle vier Formen **innerhalb** eines wertseitigen `$in` werden gemeldet.
+- **(e)** Eine reine `cannot`-Regel mit `action: 'manage'`, `subject: 'all'` erzeugt **je drei** Zeilen —
+  eine pro (`read archive`, `search archive`, `read ingestion`).
+
+**Aufräumen:** alle Wegwerf-Datenbanken gelöscht, 0 `oa_test_*`/`oa_probe_*` übrig, Arbeitsbaum leer,
+kein Produktionscode und kein Planungsdokument vom Prüfer angefasst.
+
+> **Der eine Vorbehalt des Prüfberichts ist widerlegt — vom PO nachgemessen.** Der Bericht meldete einen
+> neuen niedrigen Befund („F36"): eine Prettier-Warnung an der geprüften Seite, die angeblich **auch nach**
+> CRLF→LF-Normalisierung bestehen bleibt und von einem tab-eingerückten JSON-Block herrühre. Beides ist
+> falsch. `.prettierrc` setzt **`useTabs: true`** — die Tabs sind vorgeschrieben, nicht fehlerhaft. Und
+> die Normalisierung hält der Gegenprobe nicht stand: eine LF-Kopie derselben Datei ist `prettier --check`
+> **grün (Exit 0)**, die CRLF-Kopie rot, und die Prettier-API liefert nach CRLF-Normalisierung **0**
+> abweichende Zeilen bei 675. Die Warnung ist damit **reines F35** und kein zusätzlicher Defekt. Geführt
+> als **F36 (widerlegt)** in `09-befunde-bestandscode.md`, damit die nächste Session denselben Kandidaten
+> nicht erneut für echt hält. **Das Verdikt ändert sich dadurch nicht — es verliert nur seine Einschränkung.**
 
 ### E13 — `JR-1318` committet (2026-07-29, Rolle `senior-dev`) — **ohne DEV-Bericht**, Abnahme offen
 
