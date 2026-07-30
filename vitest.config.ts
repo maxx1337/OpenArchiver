@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import { ExecutedTestsReporter } from './tests/support/executed-tests';
 import { suiteInclude } from './tests/support/suite-inventory';
 
 /**
@@ -22,6 +23,13 @@ import { suiteInclude } from './tests/support/suite-inventory';
  * silent failure modes found during the JR-106 acceptance -- an absent `integration` directory and a
  * `*.test.ts` file under `tests/integration/` -- are closed by that check rather than by inspecting
  * the log afterwards.
+ *
+ * `ExecutedTestsReporter` is the second half of that guard (JR-105c). Counting files cannot see the
+ * three ways of removing coverage without touching the filesystem -- relabelling a suite's class,
+ * filling a file with `it.skip`, deleting one file while adding another (F14, F15) -- so it measures
+ * how many tests of each class actually ran and writes that down; the `globalSetup` teardown asserts
+ * it. Removing this reporter does not disable the check: the measurement is then missing and the
+ * teardown fails on its absence.
  */
 
 const supportDir = fileURLToPath(new URL('./tests/support', import.meta.url));
@@ -37,6 +45,10 @@ export default defineConfig({
 		// Positive, unconditional expectations about which test files exist and which project
 		// collects them. See tests/support/suite-inventory.ts.
 		globalSetup: ['./tests/support/global-setup.ts'],
+		// `default` stays first so the human-readable output is unchanged; the second reporter only
+		// measures and writes a file. Named explicitly because listing any reporter replaces the
+		// default one.
+		reporters: ['default', new ExecutedTestsReporter()],
 		projects: [
 			{
 				resolve,

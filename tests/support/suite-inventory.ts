@@ -1,6 +1,7 @@
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TEST_CLASSES, type TestClass } from './test-classes';
 
 /**
  * Suite inventory (JR-105b).
@@ -28,9 +29,9 @@ import { fileURLToPath } from 'node:url';
  * ---------------------------------------------------------------------------------------------
  * The two expectations
  * ---------------------------------------------------------------------------------------------
- *   1. **Minimum file count per suite.** Each suite declares how many files it must match. Zero
- *      files is therefore a failure, which is what closes (a) -- and it closes it for a *deleted*
- *      directory just as much as for a renamed one.
+ *   1. **Exact file count per suite.** Each suite declares how many files it must match. Zero files
+ *      is therefore a failure, which is what closes (a) -- and it closes it for a *deleted* directory
+ *      just as much as for a renamed one.
  *
  *   2. **No unclassified test file.** Every file in the repository whose name looks like a test
  *      (`*.test.ts`, `*.spec.ts`, and the `.js`/`.mjs`/`.tsx`/... variants) must be matched by at
@@ -43,6 +44,17 @@ import { fileURLToPath } from 'node:url';
  * Both numbers are reported on **every** run, green or red (Testplan rule 6: no silent caps). A
  * green run says how many files each suite matched, so "covered" can be read off the output rather
  * than assumed.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * What this file cannot see, and who does (JR-105c)
+ * ---------------------------------------------------------------------------------------------
+ * Everything here is decided before a single test runs, by looking at the filesystem. Three ways of
+ * removing coverage leave the filesystem intact and were therefore green until JR-105c: relabelling a
+ * suite's class, filling a file with `it.skip`, and deleting one file while adding another. Those are
+ * findings F14 and F15, and they are watched by `./executed-tests.ts`, which counts tests that
+ * actually **executed**, per suite and per class, and asserts the counts declared in
+ * `SUITES[].expectedTests` below. The two guards sit in the same table on purpose: a maintainer who
+ * adds or removes a test file has one place to update.
  */
 
 /** Repository root -- this file lives at `<root>/tests/support/suite-inventory.ts`. */
@@ -55,12 +67,24 @@ export interface SuiteSpec {
 	/** Include globs, handed to vitest verbatim. Repository-root relative, `/` separated. */
 	readonly include: readonly string[];
 	/**
-	 * How many files must match, at minimum. Set to the number of files that exist today: raising
-	 * it when a suite grows is optional, but *lowering* it is a deliberate act that shows up in a
-	 * diff. Consolidating files without touching this number fails the run, which is the point --
-	 * the alternative is a suite that quietly shrinks to nothing.
+	 * How many files must match -- **exactly**, not at minimum.
+	 *
+	 * It was a lower bound until JR-105c. A lower bound is slack, and a deletion the size of the
+	 * slack goes through unnoticed: that is finding F15, reproduced by adding one integration file
+	 * and deleting `pg-harness.int.test.ts`, which carries the entire JR-104 isolation contract.
+	 * Equality costs one number per commit that adds or removes a test file, and the failure message
+	 * says which number to write.
 	 */
-	readonly minimumFiles: number;
+	readonly expectedFiles: number;
+	/**
+	 * How many tests must actually **execute**, per class, when that class is selected. Asserted
+	 * after the run by `./executed-tests.ts`; see that module for why files alone are not enough
+	 * (F14) and why this is equality rather than a lower bound (F15).
+	 *
+	 * A class that is not selected contributes 0 -- so the default `ci` run expects 0 `nightly`
+	 * tests, and a suite relabelled from `ci` to `nightly` is caught by its `ci` number falling.
+	 */
+	readonly expectedTests: Readonly<Record<TestClass, number>>;
 }
 
 export const SUITES: readonly SuiteSpec[] = [
@@ -72,23 +96,26 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 5 after JR-105b; 7 after JR-1301 added the F1 regression at the validator boundary
 		// (src/iam-policy/policy-validator.f1-conditions.test.ts) and the ADR-017 call-site
 		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-1313 added the
-		// cross-gate check (tests/unit/condition-key-gates.test.ts). Raised to the exact count on
-		// purpose: leaving slack is what F15 describes -- a deletion the size of the slack passes
-		// unnoticed.
-		minimumFiles: 8,
+		// cross-gate check (tests/unit/condition-key-gates.test.ts); 10 after JR-105c added
+		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts.
+		expectedFiles: 10,
+		expectedTests: { ci: 216, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'integration',
 		include: ['packages/*/tests/integration/**/*.int.test.ts'],
 		// 4 after JR-104; 8 after JR-1301 split the F1/F3/F7/F8 regressions out of
-		// filter-builder.int.test.ts and added predefined-roles.int.test.ts. Same reasoning as
-		// above: exact count, no slack.
-		minimumFiles: 8,
+		// filter-builder.int.test.ts and added predefined-roles.int.test.ts.
+		expectedFiles: 8,
+		expectedTests: { ci: 55, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
 		include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
-		minimumFiles: 1,
+		expectedFiles: 1,
+		// The one `nightly` and one `manual` suite in the repository, both in
+		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
+		expectedTests: { ci: 3, nightly: 1, manual: 1 },
 	},
 ];
 
@@ -228,14 +255,17 @@ export function collectSuiteInventory(root: string = REPO_ROOT): InventoryReport
 
 	const violations: string[] = [];
 	for (const spec of SUITES) {
-		if (counts[spec.name] < spec.minimumFiles) {
+		if (counts[spec.name] !== spec.expectedFiles) {
+			const direction = counts[spec.name] < spec.expectedFiles ? 'fewer' : 'more';
 			violations.push(
-				`Suite "${spec.name}" matched ${counts[spec.name]} file(s), but at least ` +
-					`${spec.minimumFiles} are expected.\n` +
+				`Suite "${spec.name}" matched ${counts[spec.name]} file(s), but exactly ` +
+					`${spec.expectedFiles} are expected -- ${direction} than declared.\n` +
 					`    include: ${spec.include.join(', ')}\n` +
-					`    A suite that matches nothing is reported as green by vitest. If the suite was ` +
-					`renamed, moved or deleted on purpose, change minimumFiles in ` +
-					`tests/support/suite-inventory.ts in the same commit.`
+					`    A suite that matches nothing is reported as green by vitest. The count is ` +
+					`checked for equality rather than as a lower bound (F15): slack lets a deletion the ` +
+					`size of the slack pass unnoticed. If this change is intended, set expectedFiles to ` +
+					`${counts[spec.name]} for suite "${spec.name}" in tests/support/suite-inventory.ts ` +
+					`in the same commit -- and expectedTests with it.`
 			);
 		}
 	}
@@ -253,7 +283,7 @@ export function collectSuiteInventory(root: string = REPO_ROOT): InventoryReport
 	const summary =
 		`[TEST-INVENTORY] ` +
 		SUITES.map(
-			(spec) => `${spec.name}: ${counts[spec.name]} file(s) (min ${spec.minimumFiles})`
+			(spec) => `${spec.name}: ${counts[spec.name]} file(s) (expected ${spec.expectedFiles})`
 		).join(' · ') +
 		` · unclassified: ${unclassified.length}`;
 
@@ -264,9 +294,9 @@ export function collectSuiteInventory(root: string = REPO_ROOT): InventoryReport
  * Write the inventory as JSON when `OA_TEST_INVENTORY_REPORT` names a path.
  *
  * This is how CI states its expectation **positively**: the job requires the file to exist and to
- * satisfy the minimums it carries. A run in which `globalSetup` never executed -- because the entry
+ * satisfy the counts it carries. A run in which `globalSetup` never executed -- because the entry
  * was removed from `vitest.config.ts`, say -- produces no file, and the job fails on its absence
- * rather than on the absence of a log line. The minimums travel inside the report, so the check
+ * rather than on the absence of a log line. The expectations travel inside the report, so the check
  * needs no copy of them.
  */
 function writeInventoryReport(report: InventoryReport): void {
@@ -280,7 +310,10 @@ function writeInventoryReport(report: InventoryReport): void {
 		suites: SUITES.map((spec) => ({
 			name: spec.name,
 			include: [...spec.include],
-			minimumFiles: spec.minimumFiles,
+			expectedFiles: spec.expectedFiles,
+			expectedTests: Object.fromEntries(
+				TEST_CLASSES.map((cls) => [cls, spec.expectedTests[cls]])
+			),
 			files: report.counts[spec.name],
 		})),
 		unclassified: report.unclassified,

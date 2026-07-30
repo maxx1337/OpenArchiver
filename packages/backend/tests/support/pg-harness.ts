@@ -7,6 +7,11 @@ import postgres, { type Sql } from 'postgres';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { coverageNotice } from '@oa-test/notice';
+import {
+	forgetAcquisition,
+	recordAcquisition,
+	requireLedgerDirectory,
+} from '@oa-test/harness-ledger';
 import * as schema from '../../src/database/schema';
 
 /**
@@ -419,6 +424,18 @@ const liveHarnesses = new Set<PgHarness>();
 let boundHarness: PgHarness | undefined;
 let exitWarningInstalled = false;
 
+/**
+ * Announce a leak from inside the worker.
+ *
+ * This handler is **not** the guarantee, and JR-105c is the reason it says so here. Its message never
+ * arrived in the case it was written for: a module-scope throw after the acquire happens in a forked
+ * worker (`pool: 'forks'`), and the worker's `exit` output does not reach the main process's summary
+ * (F16). What does arrive is the ledger the main process reads after the run --
+ * `@oa-test/harness-ledger` plus the `globalSetup` teardown.
+ *
+ * It is kept because it still speaks in the one case the ledger cannot: a worker that dies without
+ * the run reaching the teardown at all.
+ */
 function installExitWarning(): void {
 	if (exitWarningInstalled) {
 		return;
@@ -433,8 +450,9 @@ function installExitWarning(): void {
 		const names = [...liveHarnesses].map((harness) => harness.databaseName).join(', ');
 		console.warn(
 			`[TEST-COVERAGE NOTICE] pg-harness: process exited with ${liveHarnesses.size} harness ` +
-				`database(s) still present: ${names}. Teardown did not complete. The next run's ` +
-				`sweeper will drop them once they exceed OA_TEST_PG_STALE_MS.`
+				`database(s) still present: ${names}. Teardown did not complete. The run's ledger ` +
+				`carries them, so the globalSetup teardown will announce and drop them; failing that, ` +
+				`the next run's sweeper will once they exceed OA_TEST_PG_STALE_MS.`
 		);
 	});
 }
@@ -457,11 +475,25 @@ export async function acquireTestDatabase(
 ): Promise<PgHarness> {
 	const baseUrl = requireDatabaseUrl();
 	const databaseName = buildDatabaseName(label);
+	// Checked before anything is created: a run that cannot record what it owns would leave residue
+	// nobody announces, which is the finding this ledger closes (F16). Failing first leaves nothing
+	// behind to announce.
+	requireLedgerDirectory();
 
 	await sweepStaleHarnessDatabases();
 
 	await withAdminConnection(async (sql) => {
 		await sql.unsafe(`create database ${quoteIdentifier(databaseName)}`);
+	});
+
+	// The database exists from here on, so from here on this run owns residue if it dies. Written
+	// before the next `await` for exactly that reason.
+	recordAcquisition({
+		databaseName,
+		adminUrl: urlForDatabase(baseUrl, maintenanceDatabase()),
+		label,
+		pid: process.pid,
+		acquiredAt: new Date().toISOString(),
 	});
 
 	const url = urlForDatabase(baseUrl, databaseName);
@@ -501,6 +533,9 @@ export async function acquireTestDatabase(
 			}
 			await client.end({ timeout: 10 }).catch(() => undefined);
 			await withAdminConnection((admin) => dropDatabase(admin, databaseName));
+			// Only after the drop has actually happened. A throw above leaves the ledger entry in
+			// place, and the main process then announces the database as residue -- which it is.
+			forgetAcquisition(databaseName);
 		},
 	};
 

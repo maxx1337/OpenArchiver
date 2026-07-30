@@ -37,28 +37,28 @@ function tree(files: string[]): string {
 	return root;
 }
 
-/** Just enough unit files to satisfy the `unit` minimum. */
+/** Exactly as many unit files as the `unit` suite declares. */
 function unitFiles(): string[] {
 	return Array.from(
-		{ length: suiteMinimum('unit') },
+		{ length: suiteExpected('unit') },
 		(_unused, index) => `packages/backend/src/unit-${index}.test.ts`
 	);
 }
 
-/** The tree the repository is expected to have: enough files to satisfy every minimum. */
+/** The tree the repository is expected to have: exactly the declared number of files per suite. */
 function healthyTree(): string {
 	const files: string[] = [...unitFiles()];
-	for (let index = 0; index < suiteMinimum('integration'); index += 1) {
+	for (let index = 0; index < suiteExpected('integration'); index += 1) {
 		files.push(`packages/backend/tests/integration/int-${index}.int.test.ts`);
 	}
-	for (let index = 0; index < suiteMinimum('adversarial'); index += 1) {
+	for (let index = 0; index < suiteExpected('adversarial'); index += 1) {
 		files.push(`packages/backend/tests/adversarial/adv-${index}.adv.test.ts`);
 	}
 	return tree(files);
 }
 
-function suiteMinimum(name: 'unit' | 'integration' | 'adversarial'): number {
-	return SUITES.find((spec) => spec.name === name)!.minimumFiles;
+function suiteExpected(name: 'unit' | 'integration' | 'adversarial'): number {
+	return SUITES.find((spec) => spec.name === name)!.expectedFiles;
 }
 
 suite('ci', 'suite-inventory: glob matching (JR-105b)', () => {
@@ -103,15 +103,18 @@ suite('ci', 'suite-inventory: glob matching (JR-105b)', () => {
 });
 
 suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
-	it('accepts a tree that satisfies every minimum', () => {
+	it('accepts a tree that matches every declared count exactly', () => {
 		const root = healthyTree();
 		try {
 			const report = collectSuiteInventory(root);
 			expect(report.violations).toEqual([]);
 			expect(report.unclassified).toEqual([]);
-			expect(report.counts.integration).toBe(suiteMinimum('integration'));
+			expect(report.counts.integration).toBe(suiteExpected('integration'));
 			// The summary is printed on green runs too, so it has to carry the numbers.
-			expect(report.summary).toContain(`integration: ${suiteMinimum('integration')} file(s)`);
+			expect(report.summary).toContain(
+				`integration: ${suiteExpected('integration')} file(s)`
+			);
+			expect(report.summary).toContain(`(expected ${suiteExpected('integration')})`);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -124,12 +127,36 @@ suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
 		try {
 			const report = collectSuiteInventory(root);
 			expect(report.counts.integration).toBe(0);
-			// The expected minimum is read from SUITES rather than written out: JR-1301 raised it
+			// The expected count is read from SUITES rather than written out: JR-1301 raised it
 			// from 4 to 8 and a literal here turned a deliberate inventory change into an
 			// unrelated red test.
 			expect(report.violations.join('\n')).toContain(
-				`Suite "integration" matched 0 file(s), but at least ${suiteMinimum('integration')} ` +
+				`Suite "integration" matched 0 file(s), but exactly ${suiteExpected('integration')} ` +
 					`are expected`
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it('F15: one file *more* than declared is a violation too, not slack', () => {
+		// The finding: `minimumFiles` was a lower bound, so a suite that grew past it carried slack,
+		// and a deletion the size of the slack passed unnoticed. Equality removes the slack -- at the
+		// price of one number per commit that adds a test file, which is what the message asks for.
+		const root = healthyTree();
+		writeFileSync(
+			path.join(root, 'packages/backend/tests/integration/extra.int.test.ts'),
+			'// one more than declared\n'
+		);
+		try {
+			const report = collectSuiteInventory(root);
+			expect(report.counts.integration).toBe(suiteExpected('integration') + 1);
+			expect(report.violations.join('\n')).toContain(
+				`matched ${suiteExpected('integration') + 1} file(s), but exactly ` +
+					`${suiteExpected('integration')} are expected -- more than declared`
+			);
+			expect(report.violations.join('\n')).toContain(
+				`set expectedFiles to ${suiteExpected('integration') + 1}`
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
@@ -223,9 +250,7 @@ suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
 		const report = collectSuiteInventory();
 		expect(report.violations, report.summary).toEqual([]);
 		for (const spec of SUITES) {
-			expect(report.counts[spec.name], `${spec.name} files`).toBeGreaterThanOrEqual(
-				spec.minimumFiles
-			);
+			expect(report.counts[spec.name], `${spec.name} files`).toBe(spec.expectedFiles);
 		}
 	});
 });

@@ -105,6 +105,9 @@ jobs:
                   # vitest's globalSetup writes the suite inventory here (JR-105b). Under RUNNER_TEMP
                   # like the log: this workflow writes nothing into the checkout.
                   OA_TEST_INVENTORY_REPORT: ${{ runner.temp }}/suite-inventory.json
+                  # And the executed-test measurement plus its verdict here (JR-105c). Same reason
+                  # for the location; without the override it lands under node_modules/.cache.
+                  OA_TEST_EXECUTED_REPORT: ${{ runner.temp }}/executed-tests.json
               run: |
                   set -o pipefail
                   # The log goes to RUNNER_TEMP, not the workspace: this workflow writes nothing
@@ -116,10 +119,17 @@ jobs:
             # acceptance, and both were invisible to the log grep this step used to be.
             #
             # The replacement is a positive expectation: the run has to have produced an inventory
-            # report in which every suite matched at least its declared minimum number of files and
-            # no test-looking file was left uncollected. A missing report fails the step, so removing
+            # report in which every suite matched exactly its declared number of files and no
+            # test-looking file was left uncollected. A missing report fails the step, so removing
             # the `globalSetup` entry from `vitest.config.ts` cannot silently disable the guard
-            # either. The minimums live in `tests/support/suite-inventory.ts` only.
+            # either. The counts live in `tests/support/suite-inventory.ts` only.
+            #
+            # JR-105c adds the second report. Counting files cannot see coverage that disappears
+            # without the filesystem changing -- a suite relabelled from `ci` to `nightly`, a file
+            # whose tests are all `it.skip`, a deletion absorbed by an addition (F14, F15) -- so the
+            # run also has to have produced an executed-test measurement whose verdict is
+            # `applicable` and violation-free. Applicability matters: a run narrowed with `-t`, a file
+            # filter, `--project` or `--shard` verifies nothing, and this job must not be one.
             #
             # The "suite was skipped" case is covered separately and earlier, by
             # `OA_TEST_REQUIRE_INFRA` in this job's `env`: an unreachable Postgres now fails the test
@@ -127,7 +137,10 @@ jobs:
             - name: Assert the expected suites actually existed and ran
               if: always() && steps.test.conclusion != 'skipped'
               shell: bash
-              run: node tests/support/assert-inventory-report.mjs "$RUNNER_TEMP/suite-inventory.json"
+              run: |
+                  node tests/support/assert-inventory-report.mjs \
+                      "$RUNNER_TEMP/suite-inventory.json" \
+                      "$RUNNER_TEMP/executed-tests.json"
 
             # `release()` drops the per-run database, and `sweepStaleHarnessDatabases()` cleans up
             # after a killed worker. A leftover here is a harness defect and must fail the job
@@ -135,6 +148,12 @@ jobs:
             # default -- lowering it lets the sweeper delete a *foreign* running job's database
             # (F12). Since JR-104a the harness refuses a lowered threshold that is not paired with an
             # explicit list of names, so this is enforced there too, not only by this comment.
+            #
+            # Since JR-105c the globalSetup teardown drops this run's residue itself, and in an
+            # unnarrowed run it also fails the run for having produced any (F16, F24). That does not
+            # make this step redundant: the teardown only knows what the ledger recorded, so a
+            # database created between `CREATE DATABASE` and the ledger write, or by something that
+            # bypassed the harness, is still only visible here.
             - name: Assert no leftover test databases
               if: always() && steps.test.conclusion != 'skipped'
               shell: bash

@@ -1,5 +1,12 @@
 import { describe, it } from 'vitest';
 import { coverageNotice } from './notice';
+import {
+	CLASSES_ENV_VAR,
+	TEST_CLASSES,
+	parseClassSelection,
+	suiteLabel,
+	type TestClass,
+} from './test-classes';
 
 /**
  * Test classification (JR-102, Testplan section 2).
@@ -10,37 +17,18 @@ import { coverageNotice } from './notice';
  *
  * Selection happens through `OA_TEST_CLASSES` (comma separated, or `all`). Default: `ci` only.
  * A suite whose class was not selected is reported as skipped *and* emits a coverage notice.
+ *
+ * The class list, the selection parser and the `[ci] `-style label live in `./test-classes`, which
+ * imports nothing: the executed-test guard (JR-105c) runs in vitest's main process and reads the
+ * class back out of the reported suite name, so it needs the same definition without being able to
+ * import `vitest`. See the header of that module.
  */
 
-export const TEST_CLASSES = ['ci', 'nightly', 'manual'] as const;
-export type TestClass = (typeof TEST_CLASSES)[number];
+export { TEST_CLASSES, type TestClass };
 
-const ENV_VAR = 'OA_TEST_CLASSES';
+const ENV_VAR = CLASSES_ENV_VAR;
 
-function parseSelection(): Set<TestClass> {
-	const raw = process.env[ENV_VAR]?.trim();
-	if (!raw) {
-		return new Set<TestClass>(['ci']);
-	}
-	if (raw === 'all') {
-		return new Set<TestClass>(TEST_CLASSES);
-	}
-	const parts = raw
-		.split(',')
-		.map((part) => part.trim())
-		.filter((part) => part.length > 0);
-	const unknown = parts.filter((part) => !(TEST_CLASSES as readonly string[]).includes(part));
-	if (unknown.length > 0) {
-		// Fail loudly. A typo in the class selector must not silently run nothing.
-		throw new Error(
-			`${ENV_VAR} contains unknown test class(es): ${unknown.join(', ')}. ` +
-				`Valid values: ${TEST_CLASSES.join(', ')}, or "all".`
-		);
-	}
-	return new Set(parts as TestClass[]);
-}
-
-const selection = parseSelection();
+const selection = parseClassSelection(process.env[ENV_VAR]);
 
 export function selectedClasses(): TestClass[] {
 	return TEST_CLASSES.filter((cls) => selection.has(cls));
@@ -106,7 +94,7 @@ isInfraRequired();
  * The reported name is prefixed with `[ci]` / `[nightly]` / `[manual]`.
  */
 export function suite(cls: TestClass, name: string, fn: () => void): void {
-	const label = `[${cls}] ${name}`;
+	const label = suiteLabel(cls, name);
 	if (selection.has(cls)) {
 		describe(label, fn);
 		return;
@@ -131,7 +119,7 @@ export function suiteRequiring(
 	requirement: { available: boolean; reason: string },
 	fn: () => void
 ): void {
-	const label = `[${cls}] ${name}`;
+	const label = suiteLabel(cls, name);
 	if (!selection.has(cls)) {
 		suite(cls, name, fn);
 		return;
