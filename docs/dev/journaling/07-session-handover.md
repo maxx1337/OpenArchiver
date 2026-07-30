@@ -254,6 +254,15 @@ Squash würde die **drei** dokumentierten Ablehnungen tilgen und damit den Beleg
 funktioniert hat), dann `JR-1312` als Grundlagenarbeit direkt dort. `main` bleibt bis E12 unangetastet.
 Nächstes Epic ist **E2**, fällig ist davor **`JR-105c`** (F14–F16, F24).
 
+> **Der Rückmerge ist am 2026-07-30 ausdrücklich zurückgestellt worden — Entscheidung des
+> Auftraggebers, nicht Versäumnis.** Zur Frage gestellt war, die 33 Commits sofort zu mergen; der
+> Integrationsbranch steht unverändert bei `efea6bc`. Begründung: der Merge würde `939df10`
+> mitbringen — die Betreiberseite, an der **drei von drei** Abnahmen gescheitert sind und deren
+> vierte Prüfung offen ist. Eine Ablehnung müsste dann im **Integrationsbranch** nachgearbeitet
+> werden. Der Autorisierungscode ist dagegen dreimal unabhängig belegt. Ein technischer Zwang
+> besteht nicht: die Prozessänderungen (ADR-021, `model: sonnet`, `CLAUDE.md`) wirken auf diesem
+> Branch, weil `JR-1309c` hier stattfindet. **Nach bestandener Abnahme mergen, nicht davor.**
+
 **Unverändert offen und richtig so:** die **Laufzeitseite von F26** — ein bereits gespeichertes
 `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil `FilterBuilder.ts:51–53`
 unverändert `!rule.conditions` liest. In `JR-1309a` nachgemessen (`UNRESTRICTED` vor **und** nach E13)
