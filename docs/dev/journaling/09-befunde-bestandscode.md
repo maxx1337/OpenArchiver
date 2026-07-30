@@ -1581,12 +1581,12 @@ stehen vor **und** nach dem Commit unverändert da (`git show 939df10^:…` lief
 
 Diese wurden in E0 gefunden und haben schon eine Task — sie gehören nicht in die Liste oben:
 
-| Problem                                                                                                                      | Task                                             |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `docs/services/iam-service/iam-policy.md` listet die Action `export` nicht und beschreibt `manage` falsch (Code ist korrekt) | `JR-1103`                                        |
-| Frontend hat keine Nav-Filterung; eingeschränkte Nutzer sehen Menüpunkte, die 403 liefern                                    | `JR-1102`                                        |
-| `IamService`-Slug-Bug: `name.toLocaleLowerCase().replaceAll('', '_')`                                                        | Workaround in `JR-1101` (`slug` explizit setzen) |
-| `docs/enterprise/journaling/guide.md` beschreibt abwesenden Code                                                             | `JR-1205`                                        |
+| Problem                                                                                                                              | Task                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| ~~`docs/services/iam-service/iam-policy.md` listet die Action `export` nicht und beschreibt `manage` falsch~~ **behoben 2026-07-30** | `JR-1312` (nicht `JR-1103`)                      |
+| Frontend hat keine Nav-Filterung; eingeschränkte Nutzer sehen Menüpunkte, die 403 liefern                                            | `JR-1102`                                        |
+| `IamService`-Slug-Bug: `name.toLocaleLowerCase().replaceAll('', '_')`                                                                | Workaround in `JR-1101` (`slug` explizit setzen) |
+| `docs/enterprise/journaling/guide.md` beschreibt abwesenden Code                                                                     | `JR-1205`                                        |
 
 ## Offene Vorschläge, die Produktionscode betreffen
 

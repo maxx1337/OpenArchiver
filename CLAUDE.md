@@ -130,7 +130,7 @@ Two independent i18n systems, 11 languages each (`en, de, es, fr, it, pt, nl, ja
 
 Adding a key to `en` alone is incomplete work. See `.claude/skills/oa-i18n/SKILL.md`.
 
-### 5.4 Permission vocabulary is duplicated and the docs are stale
+### 5.4 Permission vocabulary is duplicated across three places
 
 Authorization is CASL (`@casl/ability`). Roles are **database rows** with a JSONB `policies` column,
 not an enum. The vocabulary lives in three places:
@@ -140,10 +140,11 @@ not an enum. The vocabulary lives in three places:
    Sets that must mirror (1)
 3. `docs/services/iam-service/iam-policy.md` — the human-facing reference
 
-(1) and (2) currently agree (both include `export`). **(3) is stale**: it omits `export` from the
-action list and wrongly enumerates `manage` as expanding to
-`create/read/update/delete/search/sync` — CASL's `manage` is a true wildcard and covers `export`
-too. If you touch the vocabulary, update all three.
+**All three now agree** — 8 actions (including `export`) and 7 subjects, verified by comparing the
+three lists mechanically. `JR-1312` fixed (3) on 2026-07-30; until then it omitted `export` and
+wrongly described `manage` as expanding to `create/read/update/delete/search/sync`. CASL's `manage`
+is a **true wildcard**: it matches any action on the subject, including `export` and any action added
+later (measured against the built code, not inferred). If you touch the vocabulary, update all three.
 
 Key helpers: `AuthorizationService.can()`, `IamService.getAbilityForUser()`, and
 `FilterBuilder.create(userId, resourceType, action)` → `{ drizzleFilter, searchFilter }` for

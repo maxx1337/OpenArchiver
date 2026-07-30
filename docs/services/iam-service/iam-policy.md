@@ -26,13 +26,19 @@ IAM policies are defined as an array of JSON objects, where each object represen
 
 The following actions are available for use in IAM policies:
 
-- `manage`: A wildcard action that grants all permissions on a subject (`create`, `read`, `update`, `delete`, `search`, `sync`).
+- `manage`: A true wildcard. In CASL, `manage` matches **any** action on the subject — it is not shorthand for a fixed list. It therefore also covers `export`, and it will cover any action added to Open Archiver in the future. Grant it only where you mean "everything on this subject".
 - `create`: Allows the user to create a new resource.
 - `read`: Allows the user to view a resource.
 - `update`: Allows the user to modify an existing resource.
 - `delete`: Allows the user to delete a resource.
 - `search`: Allows the user to search for resources.
+- `export`: Allows the user to export a resource.
 - `sync`: Allows the user to synchronize a resource.
+
+> This list is one of three places the permission vocabulary is written down. The other two are
+> `packages/types/src/iam.types.ts` (`AppActions`, `AppSubjects`) and the `validActions`/`validSubjects`
+> sets in `packages/backend/src/iam-policy/policy-validator.ts`. A policy is rejected on save if it
+> names an action or subject the validator does not know, so all three have to be changed together.
 
 ## Subjects
 

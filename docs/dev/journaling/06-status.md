@@ -235,6 +235,32 @@ F31 (mit F32–F34) behoben, und die **vierte Abnahme `JR-1309c` hat E13 am 2026
 | [x] | JR-1308 Upstream-Meldung vorbereiten (nicht versenden) — **erledigt 2026-07-29**, in `JR-1309` bestätigt                                           | PO        |
 | [x] | JR-1309 Abnahme E13 — **durchgeführt 2026-07-29; Ergebnis: E13 nicht abgenommen**                                                                  | TEST → PO |
 
+### `JR-1312` erledigt (2026-07-30) — Grundlagenarbeit direkt auf dem Integrationsbranch
+
+Die dritte, veraltete Stelle des Berechtigungsvokabulars ist berichtigt
+(`docs/services/iam-service/iam-policy.md`): die Action **`export`** fehlte in der Liste, und **`manage`**
+war als Aufzählung `create/read/update/delete/search/sync` beschrieben statt als das, was es ist.
+
+**Das Kriterium ist gemessen, nicht behauptet.** Ein Vergleichsskript liest alle drei Stellen — die
+Union-Typen aus `iam.types.ts`, die `validActions`/`validSubjects`-Sets aus `policy-validator.ts` und die
+zwei Aufzählungen aus der Markdown-Datei — und stellt sie nebeneinander: **8 Actions und 7 Subjects,
+Übereinstimmung an allen drei Stellen**, und kein Satz beschreibt `manage` mehr als feste Aufzählung.
+
+**Die drei neu geschriebenen Faktenaussagen sind ebenfalls gemessen** — gegen den **gebauten** Code
+(`dist/iam-policy/ability.js`), nicht gegen den Entwurf. Das ist die direkte Lehre aus E13, wo dreimal in
+Folge der Defekt in Text saß, der in derselben Runde neu geschrieben wurde:
+
+| Aussage der neuen Doku                             | Messung                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------- |
+| `manage` deckt `export` mit ab                     | `manage all` → `can('export', 'archive')` = **true**                |
+| `manage` deckt auch künftige Actions ab            | `manage archive` → `can('teleport', 'archive')` = **true**          |
+| `manage` ist keine Aufzählung                      | die explizite Sechserliste → `can('export', 'archive')` = **false** |
+| `manage` wirkt nur auf seinem Subject (Gegenprobe) | `manage archive` → `can('export', 'ingestion')` = **false**         |
+
+**Mitgezogen, weil sie sonst widersprüchlich zurückbleiben:** `CLAUDE.md` §5.4 (Überschrift und der
+Absatz „(3) is stale") und der Eintrag in `09-befunde-bestandscode.md` unter „Bereits im Backlog erfasste
+Bestandsprobleme", der die Sache `JR-1103` zuordnete. **Kein Produktionscode, kein Test, keine Migration.**
+
 ### Abnahme `JR-1309c` (2026-07-30) — Ergebnis: **E13 ABGENOMMEN**
 
 **Rolle Tester, Umfang `JR-1307` Kriterium 12 und `JR-1318` (F31 tragend, F32–F34 mit).** Prüfgegenstand
