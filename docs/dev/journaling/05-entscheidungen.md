@@ -330,14 +330,91 @@ sehen will, braucht eine neue ADR, die diese ersetzt. Der Review von Snapshots (
 `oa-migration`) bleibt unverändert Pflicht — „von Prettier ignoriert" heißt nicht „nicht
 reviewpflichtig".
 
-## ADR-016 — reserviert für `JR-1307`
+## ADR-016 — Fail-closed rechtfertigt den Verhaltensbruch aus `JR-1302`
 
-**Status:** offen · **Nummer bewusst freigehalten**
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F7, F19, F20, `JR-1302`,
+`JR-1307`, E11
 
-`JR-1307` in `03-backlog.md` fordert eine ADR-016, die festhält, dass fail-closed den
-Verhaltensbruch aus `JR-1302` rechtfertigt. Sie wird dort geschrieben, nicht hier. **Die Lücke
-zwischen ADR-015 und ADR-017 ist Absicht — nicht umnummerieren.** ADR-017 entstand zuerst, weil sie
-`JR-1302` blockiert und ADR-016 dessen Ergebnis beschreibt.
+> **Zur Nummer:** ADR-016 liegt zwischen ADR-015 und ADR-017, und das ist Absicht — **nicht
+> umnummerieren.** ADR-017 wurde zuerst geschrieben, weil sie `JR-1302` blockierte; ADR-016
+> beschreibt dessen Ergebnis und hat die Nummer reserviert bekommen. Die Reihenfolge der Nummern ist
+> die Reihenfolge der Sachlogik, nicht die der Entstehung.
+
+**Entscheidung:** `FilterBuilder.create()` antwortet für **jedes** Ergebnis mit deny, das kein
+nachweislich **unbedingtes `can`** ist — kein passendes Recht, nur Verbote, ein widerrufenes Recht,
+eine Bedingungsmenge, die sich nicht ausdrücken lässt. Der damit verbundene Verhaltensbruch wird
+**hingenommen** und über einen Release-Hinweis samt Prüfanleitung begleitet (`JR-1307`), nicht über
+einen Kompatibilitätsschalter abgefedert.
+
+Wer bisher den `null`-Zweig traf, sah das **ganze** Archiv und sieht künftig **nichts**. Das ist die
+größte Verhaltensänderung, die E13 auslöst.
+
+### Warum das kein „Sicherheit geht vor" ist
+
+Das Argument ist nicht abstrakt, sondern eine Aussage über die Aussagekraft des Systems: **„kein Recht
+auf dieses Subject" und „darf alles sehen" wurden vom selben Wert dargestellt** —
+`{ drizzleFilter: undefined, searchFilter: undefined }` —, **und der unsichere war der Default.**
+`FilterBuilder.ts:49` bildete das `null` von `rulesToQuery` auf genau diesen Wert ab, kommentiert als
+„Full access", während der unmittelbar folgende Zweig für das leere Query korrekt ``sql`1=0` ``
+lieferte.
+
+Die Folge ist keine Größenordnung von Risiko, sondern das Fehlen einer Eigenschaft: **in diesem
+Zustand ist keine Zugriffsaussage über das Archiv belegbar.** Man kann einer Rolle nicht ansehen, ob
+sie einschränkt. Zwei Policies, von denen eine ein Postfach freigibt und die andere ein Postfach
+verbietet, liefern dieselbe Wirkung — Vollzugriff. Damit ist auch keine Aussage darüber möglich, wer
+ein Archivobjekt gesehen haben **kann**, und genau diese Aussage ist der Zweck der Zugriffsschicht
+über einem Archiv (RFC §11). F19 und F20 sind dieselbe Verwechslung an zwei weiteren Stellen: ein
+`can` mit leerem `conditions` und ein `cannot` ohne Bedingung landeten ebenfalls bei „darf alles
+sehen".
+
+Fail-closed stellt die Unterscheidbarkeit her: unbeschränkt ist ab jetzt genau ein Fall, und der ist
+im Code benannt. Alles andere ist ein Filter oder ein deny.
+
+### Verworfene Alternative: Verhalten beibehalten und nur dokumentieren
+
+Die naheliegende Alternative war, `null` weiter als Vollzugriff zu behandeln und das Verhalten
+lediglich zu dokumentieren — „wer einschränken will, muss ein `can` erteilen" —, notfalls mit einem
+Schalter, der die alte Semantik erhält. Das ist nicht tragfähig, aus einem konkreten Grund und nicht
+aus Vorsicht:
+
+**E11s Auditor-Rolle ist auf genau diesen Mechanismus gebaut.** `JR-1101` liefert eine Rolle, die
+lesen und suchen darf und sonst nichts, in der Form von `auditor-specific-mailbox.json`. Diese Form
+erteilt für `archive` **kein** `can`, sondern nur ein Verbot — und traf damit exakt den `null`-Zweig.
+Ein „read-only"-Auditor, der unbeschränkt liest, ist keine Auditor-Rolle; **E11 wäre mit dem alten
+Verhalten nicht abnehmbar.** Dokumentieren hätte bedeutet, die Einschränkung als nicht existent zu
+beschreiben und E11 die Grundlage zu entziehen.
+
+Verschärfend kommt F17 dazu: ausgeliefert existiert **keine** Read-Only-Rolle, weil der
+Rollen-Bootstrap in einer echten Installation nie läuft. Jeder eingeschränkte Nutzer ist damit eine
+handgeschriebene Policy in genau der Form, die der `null`-Zweig ins Gegenteil verkehrt. Das ist nicht
+der Ausnahmefall, sondern der einzige Weg, den ein Betreiber hat.
+
+**Auch der Schalter ist verworfen.** Er müsste dokumentiert werden, und jede Installation, die ihn
+setzt, hätte wieder keine belegbare Zugriffsaussage — derselbe Zustand, nur mit Namen. Ein
+Kompatibilitätsschalter über einer Autorisierungsentscheidung ist eine dauerhafte zweite Semantik,
+die jeder künftige Test mitprüfen müsste.
+
+### Was den Bruch verträglich macht
+
+- **Keine der drei `predefined_*`-Rollen ist betroffen** — belegt, nicht hergeleitet, durch
+  `tests/integration/predefined-roles.int.test.ts`, das durch alle fünf Fixes grün geblieben ist
+  (Einschränkungen: ADR-017, Nachtrag, Punkte 1 und 2).
+- Die betroffenen Formen sind **benennbar und abfragbar**: drei Formen für den `null`-Zweig plus die
+  Formen aus F19/F20 und `JR-1306`. Deshalb ist `JR-1307` eine Prüfanleitung mit SQL gegen
+  `roles.policies` und keine Pauschalwarnung.
+- Der Bruch ist **laut**, nicht still: ein deny fällt auf, eine leere Ergebnisliste ist auffindbar.
+  Der Zustand davor war das Gegenteil.
+
+### Konsequenz
+
+- `JR-1307` liefert Release-Hinweis und Prüfanleitung in der **öffentlichen** Doku
+  (`docs/user-guides/upgrade-and-migration/access-control-changes.md`), englisch nach ADR-003, samt
+  der getesteten SQL. Die Prüfanleitung ist Teil dieser Entscheidung, nicht Beigabe: der Bruch ist
+  nur deshalb vertretbar, weil er vorab feststellbar ist.
+- Wer die alte Semantik zurückholen will — auch als Schalter —, braucht eine ADR, die diese ersetzt.
+- Die Anleitung darf **nicht** als „vollständig geprüft" gelesen werden: der Restspalt aus ADR-019
+  (ein Key, der nur die Spaltenexistenz verletzt) fällt weiter erst zur Abfragezeit auf und ist als
+  `JR-1311` geführt.
 
 ## ADR-017 — Action-Versatz zwischen Route-Gate und `FilterBuilder`
 
@@ -393,6 +470,39 @@ minimale Änderung, die F7s Weg über die Suchroute schließt.
 Keine dieser drei Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` — weder vor noch nach der
 Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-1301`, nicht diese Tabelle.
 
+### Nachtrag 2026-07-29 — nachgemessen in `JR-1301`, zwei Einschränkungen
+
+Die Entscheidung bleibt Variante B, und sie ist jetzt **belegt statt hergeleitet**:
+`tests/integration/predefined-roles.int.test.ts` legt die drei Rollen über Produktionscode an und
+zeigt, dass `('archive','read')` und `('archive','search')` je Rolle **identischen** Filtertext,
+identische Bind-Parameter und identischen Meili-Filter ergeben. `JR-1303` ist damit für eine
+Standardinstallation nachweisbar wirkungsfrei — unabhängig davon, was `JR-1302` mit dem `null`-Zweig
+macht.
+
+Zwei Aussagen dieses Abschnitts waren aber zu weit gefasst:
+
+1. **Der Satz gilt je Aufrufstelle, nicht je Rolle (F18).** Über das volle Vokabular (8 Actions × 7
+   Subjects) erreicht `predefined_end_user` den `null`-Zweig für 39 von 56 Paaren,
+   `predefined_read_only_user` für 46 — eine Read-Only-Rolle hat naturgemäß kein `create archive`.
+   Nur `manage: all` erteilt für jedes Paar ein unbedingtes `can`. Richtig gelesen lautet die Aussage:
+   **für die (Action, Subject)-Paare der heute existierenden vier Aufrufstellen** trifft keine der drei
+   Rollen den `null`-Zweig. Eine fünfte Aufrufstelle mit einer anderen Action — `export archive` aus
+   E11 ist der naheliegende Kandidat — kann das umstoßen. `tests/unit/filter-builder-call-sites.test.ts`
+   wacht deshalb darüber, dass es bei vier bleibt.
+2. **„Ausgeliefert" trifft auf zwei der drei Rollen nicht zu (F17).** `createDefaultRoles()` läuft in
+   einer echten Installation **nie**: `createFirstAdmin()` legt `predefined_super_admin` an und
+   erfüllt damit dauerhaft den Bootstrap-Auslöser `!roles.some(r => r.slug?.includes('predefined_'))`.
+   Eine Standardinstallation hat **eine** Rolle, nicht drei.
+
+Punkt 2 macht die Wirkungsanalyse nicht falsch — die beiden nicht existierenden Rollen können den
+Zweig erst gar nicht treffen —, aber er verschiebt die Lesart von F7 in die unangenehme Richtung:
+**ausgeliefert gibt es keine Read-Only-Rolle.** Jeder eingeschränkte Nutzer ist eine handgeschriebene
+Policy, und die naheliegende Form dafür ist die von `auditor-specific-mailbox.json` — genau die Form,
+die F7 ins Gegenteil verkehrt. **F7s praktische Schwere steigt dadurch.** Der Fix für F17 ist eine
+Produktentscheidung (welche Rollen liefert Open Archiver aus?) und gehört **nicht** in E13;
+`JR-1307`s Betreiberanleitung muss den Sachverhalt aber benennen, sonst sucht ein Betreiber nach
+einer Rolle, die es nicht gibt.
+
 ### Verworfen: Variante A — Suchrouten zusätzlich auf `read` gaten
 
 Eine Rolle mit `search` ohne `read` bekäme ein klares `403` statt eines leeren Ergebnisses, was für
@@ -417,6 +527,198 @@ und sie gehört nicht in ein Epic, dessen Zweck das Schließen einer Autorisieru
   `search archive` entsteht aus deren `search`-Regeln.
 - Wer diese Entscheidung umkehren will, braucht eine neue ADR, die diese ersetzt — keine stille
   Änderung des dritten Arguments.
+
+## ADR-018 — Ein unübersetzbarer Zweig wird verweigert, nicht durch ein Sentinel ersetzt
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F3, F22, `JR-1304`,
+`JR-1301`
+
+`mongoToDrizzle` **wirft**, wenn eine Policy-Bedingung nicht übersetzbar ist. Es gibt **keinen**
+milden Modus, und ein verworfener Zweig wird **nicht** durch ein „never-true"-Prädikat je Zweig
+ersetzt.
+
+**Anlass:** Nach den Fixes `JR-1302`–`JR-1306` blieb genau ein roter Test übrig, und zwar nicht
+wegen eines fehlenden Fixes, sondern weil zwei Erwartungen aus `JR-1301` sich widersprachen:
+
+| Ort                                             | Eingabe                                       | Forderung                                        |
+| ----------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| `src/helpers/mongoToDrizzle.test.ts:227`        | `{ $or: [{id:'a'}, {subject:{$regex:'x'}}] }` | fail-closed, und **nicht** `"id" = $1`           |
+| `tests/integration/filter-builder-f1-f3.int.ts` | strukturell identisch                         | ein Prädikat, unter dem `rows.mine` sichtbar ist |
+
+Beide trugen `RED UNTIL JR-1304`. Unabhängig nachgemessen: die beiden sind **unter jeder
+Implementierung** unvereinbar — es gibt keine prinzipielle Regel, die `{id:'a'}` anders behandelt als
+`{userEmail:…}`, beide sind Gleichheit auf einer erlaubten Spalte.
+
+**Entscheidung: die Unit-Erwartung gilt, die Integrationszeile war falsch.** Drei Gründe:
+
+1. `JR-1304`s Kriterium lautet „kein Zweig wird stillschweigend weggelassen" und nennt das `$or`
+   ausdrücklich. Die Integrationszeile forderte genau dieses Weglassen.
+2. **Das Sentinel-Verfahren ist unsicher.** `FilterBuilder.ts:84` setzt jede `cannot`-Bedingung unter
+   ein `$not`. Ein „never-true" je verworfenem Zweig ergibt dort `not(false)` = **wahr**: ein
+   vakuumer Konjunkt, das Verbot ist weg. Gemessen am Übersetzer vor `JR-1304`:
+   `{ $and: [{ $not: {userEmail} }, { $not: <unübersetzbar> }] }` ⇒ `not "user_email" = $1`, das
+   zweite Verbot fehlt schlicht.
+3. `mongoToMeli` wirft für dieselbe Form schon **vor** E13, festgehalten von einem grünen Test
+   (`mongo-to-meli.int.test.ts:141`). `FilterBuilder.create()` hat solche Policies also immer
+   abgelehnt — nur eben abhängig davon, dass der Suchübersetzer streng bleibt.
+
+**Konsequenz:** Wer `mongoToDrizzle` später einen „gib zurück, was du kannst"-Modus geben will, hebt
+damit F3 und F22 wieder auf und braucht eine ADR, die diese ersetzt. Der Aufrufer, der eine
+Verweigerung nicht will, muss die Policy reparieren, nicht den Übersetzer aufweichen.
+
+**Nebenwirkung, bewusst akzeptiert:** eine Policy, die vor E13 stillschweigend zu wenig oder zu viel
+zeigte, führt jetzt zu einem Fehler statt zu einem falschen Ergebnis. Das ist die Absicht — ein
+Fehler ist auffindbar, ein falsches Ergebnis nicht. `JR-1307` muss es in der Betreiberanleitung
+nennen.
+
+## ADR-019 — Die Key-Allowlist prüft Form und Relation, nicht Spaltenexistenz
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F1, F21, `JR-1306`,
+`JR-1311`
+
+Die in `JR-1306` gebaute Allowlist lässt einen Key durch, wenn er **formal** eine Spaltenreferenz ist
+— ein einzelner Identifier oder `<relation>.<identifier>` mit einer Relation aus
+`relationToTableMap`. Sie prüft **nicht**, ob die Spalte existiert. Ein einzelner unbekannter, aber
+syntaktisch harmloser Key wie `foo` wird weiter übersetzt und scheitert erst an Postgres.
+
+**Das ist eine Einschränkung meiner eigenen F21-Entscheidung.** Ich hatte „jeder unbekannte Key wird
+abgewiesen" verfügt, ohne zu berücksichtigen, dass `mongoToDrizzle` ein **subjektagnostischer**
+Übersetzer ist: er bekommt nur das Query-Objekt und weiß nicht, gegen welche Tabelle er baut. Eine
+spaltengenaue Liste dort hätte entweder falsch sein müssen oder die Formtests des Übersetzers
+gebrochen, die absichtlich mit synthetischen Feldnamen arbeiten (`{a:1}`, `{b:2}`, `{n:{$gt:1}}`).
+
+**Warum das trotzdem tragfähig ist:** Der Zweck von F1 war der Injektionsweg, und der ist zu — an
+**zwei** Stellen. `PolicyValidator` weist eine Policy mit einem nicht-identifierartigen Key beim
+Anlegen ab (400 aus `iam.controller.ts`), und `mongoToDrizzle` weist sie zur Abfragezeit erneut ab;
+`sql.raw` ist aus dem Relationszweig entfernt. Der Restspalt ist ein **Policy-Schreibfehler**, kein
+Angriffsweg: `"foo" = $1` trifft keine Spalte und erzeugt einen Fehler, kein stilles Ergebnis.
+
+**Konsequenz:** Der Restspalt wird als **`JR-1311`** geführt, nicht offen gelassen — spaltengenaue
+Prüfung in `FilterBuilder.create()`, das `resourceType` bereits als Parameter hat. Unabhängig von
+`JR-1310`; Variante C wird dafür nicht gebraucht. Bis dahin gilt: **ein Tippfehler in einer Policy
+fällt beim Anlegen auf, wenn er die Form verletzt, und erst zur Abfragezeit, wenn er nur die
+Spaltenexistenz verletzt.**
+
+## ADR-020 — Betreiberdokumentation sagt, was sie meldet, nie was sie garantiert
+
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F27, F30, `JR-1307`,
+`JR-1314`, `JR-1317`
+
+Eine Prüfanleitung für Betreiber beschreibt **die Befunde, die sie meldet**. Sie behauptet **keine
+Vollständigkeit** über Daten ohne festes Schema. Sätze der Form „es prüft rekursiv alle …", „ein
+leeres Ergebnis heißt, dass keine Rolle betroffen ist" oder „diese Klasse ändert sich in diesem
+Release nicht" sind in `docs/user-guides/upgrade-and-migration/access-control-changes.md` unzulässig.
+
+**Begründung — zwei Ablehnungen derselben Klasse.** E13 ist zweimal an der betreibersichtbaren Hälfte
+gescheitert, und beide Male an einem **positiven Abdeckungssatz**, nicht am Code:
+
+| Runde      | Befund  | Widerlegter Satz                                                         | Gefundene Form                            |
+| ---------- | ------- | ------------------------------------------------------------------------ | ----------------------------------------- |
+| `JR-1309`  | **F27** | „No rows means no role … is affected"                                    | `conditions: 5` (Skalar an der Wurzel)    |
+| `JR-1309a` | **F30** | „walked recursively … the empty object" · „not one this release changes" | `{"$or": [{…}, {}]}`, `{"userEmail": {}}` |
+
+Die Policies liegen als JSONB, also ohne Schema. Zu jeder Abfrage, die Abdeckung behauptet, lässt sich
+eine Ebene tiefer eine Form konstruieren, die sie nicht kennt — der Anspruch ist **prinzipiell**
+falsifizierbar, nicht nur zufällig falsch. Ein Betreiber, der „ist abgedeckt" liest und kein Ergebnis
+bekommt, zieht dann den gefährlichsten möglichen Schluss.
+
+**Was an die Stelle tritt:** die Liste der gemeldeten Befundtypen, der ausdrückliche Satz, dass ein
+leeres Ergebnis ein **Hinweis und keine Freigabe** ist, und eine Gegenprobe, die **nicht** von einer
+Aufzählung von JSON-Formen abhängt — jede eingeschränkte Rolle einmal ausüben und das Ergebnis
+vergleichen. Diese Gegenprobe hängt nicht an einer Formliste; **vollständig ist sie damit nicht** —
+sie misst genau die Oberflächen, die sie ausübt, und nur die (siehe Berichtigung unten).
+
+**Verworfene Alternative:** die Abfragen so lange erweitern, bis sie vollständig sind. Zweimal
+versucht, zweimal von einer tieferen Form eingeholt; die dritte Runde hätte dasselbe Ergebnis. Die
+billige Erweiterung wird trotzdem mitgenommen (`JR-1317` (a)) — sie ist eine Verbesserung, nur keine
+Grundlage für eine Zusage.
+
+**Konsequenz:** `JR-1316` (Regressionstest für diese Abfragen) bleibt nach E13 und ist damit eine
+Verbesserung statt einer Abnahmevoraussetzung — genau deshalb war es richtig, ihn aus E13 zu nehmen.
+Wer künftig einen Abdeckungssatz in diese Seite schreibt, braucht eine ADR, die diese ersetzt.
+
+### Berichtigung (2026-07-29, nach der Abnahme `JR-1309b` — F31)
+
+**Der Satz „Diese Prüfung ist vollständig, weil sie das Verhalten misst statt die Datenform zu raten"
+ist gestrichen. Er war selbst ein Abdeckungssatz** — derselbe, den diese ADR verbietet, nur über den
+Verhaltenscheck statt über die Abfrage. Der Fehler liegt damit **in dieser ADR**, nicht in ihrer
+Umsetzung: `JR-1317` hat den Anspruch folgerichtig auf die Betreiberseite übernommen
+(`access-control-changes.md:621–623`, `:498–500`, `:631–632`), und `JR-1309b` hat ihn dort widerlegt.
+
+**Wie er widerlegt ist.** Der vorgeschriebene Vergleich nennt **zwei** Zahlen (Zeilen der Archivliste,
+Trefferzahl einer Suche). Dieselbe Seite benennt in Zeile 223–224 **drei** Oberflächen, für die die
+Anwendung einen Zeilenfilter baut: Archiv lesen, Archiv suchen, **Ingestion-Quellen auflisten**. Eine
+Rolle mit Archiv-Grants und nur einem Verbot auf der Ingestion-Seite — die Form, die Änderung 1 selbst
+als typisch beschreibt — lässt beide Zahlen unverändert, während die Quellenliste fail-closed auf
+`ingestionSourceId = "-1"` umschlägt. Die Seite lud ausdrücklich dazu ein, die **zutreffende** Meldung
+von Query 2 daraufhin zu verwerfen („whatever the queries did or did not report about it"). Das ist der
+gefährlichste mögliche Schluss, also genau der, den diese ADR verhindern soll.
+
+**Was stattdessen gilt: kein Element dieser Seite bürgt für ein anderes.** Weder die Abfragen für den
+Verhaltenscheck noch der Verhaltenscheck für die Abfragen. Jedes von beiden meldet, was es messen kann,
+und **benennt die Oberflächen, die es messen kann**; „deckt den Rest ab" ist in **jeder** Richtung
+unzulässig. Für den Verhaltenscheck kommt eine zweite Pflicht hinzu: er muss **alle** Oberflächen
+nennen, für die die Anwendung einen Zeilenfilter baut — sonst misst er nicht einmal das, was er zu
+messen behauptet.
+
+**Die Lehre nach drei Ablehnungen derselben Klasse.** Streicht man den falsifizierbaren Anspruch nur an
+einer Stelle, **wandert er** (Abfrage ⇒ Verhaltenscheck) statt zu verschwinden. Aufzugeben ist die
+**Konstruktion** „ein Teil der Seite bürgt für den Rest", nicht der jeweilige Satz. Eine vierte
+Ersatzbürgschaft ist damit ausgeschlossen.
+
+**Was diese Berichtigung nicht ändert:** die Streichung der Abdeckungsansprüche der Abfrage und die
+Knotenebene aus `JR-1317` (a) bleiben richtig und sind in `JR-1309b` unabhängig belegt (alle acht
+F30-Formen gemeldet, keine Falsch-positiven). Umgesetzt wird die Berichtigung in **`JR-1318`**.
+
+---
+
+## ADR-021 — Abnahmeeinheit ist die Scheibe, nicht das Epic
+
+**Status:** entschieden (2026-07-30) · **Entscheider:** Auftraggeber · **Betrifft:** ADR-014, alle
+offenen Epics E2–E12, die Rollen `senior-dev` und `tester`
+
+Ein Epic wird **nicht** als Ganzes abgenommen. Die Abnahmeeinheit ist die **Scheibe**: ein Artefakt mit
+**einer** Fehlerklasse, mit eigenen Kriterien, in **einer** Session abschließbar. Ein Epic ist danach nur
+noch eine Klammer um mehrere Scheiben.
+
+**Begründung — E13 wurde nicht von großen Tasks aufgehalten, sondern von einer monolithischen Abnahme.**
+Die fünf Fix-Tasks liefen in einer Session durch (fünf Commits). Was Wochen kostete, waren **vier
+Abnahmerunden** mit 21, 23, 18 und einer offenen Kriterienliste — und **alle drei Ablehnungen trafen
+dasselbe Artefakt**, die betreibersichtbare Dokumentation:
+
+| Runde      | Gebrochen an | Artefakt                 | Der Autorisierungscode |
+| ---------- | ------------ | ------------------------ | ---------------------- |
+| `JR-1309`  | F27, F29     | Prüf-SQL + Betreibertext | hielt                  |
+| `JR-1309a` | F30          | Prüf-SQL + Betreibertext | hielt                  |
+| `JR-1309b` | F31          | Betreibertext            | hielt                  |
+
+Der Code war nach Runde 1 unabhängig belegt und wurde danach **dreimal mitgeprüft, ohne je zu brechen**.
+Wären Code und Betreiberdoku getrennte Scheiben gewesen, wäre die Codehälfte nach Runde 1 abgenommen und
+zurückgemergt worden, und die drei Wiederholungen hätten ein Textartefakt betroffen statt ein Epic.
+
+**Die Regeln:**
+
+1. **Eine Scheibe = ein Artefakt + eine Fehlerklasse + eine Abnahme.** Produktionscode, Testharness,
+   Migration und **betreibersichtbare Dokumentation** sind verschiedene Fehlerklassen und damit
+   verschiedene Scheiben — auch wenn sie zum selben Befund gehören.
+2. **Höchstens ~8 Abnahmekriterien je Scheibe.** Wer mehr braucht, hat zwei Scheiben.
+3. **Was einmal unabhängig belegt ist, wird nicht neu geprüft.** Eine Wiederholungsabnahme prüft die
+   Nacharbeit und die Kriterien, die sie berührt — nicht die ganze Liste. In E13 ab Runde 3 so gemacht,
+   und es hat gehalten.
+4. **Rückmerge je Scheibe**, sobald sie unabhängig lauffähig und abgenommen ist (präzisiert ADR-014,
+   ersetzt es nicht). Eine noch offene Doku-Scheibe wird dann als Blocker für **E12** (Rollout) geführt,
+   nicht als Blocker für den Merge des Codes. **`main` bleibt bis zur Abnahme von E12 unangetastet.**
+5. **Eine Scheibe muss in einer Session abschließbar sein.** Das ist keine Stilfrage: in der Session vom
+   2026-07-29 ist der Prüfer **mitten im Auftrag** an ein Session-Limit gelaufen. Bei einer Scheibe
+   kostet das eine Scheibe, bei einem Epic-Monolithen die ganze Runde.
+
+**Wann zerlegt wird:** wenn ein Epic **ansteht**, nicht vorab für alle. Elf Epics jetzt in Scheiben zu
+planen wäre selbst der Monolith, den diese ADR abschafft — und Planung, die erst in Wochen gebraucht
+wird, veraltet bis dahin. Entscheidung des Auftraggebers vom 2026-07-30: **nur das Prinzip
+festschreiben**, `03-backlog.md` bleibt unverändert.
+
+**Verworfen:** „Abnahme am Epic-Ende beibehalten, aber Kriterien kürzen." Das verkleinert die Liste, nicht
+die Kopplung — eine gebrochene Doku-Zeile hätte weiter den Merge des Codes blockiert.
 
 ---
 

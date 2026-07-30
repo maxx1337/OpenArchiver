@@ -124,8 +124,12 @@ suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
 		try {
 			const report = collectSuiteInventory(root);
 			expect(report.counts.integration).toBe(0);
-			expect(report.violations.join('\n')).toMatch(
-				/Suite "integration" matched 0 file\(s\), but at least 4 are expected/
+			// The expected minimum is read from SUITES rather than written out: JR-1301 raised it
+			// from 4 to 8 and a literal here turned a deliberate inventory change into an
+			// unrelated red test.
+			expect(report.violations.join('\n')).toContain(
+				`Suite "integration" matched 0 file(s), but at least ${suiteMinimum('integration')} ` +
+					`are expected`
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

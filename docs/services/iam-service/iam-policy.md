@@ -54,6 +54,17 @@ All conditions within a single rule are implicitly joined with an **AND** logic.
 
 The power of this system comes from its use of a subset of [MongoDB's query language](https://www.mongodb.com/docs/manual/), which provides a flexible and expressive way to define complex rules. These rules are translated into native queries for both the PostgreSQL database (via Drizzle ORM) and the Meilisearch engine.
 
+### Condition Keys
+
+A condition key names a field of the subject (`userEmail`, `sizeBytes`), optionally prefixed by a resolvable relation (`ingestionSource.userId`). Only `ingestionSource` is resolvable as a prefix.
+
+Keys are checked against that shape:
+
+- A key that is not of that shape is rejected when the role is saved, with HTTP `400` and a message naming the key.
+- A key that has the right shape but names no existing field is **not** rejected when the role is saved. It is only noticed when a request uses the policy, and then the request fails. A typo in a field name is the usual cause, so check the spelling of your keys.
+
+A condition the system cannot translate into a database query — an operator outside the list below, or an `$or`/`$and` with no branches — makes the requests that need the policy fail. It is never partially applied: a partially applied condition would mean something other than what the policy says, and it could just as easily expose rows a `cannot` rule was meant to hide as hide rows a `can` rule was meant to show.
+
 ### Supported Operators and Examples
 
 Here is a detailed breakdown of the supported operators with examples.
@@ -167,6 +178,19 @@ The system evaluates policies by combining all relevant rules for a user. The lo
 
 - A user has permission if at least one `can` rule allows it.
 - A permission is denied if a `cannot` (`"inverted": true`) rule explicitly forbids it, even if a `can` rule allows it. `cannot` rules always take precedence.
+
+### When No Rule Applies
+
+Access is denied unless a rule grants it. A role that has no `can` rule for the action and subject being checked — because it has no rule for them at all, or because it only has `cannot` rules — grants nothing for that combination.
+
+This matters when you write a restriction. A role whose only statement about a subject is a `cannot` rule does **not** grant the rest of that subject; it grants nothing. State the grant and carve the exception out of it, as shown under [Inverted Rules](#inverted-rules-creating-exceptions-with-cannot).
+
+Two shapes look like a grant but are not:
+
+- `"conditions": {}` on a `can` rule states no condition that can be checked against a row, so the rule grants nothing. Remove the key if you meant the rule to be unconditional.
+- A `cannot` rule with no `conditions` revokes the action outright rather than describing an exception.
+
+Earlier releases treated all of these as unrestricted access. If you are upgrading an existing installation, read [Access Control Changes](/user-guides/upgrade-and-migration/access-control-changes) first — it lists every affected shape of policy and contains SQL that reports which of your roles are affected.
 
 ### Dynamic Policies with Placeholders
 

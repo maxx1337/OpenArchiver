@@ -228,9 +228,16 @@ project — not a working branch. Each epic gets its own branch off it. Full rul
 > genuinely diverged instead of silently discarding work.
 
 - `git push -u origin <branch>`; retry network failures with backoff.
-- Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. Note that
-  `pnpm lint` currently **fails** on nine pre-existing files; `JR-105a` fixes that in one
-  formatting-only commit. Don't mix that cleanup into a feature commit.
+- Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. `JR-105a`
+  made the repository lint-clean on 2026-07-28.
+    > **On Windows it is red anyway, and that is not your doing.** With no `.gitattributes` in the
+    > repository and Git-for-Windows' default `core.autocrlf=true`, every text file is checked out with
+    > CRLF while Prettier defaults to `endOfLine: "lf"` — so `pnpm lint` reports ~388 files. The index and
+    > `origin` hold LF; nothing is actually misformatted. **Never "fix" this with `prettier --write`** —
+    > that rewrites the whole repository. Check your own files instead:
+    > `corepack pnpm exec prettier --check <paths>`. Tracked as **F35** in
+    > `docs/dev/journaling/09-befunde-bestandscode.md` with a proposed fix.
+- `pnpm` may not be on `PATH` on a Windows host. `corepack pnpm …` runs the pinned 10.13.1.
 
 > **Do not remove `srcExclude: ['dev/**']`from`docs/.vitepress/config.mts`.** VitePress turns every
 `.md`file under`docs/`into a published page and the local search provider indexes it — leaving a

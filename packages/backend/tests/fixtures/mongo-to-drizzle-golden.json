@@ -3,171 +3,291 @@
 		"Golden file for packages/backend/src/helpers/mongoToDrizzle.ts, captured 2026-07-27 with",
 		"drizzle-orm 0.44.x via PgDialect.sqlToQuery().",
 		"",
-		"`sql: null` means the translator produced NO filter at all for that input. For a helper",
-		"whose output is used by FilterBuilder to scope row-level access, 'no filter' means",
-		"'unrestricted' -- see the entries tagged \"failOpen\": true. They are recorded here as the",
-		"observed state, not as approved behaviour.",
+		"`sql` is the exact rendered predicate. Params are asserted alongside the statement text so",
+		"that a value being interpolated into the SQL string instead of bound as a parameter shows up",
+		"as a diff.",
 		"",
-		"Params are asserted alongside the statement text so that a value being interpolated into",
-		"the SQL string instead of bound as a parameter shows up as a diff."
+		"`mustFailClosed: true` marks an input for which the translator must NOT produce a filter that",
+		"leaves rows visible. Accepted outcomes: a thrown error, or a never-true predicate (1=0 /",
+		"false). Rewritten in JR-1301 (epic E13): until 2026-07-28 these three entries carried",
+		"`failOpen: true` plus `sql: null` and thereby asserted the defect (F3) as if it were the",
+		"contract. `observedBeforeE13` records what the helper did then, so the change of expectation",
+		"is legible. These cases are RED until JR-1304 lands."
 	],
 	"cases": [
 		{
 			"name": "implicit equality",
-			"query": { "id": "a" },
+			"query": {
+				"id": "a"
+			},
 			"sql": "\"id\" = $1",
 			"params": ["a"]
 		},
 		{
 			"name": "camelCase key becomes snake_case column",
-			"query": { "userId": "u" },
+			"query": {
+				"userId": "u"
+			},
 			"sql": "\"user_id\" = $1",
 			"params": ["u"]
 		},
 		{
 			"name": "known relation key becomes qualified column",
-			"query": { "ingestionSource.userId": "u" },
+			"query": {
+				"ingestionSource.userId": "u"
+			},
 			"sql": "\"ingestion_sources\".\"user_id\" = $1",
 			"params": ["u"]
 		},
 		{
-			"name": "unknown relation key is emitted as one identifier containing a dot",
-			"query": { "foo.bar": "x" },
-			"sql": "\"foo.bar\" = $1",
-			"params": ["x"],
-			"note": "There is no column literally named foo.bar; Postgres would reject this at query time rather than at policy-save time."
+			"name": "unknown relation key must fail closed",
+			"query": {
+				"foo.bar": "x"
+			},
+			"mustRefuseKey": true,
+			"observedBeforeE13": "\"foo.bar\" = $1 (one quoted identifier containing a dot)",
+			"note": "INVERTED in JR-1306 (finding F21, decided by the PO 2026-07-29: strict allowlist). This case used to pin the emitted identifier. There is no column literally named foo.bar, so the old behaviour made every FilterBuilder-scoped query fail at runtime instead of denying access; an unresolvable relation is a policy error and is refused. Marked `mustRefuseKey` and not `mustFailClosed` so that the count of F3 cases stays what JR-1301 set it to."
 		},
-		{ "name": "$eq", "query": { "id": { "$eq": "a" } }, "sql": "\"id\" = $1", "params": ["a"] },
+		{
+			"name": "$eq",
+			"query": {
+				"id": {
+					"$eq": "a"
+				}
+			},
+			"sql": "\"id\" = $1",
+			"params": ["a"]
+		},
 		{
 			"name": "$ne",
-			"query": { "id": { "$ne": "a" } },
+			"query": {
+				"id": {
+					"$ne": "a"
+				}
+			},
 			"sql": "not \"id\" = $1",
 			"params": ["a"]
 		},
 		{
 			"name": "$gt",
-			"query": { "sizeBytes": { "$gt": 10 } },
+			"query": {
+				"sizeBytes": {
+					"$gt": 10
+				}
+			},
 			"sql": "\"size_bytes\" > $1",
 			"params": [10]
 		},
 		{
 			"name": "$gte",
-			"query": { "sizeBytes": { "$gte": 10 } },
+			"query": {
+				"sizeBytes": {
+					"$gte": 10
+				}
+			},
 			"sql": "\"size_bytes\" >= $1",
 			"params": [10]
 		},
 		{
 			"name": "$lt",
-			"query": { "sizeBytes": { "$lt": 10 } },
+			"query": {
+				"sizeBytes": {
+					"$lt": 10
+				}
+			},
 			"sql": "\"size_bytes\" < $1",
 			"params": [10]
 		},
 		{
 			"name": "$lte",
-			"query": { "sizeBytes": { "$lte": 10 } },
+			"query": {
+				"sizeBytes": {
+					"$lte": 10
+				}
+			},
 			"sql": "\"size_bytes\" <= $1",
 			"params": [10]
 		},
 		{
 			"name": "$in",
-			"query": { "id": { "$in": ["a", "b"] } },
+			"query": {
+				"id": {
+					"$in": ["a", "b"]
+				}
+			},
 			"sql": "\"id\" in ($1, $2)",
 			"params": ["a", "b"]
 		},
 		{
 			"name": "$in with an empty list is fail-closed",
-			"query": { "id": { "$in": [] } },
+			"query": {
+				"id": {
+					"$in": []
+				}
+			},
 			"sql": "false",
 			"params": []
 		},
 		{
 			"name": "$nin",
-			"query": { "id": { "$nin": ["a", "b"] } },
+			"query": {
+				"id": {
+					"$nin": ["a", "b"]
+				}
+			},
 			"sql": "not \"id\" in ($1, $2)",
 			"params": ["a", "b"]
 		},
 		{
 			"name": "$exists true",
-			"query": { "deletedAt": { "$exists": true } },
+			"query": {
+				"deletedAt": {
+					"$exists": true
+				}
+			},
 			"sql": "not \"deleted_at\" is null",
 			"params": []
 		},
 		{
 			"name": "$exists false",
-			"query": { "deletedAt": { "$exists": false } },
+			"query": {
+				"deletedAt": {
+					"$exists": false
+				}
+			},
 			"sql": "\"deleted_at\" is null",
 			"params": []
 		},
 		{
 			"name": "literal null becomes = NULL, not IS NULL",
-			"query": { "deletedAt": null },
+			"query": {
+				"deletedAt": null
+			},
 			"sql": "\"deleted_at\" = $1",
 			"params": [null],
 			"note": "Never matches any row. Fail-closed, but silently: $exists is the working form."
 		},
 		{
 			"name": "several keys are ANDed",
-			"query": { "id": "a", "userId": "u" },
+			"query": {
+				"id": "a",
+				"userId": "u"
+			},
 			"sql": "(\"id\" = $1 and \"user_id\" = $2)",
 			"params": ["a", "u"]
 		},
 		{
 			"name": "$or",
-			"query": { "$or": [{ "id": "a" }, { "id": "b" }] },
+			"query": {
+				"$or": [
+					{
+						"id": "a"
+					},
+					{
+						"id": "b"
+					}
+				]
+			},
 			"sql": "(\"id\" = $1 or \"id\" = $2)",
 			"params": ["a", "b"]
 		},
 		{
 			"name": "$and",
-			"query": { "$and": [{ "id": "a" }, { "sizeBytes": { "$gt": 1 } }] },
+			"query": {
+				"$and": [
+					{
+						"id": "a"
+					},
+					{
+						"sizeBytes": {
+							"$gt": 1
+						}
+					}
+				]
+			},
 			"sql": "(\"id\" = $1 and \"size_bytes\" > $2)",
 			"params": ["a", 1]
 		},
 		{
 			"name": "$not",
-			"query": { "$not": { "id": "a" } },
+			"query": {
+				"$not": {
+					"id": "a"
+				}
+			},
 			"sql": "not \"id\" = $1",
 			"params": ["a"]
 		},
 		{
 			"name": "nested $or over $and and $in",
 			"query": {
-				"$or": [{ "$and": [{ "id": "a" }, { "userId": "u" }] }, { "id": { "$in": ["x"] } }]
+				"$or": [
+					{
+						"$and": [
+							{
+								"id": "a"
+							},
+							{
+								"userId": "u"
+							}
+						]
+					},
+					{
+						"id": {
+							"$in": ["x"]
+						}
+					}
+				]
 			},
 			"sql": "((\"id\" = $1 and \"user_id\" = $2) or \"id\" in ($3))",
 			"params": ["a", "u", "x"]
 		},
 		{
 			"name": "$not around a compound condition",
-			"query": { "$not": { "id": "a", "userId": "u" } },
+			"query": {
+				"$not": {
+					"id": "a",
+					"userId": "u"
+				}
+			},
 			"sql": "not (\"id\" = $1 and \"user_id\" = $2)",
 			"params": ["a", "u"]
 		},
 		{
-			"name": "empty query produces no filter",
+			"name": "empty query must fail closed",
 			"query": {},
-			"sql": null,
-			"params": [],
-			"failOpen": true
+			"mustFailClosed": true,
+			"observedBeforeE13": "undefined (no filter => unrestricted query)",
+			"note": "JR-1301/F3: an empty condition object carries no restriction, so translating it to \"no filter\" hands the caller an unscoped query. FilterBuilder already special-cases the empty query to 1=0; the translator must not be the one place where it means \"everything\"."
 		},
 		{
-			"name": "unsupported operator produces no filter",
-			"query": { "subject": { "$regex": "^invoice" } },
-			"sql": null,
-			"params": [],
-			"failOpen": true,
-			"note": "The switch has no default branch, so an unknown operator is dropped and the condition disappears entirely."
+			"name": "unsupported operator must fail closed",
+			"query": {
+				"subject": {
+					"$regex": "^invoice"
+				}
+			},
+			"mustFailClosed": true,
+			"observedBeforeE13": "undefined (no filter => unrestricted query)",
+			"note": "JR-1301/F3: the switch has no default branch, so an unknown operator is dropped and the condition disappears entirely. Required behaviour (JR-1304): reject, or emit a never-true predicate."
 		},
 		{
-			"name": "empty $or produces no filter",
-			"query": { "$or": [] },
-			"sql": null,
-			"params": [],
-			"failOpen": true
+			"name": "empty $or must fail closed",
+			"query": {
+				"$or": []
+			},
+			"mustFailClosed": true,
+			"observedBeforeE13": "undefined (no filter => unrestricted query)",
+			"note": "JR-1301/F3: an empty disjunction satisfies nothing, so it must not translate to \"no filter\"."
 		},
 		{
 			"name": "second operator in the same object is dropped",
-			"query": { "sizeBytes": { "$gte": 1, "$lte": 5 } },
+			"query": {
+				"sizeBytes": {
+					"$gte": 1,
+					"$lte": 5
+				}
+			},
 			"sql": "\"size_bytes\" >= $1",
 			"params": [1],
 			"note": "Only Object.keys(value)[0] is read. The $lte bound is silently lost."

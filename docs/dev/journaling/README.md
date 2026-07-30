@@ -42,6 +42,8 @@ SEC 17a-4, FINRA 4511, MiFID II).
 | 07  | `07-session-handover.md`     | Was ist der nächste konkrete Schritt                               | am Anfang und Ende jeder Session        |
 | 08  | `08-risiken.md`              | Risiken mit Gegenmaßnahme                                          | bei Planungsänderungen                  |
 | 09  | `09-befunde-bestandscode.md` | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes          | bevor man einen davon „nebenbei" behebt |
+| 10  | `10-upstream-meldung.md`     | **Entwurf** der Upstream-Sicherheitsmeldung — **nicht versendet**  | nur wenn der Auftraggeber sie versendet |
+| 11  | `11-archiv-e1.md`            | Protokoll des abgenommenen Epics E1, unverändert ausgegliedert     | nur bei Fragen zur E1-Historie          |
 
 ## Team und Rollen
 
@@ -82,11 +84,79 @@ Auditor-Artefakte ab E9/E11.
 ## Aktueller Stand (Kurzfassung)
 
 Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenommen** (`JR-106a`,
-2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, 197 Tests grün, CI gegen
-PostgreSQL 17, `pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig
-vor E2). **Nächstes Epic: E13** (IAM-Autorisierung härten), beginnend mit `JR-1301`; ADR-017 ist
-entschieden, es blockiert keine Entscheidung mehr. Es existiert noch **kein** Produktionscode für den
-Receiver selbst.
+2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, CI gegen PostgreSQL 17,
+`pnpm lint` repo-weit sauber. Eine Nacharbeit ist offen (`JR-105c` für F14–F16, fällig vor E2).
+
+**E13 (IAM-Autorisierung härten) läuft** auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
+Regressionstests für F1/F3/F7/F8 auf den gewünschten Zustand umgestellt (21 rot), die fünf Fix-Tasks
+`JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt, und der letzte rote Test war ein
+Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelöst. Die Suite ist grün:
+`224 passed | 2 skipped`, Exit 0, F1/F3/F7/F8/F19/F20/F22 behoben. `JR-1307` (ADR-016 plus
+Betreiberdoku) und `JR-1308` (Upstream-Entwurf in `10-upstream-meldung.md`, **nicht versendet**) sind
+geschrieben.
+
+**Die Abnahme `JR-1309` ist durchgeführt — Ergebnis: E13 ist _nicht_ abgenommen** (2026-07-29). Die
+**Codekorrekturen sind unabhängig belegt**: der Injektionsweg ist an beiden Gates zu (12 Nutzlasten
+inklusive Umgehungsversuchen, 0 fremde Zeilen), `FilterBuilder` ist zeilenscharf fail-closed, alle
+Regressionstests sind ohne den jeweiligen Fix rot, und die Suite läuft auch in der CI auf PostgreSQL
+17.10 grün. Gebrochen ist die **betreibersichtbare Hälfte**: die Prüf-SQL aus `JR-1307` findet eine
+Policy-Form nicht, die von „sieht alles" auf „sieht nichts" umschlägt (**F27**), und die
+veröffentlichte Doku behauptet eine Ablehnung beim Speichern, die nicht stattfindet (**F29**, zugleich
+`JR-1306`s letztes Kriterium). Fünf neue Befunde **F25–F29**.
+
+**Die Nacharbeit ist erledigt** (`JR-1313` F29 und F26s Schreibseite, `JR-1314` F27/F28, `JR-1315`
+F25): Suite `250 passed | 2 skipped`, Exit 0.
+
+**Die erneute Abnahme `JR-1309a` ist durchgeführt — Ergebnis: E13 ist _wieder nicht_ abgenommen**
+(2026-07-29). 23 Kriterien, **22 erfüllt**. Erfüllt und diesmal unabhängig gemessen sind unter anderem:
+beide Gates urteilen deckungsgleich **und** richtig (26 Keys gegen eine eigene Erwartungstabelle), der
+**HTTP-400-Pfad** über `IamController.createRole` (11 × 400, 5 × 201), und die Betreiber-SQL liefert auf
+PostgreSQL **17.10** eine zeichenweise identische Ausgabe wie auf 16.13 — zwei Lücken, die `JR-1309`
+offenlassen musste, sind damit zu. Gebrochen ist erneut ein Kriterium der betreibersichtbaren Hälfte:
+**F30** — die Formprüfung wirkt im Übersetzer **rekursiv**, in Query 2 nur an der **Wurzel**, also
+schweigt die Anleitung zu acht verschachtelten Formen, von denen vier von „sieht alles" auf „jede
+Anfrage scheitert" kippen; zwei positive Sätze der Seite sind damit widerlegt.
+
+**F30 ist behoben (`JR-1317`, 2026-07-29).** Die zwei Formbefunde von Query 2 speisen aus der rekursiven
+CTE `cond` statt aus `pair` und melden jede der acht Formen mit Positionsangabe; wichtiger noch: **die
+Seite behauptet keine Abdeckung mehr, sondern sagt, was sie meldet** (**ADR-020**) und stellt eine
+verhaltensbasierte Gegenprobe daneben, die keine Aufzählung von JSON-Formen braucht. Keine
+Falsch-positiven, beide Nachweise wörtlich aus der `.md` gegen echtes Postgres.
+
+**Die dritte Abnahme `JR-1309b` ist durchgeführt — Ergebnis: E13 ist zum _dritten_ Mal nicht abgenommen**
+(2026-07-29). 18 Kriterien, **17 erfüllt**; die Abfrageseite von `JR-1317` (a) ist unabhängig belegt (alle
+acht Formen mit Position gemeldet, **keine** Falsch-positiven, 42 Werte gegen den Übersetzer gekreuzt,
+**0** falsch-negative). Gebrochen ist erneut die Textseite: **F31** — der Abdeckungsanspruch war nicht
+verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewandert, der zwei Zahlen vorschreibt,
+während die Anwendung **drei** Oberflächen filtert. **Die Ursache lag in ADR-020 selbst**, die den
+Verhaltenscheck „vollständig" nannte; sie ist berichtigt (**kein Element der Seite bürgt für ein
+anderes**). Drei niedrige Befunde dazu: F32, F33, F34.
+
+**`JR-1318` ist committet (`939df10`)** — die dritte Zahl ist aufgenommen, der Absolutsatz durch sein
+Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Bericht liegt nicht vor**
+(Agent endete ohne Bericht), die Statusnotiz ist die Lesart des PO aus dem Diff.
+
+**Nächster Schritt: die vierte Abnahme `JR-1309c`** (nur `JR-1307`s Kriterium 12 und `JR-1318`, nicht die
+Abfrageseite erneut) — **beauftragt, aber nicht durchgeführt**: der Prüfer lief in ein Session-Limit.
+**Kein Rückmerge**, kein PR. Danach **E2** (davor fällig: `JR-105c`). `JR-1316` steht weiter bei den
+Folge-Tasks. Es existiert noch **kein** Produktionscode für den Receiver selbst.
+
+**Am 2026-07-30 hat der Auftraggeber drei Prozessentscheidungen getroffen:**
+
+1. **`ADR-021` — Abnahmeeinheit ist die Scheibe, nicht das Epic.** Ein Artefakt, eine Fehlerklasse,
+   höchstens ~8 Kriterien, in **einer** Session abschließbar; Code und betreibersichtbare Doku sind
+   getrennte Scheiben, und was einmal belegt ist, wird nicht neu geprüft. Die Zerlegung geschieht, wenn
+   ein Epic **ansteht** — `03-backlog.md` bleibt bis dahin unverändert.
+2. **Die Subagenten `senior-dev` und `tester` laufen auf Sonnet** (`model: sonnet` in beiden
+   Rollendateien).
+3. **Die Planungsdokumente sind entschlackt:** die doppelt geführte Sessionhistorie ist aus
+   `07-session-handover.md` entfernt (1085 → 556 Zeilen, sie stand vollständig in `06-status.md`), und
+   das Protokoll von E1 liegt jetzt in `11-archiv-e1.md` (`06-status.md` 2029 → 1359 Zeilen). **Inhalt
+   ist nirgends gekürzt worden, nur verschoben.**
+
+> **Die Umgebung ist nicht mehr der Linux-Container der Vorsessions**, sondern ein Windows-Host ohne
+> PostgreSQL, ohne `pnpm` im PATH und mit gesperrtem SSH-Key. Der Handover beschreibt unter „Die Umgebung
+> hat sich geändert", wie ein Wegwerf-Cluster in PostgreSQL 17.10 entsteht — **vor** „Immer zuerst" lesen.
 
 Verbindlich ist immer `06-status.md`, nicht dieser Abschnitt.
 

@@ -69,12 +69,21 @@ export const SUITES: readonly SuiteSpec[] = [
 		// Units live next to the code they test; `tests/unit/` is for units of the harness itself,
 		// which has no `src`.
 		include: ['packages/*/src/**/*.test.ts', 'packages/*/tests/unit/**/*.test.ts'],
-		minimumFiles: 5,
+		// 5 after JR-105b; 7 after JR-1301 added the F1 regression at the validator boundary
+		// (src/iam-policy/policy-validator.f1-conditions.test.ts) and the ADR-017 call-site
+		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-1313 added the
+		// cross-gate check (tests/unit/condition-key-gates.test.ts). Raised to the exact count on
+		// purpose: leaving slack is what F15 describes -- a deletion the size of the slack passes
+		// unnoticed.
+		minimumFiles: 8,
 	},
 	{
 		name: 'integration',
 		include: ['packages/*/tests/integration/**/*.int.test.ts'],
-		minimumFiles: 4,
+		// 4 after JR-104; 8 after JR-1301 split the F1/F3/F7/F8 regressions out of
+		// filter-builder.int.test.ts and added predefined-roles.int.test.ts. Same reasoning as
+		// above: exact count, no slack.
+		minimumFiles: 8,
 	},
 	{
 		name: 'adversarial',

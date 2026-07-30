@@ -308,7 +308,10 @@ export class SearchService {
 		// Access-control filter: the user may only search emails they are allowed to see.
 		// Both sides are parenthesized — the permission filter can contain top-level OR,
 		// and unparenthesized concatenation would corrupt precedence.
-		const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'read');
+		// The action must be the one the route authorised — GET /search gates on
+		// requirePermission('search', 'archive') — otherwise row-level scoping and the gate
+		// disagree about the same request (ADR-017, variant B).
+		const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'search');
 		// undefined = full access (admin); '' = a permission query that compiled to
 		// nothing (e.g. an unsupported operator) → fail closed, deny everything.
 		const accessFilter = searchFilter === '' ? 'ingestionSourceId = "-1"' : searchFilter;
@@ -420,7 +423,9 @@ export class SearchService {
 			return [];
 		}
 		const index = await this.getIndex<EmailDocument>('emails');
-		const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'read');
+		// GET /search/facets gates on requirePermission('search', 'archive'), so the filter is
+		// built for the same action (ADR-017, variant B).
+		const { searchFilter } = await FilterBuilder.create(userId, 'archive', 'search');
 		// undefined = full access; '' = a permission query that compiled to nothing → deny.
 		const accessFilter = searchFilter === '' ? 'ingestionSourceId = "-1"' : searchFilter;
 		const result = await index.search(query || '', {

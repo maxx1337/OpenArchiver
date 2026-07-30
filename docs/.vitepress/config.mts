@@ -88,6 +88,10 @@ export default defineConfig({
 								text: 'Meilisearch Upgrade',
 								link: '/user-guides/upgrade-and-migration/meilisearch-upgrade',
 							},
+							{
+								text: 'Access Control Changes',
+								link: '/user-guides/upgrade-and-migration/access-control-changes',
+							},
 						],
 					},
 				],
