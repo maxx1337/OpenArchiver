@@ -672,6 +672,56 @@ F30-Formen gemeldet, keine Falsch-positiven). Umgesetzt wird die Berichtigung in
 
 ---
 
+## ADR-021 — Abnahmeeinheit ist die Scheibe, nicht das Epic
+
+**Status:** entschieden (2026-07-30) · **Entscheider:** Auftraggeber · **Betrifft:** ADR-014, alle
+offenen Epics E2–E12, die Rollen `senior-dev` und `tester`
+
+Ein Epic wird **nicht** als Ganzes abgenommen. Die Abnahmeeinheit ist die **Scheibe**: ein Artefakt mit
+**einer** Fehlerklasse, mit eigenen Kriterien, in **einer** Session abschließbar. Ein Epic ist danach nur
+noch eine Klammer um mehrere Scheiben.
+
+**Begründung — E13 wurde nicht von großen Tasks aufgehalten, sondern von einer monolithischen Abnahme.**
+Die fünf Fix-Tasks liefen in einer Session durch (fünf Commits). Was Wochen kostete, waren **vier
+Abnahmerunden** mit 21, 23, 18 und einer offenen Kriterienliste — und **alle drei Ablehnungen trafen
+dasselbe Artefakt**, die betreibersichtbare Dokumentation:
+
+| Runde      | Gebrochen an | Artefakt                 | Der Autorisierungscode |
+| ---------- | ------------ | ------------------------ | ---------------------- |
+| `JR-1309`  | F27, F29     | Prüf-SQL + Betreibertext | hielt                  |
+| `JR-1309a` | F30          | Prüf-SQL + Betreibertext | hielt                  |
+| `JR-1309b` | F31          | Betreibertext            | hielt                  |
+
+Der Code war nach Runde 1 unabhängig belegt und wurde danach **dreimal mitgeprüft, ohne je zu brechen**.
+Wären Code und Betreiberdoku getrennte Scheiben gewesen, wäre die Codehälfte nach Runde 1 abgenommen und
+zurückgemergt worden, und die drei Wiederholungen hätten ein Textartefakt betroffen statt ein Epic.
+
+**Die Regeln:**
+
+1. **Eine Scheibe = ein Artefakt + eine Fehlerklasse + eine Abnahme.** Produktionscode, Testharness,
+   Migration und **betreibersichtbare Dokumentation** sind verschiedene Fehlerklassen und damit
+   verschiedene Scheiben — auch wenn sie zum selben Befund gehören.
+2. **Höchstens ~8 Abnahmekriterien je Scheibe.** Wer mehr braucht, hat zwei Scheiben.
+3. **Was einmal unabhängig belegt ist, wird nicht neu geprüft.** Eine Wiederholungsabnahme prüft die
+   Nacharbeit und die Kriterien, die sie berührt — nicht die ganze Liste. In E13 ab Runde 3 so gemacht,
+   und es hat gehalten.
+4. **Rückmerge je Scheibe**, sobald sie unabhängig lauffähig und abgenommen ist (präzisiert ADR-014,
+   ersetzt es nicht). Eine noch offene Doku-Scheibe wird dann als Blocker für **E12** (Rollout) geführt,
+   nicht als Blocker für den Merge des Codes. **`main` bleibt bis zur Abnahme von E12 unangetastet.**
+5. **Eine Scheibe muss in einer Session abschließbar sein.** Das ist keine Stilfrage: in der Session vom
+   2026-07-29 ist der Prüfer **mitten im Auftrag** an ein Session-Limit gelaufen. Bei einer Scheibe
+   kostet das eine Scheibe, bei einem Epic-Monolithen die ganze Runde.
+
+**Wann zerlegt wird:** wenn ein Epic **ansteht**, nicht vorab für alle. Elf Epics jetzt in Scheiben zu
+planen wäre selbst der Monolith, den diese ADR abschafft — und Planung, die erst in Wochen gebraucht
+wird, veraltet bis dahin. Entscheidung des Auftraggebers vom 2026-07-30: **nur das Prinzip
+festschreiben**, `03-backlog.md` bleibt unverändert.
+
+**Verworfen:** „Abnahme am Epic-Ende beibehalten, aber Kriterien kürzen." Das verkleinert die Liste, nicht
+die Kopplung — eine gebrochene Doku-Zeile hätte weiter den Merge des Codes blockiert.
+
+---
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill
