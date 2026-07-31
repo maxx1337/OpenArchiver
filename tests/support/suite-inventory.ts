@@ -108,9 +108,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		name: 'integration',
 		include: ['packages/*/tests/integration/**/*.int.test.ts'],
 		// 4 after JR-104; 8 after JR-1301 split the F1/F3/F7/F8 regressions out of
-		// filter-builder.int.test.ts and added predefined-roles.int.test.ts.
-		expectedFiles: 8,
-		expectedTests: { ci: 55, nightly: 0, manual: 0 },
+		// filter-builder.int.test.ts and added predefined-roles.int.test.ts; 9 after JR-204 added
+		// journal-ledger-schema.int.test.ts (the CHECK constraints and keys of the ledger table).
+		expectedFiles: 9,
+		// 55 before JR-204; 71 with the 16 schema tests of journal_ledger/deployment_identity.
+		expectedTests: { ci: 71, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

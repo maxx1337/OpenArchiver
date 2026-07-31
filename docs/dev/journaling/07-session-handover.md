@@ -93,7 +93,7 @@ keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant
 Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
 behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
 `claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
-Docker-Postgres **324 passed | 2 skipped** bei 22 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
+Docker-Postgres **340 passed | 2 skipped** bei 23 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
@@ -382,11 +382,25 @@ davon für die nächsten Tasks gilt:
 - **Die Ledger-Typen liegen in `packages/types`** (`journal-ledger.types.ts`), nicht im Paket — sonst
   hätte die Abhängigkeitsregel keinen Sinn und `verify` (E9) bekäme eigene Formen.
 
+**`JR-204` ist ebenfalls erledigt** (Migration `0041_even_scream.sql`). Was davon für die nächsten Tasks
+zählt:
+
+- **`JR-205` (Append-Only) hat zwei Tabellen im Umfang**, nicht eine: `journal_ledger` **und**
+  `deployment_identity`. Die `deployment_id` steckt im Genesis jeder Kette.
+- **Das Löschen einer `ingestion_source` mit Ledger-Zeilen ist blockiert** (`ON DELETE restrict`). Das
+  ist gewollt, aber es heißt, dass E12 ein Verfahren für „Archiv nach Fristablauf entfernen" braucht —
+  ein `DELETE` ist es nicht.
+- **`duplicate_of < seq`** ist ein eigener CHECK, weil der zusammengesetzte Fremdschlüssel den
+  Selbstverweis **nicht** verhindert: Postgres prüft Referenzintegrität am Statement-Ende, und dann ist
+  das referenzierte Paar die gerade eingefügte Zeile.
+- Die Migration enthält **eine handgeschriebene Zeile** — das `INSERT` der Identität. Sie ist im SQL als
+  solche markiert und begründet; `db:generate` erzeugt keine Daten.
+
 ```
-Arbeite JR-204 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
-Branch claude/journaling-e2-ledger (existiert). Skill oa-migration ist Pflicht.
-JR-204 braucht drei Dinge aus ADR-006: size_bytes/content_sha256 nullable, den
-CHECK auf ms-Vielfache in received_at, und die Tabelle deployment_identity.
+Arbeite JR-205 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
+Branch claude/journaling-e2-ledger (existiert). JR-205 entscheidet ADR-009
+(Rechteentzug, Trigger oder beides) und umfasst journal_ledger UND
+deployment_identity. Danach JR-206 (LedgerWriter.append()).
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -403,7 +417,7 @@ Konsequenzen für jede E2-Task:
   `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
 - **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
   prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
-  **324 passed | 2 skipped** bei 22 Dateien (vor `JR-202` waren es 274 bei 19).
+  **340 passed | 2 skipped** bei 23 Dateien (vor `JR-202` waren es 274 bei 19, vor `JR-204` 324 bei 22).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
 können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin

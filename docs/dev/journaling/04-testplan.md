@@ -61,7 +61,7 @@ Lauf und in jeder Umgebung — zwei positive Erwartungen:
    — sie fällt auf.
 
 Die Zahlen werden auf **jedem** Lauf gemeldet, auch auf einem grünen:
-`[TEST-INVENTORY] unit: 13 file(s) (expected 13) · integration: 8 file(s) (expected 8) · adversarial: 1 file(s) (expected 1) · unclassified: 0`.
+`[TEST-INVENTORY] unit: 13 file(s) (expected 13) · integration: 9 file(s) (expected 9) · adversarial: 1 file(s) (expected 1) · unclassified: 0`.
 Wer eine Suite absichtlich verkleinert, ändert `expectedFiles` im selben Commit — sichtbar im Diff,
 statt unbemerkt.
 

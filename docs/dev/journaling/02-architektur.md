@@ -123,6 +123,31 @@ Stilvorgaben: `timestamp(..., { withTimezone: true })`, typisiertes JSONB, `pgEn
 `legal_hold_set`. Enum-Werte lassen sich in Postgres nicht entfernen — Erweiterungen sind später
 möglich, Umbenennungen nicht.
 
+**Umgesetzt am 2026-07-31 (`JR-204`, Migration `0041_even_scream.sql`).** Vier Festlegungen darin
+weichen von der naheliegenden Lösung ab und sind es wert, hier zu stehen — die vollständige Begründung
+steht als Doc-Kommentar an der jeweiligen Spalte:
+
+- **Hashes sind `bytea`, nicht hex-`text`** wie im Bestand (`archived_emails.storage_hash_sha256`).
+  Diese Bytes gehen **in** einen Hash, und eine Textform fügt eine Groß-/Kleinschreibungsfrage an einem
+  Wert hinzu, von dem die Kettenverifikation abhängt. Preis: **eine** explizite Konversion dort, wo ein
+  Ledger-Hash gegen die Bestandsspalte verglichen wird (Phase B, `verify`).
+- **`remote_ip` ist `text`, nicht `inet`.** Der gehashte Wert **ist** diese kanonische Textform; `inet`
+  würde beim Lesen eine zweite Normalisierung anwenden, die davon abweichen kann.
+- **Kein Fremdschlüssel auf `journaling_sources`.** Jede Referenzaktion wäre `SET NULL` — ändert ein
+  gehashtes Feld und bricht die Kette — oder `CASCADE`, was Beweise löscht. Die Aussage „dieser Endpunkt
+  hat gesendet" bleibt wahr, nachdem der Endpunkt entfernt wurde.
+- **`chain_scope_id` hat `ON DELETE restrict`.** Das Löschen eines Archivs mit Ledger-Zeilen ist
+  **blockiert**; ein Beleg, der mit der Konfiguration verschwindet, die ihn erzeugt hat, beweist nichts.
+  **Konsequenz für E12:** „Archiv nach Fristablauf entfernen" braucht ein eigenes Verfahren, ein
+  `DELETE` ist es nicht.
+
+Dazu sechs `CHECK`-Constraints: ms-Vielfache in `received_at` (ADR-006 §3.1), 32 Byte für alle drei
+Hash-Spalten, `seq >= 0` und **`duplicate_of < seq`**. Der letzte ist beim Testschreiben entstanden: der
+zusammengesetzte Fremdschlüssel `(chain_scope_id, duplicate_of) → (chain_scope_id, seq)` verhindert den
+**Selbstverweis nicht**, weil Postgres Referenzintegrität am Ende des Statements prüft und das
+referenzierte Paar dann die gerade eingefügte Zeile ist — eine Quittung wäre ihr eigenes Original
+geworden.
+
 ### Lückenlose `seq`
 
 Eine Postgres-Sequenz ist **ungeeignet**: `nextval()` wird bei Rollback nicht zurückgedreht und
