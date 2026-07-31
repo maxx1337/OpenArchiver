@@ -165,10 +165,22 @@ genannte sortierte Liste ist **verworfen** und dort als Fehler markiert. **`ADR-
 `open-tsa.eu` ist gemessen (Token geholt, gegen gepinnte CA verifiziert) und eingeordnet: gut für
 `nightly` und für Installationen ohne GoBD-Anspruch, **kein** qualifizierter Zeitstempel, **nicht** in `ci`.
 
-**Vor der ersten Zeile Kettencode fehlt damit genau eine Entscheidung: `ADR-006`** (Task `JR-203`) —
-Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id` und das Verhalten, wenn
-eine Installation aus einem Backup geklont wird. Sie steckt im Genesis-Hash und ist später nicht
-korrigierbar.
+**`ADR-006` ist am 2026-07-31 entschieden (`JR-203`) — damit ist keine Entscheidung mehr offen, die
+Kettencode blockiert.** Festgelegt sind die 16 gehashten Felder samt Bytes, der Genesis-String, die
+Herkunft der `deployment_id` und die Merkle-Kodierung des Ankers. Drei Punkte daraus sind auch für wen
+relevant, der die ADR nicht liest:
+
+- **Die Feldliste in RFC §5.2 war unvollständig.** Sie hasht acht Spalten und lässt `remote_ip`,
+  `tls_version`, `tls_cipher`, `ehlo_name` und `duplicate_of` außen vor — die wären nachträglich
+  änderbar, ohne die Kette zu brechen. Die Kodierung deckt jetzt **alle 16** wertetragenden Spalten ab.
+- **`deployment_id` liegt in einer eigenen Tabelle `deployment_identity`, nicht in `system_settings`** —
+  letztere ist über die Einstellungs-API schreibbar, und ein `PUT` darauf hätte jede Kette
+  unverifizierbar gemacht.
+- **Der ungerade Merkle-Knoten wird hochgezogen (RFC 6962), nicht dupliziert.** Bei der Duplizier-Regel
+  liefern `[A,B,C]` und `[A,B,C,C]` dieselbe Wurzel — gemessen, und es hätte ADR-022 Festlegung 1
+  aufgehoben.
+
+Die ADR enthält reproduzierbare **Testvektoren**; `JR-202` muss sie treffen.
 
 **Zur Umgebung:** seit dem 2026-07-31 laufen **Postgres, Valkey, Meilisearch und Tika über Docker
 Desktop** aus `docker-compose.yml`, alle vier vom Host aus belegt, und der Volllauf dagegen ist grün. Der

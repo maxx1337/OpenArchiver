@@ -332,16 +332,27 @@ Dies ist der Test, der belegt, dass Phase B den Acceptance-Contract nicht berüh
 
 **Klasse:** `ci`.
 
-| Fall | Manipulation                                    | Erwartung                                                                                        |
-| ---- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| a    | gespeichertes Objekt verändern                  | Hash-Mismatch beim **korrekten** `seq`                                                           |
-| b    | Ledger-Zeile löschen                            | Kettenbruch beim **korrekten** `seq`                                                             |
-| c    | Kette ab `seq` N vorwärts neu schreiben         | Divergenz gegen den **ersten Anker nach N**                                                      |
-| d    | Kette eines Mandanten **vollständig** entfernen | Befund beim Vergleich zweier aufeinanderfolgender Anker — die Kette fehlt im zweiten Merkle-Baum |
-| e    | Inklusionspfad eines Ankers verändern           | Wurzel stimmt nicht mehr, Token-Prüfung schlägt fehl                                             |
+| Fall | Manipulation                                      | Erwartung                                                                                        |
+| ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| a    | gespeichertes Objekt verändern                    | Hash-Mismatch beim **korrekten** `seq`                                                           |
+| b    | Ledger-Zeile löschen                              | Kettenbruch beim **korrekten** `seq`                                                             |
+| c    | Kette ab `seq` N vorwärts neu schreiben           | Divergenz gegen den **ersten Anker nach N**                                                      |
+| d    | Kette eines Mandanten **vollständig** entfernen   | Befund beim Vergleich zweier aufeinanderfolgender Anker — die Kette fehlt im zweiten Merkle-Baum |
+| e    | Inklusionspfad eines Ankers verändern             | Wurzel stimmt nicht mehr, Token-Prüfung schlägt fehl                                             |
+| f    | `tls_version` von `NULL` auf `TLSv1.3` setzen     | Kettenbruch beim korrekten `seq`, Feld `tls_version`                                             |
+| g    | `remote_ip` einer Zeile umschreiben               | Kettenbruch beim korrekten `seq`, Feld `remote_ip`                                               |
+| h    | zwei Ketten mit identischem Genesis, divergierend | **Split-Brain**-Befund, nicht „Kettenbruch" — eigene Befundart                                   |
 
 Immer wird die **erste** Divergenz erwartet, mit `seq` **und** Feld — nicht nur pass/fail. Fall (c)
 setzt E8 voraus und ist der eigentliche Beweis, dass Anchoring etwas leistet.
+
+**Fälle (f) bis (h) kommen aus ADR-006 (2026-07-31).** (f) und (g) sind die Gegenprobe darauf, dass die
+Kodierung wirklich **16** Felder deckt und nicht die acht der RFC-Formel: nach der RFC-Formel wären beide
+Manipulationen **unentdeckbar**, und (f) ist die gefährlichere — sie weist eine im Klartext empfangene
+Nachricht als TLS-geschützt aus. Ein Testlauf, in dem (f) und (g) grün sind, weil die Prüfung sie nicht
+betrachtet, ist der teuerste denkbare Fehlschlag dieser Suite; beide Fälle müssen daher zuerst gegen eine
+Implementierung **nach der RFC-Formel** rot gesehen worden sein. (h) ist der geklonte Server aus ADR-006
+§4.3 — technisch nicht verhinderbar, deshalb als Befund zu melden.
 
 **Fälle (d) und (e) kommen aus ADR-007/ADR-022** und existieren erst, seit es eine Kette je Mandant und
 einen Merkle-Anker darüber gibt. Zu (d): weil der Baum **jede** Kette als Blatt trägt — auch eine seit dem

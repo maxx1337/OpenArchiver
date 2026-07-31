@@ -123,44 +123,318 @@ nicht Teil dieses Projekts.
 
 ## ADR-006 — Kanonische Kodierung, Genesis-String, `deployment_id`
 
-**Status:** **offen** — zu entscheiden in E2 (`JR-203`)
+**Status:** **entschieden** (2026-07-31) · **Entscheider:** PO · **Quelle:** RFC §5.2 ·
+**Erfüllt Vorgaben aus:** ADR-007 Konsequenz 3, ADR-022 Festlegung 3
 
-Zu fixieren: die exakte Bytefolge der kanonischen Kodierung, der Genesis-String und die Herkunft der
-`deployment_id`.
+Diese ADR fixiert fünf Dinge: den Umfang und die Bytes der Feldkodierung, den Genesis-String, die
+Herkunft der `deployment_id`, das Verhalten beim Klonen einer Installation und die Merkle-Kodierung des
+Ankers. Sie ist die letzte Entscheidung vor der ersten Zeile Kettencode.
 
-**Entwurfsrichtung** (siehe `02-architektur.md` §4):
+**Jede Zahl in dieser ADR ist gemessen, nicht hergeleitet.** Die Festlegungen wurden als
+Referenzimplementierung ausgeführt; die Testvektoren in §6 und die Längenrechnungen in §5.3 sind deren
+Ausgabe. Wo unten „belegt" steht, ist genau das gemeint.
 
-- Führendes Versionsbyte.
-- Je Feld: Typ-Tag (1 Byte), dann Länge (4 Byte big-endian), dann Rohbytes.
-- `NULL` als eigenes Tag mit Länge 0.
-- Zeitstempel als int64 big-endian, Mikrosekunden seit Epoche, UTC.
-- Arrays in **Empfangsreihenfolge**, nicht sortiert.
-- `event_payload` vor dem Hashing kanonisch serialisiert (sortierte Schlüssel).
+### 1. Umfang: gehasht wird jede wertetragende Spalte, nicht die RFC-Feldliste
+
+**Die Feldliste in RFC §5.2 ist unvollständig, und das ist der wichtigste Befund dieser ADR.** Der RFC
+legt die Tabelle mit 14 Spalten an, hasht aber nur acht davon:
 
 ```
-chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> || <chain_scope_id> )
+chain_hash(n) = SHA256( canonical_encode(seq, received_at, content_sha256, event_type,
+                        event_payload, envelope_from, envelope_rcpt, size_bytes) || prev )
 ```
 
-> **Vorgabe aus ADR-007 (entschieden 2026-07-31):** `chain_scope_id` **muss** in den Genesis. Es gibt
-> eine Kette je Mandant; ohne die Kennung im Genesis hätten zwei Ketten mit identischem erstem Ereignis
-> denselben Hash, und ein Eintrag ließe sich zwischen Mandanten verschieben, ohne die Kette zu brechen.
-> `chain_scope_id` **ist `ingestion_sources.id`** (ADR-007, ebenfalls am 2026-07-31 entschieden).
+Nicht im Hash sind damit `remote_ip`, `ehlo_name`, `tls_version`, `tls_cipher` und `duplicate_of` —
+und, da der RFC ADR-007 vorausgeht, auch `chain_scope_id`, `journaling_source_id` und `spool_txid`.
+Jede dieser Spalten ließe sich nachträglich ändern, **ohne die Kette zu brechen**. Konkret: wer
+Datenbankzugriff hat, könnte `tls_version` von `NULL` auf `TLSv1.3` setzen und damit eine
+unverschlüsselt empfangene Nachricht als verschlüsselt ausweisen, oder `remote_ip` auf einen anderen
+Absender umschreiben — bei intakter Verifikation. Ein Ledger, dessen Verifikation solche Felder nicht
+abdeckt, bezeugt sie nicht; sie im Beleg zu führen und nicht zu hashen, ist schlimmer als sie
+weglassen, weil es Beweiskraft behauptet, die nicht existiert.
 
-**Ebenfalls noch offen und Teil dieser ADR: woher kommt `deployment_id`?** Naheliegend ist ein einmalig
-bei der ersten Migration erzeugter Wert in `system_settings` (die Tabelle existiert, `SettingsService`
-liest sie). Zu klären ist, was passiert, wenn eine Installation aus einem Backup **geklont** wird:
-dieselbe `deployment_id` in zwei Installationen bedeutet zwei divergierende Ketten mit gleichem Genesis.
+**Festlegung: `canonical_encode` deckt alle 16 wertetragenden Spalten von `journal_ledger` ab.**
+Ausgenommen sind genau zwei, und beide aus einem strukturellen Grund: `chain_hash` ist das Ergebnis
+selbst, und `prev_chain_hash` wird gemäß RFC-Formel **angehängt**, nicht als Feld kodiert. Eine
+Spalte, die später hinzukommt und einen Wert trägt, erzwingt ein neues Versionsbyte — nicht eine
+Ausnahme.
 
-> **Vorgabe aus ADR-022 (entschieden 2026-07-31): die Merkle-Kodierung gehört ebenfalls hierher.** Der
-> Anker ist ein Baum über allen Kettenköpfen, und `verify` muss ihn **byteidentisch** nachbauen. Also
-> fixiert diese ADR zusätzlich: die Blattkodierung `H(0x00 ‖ canonical(chain_scope_id, head_seq,
-head_chain_hash))`, die Knotenkodierung `H(0x01 ‖ links ‖ rechts)`, die Sortierung der Blätter nach
-> `chain_scope_id` und die Regel für den **ungeraden Knoten** (Hochziehen oder Duplizieren — eine der
-> beiden, festgeschrieben). Wer das erst in E8 festlegt, hat in E2 eine kanonische Kodierung geschrieben,
-> die die Baumform nicht abdeckt.
+> Der Skill `journal-ledger` gibt die RFC-Formel wörtlich wieder. Er ist für E2 verbindlich, und diese
+> ADR weicht von ihm **nicht in der Form** ab (`SHA256(record ‖ prev)` bleibt), sondern **erweitert die
+> Feldliste**. Das ist die Präzisierung, für die `JR-203` existiert.
 
-**Warum es eine ADR braucht:** Eine Änderung der Kodierung invalidiert jede bestehende Kette. Das ist
-ein Migrationsvorgang, keine Refaktorierung. Das Versionsbyte existiert genau deshalb.
+### 2. Die Bytes
+
+**Rahmen.** Ein Record ist:
+
+```
+record  := 0x01                    -- Versionsbyte des Kodierungsformats
+         ‖ uint32be(field_count)   -- 16 für v1
+         ‖ field_1 ‖ … ‖ field_n
+field   := tag(1 Byte) ‖ uint32be(len) ‖ value_bytes
+```
+
+Das `field_count`-Präfix ist Absicht: es macht eine stille Feldänderung zu einem Hashunterschied auch
+dann, wenn ein Feld am Ende bloß entfällt. `len` ist immer die Länge von `value_bytes`, auch bei
+zusammengesetzten Typen — jedes Feld ist damit überspringbar, ohne seinen Inhalt zu verstehen.
+
+**Typ-Tags.**
+
+| Tag    | Typ            | `len` | Wert                                                  |
+| ------ | -------------- | ----- | ----------------------------------------------------- |
+| `0x00` | `NULL`         | 0     | keine Bytes                                           |
+| `0x01` | `UINT64`       | 8     | big-endian, unsigned                                  |
+| `0x02` | `TIMESTAMP_US` | 8     | int64 big-endian, Mikrosekunden seit Unix-Epoche, UTC |
+| `0x03` | `STRING`       | var   | UTF-8, **ohne** Unicode-Normalisierung                |
+| `0x04` | `BYTES`        | var   | Rohbytes                                              |
+| `0x05` | `UUID`         | 16    | Rohbytes (RFC 4122 Netzwerkreihenfolge)               |
+| `0x06` | `ARRAY_STR`    | var   | `uint32be(count)` ‖ (`uint32be(len)` ‖ UTF-8)\*       |
+| `0x07` | `JSON`         | var   | kanonisches JSON nach §3.3, UTF-8                     |
+
+`NULL` ist ein **eigenes Tag**, nicht ein leerer Wert: `NULL` und der leere String müssen verschieden
+hashen, sonst ist „kein EHLO gesendet" von „EHLO mit leerem Namen" nicht unterscheidbar.
+
+**Keine Unicode-Normalisierung** ist eine Festlegung gegen die Intuition. NFC würde die Bytes
+verändern, die empfangen wurden; der Ledger ist ein Beleg über empfangene Bytes. Verboten sind nur
+ungepaarte Surrogate — die lehnt PostgreSQL ohnehin ab.
+
+**Feldreihenfolge v1** — positional, die Reihenfolge ist Teil des Formats:
+
+| #   | Feld                   | Tag                    | Bei `receipt`                           |
+| --- | ---------------------- | ---------------------- | --------------------------------------- |
+| 1   | `chain_scope_id`       | `UUID`                 | Pflicht (ADR-007)                       |
+| 2   | `seq`                  | `UINT64`               | Pflicht                                 |
+| 3   | `received_at`          | `TIMESTAMP_US`         | Pflicht                                 |
+| 4   | `event_type`           | `STRING`               | Pflicht                                 |
+| 5   | `remote_ip`            | `STRING` \| `NULL`     | Pflicht, normalisiert nach §3.2         |
+| 6   | `ehlo_name`            | `STRING` \| `NULL`     | wie empfangen                           |
+| 7   | `tls_version`          | `STRING` \| `NULL`     | `NULL` = Klartextverbindung             |
+| 8   | `tls_cipher`           | `STRING` \| `NULL`     |                                         |
+| 9   | `envelope_from`        | `STRING` \| `NULL`     |                                         |
+| 10  | `envelope_rcpt`        | `ARRAY_STR` \| `NULL`  | **Empfangsreihenfolge**, nicht sortiert |
+| 11  | `size_bytes`           | `UINT64` \| `NULL`     |                                         |
+| 12  | `content_sha256`       | `BYTES` (32) \| `NULL` | über Plaintext-Wire-Bytes               |
+| 13  | `duplicate_of`         | `UINT64` \| `NULL`     | `seq` des Originals                     |
+| 14  | `journaling_source_id` | `UUID` \| `NULL`       | „wer hat gesendet" (ADR-007)            |
+| 15  | `spool_txid`           | `STRING` \| `NULL`     | Crash-Recovery hängt daran              |
+| 16  | `event_payload`        | `JSON` \| `NULL`       | kanonisch nach §3.3                     |
+
+Die Empfangsreihenfolge von `envelope_rcpt` ist **nicht** sortiert, weil die Reihenfolge der
+`RCPT TO`-Kommandos Teil des Belegs ist. Sortieren würde eine Information vernichten, die eine
+Verteilerlisten-Expansion erst nachvollziehbar macht.
+
+Bei Ereignissen ohne SMTP-Transaktion (`anchor`, `retention_expiry`, `object_erased`,
+`legal_hold_set`) sind die Felder 5–13 und 15 `NULL`. **Das ist eine Vorgabe an `JR-204`:**
+`size_bytes` und `content_sha256` müssen `NULL`-fähig sein, anders als im `CREATE TABLE` des RFC.
+`0` statt `NULL` zu schreiben wäre eine Behauptung über eine Nachricht, die es nicht gibt.
+
+### 3. Drei Fallstricke, die hier mitentschieden sind
+
+Alle drei sind Stellen, an denen dieselbe Zeile auf zwei Rechnern verschieden hasht. Jede davon macht
+`verify` unbrauchbar, und keine fällt vor der ersten Verifikation auf.
+
+**3.1 Zeitstempel: Format in Mikrosekunden, geschriebene Werte in Millisekunden.** `timestamptz` hat
+in PostgreSQL Mikrosekundenauflösung, JavaScripts `Date` hat Millisekunden. Ein Wert, der über ein
+`Date` gelaufen ist, verliert die letzten drei Dezimalstellen — der Writer hasht also andere Bytes als
+`verify` nach dem Roundtrip liest, und der Bruch tritt genau in einem von tausend Fällen auf.
+
+Festlegung: das Feld bleibt `TIMESTAMP_US` (das Format soll nicht an der Auflösung einer
+Laufzeitumgebung hängen), aber die Anwendung schreibt **ausschließlich Werte, deren
+Mikrosekundenanteil durch 1000 teilbar ist**. `JR-204` sichert das mit einem `CHECK`-Constraint ab,
+damit die Invariante in der Datenbank steht und nicht in einem Kommentar. Millisekunden sind für einen
+SMTP-Empfangszeitpunkt reichlich; ein nicht nachbaubarer Hash ist fatal. **Verworfen:** die Spalte als
+`bigint`-Mikrosekunden zu führen — das verliert Zeitzonen- und Vergleichssemantik in SQL und macht
+jede Auswertung fehleranfällig, um eine Auflösung zu retten, die niemand braucht.
+
+**3.2 IP-Normalisierung: IPv4 bleibt IPv4.** Node liefert auf einem Dual-Stack-Socket
+`::ffff:192.0.2.25` für eine IPv4-Verbindung. Dieselbe Verbindung über einen IPv4-Listener liefert
+`192.0.2.25`. Beide bezeichnen denselben Absender und hashen verschieden.
+
+Festlegung: `remote_ip` wird **vor** dem Hashen und vor dem `INSERT` normalisiert — IPv4-mapped-IPv6
+auf die IPv4-Schreibweise, IPv6 komprimiert nach RFC 5952, Kleinbuchstaben. Kodiert wird die
+kanonische **Textform**, nicht die Rohbytes: der Wert steht in Betriebsmeldungen und in Prüfberichten,
+und eine Form, die ein Mensch mit dem Log vergleichen kann, ist hier mehr wert als zwei gesparte Bytes.
+
+**3.3 `event_payload`: kanonisches JSON, und keine Fließkommazahlen.** Erlaubt sind Objekt, Array,
+String, Boolean, `null` und **ganzzahlige** Zahlen im Bereich ±(2^53−1). Serialisierung: Schlüssel
+sortiert nach UTF-16-Code-Units, kein Whitespace, minimales JSON-Escaping — das ist RFC 8785 (JCS),
+auf diese Teilmenge eingeschränkt.
+
+Die Einschränkung ist der eigentliche Inhalt der Festlegung: die Zahlenserialisierung ist der einzige
+schwierige Teil von RFC 8785, und mit dem Verbot von Nicht-Ganzzahlen fällt er weg — kanonisches JSON
+reduziert sich dann auf „Schlüssel sortieren, dann `JSON.stringify`", was ohne fremde Abhängigkeit
+korrekt zu bekommen ist. Größere Ganzzahlen als 2^53−1 gehören als String in das Payload. Ein
+`undefined`-Wert wird weggelassen, nicht zu `null` — sonst hängt der Hash daran, ob ein Feld gesetzt
+oder abwesend war, und das ist in JavaScript keine stabile Unterscheidung.
+
+### 4. Genesis, `deployment_id` und der geklonte Server
+
+**4.1 Genesis-String.**
+
+```
+chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" ‖ deployment_id ‖ ":" ‖ chain_scope_id )
+```
+
+Beide Kennungen als **kanonische UUID-Textform in Kleinbuchstaben** (36 Zeichen, RFC 4122 §3), ASCII,
+mit `:` als Trenner. Das ist eine **bewusste Ausnahme** von §2, wo UUIDs 16 Rohbytes sind, und sie ist
+zu erhalten, nicht zu „korrigieren": der Genesis-Hash ist der einzige Wert der ganzen Kette, den ein
+Prüfer ohne unseren Code nachrechnen können soll —
+
+```
+printf 'open-archiver:journal-ledger:v1:<dep>:<scope>' | sha256sum
+```
+
+— und diese Nachrechenbarkeit ist mehr wert als die formale Einheitlichkeit. Der Trenner ist nötig,
+weil ohne ihn zwei verschiedene Kennungspaare denselben String bilden könnten, sobald eine Kennung je
+ihre feste Länge verliert.
+
+**4.2 Herkunft der `deployment_id`: eigene Tabelle, nicht `system_settings`.** Die naheliegende
+Variante aus der Entwurfsrichtung ist **verworfen**, und zwar am Bestandscode geprüft:
+`system_settings` ist eine einzelne Zeile mit einer `jsonb`-Spalte `config`, deren Typ
+`SystemSettings` in `packages/types/src/system.types.ts` `language`, `theme`, `supportEmail` und die
+Security-Policy enthält — es ist die über die Einstellungs-API **schreibbare** Konfiguration. Eine
+Kennung, die im Genesis-Hash jeder Kette steckt, darf nicht über denselben Endpunkt änderbar sein, der
+das Anwendungsthema umstellt. Ein `PUT` auf die Einstellungen würde sonst jede Kette der Installation
+unverifizierbar machen.
+
+Festlegung: eine eigene Tabelle `deployment_identity` mit genau einer Zeile, `deployment_id uuid`,
+erzeugt **in der Migration selbst** per `gen_random_uuid()`. Gründe: kein Anwendungscode, kein Race
+zwischen zwei startenden Prozessen, und es funktioniert auch im Container-Entrypoint, der
+`pnpm db:migrate` vor dem ersten Start ausführt. Die Tabelle wird durch dieselbe
+Append-Only-Erzwingung geschützt wie `journal_ledger` (**Vorgabe an ADR-009/`JR-205`**: der Umfang der
+Erzwingung ist `journal_ledger` **und** `deployment_identity`) und trägt einen `CHECK`, der eine
+zweite Zeile ausschließt.
+
+**4.3 Der geklonte Server: nicht verhinderbar, aber erkennbar — und das ehrlich sagen.** Zwei
+Installationen mit derselben `deployment_id`, die beide weiterlaufen, erzeugen divergierende Ketten
+mit identischem Genesis. Das lässt sich **nicht** technisch verhindern: ein Restore aus einem Backup
+und ein Klon zum Nebenbetrieb sind byteidentisch, und der Restore ist ein legitimer, notwendiger
+Vorgang. Wer hier eine Sperre einbaut, sperrt zuerst das Disaster Recovery.
+
+Festlegung in drei Teilen:
+
+1. **Ein Restore ist dieselbe Installation.** Die `deployment_id` bleibt unverändert und wird beim
+   Restore **nicht** neu erzeugt — sie ist die Identität des Archivs, nicht der Maschine. Die Kette
+   setzt sich fort. Eine neue Installation bekommt automatisch eine neue Kennung, weil die Migration
+   auf einer leeren Datenbank läuft.
+2. **Ein parallel weiterlaufender Klon ist ein Split-Brain und wird als Befund gemeldet, nicht
+   verhindert.** Erkannt wird er an zwei Stellen, die beide ohnehin existieren: `UNIQUE
+(chain_scope_id, seq)` innerhalb einer Datenbank, und das externe append-only Ankerziel (ADR-022
+   Festlegung 7) — zwei Anker mit derselben `deployment_id` für denselben Zeitraum, aber
+   verschiedenen Wurzeln, sind ein Split-Brain und nichts anderes. **Vorgaben:** das externe Ziel
+   erhält die `deployment_id` mit (`JR-803`), und `verify` meldet den Fall als eigenen Befund neben
+   „Kette fehlt" (`JR-209`, `JR-805`).
+3. **Der Anchor-Job weigert sich, wenn das externe Ziel schon einen späteren Anker derselben
+   `deployment_id` trägt** (**Vorgabe an `JR-802`**). Damit fällt ein Klon beim **ersten** Ankerlauf
+   auf und nicht Monate später bei einer Prüfung. Das ist die billigste wirksame Härtung, die ohne
+   Sperre auskommt.
+
+Dazu gehört eine Betreiberauflage, die keine Technik ersetzen kann: **ein aus Produktionsdaten
+erzeugtes Test- oder Staging-System läuft mit abgeschaltetem SMTP-Ingress und abgeschaltetem
+Anchor-Job.** Das gehört in den Deployment-Guide (E11), und zwar als Anforderung, nicht als Hinweis.
+
+### 5. Merkle-Kodierung des Ankers
+
+Vorgabe aus ADR-022 Festlegung 3. `verify` muss den Baum byteidentisch nachbauen, deshalb steht die
+Kodierung hier und nicht in E8.
+
+**5.1 Blatt und Knoten.**
+
+```
+leaf(chain)  = SHA256( 0x00 ‖ record3(chain_scope_id, head_seq, head_chain_hash) )
+node(l, r)   = SHA256( 0x01 ‖ l ‖ r )
+```
+
+`record3` ist derselbe Rahmen aus §2 mit `field_count = 3` und den Tags `UUID`, `UINT64`, `BYTES`.
+Eine Kodierfunktion, zwei Schemata — die Blattkodierung erbt damit jede Eigenschaft aus §2 und §3
+automatisch.
+
+**5.2 Baumform: RFC 6962, der ungerade Knoten wird hochgezogen.** Blätter sortiert nach den **16
+Rohbytes** der `chain_scope_id`; die Wurzel ist `MTH` nach RFC 6962 §2.1, also Aufteilung an der
+größten Zweierpotenz **kleiner** als die Blattzahl. Ein einzelnes Blatt ist die Wurzel; die leere
+Blattmenge tritt nicht auf, weil ohne Kette nicht geankert wird.
+
+**Duplizieren ist verworfen, und der Grund ist gemessen.** Bei der Bitcoin-Regel („letzten Knoten
+verdoppeln") liefern die Blattmengen `[A,B,C]` und `[A,B,C,C]` **dieselbe** Wurzel — in der
+Referenzimplementierung nachgestellt und bestätigt. Genau das würde ADR-022 Festlegung 1 aufheben: der
+Anker soll die **Menge** der Ketten bezeugen, und bei der Duplizier-Regel ließe sich eine zusätzliche
+Kette in einen bestehenden Anker hineinbehaupten. Unter RFC 6962 sind dieselben zwei Mengen
+verschieden — ebenfalls gemessen (§6, D4/D5).
+
+**5.3 Domain-Trennung ist vollständig, auch gegenüber dem Ledger-Hash.** Drei Hash-Preimages treten im
+System auf, und keine zwei können verwechselt werden:
+
+| Preimage      | Aufbau                 | Länge                       |
+| ------------- | ---------------------- | --------------------------- |
+| Merkle-Blatt  | `0x00 ‖ record3`       | 77 Byte, beginnt mit `0x00` |
+| Merkle-Knoten | `0x01 ‖ 32 ‖ 32`       | genau 65 Byte               |
+| Ledger-Record | `record16 ‖ prev_hash` | ≥ 117 Byte                  |
+
+Das Blatt ist durch sein führendes `0x00` von beiden anderen getrennt. Knoten und Ledger-Record
+beginnen beide mit `0x01` — der Knoten wegen ADR-022, der Record wegen seines Versionsbytes —, sind
+aber durch die Länge disjunkt: ein Record mit 16 Feldern ist selbst bei durchgehend `NULL`-Feldern
+1 + 4 + 16·5 = 85 Byte, plus 32 Byte `prev_chain_hash` also **mindestens 117**, gegen genau 65 beim
+Knoten. Die Kollisionsfreiheit hängt damit an einer Längenrechnung und nicht an einem Präfix; das ist
+der Preis dafür, die RFC-Formel `SHA256(record ‖ prev)` unverändert zu lassen, und er ist hier notiert,
+damit niemand die Präfixe später „vereinheitlicht" und dabei jede bestehende Kette invalidiert.
+
+### 6. Testvektoren
+
+Erzeugt mit der Referenzimplementierung am 2026-07-31. **`JR-202` muss diese Werte reproduzieren** —
+sie sind der Golden-File-Test, den das Akzeptanzkriterium dort verlangt.
+
+Eingaben: `deployment_id = 00000000-0000-4000-8000-000000000001`,
+`scope_A = 11111111-1111-4111-8111-111111111111`,
+`scope_B = 22222222-2222-4222-8222-222222222222`,
+`scope_C = 33333333-3333-4333-8333-333333333333`.
+
+| Vektor                                  | Wert                                                               |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| `G1` genesis(dep, scope_A)              | `02f0c72949b5ac8058d7f6ab2ee6241c0f730eaf8cdd53799254fc0cda3f8a14` |
+| `G2` genesis(dep, scope_B)              | `52d2fdd7b5380cf2fcce9736f9be57ca99a263d67a9005f62a5ea221c22a1b49` |
+| `V3` leaf(scope_A, 1, SHA256("head-A")) | `0a33f4d7fdc3c771eb4df31c88ab194bafd6093e5be00514a0408425483db323` |
+| `V3` root über 2 Blätter `[A,B]`        | `72bcc7f6caf87be729b79c879677cd36463a19debe9b0eb6c8b344c4f5f5c422` |
+| `V3` root über 3 Blätter `[A,B,C]`      | `97edaf856349af16d247b665078c53a99b7e0f0fd2906bcdff822c0125e2b9bc` |
+
+Blätter `B` und `C` verwenden `head_seq = 7` bzw. `0` und `SHA256("head-B")` / `SHA256("head-C")` als
+Kopf-Hash. Die Wurzel über ein Blatt ist das Blatt selbst.
+
+Der Receipt-Vektor `V1` (`seq = 1`, `received_at = 2026-07-31T10:15:30.123Z` ⇒ `1785492930123000` µs,
+`remote_ip = 192.0.2.25`, `ehlo_name = mail.example.com`, `tls_version = TLSv1.3`,
+`tls_cipher = TLS_AES_256_GCM_SHA384`, `envelope_from = sender@example.com`,
+`envelope_rcpt = [a@example.com, b@example.com]`, `size_bytes = 4096`,
+`content_sha256 = SHA256("journal-report-bytes")`, `duplicate_of = NULL`,
+`journaling_source_id = aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+`spool_txid = 01JZZ0000000000000000000AA`, `event_payload = {"parse_failed":false,"phase":"A"}`):
+
+| Vektor                          | Wert                                                               |
+| ------------------------------- | ------------------------------------------------------------------ |
+| Recordlänge                     | 351 Byte                                                           |
+| `SHA256(record)`                | `cf5a92f4208a06c239d8b330a820ad5030570b1d784b1695b4cd7de105522522` |
+| `chain_hash(1)` mit `prev = G1` | `6ae132b63a3b3077ff80d988b76b190a7e954f2cdfcb1216d9b7dc6973889d92` |
+
+**Eigenschaftsnachweise**, alle ausgeführt: `rcpt`-Reihenfolge getauscht ⇒ anderer Hash;
+`event_payload`-Schlüssel umgestellt ⇒ **gleicher** Hash; `chain_scope_id` getauscht ⇒ anderer Hash
+(das ist ADR-007 Konsequenz 3 als Test); `remote_ip` getauscht ⇒ anderer Hash (das ist §1 als Test).
+`D4`: Duplizier-Regel ⇒ `root[A,B,C] == root[A,B,C,C]`, **true**. `D5`: RFC 6962 ⇒ dieselbe
+Gleichheit, **false**.
+
+### 7. Was diese ADR anderen Tasks vorgibt
+
+| Task     | Vorgabe                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| `JR-202` | 16 Felder in der Reihenfolge aus §2; Vektoren aus §6 als Golden-File; JCS-Teilmenge aus §3.3    |
+| `JR-204` | `size_bytes`/`content_sha256` nullable; `CHECK` auf ms-Vielfache; Tabelle `deployment_identity` |
+| `JR-205` | Append-Only-Erzwingung umfasst `deployment_identity` mit                                        |
+| `JR-802` | Ankern verweigern, wenn das Ziel einen späteren Anker derselben `deployment_id` trägt           |
+| `JR-803` | `deployment_id` geht an das externe Ziel mit                                                    |
+| `JR-209` | Split-Brain (gleicher Genesis, divergierende Ketten) ist ein eigener Befund                     |
+
+### 8. Warum es eine ADR braucht
+
+Eine Änderung der Kodierung invalidiert jede bestehende Kette. Das ist ein Migrationsvorgang, keine
+Refaktorierung. Das Versionsbyte existiert genau deshalb — und es ist zu erhöhen, sobald sich an §2
+oder §3 etwas ändert, auch wenn die Änderung „nur" ein zusätzliches Feld ist.
 
 ## ADR-007 — Lock-Key-Strategie und Mehrmandantenfähigkeit
 

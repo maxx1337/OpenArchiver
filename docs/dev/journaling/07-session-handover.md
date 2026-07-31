@@ -85,7 +85,9 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-31 (**`ADR-007` entschieden**: eine Kette je Mandant, `chain_scope_id` =
+**Stand:** 2026-07-31 (**`ADR-006` entschieden, `JR-203` erledigt** — 16 gehashte Felder statt der acht
+aus RFC §5.2, Genesis, `deployment_identity`, Merkle nach RFC 6962, mit Testvektoren; **damit blockiert
+keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant, `chain_scope_id` =
 `ingestion_sources.id` · **`ADR-022`**: ein Token über die Merkle-Wurzel aller Kettenköpfe ·
 **`ADR-023`**: TSA-Auswahl, `open-tsa.eu` gemessen und eingeordnet · **Infrastruktur steht** über Docker
 Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
@@ -95,11 +97,12 @@ Docker-Postgres **274 passed | 2 skipped** bei 19 Dateien, Exit 0, 0 `oa_test_*`
 
 ### Der Stand in einem Satz
 
-**E1 und E13 sind fertig, das Messinstrument trägt jetzt, was ab E2 daran hängt, und die Infrastruktur
-läuft.** Der Inventar-Wächter zählte Dateien; seit `JR-105c` zählt er **ausgeführte Tests je Suite und je
-Klasse**, also belegt ein grüner Lauf endlich, dass die `integration`-Suite gelaufen ist. **Nächster
-Schritt ist E2** — der SMTP-Receiver, das eigentliche Projekt; davor fehlt nur noch **ADR-006**
-(`JR-203`).
+**E1 und E13 sind fertig, das Messinstrument trägt jetzt, was ab E2 daran hängt, die Infrastruktur läuft,
+und seit `JR-203` ist keine Entscheidung mehr offen, die Kettencode blockiert.** Der Inventar-Wächter
+zählte Dateien; seit `JR-105c` zählt er **ausgeführte Tests je Suite und je Klasse**, also belegt ein
+grüner Lauf endlich, dass die `integration`-Suite gelaufen ist. **Der nächste Schritt ist `JR-201`** —
+`packages/journaling` anlegen, Rolle DEV, auf einem eigenen Branch `claude/journaling-e2-ledger`. Der
+erste Code danach ist `JR-202`, und der hat mit den Testvektoren aus ADR-006 §6 konkrete Zielwerte.
 
 > ### Was diese Session gemacht hat
 >
@@ -146,6 +149,24 @@ Schritt ist E2** — der SMTP-Receiver, das eigentliche Projekt; davor fehlt nur
 >    übernommen — ein Token geholt, gegen die gepinnte CA verifiziert (`Verification: OK`), plus zwei
 >    Gegenproben. Ergebnis: brauchbar für `nightly` und für Installationen ohne GoBD-Anspruch, **kein**
 >    qualifizierter Zeitstempel (private Policy-OID, kein Trusted-List-Eintrag), und **nicht** in `ci`.
+> 8. **`JR-203` erledigt: `ADR-006` entschieden** (Rolle PO, reine Doku, direkt auf dem
+>    Integrationsbranch). Fünf Teile festgelegt — Feldkodierung, Genesis-String, `deployment_id`,
+>    Klonverhalten, Merkle-Kodierung — und **jede Zahl mit einer Referenzimplementierung gemessen**, deren
+>    Ausgabe als Testvektoren in der ADR steht. Drei Dinge daran sind mehr als Formalie und stehen deshalb
+>    hier: **(a)** die Feldliste in **RFC §5.2 war unvollständig** — sie hasht acht von 14 Spalten und
+>    lässt `remote_ip`, `ehlo_name`, `tls_version`, `tls_cipher` und `duplicate_of` draußen, die damit
+>    nachträglich änderbar wären, **ohne die Kette zu brechen**; wer `JR-202` nach der RFC-Formel baut,
+>    baut ein Ledger, das seine eigenen TLS-Angaben nicht bezeugt. Jetzt sind es **16** Felder. **(b)**
+>    `system_settings` als Ort der `deployment_id` ist **verworfen** — am Bestandscode geprüft, es ist die
+>    über die Einstellungs-API schreibbare `jsonb`-Konfiguration, ein `PUT` darauf hätte jede Kette
+>    entwertet; stattdessen eine eigene Tabelle `deployment_identity`. **(c)** der ungerade Merkle-Knoten
+>    wird **hochgezogen (RFC 6962)**: unter der Duplizier-Regel liefern `[A,B,C]` und `[A,B,C,C]` dieselbe
+>    Wurzel — gemessen —, womit sich eine zusätzliche Kette in einen bestehenden Anker hineinbehaupten
+>    ließe und ADR-022 Festlegung 1 aufgehoben wäre. Der **geklonte Server** ist als nicht verhinderbar
+>    dokumentiert, nicht als gelöst: Restore und Klon sind byteidentisch, also ist er ein
+>    **Split-Brain-Befund** plus eine Verweigerung im Anchor-Job, keine Sperre. Nachgezogen: `02-architektur.md`
+>    §4 und §8, `README.md`, `03-backlog.md` (acht Task-Zeilen), `04-testplan.md` §12.5 (drei neue Fälle),
+>    `06-status.md`.
 >
 > **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt.
 
@@ -325,35 +346,35 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **E2**, und davor zwei Entscheidungen
+### Nächster konkreter Schritt — **E2**, und es blockiert nichts mehr
 
-**`ADR-007` ist am 2026-07-31 entschieden: eine Kette _je Mandant_.** Begründung, sieben Konsequenzen und
-die verworfene Alternative stehen in `05-entscheidungen.md`; was das an E2s Tasks ändert, steht als
-eigener Block im Backlog unter „Was `ADR-007` an diesem Epic ändert" (betrifft `JR-203`, `JR-204`,
-`JR-206`, `JR-208`, `JR-209`).
+**Alle drei Entscheidungen, die E2 blockierten, sind am 2026-07-31 gefallen: `ADR-007`, `ADR-022`,
+`ADR-023` und zuletzt `ADR-006`.** Begründungen und Konsequenzen stehen in `05-entscheidungen.md`; was sie
+an E2s Tasks ändern, steht als zwei Blöcke im Backlog („Was `ADR-007` an diesem Epic ändert", „Was
+`ADR-006` an diesem Epic ändert").
 
-**`chain_scope_id` ist `ingestion_sources.id`** — eine Kette je **Archiv**, im selben Zug entschieden.
-`journaling_source_id` steht als **Attribut** in jeder Ledger-Zeile, damit „wer hat gesendet" im Beleg
-bleibt, ohne eine zweite Kette zu sein.
+**Was davon beim Implementieren wirklich zählt**, in der Reihenfolge, in der man darüber stolpert:
 
-**Vor der ersten Zeile Kettencode fehlt damit genau eine Entscheidung: `ADR-006`** (Task **`JR-203`**,
-Rolle PO, reine Doku). Sie ist später **nicht** korrigierbar, weil sie im Genesis-Hash jeder Kette
-steckt. Drei Teile:
+- **Die kanonische Kodierung deckt 16 Felder, nicht die acht der RFC-Formel** (ADR-006 §1). Das ist die
+  eine Stelle, an der der RFC dem Entwurf **nicht** zu folgen ist. `04-testplan.md` §12.5 (f) und (g) sind
+  die Gegenprobe, und sie müssen zuerst gegen eine Implementierung nach der RFC-Formel **rot** gesehen
+  worden sein.
+- **`chain_scope_id` = `ingestion_sources.id`** und geht in den Genesis; `seq` läuft je Kette, der
+  Advisory-Lock-Key wird aus der Kettenkennung abgeleitet (ADR-007).
+- **Drei Kodierfallstricke**, jeder macht `verify` unbrauchbar und fällt vorher nicht auf: µs-vs-ms beim
+  Zeitstempel, `::ffff:`-IPv4 auf Dual-Stack-Sockets, JCS mit Fließkommazahlen (ADR-006 §3).
+- **`ADR-006` §6 enthält Testvektoren.** `JR-202` muss sie treffen — das ist billiger und härter als ein
+  selbst erfundenes Golden-File.
 
-- die exakten Bytes der kanonischen Kodierung — der Entwurf steht in ADR-006 und `02-architektur.md` §4
-  und ist detailliert genug, um ihn zu bestätigen statt neu zu erfinden;
-- der Genesis-String, **inklusive `chain_scope_id`** (Vorgabe aus ADR-007);
-- **woher die `deployment_id` kommt.** Naheliegend ist ein Wert, der bei der ersten Migration einmalig in
-  `system_settings` entsteht (die Tabelle existiert, `SettingsService` liest sie). Offen ist die
-  unangenehme Hälfte: was gilt, wenn eine Installation aus einem **Backup geklont** wird? Zwei
-  Installationen mit derselben `deployment_id` erzeugen zwei divergierende Ketten mit gleichem Genesis.
-
-Danach die übrigen E2-Tasks aus `03-backlog.md`.
+Offen bleibt in E2 allein **`ADR-009`** (Append-Only: Rechteentzug oder Trigger), und die ist Teil von
+`JR-205`, blockiert also nichts davor. Ihr Umfang ist seit ADR-006 §4.2 **`journal_ledger` und
+`deployment_identity`**.
 
 ```
-Arbeite JR-203 ab (ADR-006 fixieren, Rolle PO), danach JR-201 ff. aus
-docs/dev/journaling/03-backlog.md — Rolle senior-dev, Branch
-claude/journaling-e2-ledger vom Integrationsbranch.
+Arbeite JR-201 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
+Branch claude/journaling-e2-ledger vom Integrationsbranch. Lies vorher ADR-006
+und ADR-007 in docs/dev/journaling/05-entscheidungen.md; JR-202 muss die
+Testvektoren aus ADR-006 §6 reproduzieren.
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -414,11 +435,17 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**`ADR-007` ist vollständig entschieden** (2026-07-31, Auftraggeber): eine Kette je Mandant, und
-`chain_scope_id` = `ingestion_sources.id`. **Blockierend bleibt genau eine Entscheidung: `ADR-006`**
-(Task `JR-203`) — Kodierung, Genesis-String mit `chain_scope_id` darin, Herkunft der `deployment_id` und
-das Verhalten beim Klonen einer Installation aus einem Backup. Alles andere ist Arbeit ohne
-Entscheidungsbedarf.
+**Keine.** `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
+`JR-203`, Rolle PO) sind entschieden. Was in E2 noch offen ist — `ADR-009`, Append-Only per Rechteentzug
+oder Trigger — ist Teil von `JR-205` und braucht keine Entscheidung des Auftraggebers vorab. Alles andere
+ist Arbeit ohne Entscheidungsbedarf.
+
+> **Eine Festlegung aus `ADR-006` verdient trotzdem den Blick des Auftraggebers**, weil sie eine
+> Betriebsauflage erzeugt statt einer technischen Sperre: ein aus Produktionsdaten erzeugtes Staging- oder
+> Testsystem **muss** mit abgeschaltetem SMTP-Ingress und abgeschaltetem Anchor-Job laufen. Ein Klon ist
+> von einem Restore technisch nicht unterscheidbar, und wer hier eine Sperre einbaut, sperrt zuerst das
+> Disaster Recovery (ADR-006 §4.3). Die Auflage gehört in den Deployment-Guide (E11); die technische
+> Erkennung ist in `JR-802`/`JR-803`/`JR-209` verankert.
 
 Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und umgesetzt in
 `JR-1317`/`JR-1318`.
@@ -495,7 +522,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 
 | Wann      | Frage                                                                                                                                                                                                                                                                                                                      |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E2        | Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006) — invalidiert später jede Kette, wenn geändert                                                                                                                                                                                                        |
+| ~~E2~~    | ~~Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006)~~ — **entschieden 2026-07-31 (`JR-203`):** 16 gehashte Felder statt der acht aus RFC §5.2, Genesis mit `deployment_id` und `chain_scope_id` als UUID-Textform, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962, mit Testvektoren         |
 | ~~E2~~    | ~~Eine Kette global oder eine pro Mandant (ADR-007)~~ — **entschieden 2026-07-31: je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                                                                                                                                  |
 | ~~E7/E8~~ | ~~Welche TSA?~~ **Entschieden 2026-07-31, ADR-023:** kein Standard-URL; qualifizierte eIDAS-TSA in der Produktion mit GoBD-Anspruch, `open-tsa.eu` als kostenlose Option ohne diesen Anspruch und als echte TSA in `nightly`, `ci` hermetisch. **Ankerform: ADR-022** — ein Token über die Merkle-Wurzel aller Kettenköpfe |
 | E7        | Aufbewahrungsfrist für Object Lock COMPLIANCE. **Vorher lesen:** unter COMPLIANCE ist vorzeitige Löschung technisch unmöglich, auch für uns                                                                                                                                                                                |

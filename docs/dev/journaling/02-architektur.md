@@ -169,27 +169,41 @@ also **eine** Kette, und ein neu angelegter Endpunkt setzt keine neue Kette auf.
 Anforderung: deterministisch, längenpräfixiert, plattform- und versionsunabhängig — **nie**
 JSON-Schlüsselreihenfolge, nie lokalisierte Zeitformatierung.
 
-Entwurf (Festlegung in E2):
+**Festgelegt am 2026-07-31 in ADR-006 (`JR-203`), mit Testvektoren.** Dieses Kapitel gibt den Rahmen;
+die verbindliche Fassung mit Feldreihenfolge, Typ-Tags und Vektoren steht in `05-entscheidungen.md`.
 
-- Führendes Versionsbyte, damit ein späterer Formatwechsel überhaupt beschreibbar ist.
-- Je Feld: Typ-Tag (1 Byte) + Länge (4 Byte, big-endian) + Rohbytes. `NULL` = eigenes Tag mit Länge 0.
-- Zeitstempel als int64 big-endian, Mikrosekunden seit Unix-Epoche, UTC.
+- Führendes Versionsbyte (`0x01`), dann `uint32be(field_count)` — die Feldzahl ist mitgehasht, damit
+  ein entfallenes Feld am Ende nicht unbemerkt bleibt.
+- Je Feld: Typ-Tag (1 Byte) + Länge (4 Byte, big-endian) + Rohbytes. `NULL` = **eigenes Tag** mit
+  Länge 0, damit „kein EHLO gesendet" und „EHLO mit leerem Namen" verschieden hashen.
+- Zeitstempel als int64 big-endian, Mikrosekunden seit Unix-Epoche, UTC. **Geschrieben werden nur
+  ms-Vielfache** — `timestamptz` hat µs, JavaScripts `Date` hat ms, und ein Wert, der über ein `Date`
+  gelaufen ist, hasht nach dem Roundtrip anders.
 - Arrays (`envelope_rcpt`) als Elementanzahl + je Element längenpräfixiert, in **Empfangsreihenfolge**
   (nicht sortiert — die Reihenfolge ist Teil des Belegs).
-- `event_payload` wird vor dem Hashing kanonisch serialisiert (sortierte Schlüssel, keine
-  Whitespace-Varianz), nicht als `JSON.stringify`-Ausgabe übernommen.
+- `event_payload` kanonisch nach RFC 8785 (JCS), eingeschränkt auf Ganzzahlen — keine
+  Fließkommazahlen, keine `JSON.stringify`-Ausgabe ohne sortierte Schlüssel.
+
+**Gehasht wird jede wertetragende Spalte — alle 16, nicht die acht aus RFC §5.2.** Das ist die
+folgenreichste Festlegung der ADR: die Formel im RFC lässt `remote_ip`, `ehlo_name`, `tls_version`,
+`tls_cipher` und `duplicate_of` aus, die damit nachträglich änderbar wären, ohne die Kette zu brechen.
+Eine Spalte im Beleg zu führen und nicht zu hashen, behauptet Beweiskraft, die nicht existiert.
 
 ```
 chain_hash(n) = SHA256( canonical_encode(...) || prev_chain_hash(n-1) )
-chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> || <chain_scope_id> )
+chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> || ":" || <chain_scope_id> )
 ```
 
 > `chain_scope_id` ist seit ADR-007 Teil des Genesis: es gibt eine Kette je Mandant, und ohne die
-> Kennung im Genesis wären zwei Ketten mit identischem erstem Ereignis hashgleich.
+> Kennung im Genesis wären zwei Ketten mit identischem erstem Ereignis hashgleich. Beide Kennungen
+> stehen dort als **UUID-Textform**, abweichend von den 16 Rohbytes der Feldkodierung — damit ein
+> Prüfer den Genesis-Hash mit `printf … | sha256sum` ohne unseren Code nachrechnen kann. Die Ausnahme
+> ist beabsichtigt und in ADR-006 §4.1 als solche vermerkt.
 
-Der Genesis-String und die `deployment_id` werden in `05-entscheidungen.md` festgeschrieben. Eine
-Änderung der Kodierung invalidiert jede bestehende Kette — sie ist ein Migrationsvorgang, keine
-Refaktorierung.
+`deployment_id` liegt in einer eigenen Tabelle `deployment_identity` (eine Zeile, in der Migration per
+`gen_random_uuid()` erzeugt, append-only geschützt) — **nicht** in `system_settings`, die über die
+Einstellungs-API schreibbar ist. Eine Änderung der Kodierung invalidiert jede bestehende Kette — sie
+ist ein Migrationsvorgang, keine Refaktorierung, und sie erhöht das Versionsbyte.
 
 ### Abgrenzung zu `audit_logs`
 
@@ -268,8 +282,11 @@ Kette je Mandant, also N Köpfe. Der Baum darüber hält die TSA-Kosten unabhän
 - **Blätter decken jede existierende Kette ab, nicht nur die veränderten.** Nur so bezeugt der Anker auch
   die **Menge** der Ketten, und „die Kette von Mandant X ist verschwunden" wird durch Vergleich zweier
   Anker erkennbar (ADR-007 Konsequenz 5).
-- Blatt- und Knotenkodierung sind **domain-separiert** (`0x00` / `0x01`) und Teil der kanonischen
-  Kodierung in ADR-006, weil `verify` den Baum byteidentisch nachbauen muss.
+- Blatt- und Knotenkodierung sind **domain-separiert** (`0x00` / `0x01`) und seit dem 2026-07-31 in
+  ADR-006 festgelegt, weil `verify` den Baum byteidentisch nachbauen muss: Blätter nach den Rohbytes der
+  `chain_scope_id` sortiert, Baumform nach **RFC 6962** — der ungerade Knoten wird **hochgezogen**, nicht
+  dupliziert. Bei der Duplizier-Regel liefern `[A,B,C]` und `[A,B,C,C]` dieselbe Wurzel, womit sich eine
+  zusätzliche Kette in einen bestehenden Anker hineinbehaupten ließe.
 
 **Kein Standard-TSA-URL ausliefern.** Für deutsche Installationen soll es eine qualifizierte TSA
 unter eIDAS sein — das ist eine Entscheidung des Betreibers, keine Voreinstellung. **ADR-023** hält fest,
@@ -328,12 +345,12 @@ umdokumentiert, nicht mehr als primärer Pfad für Compliance-Installationen.
 Diese Punkte werden bewusst **nicht** in Epic 0 entschieden; sie sind in `05-entscheidungen.md` als
 offene ADRs geführt:
 
-| Punkt                                                                                                                                               | Epic   | Referenz                              |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
-| ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: eine Kette je Mandant, `chain_scope_id` = `ingestion_sources.id`** | E2     | ADR-007, RFC §15                      |
-| Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id` — **plus `chain_scope_id` im Genesis** (Vorgabe aus ADR-007)                | E2     | ADR-006                               |
-| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                   | E2     | ADR-009                               |
-| Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                               | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
-| `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                  | E6     | ADR-010                               |
-| Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                  | E12    | RFC §15                               |
-| Merkle-Baum statt linearer Kette                                                                                                                    | später | RFC §15 — für v1 nein                 |
+| Punkt                                                                                                                                                                                                                  | Epic   | Referenz                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
+| ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: eine Kette je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                    | E2     | ADR-007, RFC §15                      |
+| ~~Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id`~~ — **entschieden 2026-07-31: 16 gehashte Felder, Genesis mit `chain_scope_id`, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962** | E2     | ADR-006                               |
+| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                                                                                      | E2     | ADR-009                               |
+| Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                                                                                                  | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
+| `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                                                                                     | E6     | ADR-010                               |
+| Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                                                                                     | E12    | RFC §15                               |
+| Merkle-Baum statt linearer Kette                                                                                                                                                                                       | später | RFC §15 — für v1 nein                 |
