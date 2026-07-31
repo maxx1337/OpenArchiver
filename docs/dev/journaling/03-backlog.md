@@ -163,6 +163,31 @@ belegter Durability. Ohne Ledger darf nie ein `250` gesendet werden.
 
 **Skill:** `journal-ledger` ist für alle Tasks dieses Epics verbindlich.
 
+> ### Was `ADR-007` an diesem Epic ändert (entschieden 2026-07-31: **eine Kette je Mandant**)
+>
+> Die Tasks unten sind für **eine** Kette formuliert. Sie bleiben gültig, aber vier von ihnen bekommen
+> eine Dimension dazu. Wer sie aufgreift, liest zuerst ADR-007 — dort stehen Begründung und alle
+> Konsequenzen; hier nur, was in welcher Zeile anders wird:
+>
+> - **`JR-203`** (ADR-006 fixieren) nimmt `chain_scope_id` in den Genesis-String auf. **Vorgabe, nicht
+>   Option** — ohne sie sind zwei Ketten mit identischem erstem Ereignis hashgleich. Zusätzlich in
+>   ADR-006 noch offen: woher `deployment_id` kommt und was beim Klonen einer Installation aus einem
+>   Backup passiert.
+> - **`JR-204`** (Schema) braucht die Kettenspalte und `UNIQUE (chain_scope_id, seq)` statt eines
+>   globalen `seq`, plus `journaling_source_id` als **Attribut** je Zeile, damit „wer hat gesendet" im
+>   Beleg steht, ohne eine zweite Kette zu sein.
+> - **`JR-206`** (`append()`) leitet den Advisory-Lock-Key aus der Kettenkennung ab, statt ihn zu
+>   konstanten. Der Hash wird weiterhin **innerhalb** der Sperre berechnet.
+> - **`JR-208`** (adversarial) bekommt einen Fall, den es vorher nicht geben konnte: Appends in
+>   **verschiedene** Ketten dürfen sich **nicht** serialisieren, Appends in **dieselbe** Kette müssen
+>   es. Die zweite Hälfte ist der Vertrag, die erste der Grund für den abgeleiteten Lock-Key.
+> - **`JR-209`** (Tamper) bekommt „die Kette eines Mandanten fehlt vollständig" als Befund. Bei einer
+>   globalen Kette war dieser Zustand nicht darstellbar.
+>
+> **Vor der ersten Zeile Kettencode noch zu entscheiden:** ob `chain_scope_id` gleich
+> `ingestion_sources.id` (Empfehlung in ADR-007) oder `journaling_sources.id` ist. Danach ist es nicht
+> mehr korrigierbar — die Kennung steckt im Genesis-Hash jeder Kette.
+
 | ID     | Task                                                                                                                                                                                                                                                                                                                         | Rolle | RFC         | Akzeptanzkriterien                                                                                                                                                                       |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | JR-201 | `packages/journaling` anlegen: `package.json`, `tsconfig`, Abhängigkeit **nur** auf `@open-archiver/types`. Konfiguration und DB-Verbindung werden injiziert, nie importiert                                                                                                                                                 | DEV   | §2          | Paket baut eigenständig; `grep` bestätigt keinen Import aus `@open-archiver/backend`                                                                                                     |

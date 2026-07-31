@@ -146,11 +146,21 @@ Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Beric
 (`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
 Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 
-**Nächster Schritt: E2** — der Receiver selbst. Es existiert dafür noch **kein** Produktionscode. Vor der
-ersten Zeile Kettencode müssen **ADR-006** (kanonische Kodierung, Genesis-String — Task `JR-203`) und
-**ADR-007** (eine Kette global oder je Mandant) entschieden sein; eine späte Änderung invalidiert jede
-bestehende Kette. Ebenfalls offen für diesen Host: **Redis, Meilisearch und Tika fehlen.** `JR-1316`,
-`JR-1311` und `JR-1310` stehen weiter bei den Folge-Tasks und blockieren E2 nicht.
+**Nächster Schritt: E2** — der Receiver selbst. Es existiert dafür noch **kein** Produktionscode.
+
+**`ADR-007` ist am 2026-07-31 entschieden: eine Kette _je Mandant_**, nicht eine globale mit
+Mandanten-Tag — RFC §15 nennt das für Export und Löschung sauberere Modell, und beides muss dieses Produkt
+dauernd leisten. Die frühere Entwurfsrichtung („für v1 eine einzelne Kette") berief sich auf RFC §5.2 und
+verwechselte dabei Skalierungs- mit Mandantenpartitionierung; das ist berichtigt. Was das an E2s Tasks
+ändert, steht im Backlog unter „Was `ADR-007` an diesem Epic ändert".
+
+**Vor der ersten Zeile Kettencode noch offen** — beides steckt im Genesis-Hash und ist später nicht
+korrigierbar: welche Spalte `chain_scope_id` ist (`ingestion_sources.id` empfohlen), und **ADR-006**
+(Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id`) als Task `JR-203`.
+
+**Zur Umgebung:** seit dem 2026-07-31 sind Valkey, Meilisearch und Tika über **Docker Sandboxes**
+fahrbar — mit drei gemessenen Auflagen, die im Handover stehen. Postgres bleibt beim Embedded-Cluster.
+`JR-1316`, `JR-1311` und `JR-1310` stehen weiter bei den Folge-Tasks und blockieren E2 nicht.
 
 **Am 2026-07-30 hat der Auftraggeber drei Prozessentscheidungen getroffen:**
 

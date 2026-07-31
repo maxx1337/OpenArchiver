@@ -138,23 +138,103 @@ Zu fixieren: die exakte Bytefolge der kanonischen Kodierung, der Genesis-String 
 - `event_payload` vor dem Hashing kanonisch serialisiert (sortierte Schlüssel).
 
 ```
-chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> )
+chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> || <chain_scope_id> )
 ```
+
+> **Vorgabe aus ADR-007 (entschieden 2026-07-31):** `chain_scope_id` **muss** in den Genesis. Es gibt
+> eine Kette je Mandant; ohne die Kennung im Genesis hätten zwei Ketten mit identischem erstem Ereignis
+> denselben Hash, und ein Eintrag ließe sich zwischen Mandanten verschieben, ohne die Kette zu brechen.
+> Welche Spalte `chain_scope_id` ist, entscheidet ADR-007 — auch das vor der ersten Zeile Kettencode.
+
+**Ebenfalls noch offen und Teil dieser ADR: woher kommt `deployment_id`?** Naheliegend ist ein einmalig
+bei der ersten Migration erzeugter Wert in `system_settings` (die Tabelle existiert, `SettingsService`
+liest sie). Zu klären ist, was passiert, wenn eine Installation aus einem Backup **geklont** wird:
+dieselbe `deployment_id` in zwei Installationen bedeutet zwei divergierende Ketten mit gleichem Genesis.
 
 **Warum es eine ADR braucht:** Eine Änderung der Kodierung invalidiert jede bestehende Kette. Das ist
 ein Migrationsvorgang, keine Refaktorierung. Das Versionsbyte existiert genau deshalb.
 
 ## ADR-007 — Lock-Key-Strategie und Mehrmandantenfähigkeit
 
-**Status:** **offen** — zu entscheiden in E2 · **Quelle:** RFC §15
+**Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Quelle:** RFC §15
 
-Eine Kette pro Mandant oder eine globale Kette mit Mandanten-Tag?
+**Eine Kette je Mandant.** Nicht eine globale Kette mit Mandanten-Tag.
 
-**Richtung:** v1 setzt eine **einzelne** Kette um (RFC §5.2: „nicht dort anfangen" mit
-Horizontalskalierung). Der Advisory-Lock-Key wird aber so gewählt, dass eine späterere Aufspaltung in
-Shard-Ketten mit periodischem Cross-Shard-Anker möglich bleibt.
+**Begründung:** RFC §15 stellt die Abwägung selbst so: _„Per-tenant is cleaner for export and erasure;
+global is simpler to anchor."_ Export und Löschung sind die Operationen, die dieses Produkt dauernd
+ausführen muss — ein Auditor bekommt die Kette **eines** Mandanten, und eine DSGVO-Löschung wirkt
+innerhalb **eines** Mandanten. Bei einer globalen Kette wäre beides nur mit Filterung über fremde
+Metadaten möglich, und ein Kettenauszug für einen Auditor würde zwangsläufig Absender, Empfänger und
+Zeitpunkte anderer Mandanten offenlegen. Das Ankern ist die einfachere Seite und die billigere Stelle,
+den Preis zu bezahlen (siehe Konsequenz 4).
 
-**Abwägung:** pro Mandant ist sauberer für Export und Löschung; global ist einfacher zu ankern.
+**Diese Entscheidung widerspricht RFC §5.2 nicht** — und die frühere Entwurfsrichtung hier hat genau
+das verwechselt. RFC §5.2 sagt zu **Shard**-Ketten: _„If horizontal scaling is needed later, partition
+into per-shard chains with a periodic cross-shard aggregate anchor — but do not start there."_ Das ist
+eine Aussage über **Skalierungspartitionierung**, nicht über eine fachliche Partition je Mandant. Der
+Satz „für v1 wird eine einzelne Kette umgesetzt" in `02-architektur.md` §4 stützte sich auf diese
+Verwechslung und ist mit dieser ADR berichtigt. Die Serialisierungsforderung des RFC (§5.2: _„Writes
+must be serialized"_) bleibt unangetastet — sie gilt jetzt **je Kette**.
+
+### Was noch festzulegen ist, bevor Kettencode entsteht
+
+**Was ist der Mandant, technisch?** Die Entscheidung „je Mandant" nennt die Partition, nicht die
+Spalte. Es gibt zwei Kandidaten, beide existieren schon im Schema, und die Wahl ist **nicht** später
+korrigierbar — sie steckt im Genesis-Hash jeder Kette:
+
+| Kandidat                | Bedeutung                                                                                                                                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ingestion_sources.id`  | Das Archiv. `journaling_sources.ingestion_source_id` ist laut Schemakommentar „the backing ingestion source that owns all archived emails"; Storage-Pfade sind nach dieser ID benannt (`CLAUDE.md` §5.5) |
+| `journaling_sources.id` | Der SMTP-Endpunkt. Trägt `organization_domains`, `allowed_ips`, eigene SMTP-Credentials und `routing_address`                                                                                            |
+
+**Empfehlung: `ingestion_sources.id`.** Drei Gründe, alle am vorhandenen Schema geprüft:
+
+1. **Der Ledger ist der Beleg und muss stabiler sein als die Konfiguration, die ihn füllt.** Ein
+   `journaling_sources`-Datensatz ist Endpunktkonfiguration: er kann `paused` werden, seine
+   `routing_address` ist „immutable **unless regenerated**", und er hängt mit
+   `onDelete: 'cascade'` an der Ingestion-Source. Eine Kette, deren Genesis an eine neu erzeugbare
+   Konfigurationszeile gebunden ist, forkt bei jeder Neuanlage.
+2. **Export und Löschung — die Begründung dieser ADR — wirken auf das Archiv**, nicht auf den
+   Endpunkt. Retention und Compliance-Policy ebenfalls.
+3. **Das Schema erlaubt mehrere Endpunkte je Archiv** (kein `unique` auf `ingestion_source_id`). Bei
+   Kandidat 2 hätte ein Archiv dann zwei unabhängige Ketten, und eine Vollständigkeitsaussage über
+   dieses Archiv müsste beide prüfen und ihre Beziehung begründen.
+
+Damit „wer hat gesendet" nicht verloren geht, gehört `journaling_source_id` als **Attribut** in jede
+Ledger-Zeile. Eine Sicht je Endpunkt ist dann eine Abfrage, keine zweite Kette.
+
+### Konsequenzen
+
+1. **`journal_ledger` bekommt eine Kettenspalte**, und `seq` ist **je Kette** fortlaufend, nicht
+   global: `UNIQUE (chain_scope_id, seq)`. Ein globales `seq` wäre ein zweiter, versteckter
+   Serialisierungspunkt.
+2. **Der Advisory-Lock-Key wird aus der Kettenkennung abgeleitet**, nicht konstant. Das ist der
+   eigentliche Inhalt von „Lock-Key-Strategie" in dieser ADR. Nebeneffekt, nicht Zweck: zwei Mandanten
+   blockieren sich beim Append nicht mehr gegenseitig. `pg_advisory_xact_lock` bleibt Pflicht
+   (`02-architektur.md` §4), und der Hash wird weiterhin **innerhalb** der Sperre berechnet.
+3. **Die Kettenkennung muss in den Genesis-Hash.** Sonst haben zwei Ketten mit identischem erstem
+   Ereignis identische Hashes, und ein Eintrag ließe sich zwischen Mandanten verschieben, ohne die
+   Kette zu brechen. Das ist eine **Vorgabe an ADR-006**, dort einzuarbeiten:
+   `chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || deployment_id || chain_scope_id )`.
+4. **Ankern (E8) wird teurer und braucht eine Entscheidung.** Entweder ein TSA-Zeitstempel je Kette —
+   kostenpflichtig je Mandant — oder **ein** Anker über einen Aggregat-Hash aller Kettenköpfe
+   (Merkle-Wurzel oder kanonisch sortierte Liste `(chain_scope_id, seq, chain_hash)`). Vorschlag:
+   Aggregat, weil es die Kosten unabhängig von der Mandantenzahl hält und derselben Konstruktion folgt,
+   die RFC §5.2 für Shards vorsieht. **Zu entscheiden in E7/E8**, nicht jetzt — aber die Aggregatform
+   muss ankerbar sein, bevor E8 beginnt.
+5. **`verify` (E9) muss Ketten aufzählen und eine _fehlende_ Kette erkennen.** Bei einer globalen Kette
+   war „die Kette fehlt" nicht darstellbar; jetzt ist „Mandant X hat keine Kette mehr" ein
+   Manipulationsbefund und braucht einen eigenen adversarialen Testfall in §12.
+6. **Completeness-Monitoring (E10) rechnet je Mandant.** Eine globale Lückenzahl würde einen
+   vollständig ausgefallenen Mandanten hinter dem Verkehr der anderen verstecken.
+7. **Die Testmatrix wächst um einen Fall, der vorher nicht existierte:** nebenläufige Appends in
+   **verschiedene** Ketten müssen sich nicht serialisieren, nebenläufige Appends in **dieselbe** Kette
+   müssen es. Beides ist zu prüfen — die zweite Hälfte ist der Vertrag, die erste der Grund für den
+   abgeleiteten Lock-Key.
+
+**Verworfen:** globale Kette mit Mandanten-Tag. Sie ist billiger zu ankern und bleibt die
+Rückfalloption, falls die Aggregatform aus Konsequenz 4 sich als nicht ankerbar erweist — dann braucht
+es eine neue ADR, die diese hier ausdrücklich ersetzt.
 
 ## ADR-008 — Verhalten bei TSA-Ausfall
 

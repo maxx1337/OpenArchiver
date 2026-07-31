@@ -146,9 +146,21 @@ COMMIT;
 automatisch freigegeben, auch bei Abbruch. Der Hash **muss innerhalb** der Sperre berechnet werden —
 außerhalb entstehen konkurrierende Ketten.
 
-Lock-Key-Strategie und Mehrmandantenfähigkeit sind **offen** (siehe RFC §15 und ADR-007): eine Kette
-pro Mandant oder eine globale Kette mit Mandanten-Tag. Für v1 wird eine einzelne Kette umgesetzt,
-der Lock-Key aber so gewählt, dass eine Aufspaltung später möglich ist.
+**Eine Kette je Mandant — entschieden am 2026-07-31, ADR-007.** Der frühere Satz an dieser Stelle
+(„für v1 wird eine einzelne Kette umgesetzt") berief sich auf RFC §5.2 und verwechselte dabei zwei
+Dinge: §5.2s „do not start there" gilt für **Shard**-Ketten zur Horizontalskalierung, nicht für eine
+fachliche Partition je Mandant. Begründung und alle Konsequenzen stehen in ADR-007; die drei, die
+dieses Kapitel betreffen:
+
+- Der Lock-Key wird **aus der Kettenkennung abgeleitet**, nicht konstant. Die Serialisierungsforderung
+  aus RFC §5.2 gilt damit **je Kette** — nebenläufige Appends in verschiedene Ketten dürfen sich nicht
+  blockieren, nebenläufige Appends in dieselbe Kette müssen es.
+- `seq` läuft **je Kette** (`UNIQUE (chain_scope_id, seq)`), nicht global.
+- Die Kettenkennung geht **in den Genesis-Hash** — sonst wären zwei Ketten mit identischem erstem
+  Ereignis hashgleich und ein Eintrag zwischen Mandanten verschiebbar, ohne die Kette zu brechen.
+
+**Offen bleibt die Spalte, nicht die Partition:** `ingestion_sources.id` (Empfehlung) oder
+`journaling_sources.id`. Siehe ADR-007 — festzulegen vor der ersten Zeile Kettencode.
 
 ### Kanonische Kodierung
 
@@ -167,8 +179,11 @@ Entwurf (Festlegung in E2):
 
 ```
 chain_hash(n) = SHA256( canonical_encode(...) || prev_chain_hash(n-1) )
-chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> )
+chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> || <chain_scope_id> )
 ```
+
+> `chain_scope_id` ist seit ADR-007 Teil des Genesis: es gibt eine Kette je Mandant, und ohne die
+> Kennung im Genesis wären zwei Ketten mit identischem erstem Ereignis hashgleich.
 
 Der Genesis-String und die `deployment_id` werden in `05-entscheidungen.md` festgeschrieben. Eine
 Änderung der Kodierung invalidiert jede bestehende Kette — sie ist ein Migrationsvorgang, keine
@@ -289,12 +304,12 @@ umdokumentiert, nicht mehr als primärer Pfad für Compliance-Installationen.
 Diese Punkte werden bewusst **nicht** in Epic 0 entschieden; sie sind in `05-entscheidungen.md` als
 offene ADRs geführt:
 
-| Punkt                                                                                              | Epic   | Referenz                              |
-| -------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
-| Lock-Key-Strategie und ob eine Kette pro Mandant                                                   | E2     | ADR-007, RFC §15                      |
-| Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id`                            | E2     | ADR-006                               |
-| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                  | E2     | ADR-009                               |
-| Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                              | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
-| `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                 | E6     | ADR-010                               |
-| Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette) | E12    | RFC §15                               |
-| Merkle-Baum statt linearer Kette                                                                   | später | RFC §15 — für v1 nein                 |
+| Punkt                                                                                                                                                           | Epic   | Referenz                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
+| ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: je Mandant.** Offen ist nur noch die Spalte (`ingestion_sources.id` empfohlen) | E2     | ADR-007, RFC §15                      |
+| Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id` — **plus `chain_scope_id` im Genesis** (Vorgabe aus ADR-007)                            | E2     | ADR-006                               |
+| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                               | E2     | ADR-009                               |
+| Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                                           | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
+| `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                              | E6     | ADR-010                               |
+| Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                              | E12    | RFC §15                               |
+| Merkle-Baum statt linearer Kette                                                                                                                                | später | RFC §15 — für v1 nein                 |

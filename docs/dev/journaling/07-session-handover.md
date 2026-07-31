@@ -132,15 +132,16 @@ E2** — der SMTP-Receiver, das eigentliche Projekt.
 „Immer zuerst" und alle früheren Sessionprotokolle (`/var/tmp`, `apt`, pgdg, `psql -f`) setzen Linux
 voraus. Was hier tatsächlich gilt — jeder Punkt gemessen, nicht vermutet:
 
-| Sache                    | Zustand auf diesem Host                                                                                                                                                                                                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm`                   | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                                    |
-| PostgreSQL               | **nicht installiert.** Kein Dienst, kein `psql`, kein Docker/Podman. Lösung unten                                                                                                                                                                                                                                         |
-| `psql.exe`               | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                                     |
-| WSL `Ubuntu-24.04`       | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                             |
-| Redis, Meilisearch, Tika | fehlen. Für E13 nicht gebraucht; für E2 ff. zu klären                                                                                                                                                                                                                                                                     |
-| `git fetch/push`         | **braucht zwei Handgriffe.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git` über SSH, `~/.ssh/id_rsa` ist **passphrase-geschützt**. Ohne geladenen Key endet ein nicht-interaktiver Aufruf mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage. Lösung siehe unten |
-| `pnpm lint`              | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                            |
+| Sache                    | Zustand auf diesem Host                                                                                                                                                                                                                                                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm`                   | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                                             |
+| PostgreSQL               | **nicht installiert.** Kein Dienst, kein `psql`, kein Docker/Podman. Lösung unten                                                                                                                                                                                                                                                  |
+| `psql.exe`               | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                                              |
+| WSL `Ubuntu-24.04`       | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                                      |
+| Redis, Meilisearch, Tika | **seit 2026-07-31 über Docker Sandboxes fahrbar**, mit Auflagen — eigener Abschnitt unten. Valkey und Meilisearch vom Host aus belegt, Tika nur im Container                                                                                                                                                                       |
+| Docker                   | **keine Docker Engine und kein Docker Desktop auf dem Host**, auch nicht in WSL. Installiert ist `Docker.sbx` (**Docker Sandboxes** 0.37.1, winget) — ein anderes Produkt, das Agenten sandboxt; die Engine steckt _innerhalb_ einer Sandbox. `sbx.exe` liegt unter `%LOCALAPPDATA%\DockerSandboxes\bin` und ist **nicht im PATH** |
+| `git fetch/push`         | **braucht zwei Handgriffe.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git` über SSH, `~/.ssh/id_rsa` ist **passphrase-geschützt**. Ohne geladenen Key endet ein nicht-interaktiver Aufruf mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage. Lösung siehe unten          |
+| `pnpm lint`              | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                                     |
 
 **Wegwerf-Cluster ohne Systeminstallation** — so ist er in dieser Session entstanden, PostgreSQL
 **17.10**, dieselbe Version wie die CI und wie `JR-1309a`:
@@ -155,6 +156,69 @@ pg_ctl -D <datadir> -l <logfile> -o "-p 5432 -c listen_addresses=127.0.0.1" star
 ```
 
 `DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres` · `OA_TEST_REQUIRE_INFRA=1`
+
+### Infrastruktur über Docker Sandboxes (`sbx`) — was am 2026-07-31 gemessen wurde
+
+Der Auftraggeber hat **Docker Sandboxes** installiert. Das ist **nicht** Docker Desktop: es gibt auf dem
+Host weiterhin kein `docker`, und `sbx` ist ein Werkzeug, das Agenten in isolierte Umgebungen setzt. Die
+Docker Engine steckt _innerhalb_ einer Sandbox — und darüber ist `docker-compose.yml` fahrbar.
+
+```powershell
+$sbx = "$env:LOCALAPPDATA\DockerSandboxes\bin\sbx.exe"   # nicht im PATH
+& $sbx create shell --name oa-infra -m 4g "X:\NEW_DEVELOP.GIT\OpenArchiver"
+# Der Workspace wird nach /x/NEW_DEVELOP.GIT/OpenArchiver gemountet (Laufwerksbuchstabe kleingeschrieben)
+& $sbx exec oa-infra bash -lc "docker version; docker compose version"   # 29.6.1 / v5.2.0
+```
+
+Die Compose-Dienste haben **absichtlich keine Port-Mappings** (nur das interne Netz — der App-Container
+spricht sie über den Namen an). Für Zugriff vom Host braucht es beides: ein Override **außerhalb** des
+Repositorys und `sbx ports`.
+
+```bash
+# in der Sandbox, /tmp/oa-ports.yml -- NICHT im Repository anlegen
+services: { postgres: { ports: ["5432:5432"] }, valkey: { ports: ["6379:6379"] },
+            meilisearch: { ports: ["7700:7700"] }, tika: { ports: ["9998:9998"] } }
+# Compose validiert die ganze Datei, auch wenn man nur einen Dienst startet:
+export POSTGRES_DB=open_archive POSTGRES_USER=admin POSTGRES_PASSWORD=password \
+       REDIS_PASSWORD=devpassword MEILI_MASTER_KEY=aSampleMasterKey STORAGE_LOCAL_ROOT_PATH=/data
+docker compose -f docker-compose.yml -f /tmp/oa-ports.yml up -d postgres valkey meilisearch tika
+```
+
+```powershell
+& $sbx ports oa-infra --publish 5432:5432   # -> 127.0.0.1:5432 und [::1]:5432
+```
+
+**Was damit belegt ist:** PostgreSQL **17.10** (Nutzer `admin`, **`CREATEDB` vorhanden** — der Harness
+braucht das), Valkey antwortet auf `AUTH` + `PING`, Meilisearch liefert `/health` `200`. Tika läuft
+(Jetty auf `0.0.0.0:9998` im Container), ist aber vom Host aus **nicht** erreichbar.
+
+**Drei Auflagen, alle gemessen — wer sie nicht kennt, sucht den Fehler im Harness:**
+
+1. **Die Sandbox stoppt im Leerlauf**, und dann hört nichts. Das sieht vom Host wie `ECONNREFUSED` aus.
+   Container **und** Portfreigaben kommen beim nächsten Start von selbst zurück (`restart: unless-stopped`
+   greift, und erneutes `--publish` antwortet mit `409 … already published`). Jedes `sbx exec` startet
+   sie. Praktisch heißt das: **unmittelbar vor einem Testlauf ein `sbx exec … true` absetzen**, und
+   Messungen nicht über eine längere Pause hinweg für gültig halten.
+2. **Der Portforwarder überlebt die parallele Integrationslast nicht.** Ein Volllauf vom Host gegen das
+   weitergeleitete Postgres endete mit **16 Fehlschlägen**, alle `read ECONNRESET` bzw.
+   `write CONNECTION_CLOSED 127.0.0.1:5432` — acht Testdateien parallel, jede mit eigener Datenbank und
+   41 Migrationen. Derselbe Commit ist gegen den **Embedded-Cluster** grün (`274 passed | 2 skipped`).
+   Ein einzelner Connect durch den Forwarder ist dagegen schnell und stabil (4 ms).
+3. **`sbx` erzwingt im Sandbox-Netz eine Default-Deny-Policy.** `curl http://tika:9998/version`
+   _innerhalb_ der Sandbox antwortet `403 Blocked by network policy … no matching allow rule`. Das ist der
+   Zweck des Produkts, kein Defekt. Für Tika braucht es eine Regel über `sbx policy allow` — nicht
+   probiert.
+
+**Empfehlung daraus:** **Postgres weiter aus dem Embedded-Cluster** fahren (grün, schnell, kein
+Forwarder), und `sbx`-Docker für **Valkey, Meilisearch und Tika** ab E4/E6 nutzen — die brauchen wenige,
+langlebige Verbindungen und nicht die Verbindungsrate des Harness. Die Alternative, **die ganze Suite
+_in_ der Sandbox** zu fahren, umgeht den Forwarder vollständig, ist aber nicht geprüft und hat ein
+sichtbares Problem: der Workspace ist ein Bind-Mount, und `node_modules` darin ist **für Windows**
+gebaut. Das bräuchte `sbx create --clone` oder eine getrennte Installation.
+
+> **Es liegt eine Sandbox `oa-infra-probe` auf dem Host** (4 GiB, vier laufende Container), angelegt für
+> diese Messung. Sie ist nützlich, kostet aber Speicher. Entfernen:
+> `& $sbx rm -f oa-infra-probe`. Die Sandbox `claude-Maxim` des Auftraggebers wurde nicht angefasst.
 
 **Git gegen das Remote — so hat es am 2026-07-30 funktioniert.** Der Windows-Dienst `ssh-agent` hält den
 Key; Git-for-Windows bringt aber ein eigenes `ssh.exe` mit, das diesen Agent **nicht** kennt. Beides
@@ -226,16 +290,21 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 
 ### Nächster konkreter Schritt — **E2**, und davor zwei Entscheidungen
 
-**Nichts wartet auf Arbeit, aber zwei Dinge warten auf eine Entscheidung**, und beide müssen **vor der
-ersten Zeile Kettencode** fallen, weil sie später **jede bestehende Kette invalidieren**:
+**`ADR-007` ist am 2026-07-31 entschieden: eine Kette _je Mandant_.** Begründung, sieben Konsequenzen und
+die verworfene Alternative stehen in `05-entscheidungen.md`; was das an E2s Tasks ändert, steht als
+eigener Block im Backlog unter „Was `ADR-007` an diesem Epic ändert" (betrifft `JR-203`, `JR-204`,
+`JR-206`, `JR-208`, `JR-209`).
 
-| ADR         | Frage                                                                          |
-| ----------- | ------------------------------------------------------------------------------ |
-| **ADR-006** | Kanonische Kodierung und Genesis-String endgültig fixieren (Task **`JR-203`**) |
-| **ADR-007** | Eine Kette global oder eine je Mandant                                         |
+**Offen ist noch, was vor der ersten Zeile Kettencode fallen muss** — beides ist später **nicht**
+korrigierbar, weil es im Genesis-Hash jeder Kette steckt:
 
-Der Vorschlag zur Reihenfolge: **`JR-203` zuerst** (PO, reine Doku, ADR auf Status „entschieden"), dann
-die übrigen E2-Tasks aus `03-backlog.md`.
+| Punkt                              | Frage                                                                                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`chain_scope_id`** (aus ADR-007) | `ingestion_sources.id` (**Empfehlung**, Begründung in ADR-007) oder `journaling_sources.id`?                                                                                                                       |
+| **ADR-006**, Task **`JR-203`**     | Kodierung und Genesis-String fixieren — **inklusive `chain_scope_id` im Genesis** (Vorgabe aus ADR-007) — plus: woher kommt die `deployment_id`, und was passiert beim Klonen einer Installation aus einem Backup? |
+
+Der Vorschlag zur Reihenfolge: **die Spaltenfrage klären, dann `JR-203`** (PO, reine Doku, ADR-006 auf
+Status „entschieden"), dann die übrigen E2-Tasks aus `03-backlog.md`.
 
 ```
 Arbeite JR-201 bis JR-20x aus docs/dev/journaling/03-backlog.md ab —
@@ -243,10 +312,11 @@ Rolle senior-dev, Branch claude/journaling-e2-ledger vom Integrationsbranch.
 Vorher: ADR-006 und ADR-007 in 05-entscheidungen.md entscheiden.
 ```
 
-**Was für E2 an dieser Umgebung noch fehlt:** **Redis, Meilisearch und Tika sind auf diesem Host nicht
-installiert.** Für E1/E13 waren sie nicht nötig, für den Receiver sind sie es. Zu klären, wenn die erste
-Task sie braucht — Postgres läuft als Wegwerf-Cluster (Anleitung oben), für Redis wäre derselbe Weg
-(`node_modules`-Binärpaket statt Systemdienst) die naheliegende Variante.
+**Was für E2 an dieser Umgebung gilt:** **Redis/Valkey, Meilisearch und Tika sind seit 2026-07-31
+fahrbar** — über Docker Sandboxes, siehe den Abschnitt „Infrastruktur über Docker Sandboxes" oben. Drei
+Auflagen dort gemessen, die vorher zu lesen sind; die wichtigste: **Postgres bleibt beim
+Embedded-Cluster**, weil der Portforwarder der Sandbox die parallele Integrationslast nicht überlebt
+(16 Fehlschläge mit `ECONNRESET`, derselbe Commit gegen den Embedded-Cluster grün).
 
 **Was das Messinstrument jetzt hergibt, und was ab E2 daran hängt:** ein grüner Lauf belegt seit
 `JR-105c`, dass **die deklarierten Tests je Suite und Klasse ausgeführt wurden** — nicht nur, dass die
@@ -301,11 +371,11 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Zwei Fragen, beide für E2 und beide unvermeidbar vor der ersten Zeile Kettencode: ADR-006**
-(kanonische Kodierung und Genesis-String, Task `JR-203`) und **ADR-007** (eine Kette global oder eine je
-Mandant). Sie sind nicht neu — sie stehen seit E0 als offene ADRs — aber ab jetzt blockieren sie, weil
-eine spätere Änderung **jede bestehende Kette invalidiert**. Alles andere ist Arbeit ohne
-Entscheidungsbedarf.
+**`ADR-007` ist entschieden** (2026-07-31, Auftraggeber: eine Kette je Mandant). **Offen und blockierend
+bleiben zwei Punkte**, beide vor der ersten Zeile Kettencode und beide später nicht korrigierbar: welche
+Spalte `chain_scope_id` ist (`ingestion_sources.id` empfohlen), und **ADR-006** — Kodierung plus
+Genesis-String, jetzt mit `chain_scope_id` darin, plus Herkunft der `deployment_id` und das Verhalten beim
+Klonen einer Installation. Alles andere ist Arbeit ohne Entscheidungsbedarf.
 
 Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und umgesetzt in
 `JR-1317`/`JR-1318`.
