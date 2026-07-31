@@ -20,13 +20,14 @@ License: **AGPL-3.0**. Contributions must stay compatible with it.
 pnpm workspaces (`pnpm-workspace.yaml`: `packages/*`, `apps/*`). **No turbo/nx** — orchestration is
 plain `pnpm --filter` + `concurrently` + `dotenv-cli`. Node >= 22, pnpm 10.13.1 (pinned).
 
-| Path                 | Package name              | Role                                                                          |
-| -------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| `packages/types`     | `@open-archiver/types`    | Shared contract package. Types-only, MIT. **Changes here ripple everywhere.** |
-| `packages/backend`   | `@open-archiver/backend`  | Express 5 API, services, Drizzle schema, BullMQ workers                       |
-| `packages/frontend`  | `@open-archiver/frontend` | SvelteKit 2 / Svelte 5 (runes), Tailwind 4, bits-ui                           |
-| `apps/open-archiver` | `open-archiver-app`       | Thin entrypoint: `createServer([])` + `listen`                                |
-| `docs/`              | —                         | VitePress site. Sidebar is **explicit** in `docs/.vitepress/config.mts`       |
+| Path                  | Package name                | Role                                                                                                                                                                      |
+| --------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/types`      | `@open-archiver/types`      | Shared contract package. Types-only, MIT. **Changes here ripple everywhere.**                                                                                             |
+| `packages/backend`    | `@open-archiver/backend`    | Express 5 API, services, Drizzle schema, BullMQ workers                                                                                                                   |
+| `packages/frontend`   | `@open-archiver/frontend`   | SvelteKit 2 / Svelte 5 (runes), Tailwind 4, bits-ui                                                                                                                       |
+| `packages/journaling` | `@open-archiver/journaling` | **Since `JR-201` (E2).** Ledger, canonical encoding, chain and Merkle hashing. AGPL, pure logic. Depends on `types` **only** — config and DB are injected, never imported |
+| `apps/open-archiver`  | `open-archiver-app`         | Thin entrypoint: `createServer([])` + `listen`                                                                                                                            |
+| `docs/`               | —                           | VitePress site. Sidebar is **explicit** in `docs/.vitepress/config.mts`                                                                                                   |
 
 ### The dual OSS / Enterprise build — read this carefully
 
@@ -126,7 +127,8 @@ Four things about it are easy to trip over:
   message states the number to write. `globalSetup` checks the files before the run; a reporter plus the
   `globalSetup` teardown check the **executed** test counts after it (JR-105c, findings F14/F15).
 - **A green run can be a disabled run** — the reason all of the above exists. Quote test counts, not
-  just "green": a full local run is `274 passed | 2 skipped`. A run narrowed with `-t`, a file filter,
+  just "green": a full local run is `324 passed | 2 skipped` at 22 files (274 before `JR-202` added the
+  canonical encoding). A run narrowed with `-t`, a file filter,
   `--project` or `--shard` prints `verified NOTHING` and checks no counts.
 - **Integration tests acquire a real database** via `acquireTestDatabase()` in the **module scope**, and
   the harness records it in a per-run ledger so the main process can announce and drop anything a

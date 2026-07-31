@@ -61,7 +61,7 @@ Lauf und in jeder Umgebung — zwei positive Erwartungen:
    — sie fällt auf.
 
 Die Zahlen werden auf **jedem** Lauf gemeldet, auch auf einem grünen:
-`[TEST-INVENTORY] unit: 10 file(s) (expected 10) · integration: 8 file(s) (expected 8) · adversarial: 1 file(s) (expected 1) · unclassified: 0`.
+`[TEST-INVENTORY] unit: 13 file(s) (expected 13) · integration: 8 file(s) (expected 8) · adversarial: 1 file(s) (expected 1) · unclassified: 0`.
 Wer eine Suite absichtlich verkleinert, ändert `expectedFiles` im selben Commit — sichtbar im Diff,
 statt unbemerkt.
 
@@ -77,7 +77,7 @@ ein Token je Datei schaltet die ganze `integration`-Suite ab, und **beide** Wäc
 3. **Je Suite und je Klasse müssen genau `expectedTests[klasse]` Tests _ausgeführt_ worden sein.**
    Ausgeführt heißt `passed` oder `failed`; `skipped` und `todo` zählen nicht. Eine nicht gewählte
    Klasse muss 0 beitragen. Gemeldet auf jedem Lauf als
-   `[TEST-EXECUTED] unit: ci 216/216 … · selection: ci`.
+   `[TEST-EXECUTED] unit: ci 266/266 … · selection: ci`.
 
 Warum **Gleichheit** und nicht Untergrenze: eine Untergrenze ist Spiel, und eine Löschung in Höhe des
 Spiels geht lautlos durch — das ist F15. Der Preis ist eine Zahl je Commit, der die Testzahl ändert;

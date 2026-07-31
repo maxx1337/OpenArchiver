@@ -1,0 +1,25 @@
+{
+	"name": "@open-archiver/journaling",
+	"version": "0.1.0",
+	"license": "AGPL-3.0",
+	"private": true,
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"test": "vitest run --root ../.. packages/journaling",
+		"test:watch": "vitest --root ../.. packages/journaling",
+		"test:types": "tsc -p tsconfig.test.json"
+	},
+	"devDependencies": {
+		"@types/node": "^24.0.13",
+		"typescript": "^5.0.0"
+	},
+	"dependencies": {
+		"@open-archiver/types": "workspace:*"
+	}
+}

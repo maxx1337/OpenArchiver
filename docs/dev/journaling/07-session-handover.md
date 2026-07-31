@@ -92,8 +92,8 @@ keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant
 **`ADR-023`**: TSA-Auswahl, `open-tsa.eu` gemessen und eingeordnet · **Infrastruktur steht** über Docker
 Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
 behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
-`claude/enterprise-product-implementation-cxmmqe` · Arbeitsbaum **sauber** · Volllauf gegen das
-Docker-Postgres **274 passed | 2 skipped** bei 19 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
+`claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
+Docker-Postgres **324 passed | 2 skipped** bei 22 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
@@ -370,11 +370,23 @@ Offen bleibt in E2 allein **`ADR-009`** (Append-Only: Rechteentzug oder Trigger)
 `JR-205`, blockiert also nichts davor. Ihr Umfang ist seit ADR-006 §4.2 **`journal_ledger` und
 `deployment_identity`**.
 
+**`JR-201` und `JR-202` sind erledigt** (2026-07-31, Branch `claude/journaling-e2-ledger`):
+`packages/journaling` existiert, und `src/ledger/` trifft die Vektoren aus ADR-006 §6 byteidentisch. Was
+davon für die nächsten Tasks gilt:
+
+- **`encodeLedgerRecord()` ist die einzige Stelle, die Kettenbytes erzeugt.** `JR-206` (`append()`) ruft
+  sie **innerhalb** der Sperre auf und baut den Record nicht selbst zusammen.
+- **Drei Regeln der ADR sind als Verweigerung implementiert**, nicht als Kommentar: ein Zeitstempel ohne
+  ms-Vielfaches, eine UUID in Großschreibung und ein nicht parsbares `remoteIp` werfen. `JR-204` muss den
+  `CHECK` für die erste davon nachziehen, sonst hängt die Invariante allein am Anwendungscode.
+- **Die Ledger-Typen liegen in `packages/types`** (`journal-ledger.types.ts`), nicht im Paket — sonst
+  hätte die Abhängigkeitsregel keinen Sinn und `verify` (E9) bekäme eigene Formen.
+
 ```
-Arbeite JR-201 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
-Branch claude/journaling-e2-ledger vom Integrationsbranch. Lies vorher ADR-006
-und ADR-007 in docs/dev/journaling/05-entscheidungen.md; JR-202 muss die
-Testvektoren aus ADR-006 §6 reproduzieren.
+Arbeite JR-204 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
+Branch claude/journaling-e2-ledger (existiert). Skill oa-migration ist Pflicht.
+JR-204 braucht drei Dinge aus ADR-006: size_bytes/content_sha256 nullable, den
+CHECK auf ms-Vielfache in received_at, und die Tabelle deployment_identity.
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -391,7 +403,7 @@ Konsequenzen für jede E2-Task:
   `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
 - **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
   prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
-  **274 passed | 2 skipped** bei 19 Dateien.
+  **324 passed | 2 skipped** bei 22 Dateien (vor `JR-202` waren es 274 bei 19).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
 können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin

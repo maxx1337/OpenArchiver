@@ -355,6 +355,19 @@ importers:
         specifier: ^6.2.6
         version: 6.3.5(@types/node@24.0.13)(jiti@2.4.2)(lightningcss@1.30.1)
 
+  packages/journaling:
+    dependencies:
+      '@open-archiver/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.13
+        version: 24.0.13
+      typescript:
+        specifier: ^5.0.0
+        version: 5.8.3
+
   packages/types:
     dependencies:
       jose:
@@ -3943,6 +3956,7 @@ packages:
     resolution: {integrity: sha512-Nkwo9qeCvqVH0ZgYRUfPyj6o4o7StvNIxMFECeiz4y0uMOVyqc5Y9hjsdFVxdYCeiUjjXLQXA8KIz0iJL3HM0w==}
     engines: {node: '>=20.18.0'}
     hasBin: true
+    bundledDependencies: []
 
   peberminta@0.9.0:
     resolution: {integrity: sha512-XIxfHpEuSJbITd1H3EeQwpcZbTLHc+VVr8ANI9t5sit565tsI4/xK3KWTUFE2e6QiangUkh3B0jihzmGnNrRsQ==}

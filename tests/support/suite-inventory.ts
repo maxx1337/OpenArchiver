@@ -97,9 +97,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// (src/iam-policy/policy-validator.f1-conditions.test.ts) and the ADR-017 call-site
 		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-1313 added the
 		// cross-gate check (tests/unit/condition-key-gates.test.ts); 10 after JR-105c added
-		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts.
-		expectedFiles: 10,
-		expectedTests: { ci: 216, nightly: 0, manual: 0 },
+		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts; 13 after JR-202
+		// added the canonical encoding of packages/journaling (canonical-encoding, merkle and the
+		// ADR-006 golden vectors, all under src/ledger/).
+		expectedFiles: 13,
+		// 216 before JR-202; 266 with the 50 tests of the canonical encoding and the Merkle encoding.
+		expectedTests: { ci: 266, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'integration',

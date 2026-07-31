@@ -1,0 +1,19 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"declaration": true,
+		"composite": true
+	},
+	// Tests are excluded from the production build, the same way packages/backend does it: `*.test.ts`
+	// files live next to the code they test and must not end up in `dist`. `tsconfig.test.json`
+	// type-checks them.
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "src/**/*.test.ts", "tests"],
+	"references": [
+		{
+			"path": "../types"
+		}
+	]
+}
