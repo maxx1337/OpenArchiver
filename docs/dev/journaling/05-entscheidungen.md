@@ -144,7 +144,7 @@ chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || <deployment_id> ||
 > **Vorgabe aus ADR-007 (entschieden 2026-07-31):** `chain_scope_id` **muss** in den Genesis. Es gibt
 > eine Kette je Mandant; ohne die Kennung im Genesis hätten zwei Ketten mit identischem erstem Ereignis
 > denselben Hash, und ein Eintrag ließe sich zwischen Mandanten verschieben, ohne die Kette zu brechen.
-> Welche Spalte `chain_scope_id` ist, entscheidet ADR-007 — auch das vor der ersten Zeile Kettencode.
+> `chain_scope_id` **ist `ingestion_sources.id`** (ADR-007, ebenfalls am 2026-07-31 entschieden).
 
 **Ebenfalls noch offen und Teil dieser ADR: woher kommt `deployment_id`?** Naheliegend ist ein einmalig
 bei der ersten Migration erzeugter Wert in `system_settings` (die Tabelle existiert, `SettingsService`
@@ -176,18 +176,22 @@ Satz „für v1 wird eine einzelne Kette umgesetzt" in `02-architektur.md` §4 s
 Verwechslung und ist mit dieser ADR berichtigt. Die Serialisierungsforderung des RFC (§5.2: _„Writes
 must be serialized"_) bleibt unangetastet — sie gilt jetzt **je Kette**.
 
-### Was noch festzulegen ist, bevor Kettencode entsteht
+### Was der Mandant technisch ist: `ingestion_sources.id`
 
-**Was ist der Mandant, technisch?** Die Entscheidung „je Mandant" nennt die Partition, nicht die
-Spalte. Es gibt zwei Kandidaten, beide existieren schon im Schema, und die Wahl ist **nicht** später
-korrigierbar — sie steckt im Genesis-Hash jeder Kette:
+**Entschieden am 2026-07-31 durch den Auftraggeber, im selben Zug wie die Partition selbst.**
+`chain_scope_id` **ist** `ingestion_sources.id` — eine Kette je Archiv. `journaling_source_id` kommt als
+**Attribut** in jede Ledger-Zeile, damit „wer hat gesendet" im Beleg steht, ohne eine zweite Kette zu
+sein; eine Sicht je Endpunkt ist dann eine Abfrage.
+
+Die Abwägung, die zu dieser Wahl geführt hat — sie war zwischen zwei Spalten, die beide schon im Schema
+existieren, und sie ist **nicht** später korrigierbar, weil die Kennung im Genesis-Hash steckt:
 
 | Kandidat                | Bedeutung                                                                                                                                                                                                |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ingestion_sources.id`  | Das Archiv. `journaling_sources.ingestion_source_id` ist laut Schemakommentar „the backing ingestion source that owns all archived emails"; Storage-Pfade sind nach dieser ID benannt (`CLAUDE.md` §5.5) |
 | `journaling_sources.id` | Der SMTP-Endpunkt. Trägt `organization_domains`, `allowed_ips`, eigene SMTP-Credentials und `routing_address`                                                                                            |
 
-**Empfehlung: `ingestion_sources.id`.** Drei Gründe, alle am vorhandenen Schema geprüft:
+**Drei Gründe für `ingestion_sources.id`, alle am vorhandenen Schema geprüft:**
 
 1. **Der Ledger ist der Beleg und muss stabiler sein als die Konfiguration, die ihn füllt.** Ein
    `journaling_sources`-Datensatz ist Endpunktkonfiguration: er kann `paused` werden, seine
@@ -200,8 +204,9 @@ korrigierbar — sie steckt im Genesis-Hash jeder Kette:
    Kandidat 2 hätte ein Archiv dann zwei unabhängige Ketten, und eine Vollständigkeitsaussage über
    dieses Archiv müsste beide prüfen und ihre Beziehung begründen.
 
-Damit „wer hat gesendet" nicht verloren geht, gehört `journaling_source_id` als **Attribut** in jede
-Ledger-Zeile. Eine Sicht je Endpunkt ist dann eine Abfrage, keine zweite Kette.
+**Verworfen: `journaling_sources.id`.** Sie ist näher an „wer hat gesendet" und trägt die
+Organisationsdomänen — aber ein Archiv mit zwei Endpunkten hätte zwei unabhängige Ketten, und eine Kette
+würde an einer Zeile hängen, die neu angelegt werden kann.
 
 ### Konsequenzen
 

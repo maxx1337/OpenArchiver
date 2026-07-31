@@ -159,8 +159,10 @@ dieses Kapitel betreffen:
 - Die Kettenkennung geht **in den Genesis-Hash** — sonst wären zwei Ketten mit identischem erstem
   Ereignis hashgleich und ein Eintrag zwischen Mandanten verschiebbar, ohne die Kette zu brechen.
 
-**Offen bleibt die Spalte, nicht die Partition:** `ingestion_sources.id` (Empfehlung) oder
-`journaling_sources.id`. Siehe ADR-007 — festzulegen vor der ersten Zeile Kettencode.
+**`chain_scope_id` ist `ingestion_sources.id`** — eine Kette je **Archiv**, ebenfalls am 2026-07-31
+entschieden. `journaling_source_id` steht als **Attribut** in jeder Ledger-Zeile, damit „wer hat
+gesendet" im Beleg bleibt, ohne eine zweite Kette zu sein. Zwei Endpunkte auf demselben Archiv teilen
+also **eine** Kette, und ein neu angelegter Endpunkt setzt keine neue Kette auf. Begründung in ADR-007.
 
 ### Kanonische Kodierung
 
@@ -304,12 +306,12 @@ umdokumentiert, nicht mehr als primärer Pfad für Compliance-Installationen.
 Diese Punkte werden bewusst **nicht** in Epic 0 entschieden; sie sind in `05-entscheidungen.md` als
 offene ADRs geführt:
 
-| Punkt                                                                                                                                                           | Epic   | Referenz                              |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
-| ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: je Mandant.** Offen ist nur noch die Spalte (`ingestion_sources.id` empfohlen) | E2     | ADR-007, RFC §15                      |
-| Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id` — **plus `chain_scope_id` im Genesis** (Vorgabe aus ADR-007)                            | E2     | ADR-006                               |
-| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                               | E2     | ADR-009                               |
-| Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                                           | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
-| `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                              | E6     | ADR-010                               |
-| Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                              | E12    | RFC §15                               |
-| Merkle-Baum statt linearer Kette                                                                                                                                | später | RFC §15 — für v1 nein                 |
+| Punkt                                                                                                                                               | Epic   | Referenz                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
+| ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: eine Kette je Mandant, `chain_scope_id` = `ingestion_sources.id`** | E2     | ADR-007, RFC §15                      |
+| Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id` — **plus `chain_scope_id` im Genesis** (Vorgabe aus ADR-007)                | E2     | ADR-006                               |
+| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                   | E2     | ADR-009                               |
+| Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                               | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
+| `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                  | E6     | ADR-010                               |
+| Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                  | E12    | RFC §15                               |
+| Merkle-Baum statt linearer Kette                                                                                                                    | später | RFC §15 — für v1 nein                 |

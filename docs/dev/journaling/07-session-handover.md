@@ -85,18 +85,20 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-30 (**`JR-105c` ist erledigt** — E1 hat keine offene Nacharbeit mehr, F14/F15/F16/F24
-behoben. Davor in derselben Session-Kette: **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`,
-**`JR-1312`** `dca1f1a`) · **Branch:** `claude/enterprise-product-implementation-cxmmqe` ·
-Arbeitsbaum **sauber** · Volllauf auf dem Integrationsbranch **274 passed | 2 skipped** bei 19 Dateien,
-Exit 0, 0 `oa_test_*`-Rückstände
+**Stand:** 2026-07-31 (**`ADR-007` entschieden**: eine Kette je Mandant, `chain_scope_id` =
+`ingestion_sources.id` · **Infrastruktur steht** über Docker Desktop · davor am 2026-07-30 **`JR-105c`
+erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24 behoben; **E13 abgenommen** mit `JR-1309c`,
+**Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
+`claude/enterprise-product-implementation-cxmmqe` · Arbeitsbaum **sauber** · Volllauf gegen das
+Docker-Postgres **274 passed | 2 skipped** bei 19 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
-**E1 und E13 sind beide fertig, und das Messinstrument trägt jetzt, was ab E2 daran hängt.** Der
-Inventar-Wächter zählte Dateien; seit `JR-105c` zählt er **ausgeführte Tests je Suite und je Klasse**,
-also belegt ein grüner Lauf endlich, dass die `integration`-Suite gelaufen ist. **Nächster Schritt ist
-E2** — der SMTP-Receiver, das eigentliche Projekt.
+**E1 und E13 sind fertig, das Messinstrument trägt jetzt, was ab E2 daran hängt, und die Infrastruktur
+läuft.** Der Inventar-Wächter zählte Dateien; seit `JR-105c` zählt er **ausgeführte Tests je Suite und je
+Klasse**, also belegt ein grüner Lauf endlich, dass die `integration`-Suite gelaufen ist. **Nächster
+Schritt ist E2** — der SMTP-Receiver, das eigentliche Projekt; davor fehlt nur noch **ADR-006**
+(`JR-203`).
 
 > ### Was diese Session gemacht hat
 >
@@ -123,6 +125,16 @@ E2** — der SMTP-Receiver, das eigentliche Projekt.
 > 4. **Eine Lücke im Sessionprotokoll geschlossen:** die Sessions zwischen `JR-1317` und dem Rückmerge
 >    hatten ihre `###`-Abschnitte in `06-status.md`, aber keine Zeile in der Protokolltabelle. Nachgetragen
 >    als eine Sammelzeile, gekennzeichnet als Nachtrag des PO.
+> 5. **`ADR-007` entschieden** (2026-07-31, Auftraggeber): eine Kette **je Mandant**, `chain_scope_id` =
+>    `ingestion_sources.id`. Sieben Konsequenzen festgehalten, `02-architektur.md` §4, ADR-006 und fünf
+>    E2-Tasks nachgezogen. Die frühere Entwurfsrichtung („für v1 eine einzelne Kette") war ein Denkfehler
+>    — sie berief sich auf RFC §5.2, das über **Shard**-Ketten spricht, nicht über Mandanten — und ist
+>    berichtigt.
+> 6. **Die Infrastrukturfrage für E2 ist geklärt.** Der Auftraggeber hat erst **Docker Sandboxes**, dann
+>    **Docker Desktop** installiert. Beides ist gemessen: über Sandboxes lief die Infrastruktur, aber der
+>    Portforwarder überlebte die parallele Integrationslast nicht (16 × `ECONNRESET`). Mit Docker Desktop
+>    ist derselbe Volllauf **grün**. Alle vier Dienste laufen, alle vier vom Host aus belegt. Der
+>    Embedded-Cluster wird nicht mehr gebraucht und bleibt als Rückfalloption dokumentiert.
 >
 > **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt.
 
@@ -132,16 +144,16 @@ E2** — der SMTP-Receiver, das eigentliche Projekt.
 „Immer zuerst" und alle früheren Sessionprotokolle (`/var/tmp`, `apt`, pgdg, `psql -f`) setzen Linux
 voraus. Was hier tatsächlich gilt — jeder Punkt gemessen, nicht vermutet:
 
-| Sache                    | Zustand auf diesem Host                                                                                                                                                                                                                                                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm`                   | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                                             |
-| PostgreSQL               | **nicht installiert.** Kein Dienst, kein `psql`, kein Docker/Podman. Lösung unten                                                                                                                                                                                                                                                  |
-| `psql.exe`               | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                                              |
-| WSL `Ubuntu-24.04`       | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                                      |
-| Redis, Meilisearch, Tika | **seit 2026-07-31 über Docker Sandboxes fahrbar**, mit Auflagen — eigener Abschnitt unten. Valkey und Meilisearch vom Host aus belegt, Tika nur im Container                                                                                                                                                                       |
-| Docker                   | **keine Docker Engine und kein Docker Desktop auf dem Host**, auch nicht in WSL. Installiert ist `Docker.sbx` (**Docker Sandboxes** 0.37.1, winget) — ein anderes Produkt, das Agenten sandboxt; die Engine steckt _innerhalb_ einer Sandbox. `sbx.exe` liegt unter `%LOCALAPPDATA%\DockerSandboxes\bin` und ist **nicht im PATH** |
-| `git fetch/push`         | **braucht zwei Handgriffe.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git` über SSH, `~/.ssh/id_rsa` ist **passphrase-geschützt**. Ohne geladenen Key endet ein nicht-interaktiver Aufruf mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage. Lösung siehe unten          |
-| `pnpm lint`              | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                                     |
+| Sache                     | Zustand auf diesem Host                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm`                    | **nicht im PATH.** `corepack pnpm …` benutzen — liefert das gepinnte 10.13.1. Node 24.14.0, npm 11.9.0                                                                                                                                                                                                                                                                          |
+| PostgreSQL                | **seit 2026-07-31 über Docker Desktop**, `postgres:17-alpine` aus `docker-compose.yml`, Port 5432 nativ auf den Host gemappt. Der Volllauf dagegen ist **grün**. Der Wegwerf-Cluster unten bleibt als Rückfalloption beschrieben, wird aber nicht mehr gebraucht                                                                                                                |
+| `psql.exe`                | **existiert auch im Wegwerf-Cluster nicht** — die Windows-Binärdistribution ist minimal. SQL über einen Node-`postgres`-Client fahren                                                                                                                                                                                                                                           |
+| WSL `Ubuntu-24.04`        | vorhanden, aber **nackt** (kein Node, kein Postgres) — **nicht** die Umgebung der Vorsessions                                                                                                                                                                                                                                                                                   |
+| Valkey, Meilisearch, Tika | **laufen ebenfalls** über `docker-compose.yml` und sind vom Host aus belegt: Valkey `AUTH`+`PING`, Meilisearch `/health` `200`, Tika `/version` `Apache Tika 3.2.2`. Damit ist die Infrastrukturfrage für E2 ff. geklärt                                                                                                                                                        |
+| Docker                    | **Docker Desktop**, Client und Engine **29.6.2**, Compose **v5.3.1**, Linux-Engine. **Benutzerinstallation** unter `%LOCALAPPDATA%\Programs\DockerDesktop`; der PATH-Eintrag `…\resources\bin` existiert, aber eine **vor** der Installation gestartete Shell sieht ihn nicht — dann fehlt auch `docker-credential-desktop` und jedes `pull` bricht ab. Eigener Abschnitt unten |
+| `git fetch/push`          | **braucht zwei Handgriffe.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git` über SSH, `~/.ssh/id_rsa` ist **passphrase-geschützt**. Ohne geladenen Key endet ein nicht-interaktiver Aufruf mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage. Lösung siehe unten                                                       |
+| `pnpm lint`               | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                                                                                  |
 
 **Wegwerf-Cluster ohne Systeminstallation** — so ist er in dieser Session entstanden, PostgreSQL
 **17.10**, dieselbe Version wie die CI und wie `JR-1309a`:
@@ -157,68 +169,82 @@ pg_ctl -D <datadir> -l <logfile> -o "-p 5432 -c listen_addresses=127.0.0.1" star
 
 `DATABASE_URL=postgresql://postgres@127.0.0.1:5432/postgres` · `OA_TEST_REQUIRE_INFRA=1`
 
-### Infrastruktur über Docker Sandboxes (`sbx`) — was am 2026-07-31 gemessen wurde
+### Infrastruktur über Docker Desktop — die Anleitung, gemessen am 2026-07-31
 
-Der Auftraggeber hat **Docker Sandboxes** installiert. Das ist **nicht** Docker Desktop: es gibt auf dem
-Host weiterhin kein `docker`, und `sbx` ist ein Werkzeug, das Agenten in isolierte Umgebungen setzt. Die
-Docker Engine steckt _innerhalb_ einer Sandbox — und darüber ist `docker-compose.yml` fahrbar.
+Der Auftraggeber hat **Docker Desktop** installiert. Damit ist die Infrastrukturfrage für E2 ff. erledigt:
+alle vier Dienste aus `docker-compose.yml` laufen, und der **komplette Volllauf gegen dieses Postgres ist
+grün** — `274 passed | 2 skipped`, Exit 0, 0 `oa_test_*`-Rückstände.
 
-```powershell
-$sbx = "$env:LOCALAPPDATA\DockerSandboxes\bin\sbx.exe"   # nicht im PATH
-& $sbx create shell --name oa-infra -m 4g "X:\NEW_DEVELOP.GIT\OpenArchiver"
-# Der Workspace wird nach /x/NEW_DEVELOP.GIT/OpenArchiver gemountet (Laufwerksbuchstabe kleingeschrieben)
-& $sbx exec oa-infra bash -lc "docker version; docker compose version"   # 29.6.1 / v5.2.0
-```
+**Zwei Fallen zuerst, beide haben je einen Versuch gekostet:**
 
-Die Compose-Dienste haben **absichtlich keine Port-Mappings** (nur das interne Netz — der App-Container
-spricht sie über den Namen an). Für Zugriff vom Host braucht es beides: ein Override **außerhalb** des
-Repositorys und `sbx ports`.
-
-```bash
-# in der Sandbox, /tmp/oa-ports.yml -- NICHT im Repository anlegen
-services: { postgres: { ports: ["5432:5432"] }, valkey: { ports: ["6379:6379"] },
-            meilisearch: { ports: ["7700:7700"] }, tika: { ports: ["9998:9998"] } }
-# Compose validiert die ganze Datei, auch wenn man nur einen Dienst startet:
-export POSTGRES_DB=open_archive POSTGRES_USER=admin POSTGRES_PASSWORD=password \
-       REDIS_PASSWORD=devpassword MEILI_MASTER_KEY=aSampleMasterKey STORAGE_LOCAL_ROOT_PATH=/data
-docker compose -f docker-compose.yml -f /tmp/oa-ports.yml up -d postgres valkey meilisearch tika
-```
+1. **`docker` ist nicht im PATH einer Shell, die vor der Installation gestartet wurde.** Es ist eine
+   **Benutzer**installation: `%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin`. Der PATH-Eintrag
+   existiert, aber nur für neue Prozesse.
+2. **Es genügt nicht, `docker.exe` mit vollem Pfad aufzurufen.** Dann fehlt `docker-credential-desktop`
+   im PATH, und jedes `pull` bricht ab mit `error getting credentials`. Das `bin`-Verzeichnis muss **in
+   den PATH**, nicht nur die Binärdatei erreichbar sein.
 
 ```powershell
-& $sbx ports oa-infra --publish 5432:5432   # -> 127.0.0.1:5432 und [::1]:5432
+$env:PATH = "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin;$env:PATH"
+docker version --format "{{.Client.Version}} / {{.Server.Version}}"   # 29.6.2 / 29.6.2
+docker compose version                                               # v5.3.1
 ```
 
-**Was damit belegt ist:** PostgreSQL **17.10** (Nutzer `admin`, **`CREATEDB` vorhanden** — der Harness
-braucht das), Valkey antwortet auf `AUTH` + `PING`, Meilisearch liefert `/health` `200`. Tika läuft
-(Jetty auf `0.0.0.0:9998` im Container), ist aber vom Host aus **nicht** erreichbar.
+Die Compose-Dienste haben **absichtlich keine Port-Mappings** — nur das interne Netz, der App-Container
+spricht sie über den Namen an. Das bleibt so; der Override für Host-Zugriff liegt **außerhalb** des
+Repositorys (im Scratchpad als `oa-ports.yml`):
 
-**Drei Auflagen, alle gemessen — wer sie nicht kennt, sucht den Fehler im Harness:**
+```yaml
+services:
+    postgres: { ports: ['5432:5432'] }
+    valkey: { ports: ['6379:6379'] }
+    meilisearch: { ports: ['7700:7700'] }
+    tika: { ports: ['9998:9998'] }
+```
 
-1. **Die Sandbox stoppt im Leerlauf**, und dann hört nichts. Das sieht vom Host wie `ECONNREFUSED` aus.
-   Container **und** Portfreigaben kommen beim nächsten Start von selbst zurück (`restart: unless-stopped`
-   greift, und erneutes `--publish` antwortet mit `409 … already published`). Jedes `sbx exec` startet
-   sie. Praktisch heißt das: **unmittelbar vor einem Testlauf ein `sbx exec … true` absetzen**, und
-   Messungen nicht über eine längere Pause hinweg für gültig halten.
-2. **Der Portforwarder überlebt die parallele Integrationslast nicht.** Ein Volllauf vom Host gegen das
-   weitergeleitete Postgres endete mit **16 Fehlschlägen**, alle `read ECONNRESET` bzw.
-   `write CONNECTION_CLOSED 127.0.0.1:5432` — acht Testdateien parallel, jede mit eigener Datenbank und
-   41 Migrationen. Derselbe Commit ist gegen den **Embedded-Cluster** grün (`274 passed | 2 skipped`).
-   Ein einzelner Connect durch den Forwarder ist dagegen schnell und stabil (4 ms).
-3. **`sbx` erzwingt im Sandbox-Netz eine Default-Deny-Policy.** `curl http://tika:9998/version`
-   _innerhalb_ der Sandbox antwortet `403 Blocked by network policy … no matching allow rule`. Das ist der
-   Zweck des Produkts, kein Defekt. Für Tika braucht es eine Regel über `sbx policy allow` — nicht
-   probiert.
+Es gibt **kein `.env`** im Repository, und Compose **validiert die ganze Datei**, auch wenn man nur einen
+Dienst startet — ohne `STORAGE_LOCAL_ROOT_PATH` scheitert es an
+`invalid spec: archiver-data:: empty section between colons` des App-Dienstes, den man gar nicht will.
+Also alle fünf Variablen setzen:
 
-**Empfehlung daraus:** **Postgres weiter aus dem Embedded-Cluster** fahren (grün, schnell, kein
-Forwarder), und `sbx`-Docker für **Valkey, Meilisearch und Tika** ab E4/E6 nutzen — die brauchen wenige,
-langlebige Verbindungen und nicht die Verbindungsrate des Harness. Die Alternative, **die ganze Suite
-_in_ der Sandbox** zu fahren, umgeht den Forwarder vollständig, ist aber nicht geprüft und hat ein
-sichtbares Problem: der Workspace ist ein Bind-Mount, und `node_modules` darin ist **für Windows**
-gebaut. Das bräuchte `sbx create --clone` oder eine getrennte Installation.
+```powershell
+$env:POSTGRES_DB="open_archive"; $env:POSTGRES_USER="admin"; $env:POSTGRES_PASSWORD="password"
+$env:REDIS_PASSWORD="devpassword"; $env:MEILI_MASTER_KEY="aSampleMasterKey"
+$env:STORAGE_LOCAL_ROOT_PATH="/data"
+docker compose -f docker-compose.yml -f <scratchpad>\oa-ports.yml up -d postgres valkey meilisearch tika
+```
 
-> **Es liegt eine Sandbox `oa-infra-probe` auf dem Host** (4 GiB, vier laufende Container), angelegt für
-> diese Messung. Sie ist nützlich, kostet aber Speicher. Entfernen:
-> `& $sbx rm -f oa-infra-probe`. Die Sandbox `claude-Maxim` des Auftraggebers wurde nicht angefasst.
+`DATABASE_URL=postgresql://admin:password@127.0.0.1:5432/open_archive` · `OA_TEST_REQUIRE_INFRA=1`
+
+**Belegt, jeweils vom Host aus:** PostgreSQL **17.10** mit **`CREATEDB`** (das braucht
+`acquireTestDatabase()`), Valkey `AUTH`+`PING`, Meilisearch `/health` `200`, Tika `/version`
+`Apache Tika 3.2.2`. Es gibt **kein `psql`** — SQL weiterhin über einen Node-`postgres`-Client
+(`leftovers.cjs` im Scratchpad nimmt die URL als Argument).
+
+> **Der Wegwerf-Cluster unten wird nicht mehr gebraucht**, ist aber als Rückfalloption beschrieben und
+> funktioniert unverändert. Er bleibt sinnvoll, wenn Docker Desktop einmal nicht läuft.
+
+#### Docker Sandboxes (`sbx`) — was davon zu wissen bleibt
+
+Vor Docker Desktop war **Docker Sandboxes** installiert (`Docker.sbx`, winget), und es ist es noch. Es ist
+ein **anderes Produkt**: es sandboxt Agenten, `sbx.exe` liegt unter `%LOCALAPPDATA%\DockerSandboxes\bin`,
+und die Engine steckt _innerhalb_ einer Sandbox. Der Weg funktioniert grundsätzlich — Docker 29.6.1 und
+Compose v5.2.0 in der Sandbox, Workspace nach `/x/NEW_DEVELOP.GIT/OpenArchiver` gemountet, Host-Zugriff
+über `sbx ports` — aber er ist für diese Suite **nicht** geeignet, und das ist gemessen:
+
+- **Der Portforwarder überlebt die parallele Integrationslast nicht.** Volllauf vom Host: **16
+  Fehlschläge**, alle `read ECONNRESET` bzw. `write CONNECTION_CLOSED` — acht Testdateien parallel, jede
+  mit eigener Datenbank und 41 Migrationen. Ein einzelner Connect ist dagegen 4 ms schnell. Mit Docker
+  Desktops nativem Port-Mapping ist derselbe Lauf grün.
+- **Die Sandbox stoppt im Leerlauf**, und dann hört nichts — vom Host sieht das wie `ECONNREFUSED` aus.
+  Container **und** Portfreigaben kommen beim nächsten Start von selbst zurück (erneutes `--publish`
+  antwortet `409 … already published`).
+- **`sbx` erzwingt im Sandbox-Netz eine Default-Deny-Netzpolicy**: `curl http://tika:9998/version`
+  _innerhalb_ der Sandbox antwortet `403 Blocked by network policy`. Das ist der Zweck des Produkts, kein
+  Defekt; eine Regel über `sbx policy allow` wäre nötig gewesen.
+
+Die Probe-Sandbox `oa-infra-probe` ist **entfernt** (`sbx rm -f`). Die Sandbox `claude-Maxim` des
+Auftraggebers wurde nicht angefasst.
 
 **Git gegen das Remote — so hat es am 2026-07-30 funktioniert.** Der Windows-Dienst `ssh-agent` hält den
 Key; Git-for-Windows bringt aber ein eigenes `ssh.exe` mit, das diesen Agent **nicht** kennt. Beides
@@ -295,28 +321,34 @@ die verworfene Alternative stehen in `05-entscheidungen.md`; was das an E2s Task
 eigener Block im Backlog unter „Was `ADR-007` an diesem Epic ändert" (betrifft `JR-203`, `JR-204`,
 `JR-206`, `JR-208`, `JR-209`).
 
-**Offen ist noch, was vor der ersten Zeile Kettencode fallen muss** — beides ist später **nicht**
-korrigierbar, weil es im Genesis-Hash jeder Kette steckt:
+**`chain_scope_id` ist `ingestion_sources.id`** — eine Kette je **Archiv**, im selben Zug entschieden.
+`journaling_source_id` steht als **Attribut** in jeder Ledger-Zeile, damit „wer hat gesendet" im Beleg
+bleibt, ohne eine zweite Kette zu sein.
 
-| Punkt                              | Frage                                                                                                                                                                                                              |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`chain_scope_id`** (aus ADR-007) | `ingestion_sources.id` (**Empfehlung**, Begründung in ADR-007) oder `journaling_sources.id`?                                                                                                                       |
-| **ADR-006**, Task **`JR-203`**     | Kodierung und Genesis-String fixieren — **inklusive `chain_scope_id` im Genesis** (Vorgabe aus ADR-007) — plus: woher kommt die `deployment_id`, und was passiert beim Klonen einer Installation aus einem Backup? |
+**Vor der ersten Zeile Kettencode fehlt damit genau eine Entscheidung: `ADR-006`** (Task **`JR-203`**,
+Rolle PO, reine Doku). Sie ist später **nicht** korrigierbar, weil sie im Genesis-Hash jeder Kette
+steckt. Drei Teile:
 
-Der Vorschlag zur Reihenfolge: **die Spaltenfrage klären, dann `JR-203`** (PO, reine Doku, ADR-006 auf
-Status „entschieden"), dann die übrigen E2-Tasks aus `03-backlog.md`.
+- die exakten Bytes der kanonischen Kodierung — der Entwurf steht in ADR-006 und `02-architektur.md` §4
+  und ist detailliert genug, um ihn zu bestätigen statt neu zu erfinden;
+- der Genesis-String, **inklusive `chain_scope_id`** (Vorgabe aus ADR-007);
+- **woher die `deployment_id` kommt.** Naheliegend ist ein Wert, der bei der ersten Migration einmalig in
+  `system_settings` entsteht (die Tabelle existiert, `SettingsService` liest sie). Offen ist die
+  unangenehme Hälfte: was gilt, wenn eine Installation aus einem **Backup geklont** wird? Zwei
+  Installationen mit derselben `deployment_id` erzeugen zwei divergierende Ketten mit gleichem Genesis.
+
+Danach die übrigen E2-Tasks aus `03-backlog.md`.
 
 ```
-Arbeite JR-201 bis JR-20x aus docs/dev/journaling/03-backlog.md ab —
-Rolle senior-dev, Branch claude/journaling-e2-ledger vom Integrationsbranch.
-Vorher: ADR-006 und ADR-007 in 05-entscheidungen.md entscheiden.
+Arbeite JR-203 ab (ADR-006 fixieren, Rolle PO), danach JR-201 ff. aus
+docs/dev/journaling/03-backlog.md — Rolle senior-dev, Branch
+claude/journaling-e2-ledger vom Integrationsbranch.
 ```
 
-**Was für E2 an dieser Umgebung gilt:** **Redis/Valkey, Meilisearch und Tika sind seit 2026-07-31
-fahrbar** — über Docker Sandboxes, siehe den Abschnitt „Infrastruktur über Docker Sandboxes" oben. Drei
-Auflagen dort gemessen, die vorher zu lesen sind; die wichtigste: **Postgres bleibt beim
-Embedded-Cluster**, weil der Portforwarder der Sandbox die parallele Integrationslast nicht überlebt
-(16 Fehlschläge mit `ECONNRESET`, derselbe Commit gegen den Embedded-Cluster grün).
+**Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
+Meilisearch und Tika laufen seit dem 2026-07-31 über **Docker Desktop** aus `docker-compose.yml`, alle vier
+vom Host aus belegt, und der Volllauf gegen dieses Postgres ist **grün** (`274 passed | 2 skipped`, Exit 0,
+0 Rückstände). Anleitung samt der zwei PATH-Fallen im Abschnitt „Infrastruktur über Docker Desktop" oben.
 
 **Was das Messinstrument jetzt hergibt, und was ab E2 daran hängt:** ein grüner Lauf belegt seit
 `JR-105c`, dass **die deklarierten Tests je Suite und Klasse ausgeführt wurden** — nicht nur, dass die
@@ -371,11 +403,11 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**`ADR-007` ist entschieden** (2026-07-31, Auftraggeber: eine Kette je Mandant). **Offen und blockierend
-bleiben zwei Punkte**, beide vor der ersten Zeile Kettencode und beide später nicht korrigierbar: welche
-Spalte `chain_scope_id` ist (`ingestion_sources.id` empfohlen), und **ADR-006** — Kodierung plus
-Genesis-String, jetzt mit `chain_scope_id` darin, plus Herkunft der `deployment_id` und das Verhalten beim
-Klonen einer Installation. Alles andere ist Arbeit ohne Entscheidungsbedarf.
+**`ADR-007` ist vollständig entschieden** (2026-07-31, Auftraggeber): eine Kette je Mandant, und
+`chain_scope_id` = `ingestion_sources.id`. **Blockierend bleibt genau eine Entscheidung: `ADR-006`**
+(Task `JR-203`) — Kodierung, Genesis-String mit `chain_scope_id` darin, Herkunft der `deployment_id` und
+das Verhalten beim Klonen einer Installation aus einem Backup. Alles andere ist Arbeit ohne
+Entscheidungsbedarf.
 
 Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und umgesetzt in
 `JR-1317`/`JR-1318`.
@@ -691,6 +723,22 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     — die Klammern sind eine leere Gruppe, also verlangt das Muster „release" direkt gefolgt von „ drops".
     Der Lauf meldet dann „19 skipped" und Exit 0, was sich wie ein Fehler im Harness liest und keiner ist.
     Bei Testnamen mit `()`, `[]`, `$` oder `.` ein klammerfreies Teilstück nehmen (`-t "idempotent"`).
+
+33. **Ein neu installiertes Werkzeug ist in einer laufenden Shell nicht da — und der vollständige Pfad
+    genügt nicht.** Docker Desktop ist hier eine **Benutzer**installation
+    (`%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin`); der PATH-Eintrag existiert, aber nur für neue
+    Prozesse. Der naheliegende Ausweg, `docker.exe` mit vollem Pfad aufzurufen, scheitert eine Stufe
+    später: dann fehlt `docker-credential-desktop` im PATH und jedes `pull` bricht mit
+    `error getting credentials` ab. Richtig ist, das **`bin`-Verzeichnis in den PATH** zu setzen
+    (`$env:PATH = "…\resources\bin;$env:PATH"`), nicht die Binärdatei zu adressieren. Derselbe Fall gilt
+    für jedes Werkzeug mit Helper-Programmen — `git` und `ssh` eingeschlossen.
+
+34. **`docker compose` validiert die ganze Datei, auch wenn man einen Dienst startet.** Hier scheitert
+    `up -d postgres` an `invalid spec: archiver-data:: empty section between colons` — das kommt vom
+    **App**-Dienst, den man gar nicht will, weil `STORAGE_LOCAL_ROOT_PATH` leer ist und es kein `.env` im
+    Repository gibt. Die fünf Variablen aus dem Docker-Abschnitt oben immer mitgeben. Und: die
+    Compose-Dienste haben **absichtlich keine Port-Mappings**; der Override dafür gehört **außerhalb** des
+    Repositorys, sonst veröffentlicht eine Produktionsinstallation plötzlich ihre Datenbank.
 
 ---
 

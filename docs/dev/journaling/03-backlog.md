@@ -173,9 +173,9 @@ belegter Durability. Ohne Ledger darf nie ein `250` gesendet werden.
 >   Option** — ohne sie sind zwei Ketten mit identischem erstem Ereignis hashgleich. Zusätzlich in
 >   ADR-006 noch offen: woher `deployment_id` kommt und was beim Klonen einer Installation aus einem
 >   Backup passiert.
-> - **`JR-204`** (Schema) braucht die Kettenspalte und `UNIQUE (chain_scope_id, seq)` statt eines
->   globalen `seq`, plus `journaling_source_id` als **Attribut** je Zeile, damit „wer hat gesendet" im
->   Beleg steht, ohne eine zweite Kette zu sein.
+> - **`JR-204`** (Schema) braucht `chain_scope_id` → **`ingestion_sources.id`** und
+>   `UNIQUE (chain_scope_id, seq)` statt eines globalen `seq`, plus `journaling_source_id` als
+>   **Attribut** je Zeile, damit „wer hat gesendet" im Beleg steht, ohne eine zweite Kette zu sein.
 > - **`JR-206`** (`append()`) leitet den Advisory-Lock-Key aus der Kettenkennung ab, statt ihn zu
 >   konstanten. Der Hash wird weiterhin **innerhalb** der Sperre berechnet.
 > - **`JR-208`** (adversarial) bekommt einen Fall, den es vorher nicht geben konnte: Appends in
@@ -184,9 +184,13 @@ belegter Durability. Ohne Ledger darf nie ein `250` gesendet werden.
 > - **`JR-209`** (Tamper) bekommt „die Kette eines Mandanten fehlt vollständig" als Befund. Bei einer
 >   globalen Kette war dieser Zustand nicht darstellbar.
 >
-> **Vor der ersten Zeile Kettencode noch zu entscheiden:** ob `chain_scope_id` gleich
-> `ingestion_sources.id` (Empfehlung in ADR-007) oder `journaling_sources.id` ist. Danach ist es nicht
-> mehr korrigierbar — die Kennung steckt im Genesis-Hash jeder Kette.
+> **`chain_scope_id` = `ingestion_sources.id`** — ebenfalls am 2026-07-31 entschieden, Begründung in
+> ADR-007. Eine Kette je **Archiv**: zwei Endpunkte auf demselben Archiv teilen eine Kette, ein neu
+> angelegter Endpunkt setzt keine neue auf.
+>
+> **Was vor der ersten Zeile Kettencode noch fehlt, ist damit allein `ADR-006`** (Task `JR-203`):
+> Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id` und das Verhalten,
+> wenn eine Installation aus einem Backup geklont wird.
 
 | ID     | Task                                                                                                                                                                                                                                                                                                                         | Rolle | RFC         | Akzeptanzkriterien                                                                                                                                                                       |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

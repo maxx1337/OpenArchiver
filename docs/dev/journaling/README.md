@@ -154,13 +154,18 @@ dauernd leisten. Die frühere Entwurfsrichtung („für v1 eine einzelne Kette")
 verwechselte dabei Skalierungs- mit Mandantenpartitionierung; das ist berichtigt. Was das an E2s Tasks
 ändert, steht im Backlog unter „Was `ADR-007` an diesem Epic ändert".
 
-**Vor der ersten Zeile Kettencode noch offen** — beides steckt im Genesis-Hash und ist später nicht
-korrigierbar: welche Spalte `chain_scope_id` ist (`ingestion_sources.id` empfohlen), und **ADR-006**
-(Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id`) als Task `JR-203`.
+Im selben Zug entschieden: **`chain_scope_id` = `ingestion_sources.id`** — eine Kette je **Archiv**;
+`journaling_source_id` steht als Attribut in jeder Ledger-Zeile.
 
-**Zur Umgebung:** seit dem 2026-07-31 sind Valkey, Meilisearch und Tika über **Docker Sandboxes**
-fahrbar — mit drei gemessenen Auflagen, die im Handover stehen. Postgres bleibt beim Embedded-Cluster.
-`JR-1316`, `JR-1311` und `JR-1310` stehen weiter bei den Folge-Tasks und blockieren E2 nicht.
+**Vor der ersten Zeile Kettencode fehlt damit genau eine Entscheidung: `ADR-006`** (Task `JR-203`) —
+Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id` und das Verhalten, wenn
+eine Installation aus einem Backup geklont wird. Sie steckt im Genesis-Hash und ist später nicht
+korrigierbar.
+
+**Zur Umgebung:** seit dem 2026-07-31 laufen **Postgres, Valkey, Meilisearch und Tika über Docker
+Desktop** aus `docker-compose.yml`, alle vier vom Host aus belegt, und der Volllauf dagegen ist grün. Der
+Wegwerf-Cluster wird nicht mehr gebraucht. `JR-1316`, `JR-1311` und `JR-1310` stehen weiter bei den
+Folge-Tasks und blockieren E2 nicht.
 
 **Am 2026-07-30 hat der Auftraggeber drei Prozessentscheidungen getroffen:**
 
