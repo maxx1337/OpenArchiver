@@ -443,7 +443,7 @@ Build-Info **nichts** emittieren. Wer das nachstellen will, muss beides löschen
 > **Für die nächsten Epics heißt das:** `apps/smtp-ingress` (E4) und `apps/oa-verify` (E9) brauchen
 > denselben Schritt, sobald etwas anderes von ihnen abhängt — und wer es vergisst, sieht es **nicht**
 > lokal. Beim ersten Nachstellen ist mir genau das passiert: `rm -rf dist` allein ließ auch den
-> *types*-Build nichts emittieren, sodass die Messung 30 Fehler zeigte und den Fix zu widerlegen
+> _types_-Build nichts emittieren, sodass die Messung 30 Fehler zeigte und den Fix zu widerlegen
 > schien. Die Build-Info gehört mitgelöscht, sonst misst man etwas anderes als einen frischen Checkout.
 
 **Lehre für künftige Epics:** eine im Backlog vorgegebene Kommandofolge ist eine Annahme, kein
