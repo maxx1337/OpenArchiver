@@ -34,3 +34,17 @@ export {
 	merkleNode,
 	merkleRoot,
 } from './ledger/merkle';
+
+export type {
+	LedgerAppendRequest,
+	LedgerAppendResult,
+	LedgerBackend,
+	LedgerQuery,
+	LedgerTransactor,
+} from './ledger/ledger-port';
+
+export {
+	PostgresLedgerWriter,
+	advisoryLockKey,
+	type PostgresLedgerWriterOptions,
+} from './ledger/ledger-writer';

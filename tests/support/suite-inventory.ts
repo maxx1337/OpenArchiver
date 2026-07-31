@@ -99,10 +99,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// cross-gate check (tests/unit/condition-key-gates.test.ts); 10 after JR-105c added
 		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts; 13 after JR-202
 		// added the canonical encoding of packages/journaling (canonical-encoding, merkle and the
-		// ADR-006 golden vectors, all under src/ledger/).
-		expectedFiles: 13,
-		// 216 before JR-202; 266 with the 50 tests of the canonical encoding and the Merkle encoding.
-		expectedTests: { ci: 266, nightly: 0, manual: 0 },
+		// ADR-006 golden vectors, all under src/ledger/); 14 after JR-206 added ledger-writer.test.ts.
+		expectedFiles: 14,
+		// 216 before JR-202; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
+		// 280 with the 14 statement-order tests of the ledger writer (JR-206).
+		expectedTests: { ci: 280, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -110,11 +111,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 4 after JR-104; 8 after JR-1301 split the F1/F3/F7/F8 regressions out of
 		// filter-builder.int.test.ts and added predefined-roles.int.test.ts; 9 after JR-204 added
 		// journal-ledger-schema.int.test.ts (the CHECK constraints and keys of the ledger table);
-		// 10 after JR-205 added journal-ledger-append-only.int.test.ts (the trigger).
-		expectedFiles: 10,
+		// 10 after JR-205 added journal-ledger-append-only.int.test.ts (the trigger); 11 after JR-206
+		// added journal-ledger-writer.int.test.ts (append() against a real database).
+		expectedFiles: 11,
 		// 55 before JR-204; 71 with the 16 schema tests of journal_ledger/deployment_identity;
-		// 79 with the 8 append-only tests of JR-205.
-		expectedTests: { ci: 79, nightly: 0, manual: 0 },
+		// 79 with the 8 append-only tests of JR-205; 87 with the 8 writer tests of JR-206.
+		expectedTests: { ci: 87, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

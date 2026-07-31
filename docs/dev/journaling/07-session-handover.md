@@ -93,7 +93,7 @@ keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant
 Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
 behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
 `claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
-Docker-Postgres **348 passed | 2 skipped** bei 24 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
+Docker-Postgres **370 passed | 2 skipped** bei 26 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
@@ -407,14 +407,31 @@ daraus, die die nächsten Tasks betreffen:
   kann den Trigger also selbst abschalten. Gemessen, nicht vermutet. Was der Trigger heute leistet, ist
   das Schließen von **F1** als Manipulationsweg.
 
+**`JR-206` ist erledigt.** `PostgresLedgerWriter.append()` in `packages/journaling/src/ledger/`. Vier
+Dinge daraus, die die nächsten Tasks betreffen:
+
+- **Die Hash-Vorberechnung ist strukturell ausgeschlossen, nicht per Kommentar:** `LedgerAppendRequest`
+  hat kein `seq`, kein `prevChainHash`, kein `chainHash`. Wer den Writer erweitert, darf diese Felder
+  **nicht** in die Anfrage aufnehmen — damit fiele die Garantie.
+- **Der Lock-Key kommt aus `advisoryLockKey(chainScopeId)`**: SHA-256, erste 8 Bytes, als signed int64.
+  Bewusst nicht Postgres' `hashtext()`, das nicht versionsstabil ist. Eine Kollision ist harmlos (zwei
+  Ketten serialisieren sich), das Gegenteil wäre gefährlich und ist ausgeschlossen.
+- **Der Adapter liegt noch unter `tests/support/postgres-transactor.ts`**, nicht in `src/`. Er zieht
+  nach `src/`, sobald ein Prozess ihn besitzt (E3/E4) — wer ihn früher verschiebt, muss die
+  Rechtetrennung aus ADR-002 mitentscheiden.
+- **Ein Fallstrick für `verify` (E9), hier schon einmal getreten:** `select seq::text as seq … order by
+seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte überschattet. Das meldete
+  einen Kettenbruch, der nicht existierte — und kann in der Gegenrichtung einen echten verdecken.
+  `ORDER BY` immer qualifizieren, und die Leseordnung selbst prüfen.
+
 ```
-Arbeite JR-206 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
-Branch claude/journaling-e2-ledger (existiert). JR-206 ist LedgerWriter.append():
-BEGIN → SET LOCAL synchronous_commit = on → pg_advisory_xact_lock aus der
-Kettenkennung → Kopf lesen → seq ableiten → Hash INNERHALB der Sperre über
-encodeLedgerRecord() → INSERT → COMMIT. Der Lock-Key kommt aus chain_scope_id
-(ADR-007 Konsequenz 2), und die Struktur muss die Hash-Berechnung außerhalb der
-Sperre unmöglich machen — nicht nur davon abraten.
+Arbeite JR-207 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
+Branch claude/journaling-e2-ledger (existiert). JR-207 ist zum großen Teil schon
+da: das Interface LedgerBackend/LedgerTransactor/LedgerQuery steht in
+src/ledger/ledger-port.ts und ist dokumentiert. Offen ist die ausdrückliche
+Bewertung, dass Variante (b) (lokales WAL, RFC §5.4) ohne Signaturänderung
+nachrüstbar ist. Danach JR-208/JR-209 — Rolle TEST, adversariale Last und
+Tamper-Erkennung. JR-209 muss den Append-Only-Trigger gezielt abschalten.
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -431,7 +448,7 @@ Konsequenzen für jede E2-Task:
   `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
 - **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
   prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
-  **348 passed | 2 skipped** bei 24 Dateien (274 bei 19 vor E2).
+  **370 passed | 2 skipped** bei 26 Dateien (274 bei 19 vor E2).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
 können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin
