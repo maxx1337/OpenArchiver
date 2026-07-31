@@ -207,3 +207,45 @@ klaren Fehler, akzeptiert eine **Liste** von URLs (zweiter unabhängiger Zeitste
 die Zertifikatskette mit dem Token. `ci` bleibt hermetisch, `nightly` geht gegen `open-tsa.eu`, `manual`
 gegen die qualifizierte TSA. `JR-804` und ADR-008 stellen sicher, dass eine nicht erreichbare TSA die
 Ingestion niemals stoppt.
+
+## R-16 — Geteilte Infrastruktur mischt Kundendaten, ohne einen Fehler zu erzeugen
+
+**Auswirkung:** kritisch · **Wahrscheinlichkeit:** mittel · **Epic:** E12
+
+Sobald mehr als ein Endkunde bedient wird, ist der naheliegende Sparschritt, Meilisearch und Valkey
+zwischen Instanzen zu teilen. Beides scheitert **leise**, und das ist der eigentliche Schaden:
+
+- **Meilisearch:** der Indexname ist das Literal `'emails'`, an 12 Stellen in
+  `services/SearchService.ts` und `services/IndexingService.ts` hart verdrahtet, ohne Env-Var und
+  ohne Prefix. Zwei Instanzen an einem Meili-Server schreiben in **denselben** Index. Es gibt keinen
+  Fehler und keine Warnung — nur kundenübergreifende Suchtreffer in einem Archivprodukt.
+- **Valkey:** die Queue-Namen sind global (`jobs/queues.ts:19`, `:24`, `:30`), und
+  `config/redis.ts` bietet weder einen `db`-Index noch einen `keyPrefix`. Zwei Instanzen an einer
+  Valkey übernehmen sich gegenseitig die Jobs, also auch Indexierungs- und Retention-Arbeit.
+
+Verschärfend: bei `REDIS_TLS_ENABLED=true` setzt `config/redis.ts` `rejectUnauthorized: false` — für
+eine geteilte Valkey über eine Netzgrenze ist das TLS ohne Zertifikatsprüfung.
+
+**Gegenmaßnahme:** ADR-024 lässt als Dichteoption ausdrücklich nur den geteilten **Postgres-Server**
+mit eigener Datenbank und Rolle je Kunde zu und benennt Meilisearch und Valkey als nicht teilbar. Die
+technische Absicherung — `MEILI_INDEX_PREFIX` samt Ersetzung der 12 Literale sowie ein
+Redis-`keyPrefix` bzw. `db`-Index — steht als Konsequenz 3 und 4 in ADR-024 und wird als E12-Task
+angelegt, sobald das Betriebsmodell entschieden ist. Bis dahin gilt: Infrastruktur nicht teilen.
+
+## R-17 — Ein SMTP-Frontproxy würde den Acceptance-Contract aushöhlen
+
+**Auswirkung:** kritisch · **Wahrscheinlichkeit:** niedrig · **Epic:** E4, E12
+
+Jede Instanz braucht MX und eingehend TCP 25. Weil Port 25 **vor** dem STARTTLS-Handshake kein SNI
+hat, lässt sich auf einer gemeinsamen IP nicht nach Hostname routen — der naheliegende Ausweg ist ein
+Proxy, der nach `RCPT TO` verteilt. Der stünde vor dem Acceptance-Contract und hätte nur zwei
+Möglichkeiten: `250 OK` senden, bevor das Backend Spool und Ledger gefsynct hat — das verletzt den
+ersten nicht verhandelbaren Punkt und ist nach R-01 rückwirkend nicht heilbar — oder eigenen
+fsync-Spool mit eigenem Ledger führen, also E3 verdoppeln, inklusive einer zweiten Kette, deren
+Verhältnis zur ersten begründet werden müsste.
+
+**Gegenmaßnahme:** ADR-024 Begründung 2 legt **eine eigene IP je Instanz** fest und begründet sie
+nicht mit Komfort, sondern mit diesem Konflikt. `JR-1204` nimmt das in den Deployment-Guide auf
+(Konsequenz 5 der ADR): eine IP je Instanz, MX je Kunde, und ausdrücklich kein gemeinsamer
+Port-25-Proxy. Der Skill `journal-ledger` hält den Contract fest, damit er nicht aus dem Gedächtnis
+reproduziert wird.

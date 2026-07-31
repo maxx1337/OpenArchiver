@@ -157,6 +157,13 @@ verwechselte dabei Skalierungs- mit Mandantenpartitionierung; das ist berichtigt
 Im selben Zug entschieden: **`chain_scope_id` = `ingestion_sources.id`** — eine Kette je **Archiv**;
 `journaling_source_id` steht als Attribut in jeder Ledger-Zeile.
 
+**„Mandant" heißt in ADR-007 Archiv, nicht Endkunde** — wer es als „Kunde" liest, zieht aus ADR-007
+und ADR-022 falsche Schlüsse. Ein **Endkunde** ist eine Installation mit **einer** `deployment_id`,
+ein **Mandant** ein Archiv und damit eine Kette darin, ein **Endpunkt** nur ein Attribut in der
+Ledger-Zeile. „Täglich × 50 Mandanten" in ADR-022 meint 50 Archive **einer** Installation. Das
+Betriebsmodell darüber — eine Instanz je Endkunde, empfohlen — steht in **`ADR-024`** und ist
+**noch nicht entschieden**; offen sind dort die Betriebsverantwortung und die AGPL-§13-Folge daraus.
+
 **Und die Ankerfrage gleich mit, obwohl sie zu E7/E8 gehört** — sie musste vorgezogen werden, weil die
 Baumkodierung Teil der kanonischen Kodierung ist und damit in `JR-203` fällt. **`ADR-022`:** ein
 RFC-3161-Token über die **Merkle-Wurzel** aller Kettenköpfe, `anchor`-Event mit Inklusionspfad in jeder

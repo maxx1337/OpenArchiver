@@ -164,6 +164,17 @@ entschieden. `journaling_source_id` steht als **Attribut** in jeder Ledger-Zeile
 gesendet" im Beleg bleibt, ohne eine zweite Kette zu sein. Zwei Endpunkte auf demselben Archiv teilen
 also **eine** Kette, und ein neu angelegter Endpunkt setzt keine neue Kette auf. Begründung in ADR-007.
 
+> **„Mandant" heißt hier Archiv, nicht Endkunde.** Der Begriff wird regelmäßig als „Kunde" gelesen,
+> und dann sind die Folgerungen falsch. Drei Ebenen, die auseinanderzuhalten sind: ein **Endkunde**
+> ist eine Installation mit **einer** `deployment_id`; ein **Mandant** ist ein Archiv
+> (`ingestion_sources.id`) und damit **eine Kette** innerhalb dieser Installation; ein **Endpunkt**
+> (`journaling_sources.id`) ist ein Attribut in der Ledger-Zeile. Die Kostenrechnung „täglich × 50
+> Mandanten" in ADR-022 und R-15 meint deshalb 50 **Archive einer** Installation, nicht 50 Kunden.
+> Ein Kunde mit Tochtergesellschaften ist ein Kunde mit mehreren Archiven. Welches Betriebsmodell
+> darüber liegt — eine Instanz je Endkunde oder ein geteilter Stack — ist Gegenstand von **ADR-024**
+> und noch nicht entschieden; für dieses Kapitel ändert die Entscheidung nichts, weil der Lock-Key,
+> das `seq` und der Genesis in jedem Fall je Kette gelten.
+
 ### Kanonische Kodierung
 
 Anforderung: deterministisch, längenpräfixiert, plattform- und versionsunabhängig — **nie**
