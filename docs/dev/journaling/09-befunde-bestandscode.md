@@ -429,6 +429,23 @@ Der `tsbuildinfo`-Hinweis ist keine Nebensache: `packages/types/tsconfig.json` h
 `composite: true`, ein bloßes Löschen von `dist` lässt `tsc` also wegen der stehengebliebenen
 Build-Info **nichts** emittieren. Wer das nachstellen will, muss beides löschen.
 
+> ### Nachtrag 2026-07-31 (`JR-206`): dieser Befund wiederholt sich mit **jedem** neuen Workspace-Paket
+>
+> Sobald `packages/backend` von `@open-archiver/journaling` abhing, war der CI-Lauf an genau derselben
+> Stelle rot — `test:types` mit `TS2307: Cannot find module '@open-archiver/journaling'` —, während der
+> lokale Lauf grün war, weil ein `dist` aus dem Paketbau herumlag. Dieselbe Ursache, ein Paket weiter.
+>
+> Behoben mit einem zweiten vorgeschalteten Schritt in `.github/workflows/ci.yml`
+> (`pnpm --filter @open-archiver/journaling build`), und **beidseitig belegt** nach dem Löschen von
+> `dist` **und** `tsconfig.tsbuildinfo` aller drei Pakete: ohne den Schritt **25 × `TS2307`**, mit ihm
+> **0** Fehler.
+>
+> **Für die nächsten Epics heißt das:** `apps/smtp-ingress` (E4) und `apps/oa-verify` (E9) brauchen
+> denselben Schritt, sobald etwas anderes von ihnen abhängt — und wer es vergisst, sieht es **nicht**
+> lokal. Beim ersten Nachstellen ist mir genau das passiert: `rm -rf dist` allein ließ auch den
+> *types*-Build nichts emittieren, sodass die Messung 30 Fehler zeigte und den Fix zu widerlegen
+> schien. Die Build-Info gehört mitgelöscht, sonst misst man etwas anderes als einen frischen Checkout.
+
 **Lehre für künftige Epics:** eine im Backlog vorgegebene Kommandofolge ist eine Annahme, kein
 Fakt. Sie gilt erst als lauffähig, wenn sie ohne vorhandene Build-Artefakte durchgelaufen ist.
 

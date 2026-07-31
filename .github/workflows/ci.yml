@@ -89,6 +89,14 @@ jobs:
             - name: Build shared types
               run: pnpm --filter @open-archiver/types build
 
+            # Same mechanism as the step above, one package later (JR-206). Since `packages/backend`
+            # depends on `@open-archiver/journaling`, its `dist` has to exist before `test:types` runs
+            # -- otherwise `tests/support/postgres-transactor.ts` and the writer integration test fail
+            # with TS2307, exactly the way the types package did. This bit once already: the JR-206 CI
+            # run was red here while the local run was green, because a local `dist` was lying around.
+            - name: Build journaling
+              run: pnpm --filter @open-archiver/journaling build
+
             - name: Build backend
               run: pnpm --filter @open-archiver/backend build
 
