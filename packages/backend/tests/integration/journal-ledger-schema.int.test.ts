@@ -35,8 +35,11 @@ import { deploymentIdentity, ingestionSources, journalLedger } from '../../src/d
  * two halves actually meet; pulling the dependency in here to assert `bytea` is lossless would be a
  * wider claim than the test makes. The 32-byte round trip below uses a plain digest instead.
  *
- * Append-only enforcement is `JR-205`/ADR-009 and is not asserted here — a `DELETE` still succeeds at
- * this point, on purpose, so that this file's own cleanup works.
+ * Append-only enforcement is `JR-205`/ADR-009 and lives in
+ * `journal-ledger-append-only.int.test.ts`. Since that migration exists, `UPDATE`, `DELETE` and
+ * `TRUNCATE` on `journal_ledger` are refused — which is why nothing here mutates a ledger row. The
+ * one `DELETE` below targets `ingestion_sources` and asserts the `ON DELETE restrict` on the chain
+ * scope; teardown drops the whole database rather than deleting rows.
  */
 
 const postgresProbe = await probePostgres();

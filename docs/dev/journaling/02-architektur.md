@@ -52,8 +52,24 @@ Punkt als _offen_ markiert ist, entscheidet ihn das jeweilige Epic und trägt da
 | `verify`                 | **read-only** Credentials, damit Prüfer es selbst ausführen können                                                                                                           | read-only                                                                                                                                    | —                                         |
 
 Die Trennung wird über getrennte Umgebungsvariablen und getrennte Postgres-Rollen realisiert, nicht
-über Code-Konventionen. Die Append-Only-Eigenschaft von `journal_ledger` wird zusätzlich in der
-Datenbank erzwungen (Rechteentzug oder Trigger — Festlegung in E2, siehe Skill `oa-migration`).
+über Code-Konventionen.
+
+**Append-Only ist seit dem 2026-07-31 in der Datenbank erzwungen — durch einen Trigger (`JR-205`,
+ADR-009), Migration `0042_journal_ledger_append_only.sql`.** Eine `plpgsql`-Funktion wirft mit
+`ERRCODE = restrict_violation`, und **vier** Trigger hängen daran: je Tabelle einer für
+`UPDATE OR DELETE` (row level) und einer für `TRUNCATE` (statement level). Umfang ist `journal_ledger`
+**und** `deployment_identity`, weil die `deployment_id` im Genesis-Hash jeder Kette steckt.
+
+Der `TRUNCATE`-Trigger ist Pflicht, nicht Beiwerk: `TRUNCATE` löst Row-Level-Trigger **nicht** aus, ein
+reiner Row-Trigger hätte eine Anweisung offen gelassen, die den ganzen Ledger entfernt.
+
+> **Die zweite Hälfte fehlt noch, und sie ist eine Deployment-Aufgabe (E11).** Der Trigger ist von einer
+> Rolle, die die Tabellen **besitzt**, in zwei Anweisungen abschaltbar — gemessen, siehe **F37**: in einer
+> Standardinstallation ist `POSTGRES_USER` Superuser und Eigentümer, und `DATABASE_URL` benutzt genau
+> diese Rolle. Der Rechteentzug (eigene Rolle ohne Eigentum, nur `INSERT`/`SELECT`, plus Startup-Check)
+> ist in ADR-009 festgeschrieben und E11 zugeordnet. Was der Trigger heute leistet: er schließt **F1**
+> als Manipulationsweg, weil eine `WHERE`-Klausel-Injection kein `SET` und kein `ALTER TABLE` absetzen
+> kann.
 
 ## 2. Paketstruktur
 
@@ -374,7 +390,7 @@ offene ADRs geführt:
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
 | ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: eine Kette je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                    | E2     | ADR-007, RFC §15                      |
 | ~~Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id`~~ — **entschieden 2026-07-31: 16 gehashte Felder, Genesis mit `chain_scope_id`, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962** | E2     | ADR-006                               |
-| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                                                                                      | E2     | ADR-009                               |
+| ~~Append-Only-Erzwingung: Rechteentzug oder Trigger~~ — **entschieden 2026-07-31: beides. Trigger in E2 (`JR-205`), Rechteentzug als Deployment-Anforderung in E11 (F37)**                                             | E2     | ADR-009                               |
 | Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                                                                                                  | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
 | `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                                                                                     | E6     | ADR-010                               |
 | Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                                                                                     | E12    | RFC §15                               |

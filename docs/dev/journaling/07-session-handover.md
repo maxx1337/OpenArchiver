@@ -93,7 +93,7 @@ keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant
 Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
 behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
 `claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
-Docker-Postgres **340 passed | 2 skipped** bei 23 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
+Docker-Postgres **348 passed | 2 skipped** bei 24 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
@@ -396,11 +396,25 @@ zählt:
 - Die Migration enthält **eine handgeschriebene Zeile** — das `INSERT` der Identität. Sie ist im SQL als
   solche markiert und begründet; `db:generate` erzeugt keine Daten.
 
+**`JR-205` ist erledigt, ADR-009 ist entschieden** (Trigger in E2, Rechteentzug in E11). Zwei Dinge
+daraus, die die nächsten Tasks betreffen:
+
+- **`UPDATE`, `DELETE` und `TRUNCATE` auf `journal_ledger` und `deployment_identity` sind ab jetzt
+  abgewiesen.** Ein Test, der eine Ledger-Zeile aufräumen will, kann das nicht — Teardown droppt die
+  Datenbank. `JR-209` (Tamper-Tests) muss den Trigger für seine Manipulationen **gezielt** umgehen
+  (`ALTER TABLE … DISABLE TRIGGER` mit der Eigentümerrolle) und ihn danach wieder aktivieren.
+- **`F37` ist offen und E11 zugeordnet:** die Anwendung verbindet als Superuser und Tabelleneigentümer,
+  kann den Trigger also selbst abschalten. Gemessen, nicht vermutet. Was der Trigger heute leistet, ist
+  das Schließen von **F1** als Manipulationsweg.
+
 ```
-Arbeite JR-205 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
-Branch claude/journaling-e2-ledger (existiert). JR-205 entscheidet ADR-009
-(Rechteentzug, Trigger oder beides) und umfasst journal_ledger UND
-deployment_identity. Danach JR-206 (LedgerWriter.append()).
+Arbeite JR-206 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
+Branch claude/journaling-e2-ledger (existiert). JR-206 ist LedgerWriter.append():
+BEGIN → SET LOCAL synchronous_commit = on → pg_advisory_xact_lock aus der
+Kettenkennung → Kopf lesen → seq ableiten → Hash INNERHALB der Sperre über
+encodeLedgerRecord() → INSERT → COMMIT. Der Lock-Key kommt aus chain_scope_id
+(ADR-007 Konsequenz 2), und die Struktur muss die Hash-Berechnung außerhalb der
+Sperre unmöglich machen — nicht nur davon abraten.
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -417,7 +431,7 @@ Konsequenzen für jede E2-Task:
   `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
 - **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
   prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
-  **340 passed | 2 skipped** bei 23 Dateien (vor `JR-202` waren es 274 bei 19, vor `JR-204` 324 bei 22).
+  **348 passed | 2 skipped** bei 24 Dateien (274 bei 19 vor E2).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
 können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin

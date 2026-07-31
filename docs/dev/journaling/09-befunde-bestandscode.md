@@ -1665,3 +1665,47 @@ Bewusst nicht umgesetzt, weil sie über den jeweiligen Task hinausgehen:
 2. **`src/api/server.ts` type-checkt nicht unter `moduleResolution: bundler`** (Default-Import von
    `i18next-http-middleware`). Deshalb schließt `packages/backend/tsconfig.test.json` den
    Produktionscode aus und prüft nur Testdateien. Vorbestehend, kein Testproblem.
+
+## F37 — die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-Schutzmaßnahme selbst abschalten
+
+**Kategorie:** Deployment / Rechtetrennung · **Schwere:** mittel (hoch, sobald ein
+Compliance-Anspruch daran hängt) · **Status:** offen, **Nacharbeit in E11** ·
+**Herkunft:** gemessen am 2026-07-31 bei `JR-205`
+
+`docker-compose.yml` setzt `POSTGRES_USER: ${POSTGRES_USER:-admin}`, `.env.example` setzt
+`POSTGRES_USER=admin`, und `DATABASE_URL` wird aus genau dieser Rolle gebildet. Die
+`POSTGRES_USER`-Rolle eines `postgres`-Images ist **Superuser** und Eigentümer aller Objekte, die die
+Migration anlegt. In einer Standardinstallation verbindet die Anwendung also mit Superuser-Rechten.
+
+**Gemessen gegen die laufende Instanz** (PostgreSQL 17.10, Rolle `admin`):
+
+```
+current_user = admin · rolsuper = true · journal_ledger owner = admin
+UPDATE / DELETE / TRUNCATE auf journal_ledger und deployment_identity  ⇒ refused [23001]
+INSERT                                                                 ⇒ allowed
+SET session_replication_role = replica, dann UPDATE                    ⇒ ALLOWED
+ALTER TABLE journal_ledger DISABLE TRIGGER journal_ledger_append_only  ⇒ ALLOWED
+```
+
+**Was das für den Append-Only-Trigger aus `JR-205` bedeutet.** Er hält gegen den Weg, der praktisch
+zählt — **F1** (SQL-Injection über Policy-Condition-Keys) injiziert in eine `WHERE`-Klausel und kann
+weder ein `SET` noch ein `ALTER TABLE` absetzen, weil `postgres-js` das erweiterte Protokoll benutzt
+und kein Statement-Stacking erlaubt. Ein Akteur, der über diesen Weg eine Ledger-Zeile umschreiben
+wollte, scheitert am Trigger. Er hält **nicht** gegen jemanden, der beliebiges SQL als diese Rolle
+ausführen kann; für den ist der Trigger zwei Anweisungen weit entfernt.
+
+**Das ist der Grund, warum ADR-009 zwei Mechanismen verlangt** und warum die zweite Hälfte eine
+Deployment-Anforderung ist, keine Codeänderung: solange die Anwendung als Eigentümer verbindet, ist
+jede tabellenseitige Maßnahme von ihr aus aufhebbar. Nachzuarbeiten in **E11**:
+
+1. Eine eigene Rolle für die Anwendung, die **nichts besitzt** und auf `journal_ledger` /
+   `deployment_identity` nur `INSERT` und `SELECT` hält.
+2. Die Migration läuft unter einer **anderen** Rolle — sie braucht Eigentümerrechte, die Anwendung
+   nicht.
+3. Ein Startup-Check, der laut wird, wenn die Anwendung als Superuser oder als Eigentümer dieser
+   Tabellen verbindet. Ohne ihn ist eine korrekt konfigurierte Installation von einer
+   Standardinstallation nicht unterscheidbar, und der Betreiber erfährt es nie.
+
+Nicht in E2 behoben, weil eine Rollentrennung `.env`, `docker-compose.yml`, den Migrationspfad und die
+Betreiberdoku berührt — das ist E11s Gegenstand, und eine halb eingebaute Trennung wäre schlechter als
+eine dokumentierte Anforderung.
