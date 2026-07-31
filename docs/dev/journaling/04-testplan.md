@@ -332,14 +332,26 @@ Dies ist der Test, der belegt, dass Phase B den Acceptance-Contract nicht berüh
 
 **Klasse:** `ci`.
 
-| Fall | Manipulation                            | Erwartung                                   |
-| ---- | --------------------------------------- | ------------------------------------------- |
-| a    | gespeichertes Objekt verändern          | Hash-Mismatch beim **korrekten** `seq`      |
-| b    | Ledger-Zeile löschen                    | Kettenbruch beim **korrekten** `seq`        |
-| c    | Kette ab `seq` N vorwärts neu schreiben | Divergenz gegen den **ersten Anker nach N** |
+| Fall | Manipulation                                    | Erwartung                                                                                        |
+| ---- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| a    | gespeichertes Objekt verändern                  | Hash-Mismatch beim **korrekten** `seq`                                                           |
+| b    | Ledger-Zeile löschen                            | Kettenbruch beim **korrekten** `seq`                                                             |
+| c    | Kette ab `seq` N vorwärts neu schreiben         | Divergenz gegen den **ersten Anker nach N**                                                      |
+| d    | Kette eines Mandanten **vollständig** entfernen | Befund beim Vergleich zweier aufeinanderfolgender Anker — die Kette fehlt im zweiten Merkle-Baum |
+| e    | Inklusionspfad eines Ankers verändern           | Wurzel stimmt nicht mehr, Token-Prüfung schlägt fehl                                             |
 
 Immer wird die **erste** Divergenz erwartet, mit `seq` **und** Feld — nicht nur pass/fail. Fall (c)
 setzt E8 voraus und ist der eigentliche Beweis, dass Anchoring etwas leistet.
+
+**Fälle (d) und (e) kommen aus ADR-007/ADR-022** und existieren erst, seit es eine Kette je Mandant und
+einen Merkle-Anker darüber gibt. Zu (d): weil der Baum **jede** Kette als Blatt trägt — auch eine seit dem
+letzten Anker unveränderte —, ist eine gelöschte Kette von einer ruhenden unterscheidbar. Genau das war
+bei einer globalen Kette nicht darstellbar.
+
+**Positivfall dazu, und er ist die eigentliche Zusage:** der Inklusionsnachweis eines Mandanten ist
+**ohne Daten anderer Mandanten** prüfbar. Der Test bekommt Blatt, Geschwister-Hashes, Wurzel und Token —
+und **nichts** über andere Ketten — und muss damit verifizieren. Schlägt das fehl, ist die
+Mandantentrennung aus ADR-007 nur behauptet.
 
 Zusatzfall aus E9: ein `object_erased`-Eintrag darf **kein** Kettenbruch sein, sondern muss als
 absichtliche Löschung ausgewiesen werden (`JR-905`).
@@ -410,14 +422,14 @@ und den Alert nicht, geht am Punkt vorbei.
 
 Ehrliche Abgrenzung, damit niemand sie stillschweigend umgeht:
 
-| Fall                          | Grund                              | Ausweg                                                       |
-| ----------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| Echter Exchange-Online-Tenant | Fremdsystem, Credentials, Laufzeit | `manual`, protokolliert; Parser-Korpus als Vorarbeit         |
-| Qualifizierte eIDAS-TSA       | kostenpflichtig, ratenbegrenzt     | Test-TSA in `ci`, echte TSA `manual`                         |
-| 100k-Soak                     | Laufzeit                           | `nightly`, plus 1k-Smoke in `ci`                             |
-| Echtes Disk-Full              | braucht eigenes Volume             | `nightly` echt, `ENOSPC`-Injektion in `ci`                   |
-| `chattr +i`                   | dateisystemabhängig                | übersprungen mit **sichtbarem** Hinweis, nie stillschweigend |
-| 500× Kill-during-DATA         | Laufzeit                           | `nightly` voll, 20× in `ci`                                  |
+| Fall                          | Grund                              | Ausweg                                                                                             |
+| ----------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Echter Exchange-Online-Tenant | Fremdsystem, Credentials, Laufzeit | `manual`, protokolliert; Parser-Korpus als Vorarbeit                                               |
+| Qualifizierte eIDAS-TSA       | kostenpflichtig, ratenbegrenzt     | `ci` **hermetisch**, `nightly` gegen `open-tsa.eu`, `manual` gegen die qualifizierte TSA — ADR-023 |
+| 100k-Soak                     | Laufzeit                           | `nightly`, plus 1k-Smoke in `ci`                                                                   |
+| Echtes Disk-Full              | braucht eigenes Volume             | `nightly` echt, `ENOSPC`-Injektion in `ci`                                                         |
+| `chattr +i`                   | dateisystemabhängig                | übersprungen mit **sichtbarem** Hinweis, nie stillschweigend                                       |
+| 500× Kill-during-DATA         | Laufzeit                           | `nightly` voll, 20× in `ci`                                                                        |
 
 ## 6. Abnahmeregel
 

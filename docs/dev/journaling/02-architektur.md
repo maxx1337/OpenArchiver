@@ -248,13 +248,35 @@ Envelope + Metadaten in `archived_emails` → indexieren → Spool-Datei freigeb
 
 ## 8. Anchoring
 
-Täglicher Job (konfigurierbar): Kopf lesen → RFC-3161-Zeitstempel-Token von einer konfigurierten TSA
-holen → `anchor`-Event ins Ledger → Anker an mindestens ein **externes, append-only** Ziel mit
-**eigenen** Credentials ausliefern (separater Object-Lock-Bucket, Syslog-Collector, E-Mail an den
-Steuerberater). Mehrere Zieltypen unterstützen, mindestens eines erzwingen.
+Täglicher Job (konfigurierbar): **alle** Kettenköpfe lesen → **Merkle-Baum** darüber bauen → **ein**
+RFC-3161-Zeitstempel-Token über die **Wurzel** holen → in **jede** Kette ein `anchor`-Event schreiben →
+Anker an mindestens ein **externes, append-only** Ziel mit **eigenen** Credentials ausliefern (separater
+Object-Lock-Bucket, Syslog-Collector, E-Mail an den Steuerberater). Mehrere Zieltypen unterstützen,
+mindestens eines erzwingen.
+
+**Ein Token je Lauf, nicht je Mandant — ADR-022 (entschieden 2026-07-31).** Seit ADR-007 gibt es eine
+Kette je Mandant, also N Köpfe. Der Baum darüber hält die TSA-Kosten unabhängig von der Mandantenzahl
+(täglich × 50 Mandanten: 365 statt 18.250 Token im Jahr) — der tragende Grund ist aber ein anderer: der
+**Inklusionsnachweis darf keine Fremddaten brauchen**. Vier Punkte, die dieses Kapitel betreffen:
+
+- Das `anchor`-Event jeder Kette trägt **Wurzel, den Inklusionspfad dieser Kette und das Token**. Ein
+  Mandantenexport ist damit **selbsttragend** und ohne Daten anderer Mandanten prüfbar. Eine sortierte
+  Liste der Köpfe als gestempelte Eingabe wäre das nicht — sie zwingt zur Herausgabe aller Köpfe samt
+  `seq`, und `seq` verrät das Nachrichtenvolumen. Deshalb Merkle, siehe ADR-022.
+- **Der geankerte Kopf ist der Kopf _vor_ dem `anchor`-Event** — sonst verändert das Event den Kopf, den
+  es bezeugen soll.
+- **Blätter decken jede existierende Kette ab, nicht nur die veränderten.** Nur so bezeugt der Anker auch
+  die **Menge** der Ketten, und „die Kette von Mandant X ist verschwunden" wird durch Vergleich zweier
+  Anker erkennbar (ADR-007 Konsequenz 5).
+- Blatt- und Knotenkodierung sind **domain-separiert** (`0x00` / `0x01`) und Teil der kanonischen
+  Kodierung in ADR-006, weil `verify` den Baum byteidentisch nachbauen muss.
 
 **Kein Standard-TSA-URL ausliefern.** Für deutsche Installationen soll es eine qualifizierte TSA
-unter eIDAS sein — das ist eine Entscheidung des Betreibers, keine Voreinstellung.
+unter eIDAS sein — das ist eine Entscheidung des Betreibers, keine Voreinstellung. **ADR-023** hält fest,
+welche TSA je Umgebung gilt: qualifiziert in der Produktion mit GoBD-Anspruch, `open-tsa.eu` (kostenlos,
+RFC 3161, aber **nicht** qualifiziert) als dokumentierte Option ohne diesen Anspruch und als echte TSA in
+der `nightly`-Testklasse, `ci` bleibt hermetisch. Der Client nimmt eine **Liste** von TSA-URLs, damit ein
+zweiter, unabhängiger Zeitstempel möglich ist.
 
 TSA nicht erreichbar ⇒ **laut eskalieren, Ingestion niemals stoppen** (RFC §15, ADR-008). Post
 abzulehnen, um einen Zeitstempel zu schützen, invertiert die Prioritäten.

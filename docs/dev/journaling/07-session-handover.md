@@ -86,9 +86,10 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 ## Aktueller Eintrag
 
 **Stand:** 2026-07-31 (**`ADR-007` entschieden**: eine Kette je Mandant, `chain_scope_id` =
-`ingestion_sources.id` · **Infrastruktur steht** über Docker Desktop · davor am 2026-07-30 **`JR-105c`
-erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24 behoben; **E13 abgenommen** mit `JR-1309c`,
-**Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
+`ingestion_sources.id` · **`ADR-022`**: ein Token über die Merkle-Wurzel aller Kettenköpfe ·
+**`ADR-023`**: TSA-Auswahl, `open-tsa.eu` gemessen und eingeordnet · **Infrastruktur steht** über Docker
+Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
+behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
 `claude/enterprise-product-implementation-cxmmqe` · Arbeitsbaum **sauber** · Volllauf gegen das
 Docker-Postgres **274 passed | 2 skipped** bei 19 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
@@ -135,6 +136,16 @@ Schritt ist E2** — der SMTP-Receiver, das eigentliche Projekt; davor fehlt nur
 >    Portforwarder überlebte die parallele Integrationslast nicht (16 × `ECONNRESET`). Mit Docker Desktop
 >    ist derselbe Volllauf **grün**. Alle vier Dienste laufen, alle vier vom Host aus belegt. Der
 >    Embedded-Cluster wird nicht mehr gebraucht und bleibt als Rückfalloption dokumentiert.
+> 7. **`ADR-022` und `ADR-023` entschieden** — die Ankerfrage, die `ADR-007` nach E7/E8 verschoben hatte,
+>    ist vorgezogen, weil die Baumkodierung zur **kanonischen Kodierung** gehört und damit in `JR-203`
+>    fällt. **`ADR-022`:** ein Token über die **Merkle-Wurzel** aller Kettenköpfe. Dabei ist ein Fehler in
+>    meinem eigenen `ADR-007` aufgefallen und markiert: die dort als gleichwertig genannte „kanonisch
+>    sortierte Liste" ist **verworfen** — sie zwingt den Inklusionsnachweis dazu, alle fremden Kettenköpfe
+>    samt `seq` offenzulegen, also genau die Offenlegung, deren Vermeidung der einzige Grund für `ADR-007`
+>    war. **`ADR-023`:** TSA-Auswahl je Umgebung. `open-tsa.eu` ist **gemessen**, nicht von der Seite
+>    übernommen — ein Token geholt, gegen die gepinnte CA verifiziert (`Verification: OK`), plus zwei
+>    Gegenproben. Ergebnis: brauchbar für `nightly` und für Installationen ohne GoBD-Anspruch, **kein**
+>    qualifizierter Zeitstempel (private Policy-OID, kein Trusted-List-Eintrag), und **nicht** in `ci`.
 >
 > **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt.
 
@@ -482,13 +493,13 @@ gehört nicht in E13. **Blockiert nichts.**
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
 
-| Wann  | Frage                                                                                                                                       |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| E2    | Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006) — invalidiert später jede Kette, wenn geändert                         |
-| E2    | Eine Kette global oder eine pro Mandant (ADR-007)                                                                                           |
-| E7/E8 | Welche TSA? Für deutsche Installationen sollte es eine qualifizierte TSA unter eIDAS sein — kostenpflichtig, Betreiberentscheidung          |
-| E7    | Aufbewahrungsfrist für Object Lock COMPLIANCE. **Vorher lesen:** unter COMPLIANCE ist vorzeitige Löschung technisch unmöglich, auch für uns |
-| E12   | Steht ein echter Exchange-Online-Tenant für `JR-1208` zur Verfügung? Ohne ihn ist E12 nicht abnehmbar; Mocks sind kein Ersatz               |
+| Wann      | Frage                                                                                                                                                                                                                                                                                                                      |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E2        | Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006) — invalidiert später jede Kette, wenn geändert                                                                                                                                                                                                        |
+| ~~E2~~    | ~~Eine Kette global oder eine pro Mandant (ADR-007)~~ — **entschieden 2026-07-31: je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                                                                                                                                  |
+| ~~E7/E8~~ | ~~Welche TSA?~~ **Entschieden 2026-07-31, ADR-023:** kein Standard-URL; qualifizierte eIDAS-TSA in der Produktion mit GoBD-Anspruch, `open-tsa.eu` als kostenlose Option ohne diesen Anspruch und als echte TSA in `nightly`, `ci` hermetisch. **Ankerform: ADR-022** — ein Token über die Merkle-Wurzel aller Kettenköpfe |
+| E7        | Aufbewahrungsfrist für Object Lock COMPLIANCE. **Vorher lesen:** unter COMPLIANCE ist vorzeitige Löschung technisch unmöglich, auch für uns                                                                                                                                                                                |
+| E12       | Steht ein echter Exchange-Online-Tenant für `JR-1208` zur Verfügung? Ohne ihn ist E12 nicht abnehmbar; Mocks sind kein Ersatz                                                                                                                                                                                              |
 
 ### Fallstricke, die schon Zeit gekostet haben
 

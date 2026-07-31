@@ -157,6 +157,14 @@ verwechselte dabei Skalierungs- mit Mandantenpartitionierung; das ist berichtigt
 Im selben Zug entschieden: **`chain_scope_id` = `ingestion_sources.id`** — eine Kette je **Archiv**;
 `journaling_source_id` steht als Attribut in jeder Ledger-Zeile.
 
+**Und die Ankerfrage gleich mit, obwohl sie zu E7/E8 gehört** — sie musste vorgezogen werden, weil die
+Baumkodierung Teil der kanonischen Kodierung ist und damit in `JR-203` fällt. **`ADR-022`:** ein
+RFC-3161-Token über die **Merkle-Wurzel** aller Kettenköpfe, `anchor`-Event mit Inklusionspfad in jeder
+Kette, sodass ein Mandantenexport ohne Fremddaten prüfbar ist. Die in `ADR-007` zunächst als gleichwertig
+genannte sortierte Liste ist **verworfen** und dort als Fehler markiert. **`ADR-023`:** TSA-Auswahl —
+`open-tsa.eu` ist gemessen (Token geholt, gegen gepinnte CA verifiziert) und eingeordnet: gut für
+`nightly` und für Installationen ohne GoBD-Anspruch, **kein** qualifizierter Zeitstempel, **nicht** in `ci`.
+
 **Vor der ersten Zeile Kettencode fehlt damit genau eine Entscheidung: `ADR-006`** (Task `JR-203`) —
 Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id` und das Verhalten, wenn
 eine Installation aus einem Backup geklont wird. Sie steckt im Genesis-Hash und ist später nicht

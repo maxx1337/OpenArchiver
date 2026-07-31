@@ -151,6 +151,14 @@ bei der ersten Migration erzeugter Wert in `system_settings` (die Tabelle existi
 liest sie). Zu klären ist, was passiert, wenn eine Installation aus einem Backup **geklont** wird:
 dieselbe `deployment_id` in zwei Installationen bedeutet zwei divergierende Ketten mit gleichem Genesis.
 
+> **Vorgabe aus ADR-022 (entschieden 2026-07-31): die Merkle-Kodierung gehört ebenfalls hierher.** Der
+> Anker ist ein Baum über allen Kettenköpfen, und `verify` muss ihn **byteidentisch** nachbauen. Also
+> fixiert diese ADR zusätzlich: die Blattkodierung `H(0x00 ‖ canonical(chain_scope_id, head_seq,
+head_chain_hash))`, die Knotenkodierung `H(0x01 ‖ links ‖ rechts)`, die Sortierung der Blätter nach
+> `chain_scope_id` und die Regel für den **ungeraden Knoten** (Hochziehen oder Duplizieren — eine der
+> beiden, festgeschrieben). Wer das erst in E8 festlegt, hat in E2 eine kanonische Kodierung geschrieben,
+> die die Baumform nicht abdeckt.
+
 **Warum es eine ADR braucht:** Eine Änderung der Kodierung invalidiert jede bestehende Kette. Das ist
 ein Migrationsvorgang, keine Refaktorierung. Das Versionsbyte existiert genau deshalb.
 
@@ -221,12 +229,20 @@ würde an einer Zeile hängen, die neu angelegt werden kann.
    Ereignis identische Hashes, und ein Eintrag ließe sich zwischen Mandanten verschieben, ohne die
    Kette zu brechen. Das ist eine **Vorgabe an ADR-006**, dort einzuarbeiten:
    `chain_hash(0) = SHA256( "open-archiver:journal-ledger:v1:" || deployment_id || chain_scope_id )`.
-4. **Ankern (E8) wird teurer und braucht eine Entscheidung.** Entweder ein TSA-Zeitstempel je Kette —
-   kostenpflichtig je Mandant — oder **ein** Anker über einen Aggregat-Hash aller Kettenköpfe
-   (Merkle-Wurzel oder kanonisch sortierte Liste `(chain_scope_id, seq, chain_hash)`). Vorschlag:
-   Aggregat, weil es die Kosten unabhängig von der Mandantenzahl hält und derselben Konstruktion folgt,
-   die RFC §5.2 für Shards vorsieht. **Zu entscheiden in E7/E8**, nicht jetzt — aber die Aggregatform
-   muss ankerbar sein, bevor E8 beginnt.
+4. **Ankern (E8) wird teurer.** ~~Entweder ein TSA-Zeitstempel je Kette oder ein Anker über einen
+   Aggregat-Hash aller Kettenköpfe (Merkle-Wurzel **oder** kanonisch sortierte Liste); zu entscheiden in
+   E7/E8.~~ **Entschieden am 2026-07-31 in [ADR-022](#adr-022--ankerform-merkle-aggregat-über-alle-kettenköpfe):
+   ein Merkle-Baum über alle Kettenköpfe, ein Token je Ankerlauf.**
+
+    > **Die durchgestrichene Fassung war falsch, und zwar in der Richtung, die diese ADR verhindern soll.**
+    > Sie stellte „Merkle-Wurzel" und „kanonisch sortierte Liste" als gleichwertige Aggregatformen
+    > nebeneinander. Sie sind es nicht: bei einer sortierten Liste als gestempelter Eingabe braucht der
+    > Nachweis, dass der Kopf von Mandant A enthalten war, **die ganze Liste** — also `chain_scope_id`,
+    > `seq` und Kopf-Hash **jedes anderen** Mandanten, wobei die `seq` das Nachrichtenvolumen verrät. Das
+    > ist genau die mandantenübergreifende Offenlegung, deren Vermeidung der einzige Grund für diese ADR
+    > ist. Die sortierte Liste ist damit **verworfen**, nicht eine Option. Begründung und Gegenentwurf in
+    > ADR-022.
+
 5. **`verify` (E9) muss Ketten aufzählen und eine _fehlende_ Kette erkennen.** Bei einer globalen Kette
    war „die Kette fehlt" nicht darstellbar; jetzt ist „Mandant X hat keine Kette mehr" ein
    Manipulationsbefund und braucht einen eigenen adversarialen Testfall in §12.
@@ -253,6 +269,12 @@ schützen, invertiert die Prioritäten und verursacht genau den Datenverlust, de
 verhindern soll. Stattdessen laut und mit steigender Schwere eskalieren.
 
 Die ADR wird in E8 auf _entschieden_ gesetzt, sobald das Eskalationsverhalten implementiert ist.
+
+> **Welche** TSA es ist, entscheidet **ADR-023**; diese ADR regelt nur, was bei deren Ausfall passiert.
+> Zwei Hinweise, die seit dem 2026-07-31 dazugehören: durch das Merkle-Aggregat aus **ADR-022** trifft ein
+> Ausfall alle Mandanten **gleichzeitig** — ein fehlender Anker statt N, was die Eskalation vereinfacht.
+> Und wer nach ADR-023 einen kostenlosen Einzelknoten benutzt, muss diese ADR gelesen haben: der Anker
+> fehlt dann, die Annahme läuft weiter, und die Nachweiskette hat für diesen Zeitraum eine Lücke.
 
 ## ADR-009 — Erzwingung der Append-Only-Eigenschaft
 
@@ -806,6 +828,128 @@ festschreiben**, `03-backlog.md` bleibt unverändert.
 die Kopplung — eine gebrochene Doku-Zeile hätte weiter den Merge des Codes blockiert.
 
 ---
+
+## ADR-022 — Ankerform: Merkle-Aggregat über alle Kettenköpfe
+
+**Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Quelle:** RFC §5.5, §15 ·
+**Folgt aus:** ADR-007 Konsequenz 4
+
+Ein Ankerlauf holt **ein** RFC-3161-Token über die **Merkle-Wurzel** aller Kettenköpfe — nicht ein Token
+je Mandant, und nicht ein Token über eine sortierte Liste der Köpfe.
+
+**Begründung, zwei Gründe, und der zweite ist der tragende:**
+
+1. **Kosten.** Ein Token je Mandant skaliert mit Mandanten × Frequenz: täglich × 50 Mandanten sind
+   **18.250** Token im Jahr gegen **365** beim Aggregat. Bei einer qualifizierten TSA mit Token-Preis ist
+   das der Unterschied zwischen vernachlässigbar und Budgetposten. Der Ausweg „Ankerfrequenz je Mandant
+   senken" wäre, die Nachweislücke zu vergrößern, um Geld zu sparen.
+2. **Der Inklusionsnachweis darf keine Fremddaten brauchen.** Bei einer sortierten Liste als gestempelter
+   Eingabe muss ein Prüfer die **ganze Liste** rekonstruieren können, um zu zeigen, dass der Kopf von
+   Mandant A enthalten war — inklusive `chain_scope_id`, `seq` und Kopf-Hash jedes anderen Mandanten,
+   wobei `seq` das Nachrichtenvolumen verrät. Beim Merkle-Baum besteht der Nachweis aus A's Blatt,
+   ~log₂(N) Geschwister-Hashes, der Wurzel und dem Token darüber. Geschwister-Hashes sind opak.
+
+> **Das ist nicht die Merkle-Frage aus RFC §15.** Dort steht: _„Is a Merkle tree worth it over a linear
+> chain for large deployments (faster partial verification)? Probably yes eventually, not for v1."_ Das
+> fragt nach einem Baum **anstelle** der Kette, als Performance-Optimierung — und die Antwort bleibt
+> „nicht für v1". Hier geht es um einen Baum **über** den Ketten, und er ist keine Optimierung, sondern
+> die Bedingung dafür, dass ein Mandantenexport ohne Fremddaten prüfbar ist.
+
+### Festlegungen
+
+1. **Blätter decken _jede_ existierende Kette ab, nicht nur die seit dem letzten Anker veränderten.**
+   Damit bezeugt der Anker auch die **Menge** der Ketten, und „die Kette von Mandant X ist verschwunden"
+   wird durch Vergleich zweier aufeinanderfolgender Anker erkennbar — das ist ADR-007 Konsequenz 5. Nimmt
+   man nur veränderte Köpfe auf, ist eine gelöschte Kette von einer ruhenden nicht zu unterscheiden, und
+   der Befund verschwindet.
+2. **Domain-separierte Hashes.** Blatt = `H(0x00 ‖ canonical(chain_scope_id, head_seq, head_chain_hash))`,
+   innerer Knoten = `H(0x01 ‖ links ‖ rechts)`. Ohne die Präfixe ist die Baumstruktur ambig — ein Blatt
+   ließe sich als innerer Knoten ausgeben und umgekehrt. Blätter werden **gehasht**, nicht im Klartext in
+   den Baum gelegt: ein geleaktes Blatt verrät dann nichts.
+3. **Deterministische Baumform.** Blätter nach `chain_scope_id` sortiert, und die Regel für den ungeraden
+   Knoten (Hochziehen **oder** Duplizieren) explizit. Beides gehört in **ADR-006**, weil `verify` den Baum
+   byteidentisch nachbauen muss; die Vorgabe steht dort.
+4. **Das `anchor`-Event wird in _jede_ Kette geschrieben** und trägt die Wurzel, den Inklusionspfad
+   **dieser** Kette und das Token beziehungsweise eine Referenz darauf. Damit ist ein Mandantenexport
+   **selbsttragend**: die Kette enthält ihren eigenen Ankernachweis und ist ohne jede Fremddaten prüfbar.
+   Das ist die Auszahlung des Entwurfs. Kosten: N Ledger-Zeilen je Lauf — Zeilen sind billig, Token nicht.
+5. **Der geankerte Kopf ist der Kopf _vor_ dem `anchor`-Event.** Sonst entsteht eine Zirkularität: das
+   Event verändert den Kopf, den es bezeugen soll. Steht hier, weil es beim Implementieren die
+   naheliegende Falle ist.
+6. **TSA-Ausfall trifft alle Mandanten gleich** — ein fehlender Anker statt N. **ADR-008 bleibt
+   unverändert:** laut eskalieren, Ingestion **niemals** stoppen.
+7. **RFC §5.5 Punkt 4 bleibt unberührt.** Mindestens ein externes, append-only Ziel, unabhängig von der
+   TSA. Das Aggregat ändert nur, _was_ dorthin geht: Wurzel, Token und die Kettenkopf-Liste.
+
+**Verworfen: ein Token je Kette.** Vertretbar bei 1–3 Mandanten, weil es ohne Baum-Mechanik in `verify`
+auskommt. Nicht gewählt, weil der Baum wenig Code ist und die Umstellung sonst beim vierten Mandanten
+fällig wird — dann aber mit Bestandsketten und Bestandsankern.
+
+**Verworfen: sortierte Liste als Aggregat.** Siehe Grund 2. Sie war bis zum 2026-07-31 in ADR-007
+Konsequenz 4 als gleichwertige Option genannt; das war ein Fehler und ist dort als solcher markiert.
+
+## ADR-023 — TSA-Auswahl: kein Standard, und wofür `open-tsa.eu` taugt
+
+**Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Quelle:** RFC §5.5 ·
+**Berührt nicht:** ADR-008 (Ausfallverhalten)
+
+**Ausgeliefert wird weiterhin _kein_ TSA-URL.** Das war schon Akzeptanzkriterium von `JR-801` und steht in
+`02-architektur.md` §7; diese ADR bestätigt es und beantwortet die bis dahin offene Frage „welche TSA?":
+
+| Klasse                                 | TSA                                                                                       |
+| -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Produktion, deutsche/GoBD-Installation | **qualifizierte TSA unter eIDAS**, Betreiberentscheidung, kostenpflichtig                 |
+| Produktion, ohne GoBD/eIDAS-Anspruch   | `open-tsa.eu` ist eine dokumentierte, kostenlose Option — mit den Auflagen unten          |
+| Test `nightly`                         | `open-tsa.eu`, echter Endpunkt statt Mock                                                 |
+| Test `ci`                              | **hermetisch** — lokaler Responder oder aufgezeichnetes Token, **nie** ein fremder Dienst |
+| Test `manual`                          | die qualifizierte TSA des Betreibers                                                      |
+
+### Was `open-tsa.eu` ist — am 2026-07-31 gemessen, nicht von der Seite übernommen
+
+Ein Token wurde geholt und gegen die **gepinnten** CA-Zertifikate verifiziert; beide Gegenproben liefen:
+
+```
+HTTP 200 · Token 2513 Bytes · openssl ts -verify  ⇒  Verification: OK
+Policy OID 1.3.6.1.4.1.59085.1.1 · Hash sha256 · Accuracy 1 s · Ordering: yes · Nonce zurückgegeben
+verändertes Datum  ⇒ Verifikation schlägt fehl        (erwartet)
+ohne gepinnte CA   ⇒ nicht verifizierbar              (Root ist nicht im Trust Store)
+```
+
+| Punkt                 | Befund                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| Protokoll             | RFC 3161, `https://tsr.open-tsa.eu`, SHA-256/384/512 — passt unmittelbar auf `JR-801`              |
+| Kosten / Lizenz       | kostenlos, Code MIT, spendenfinanziert (Ko-fi)                                                     |
+| Betrieb               | **ein** Knoten, Nürnberg. Redundanz (Helsinki/Falkenstein, GeoDNS) laut Roadmap **Phase 3, 2028+** |
+| Reife                 | live seit **April 2026**, ~5.161 Token ausgestellt                                                 |
+| Vertrauensanker       | **eigene CA-Hierarchie, Root nicht in Trust Stores** — `ca.crt` muss gepinnt werden                |
+| Zertifikatslaufzeiten | Signing-Cert **2 Jahre** (2026–2028), Intermediate 10, TSA-Root 15, Root 25                        |
+| eIDAS                 | **kein Qualifikationsanspruch**, kein Trusted-List-Eintrag, keine SLA-Aussage                      |
+
+**Daraus folgt: es ist kein qualifizierter Zeitstempel.** Damit gibt es keine Beweisvermutung für Datum
+und Zeit nach eIDAS Art. 41, und die Forderung aus `02-architektur.md` §7 („für deutsche Installationen
+soll es eine qualifizierte TSA unter eIDAS sein") ist damit nicht erfüllt. Der härteste Einzelbeleg ist
+nicht das Fehlen einer Behauptung auf der Website, sondern die **Policy-OID im Token**:
+`1.3.6.1.4.1.59085.1.1` ist eine private Enterprise-OID, keine ETSI-Policy für qualifizierte Zeitstempel.
+
+### Wofür es trotzdem gewählt ist
+
+1. **Echte TSA in der `nightly`-Klasse.** Der Testplan sah dort einen Mock vor, weil eine qualifizierte
+   TSA Geld kostet und ratenbegrenzt ist. Ein kostenloser, echter RFC-3161-Endpunkt ersetzt den Mock durch
+   das Original — ohne Kosten und ohne Betreiber-Credentials im Test.
+2. **Dokumentierte Option** für Installationen ohne GoBD/eIDAS-Anspruch (NGO, Forschung, interne Archive),
+   im Deployment-Guide mit den Auflagen aus der Tabelle im Fließtext.
+3. **Optional als _zweiter_, unabhängiger Zeitstempel** neben einer qualifizierten TSA — zwei unabhängige
+   Bezeugungen zum Preis von einer. `JR-801` muss dafür eine **Liste** von TSA-URLs akzeptieren, nicht
+   einen Einzelwert.
+
+**Ausdrücklich nicht in `ci`.** Ein CI-Lauf darf nicht von einem fremden, spendenfinanzierten Einzelknoten
+abhängen: das erzeugt rote Läufe ohne eigenen Defekt — genau die Fehlerklasse, gegen die `JR-105c` das
+Messinstrument gehärtet hat, und die schnellste Art, einen Wächter unglaubwürdig zu machen.
+
+**Auflagen, die in die Betreiberdoku gehören:** `ca.crt` pinnen (der Root ist in keinem Trust Store); das
+Token **mit seiner Zertifikatskette** archivieren, weil das Signing-Cert 2 Jahre lebt und die
+Aufbewahrungsfrist 10 Jahre; und bei Verlass auf einen kostenlosen Einzelknoten das Ausfallverhalten aus
+ADR-008 kennen — der Anker fehlt dann, die Annahme läuft weiter.
 
 ## Nicht verhandelbar (keine ADR nötig)
 

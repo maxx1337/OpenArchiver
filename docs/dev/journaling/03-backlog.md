@@ -191,6 +191,13 @@ belegter Durability. Ohne Ledger darf nie ein `250` gesendet werden.
 > **Was vor der ersten Zeile Kettencode noch fehlt, ist damit allein `ADR-006`** (Task `JR-203`):
 > Kodierung, Genesis-String inklusive `chain_scope_id`, Herkunft der `deployment_id` und das Verhalten,
 > wenn eine Installation aus einem Backup geklont wird.
+>
+> **`JR-203` hat seit `ADR-022` (2026-07-31) einen Teil mehr:** die **Merkle-Kodierung** des Ankers —
+> Blatt `H(0x00 ‖ canonical(chain_scope_id, head_seq, head_chain_hash))`, innerer Knoten
+> `H(0x01 ‖ links ‖ rechts)`, Blätter nach `chain_scope_id` sortiert, und die Regel für den ungeraden
+> Knoten. Sie gehört hierher und nicht nach E8, weil `verify` den Baum byteidentisch nachbauen muss: eine
+> kanonische Kodierung, die die Baumform nicht abdeckt, ist in E8 nicht mehr nachrüstbar, ohne bestehende
+> Anker zu invalidieren.
 
 | ID     | Task                                                                                                                                                                                                                                                                                                                         | Rolle | RFC         | Akzeptanzkriterien                                                                                                                                                                       |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -304,6 +311,30 @@ Object Lock im COMPLIANCE-Modus lässt sich nicht zurücknehmen.
 ## E8 — Anchoring
 
 **Ziel:** Die Kette ist auch gegen jemanden mit vollem Datenbankzugriff belastbar.
+
+> ### Was `ADR-022` und `ADR-023` an diesem Epic ändern (entschieden 2026-07-31)
+>
+> Die Tasks unten sind für **eine** Kette und **eine** TSA formuliert. Sie bleiben gültig, aber vier
+> bekommen eine Dimension dazu. Wer sie aufgreift, liest ADR-022 (Ankerform) und ADR-023 (TSA) zuerst;
+> hier nur, was in welcher Zeile anders wird:
+>
+> - **`JR-801`** stempelt die **Merkle-Wurzel** statt eines einzelnen Kopf-Hashes und nimmt eine **Liste**
+>   von TSA-URLs statt eines Einzelwerts, damit ein zweiter unabhängiger Zeitstempel möglich ist. „Kein
+>   Standard-TSA-URL" bleibt. Neu dazu: die **Zertifikatskette wird mit dem Token archiviert** — bei
+>   `open-tsa.eu` lebt das Signing-Cert 2 Jahre, die Aufbewahrungsfrist 10, und der Root liegt in keinem
+>   Trust Store, muss also gepinnt werden.
+> - **`JR-802`** baut den Baum über **alle** Ketten — auch die seit dem letzten Anker unveränderten — und
+>   schreibt in **jede** Kette ein `anchor`-Event mit Wurzel, Inklusionspfad und Token. Der geankerte Kopf
+>   ist der Kopf **vor** dem Event.
+> - **`JR-805`** bekommt zwei Fälle, die es vorher nicht geben konnte: (a) der Inklusionsnachweis eines
+>   Mandanten ist **ohne Daten anderer Mandanten** prüfbar; (b) eine **zwischen zwei Ankern verschwundene
+>   Kette** wird als Befund gemeldet.
+> - **`JR-804`** (Ausfallverhalten) bleibt inhaltlich unverändert — ADR-008 gilt weiter —, trifft jetzt
+>   aber alle Mandanten gleichzeitig: ein fehlender Anker statt N.
+>
+> **Vorgezogen nach E2:** die **Merkle-Kodierung** (Blatt/Knoten domain-separiert, Sortierung, Regel für
+> den ungeraden Knoten) gehört in `JR-203`/ADR-006, weil `verify` den Baum byteidentisch nachbauen muss und
+> die kanonische Kodierung ihn sonst nicht abdeckt.
 
 | ID     | Task                                                                                                                               | Rolle | RFC       | Akzeptanzkriterien                                                                                                                 |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------- | ----- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |

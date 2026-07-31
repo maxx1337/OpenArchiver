@@ -184,6 +184,26 @@ Anchoring braucht eine RFC-3161-TSA; für deutsche Installationen sollte es eine
 unter eIDAS sein. Das ist kostenpflichtig, ratenbegrenzt und eine Betreiberentscheidung — kein
 Default, den wir setzen dürfen.
 
-**Gegenmaßnahme:** `JR-801` liefert **keinen** Standard-TSA-URL aus und meldet bei leerer
-Konfiguration einen klaren Fehler. Für Tests eine Test-TSA (`ci`), die echte TSA nur `manual`.
-`JR-804` und ADR-008 stellen sicher, dass eine nicht erreichbare TSA die Ingestion niemals stoppt.
+**Seit ADR-007 kam ein Kostenhebel dazu, und ADR-022 hat ihn entschärft:** eine Kette je Mandant hätte
+bei einem Token je Kette die TSA-Kosten mit der Mandantenzahl multipliziert (täglich × 50 Mandanten:
+18.250 Token im Jahr). Der Merkle-Anker über alle Kettenköpfe braucht **ein** Token je Lauf, also 365 —
+unabhängig von der Mandantenzahl.
+
+**Drei Risiken einer kostenlosen TSA, benannt weil ADR-023 `open-tsa.eu` für `nightly` und für
+Installationen ohne GoBD-Anspruch zulässt** (am 2026-07-31 gemessen):
+
+1. **Kein qualifizierter Zeitstempel.** Keine Beweisvermutung nach eIDAS Art. 41. Die Policy-OID im Token
+   ist eine private Enterprise-OID (`1.3.6.1.4.1.59085.1.1`), keine ETSI-Policy. Wer GoBD-Anspruch hat,
+   braucht trotzdem eine qualifizierte TSA.
+2. **Verfügbarkeit.** Ein Knoten, spendenfinanziert, Redundanz laut Roadmap erst 2028+. Fällt er aus,
+   fehlt der Anker — die Annahme läuft nach ADR-008 weiter, aber die Nachweiskette hat eine Lücke.
+   **Deshalb nicht in `ci`:** ein CI-Lauf darf nicht von einem fremden Dienst rot werden.
+3. **Langzeitverifikation.** Der Root liegt in **keinem** Trust Store und muss gepinnt werden, und das
+   Signing-Cert lebt **2 Jahre** bei einer Aufbewahrungsfrist von **10**. Das Token ist ohne seine
+   Zertifikatskette später nicht mehr prüfbar — die Kette gehört **mit** archiviert.
+
+**Gegenmaßnahme:** `JR-801` liefert **keinen** Standard-TSA-URL aus, meldet bei leerer Konfiguration einen
+klaren Fehler, akzeptiert eine **Liste** von URLs (zweiter unabhängiger Zeitstempel möglich) und archiviert
+die Zertifikatskette mit dem Token. `ci` bleibt hermetisch, `nightly` geht gegen `open-tsa.eu`, `manual`
+gegen die qualifizierte TSA. `JR-804` und ADR-008 stellen sicher, dass eine nicht erreichbare TSA die
+Ingestion niemals stoppt.
