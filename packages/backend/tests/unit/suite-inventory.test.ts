@@ -45,14 +45,26 @@ function unitFiles(): string[] {
 	);
 }
 
+/**
+ * Exactly as many adversarial files as the `adversarial` suite declares.
+ *
+ * Derived rather than written out, for the same reason `unitFiles()` is: a fixture that hard-codes
+ * one `.adv.test.ts` file silently assumes `expectedFiles: 1`, and then fails the day the suite
+ * grows -- with a message about violation counts that says nothing about the real cause. That
+ * happened when `JR-208`/`JR-209` took the suite from one file to three.
+ */
+function adversarialFiles(): string[] {
+	return Array.from(
+		{ length: suiteExpected('adversarial') },
+		(_unused, index) => `packages/backend/tests/adversarial/adv-${index}.adv.test.ts`
+	);
+}
+
 /** The tree the repository is expected to have: exactly the declared number of files per suite. */
 function healthyTree(): string {
-	const files: string[] = [...unitFiles()];
+	const files: string[] = [...unitFiles(), ...adversarialFiles()];
 	for (let index = 0; index < suiteExpected('integration'); index += 1) {
 		files.push(`packages/backend/tests/integration/int-${index}.int.test.ts`);
-	}
-	for (let index = 0; index < suiteExpected('adversarial'); index += 1) {
-		files.push(`packages/backend/tests/adversarial/adv-${index}.adv.test.ts`);
 	}
 	return tree(files);
 }
@@ -123,7 +135,7 @@ suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
 	it('gap (a): an ABSENT integration directory is a violation, not a green run', () => {
 		// This is the exact state that was green before JR-105b: the directory renamed away, so no
 		// integration file exists, no skip notice is printed, and vitest reports success.
-		const root = tree([...unitFiles(), 'packages/backend/tests/adversarial/x.adv.test.ts']);
+		const root = tree([...unitFiles(), ...adversarialFiles()]);
 		try {
 			const report = collectSuiteInventory(root);
 			expect(report.counts.integration).toBe(0);
@@ -168,7 +180,7 @@ suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
 		// expectations fire: the suite is empty *and* four files are collected by nobody.
 		const root = tree([
 			...unitFiles(),
-			'packages/backend/tests/adversarial/x.adv.test.ts',
+			...adversarialFiles(),
 			'packages/backend/tests/integration-renamed/a.int.test.ts',
 			'packages/backend/tests/integration-renamed/b.int.test.ts',
 			'packages/backend/tests/integration-renamed/c.int.test.ts',

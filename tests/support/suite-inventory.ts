@@ -131,10 +131,14 @@ export const SUITES: readonly SuiteSpec[] = [
 	{
 		name: 'adversarial',
 		include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
-		expectedFiles: 1,
-		// The one `nightly` and one `manual` suite in the repository, both in
+		// 1 until JR-208/JR-209; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
+		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)).
+		expectedFiles: 3,
+		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
-		expectedTests: { ci: 3, nightly: 1, manual: 1 },
+		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-208 (load, rollback-under-load,
+		// the no-lock counter-check, and the F38 regression); 18 with the 11 tamper cases of JR-209.
+		expectedTests: { ci: 18, nightly: 1, manual: 1 },
 	},
 ];
 

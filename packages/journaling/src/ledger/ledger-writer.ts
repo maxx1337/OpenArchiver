@@ -150,6 +150,30 @@ export class PostgresLedgerWriter implements LedgerBackend {
 		return { seq: BigInt(row.seq), chainHash: row.chain_hash };
 	}
 
+	/**
+	 * Write the row.
+	 *
+	 * ---------------------------------------------------------------------------------------------
+	 * Why `event_payload` is cast through `text` (F38)
+	 * ---------------------------------------------------------------------------------------------
+	 * The payload is bound as a JSON **string**. A driver that learns from the server's parameter
+	 * description that the parameter is `jsonb` will JSON-encode that string a second time, and the
+	 * column then holds the JSON string `"{\"k\":1}"` where the object `{"k":1}` was meant. Nothing
+	 * fails at write time. What fails is `verify`, months later and for every row that carries a
+	 * payload: the value read back is a string, so its canonical encoding differs from the one that
+	 * was hashed.
+	 *
+	 * Casting through `text` pins the parameter's type to `text` in the parameter description, so no
+	 * driver can infer `jsonb` and no second encoding can happen. **A plain `$16::jsonb` does not
+	 * help** — measured against postgres-js, it stores the doubly-encoded string exactly as a bare
+	 * `$16` does, because the cast still leaves `jsonb` as the inferred parameter type.
+	 *
+	 * Found by `JR-208`, which writes through a plain postgres-js client. Every integration test
+	 * before it wrote through `harness.sql`, and `drizzle()` patches the client it is handed — so the
+	 * one client in the repository that behaves differently was the only one being tested. The
+	 * regression case lives in `journal-ledger-concurrency.adv.test.ts` and asserts `jsonb_typeof`
+	 * directly.
+	 */
 	private async insert(
 		tx: LedgerQuery,
 		record: JournalLedgerRecord,
@@ -169,7 +193,8 @@ export class PostgresLedgerWriter implements LedgerBackend {
 				$1, $2, timestamptz 'epoch' + $3::bigint * interval '1 microsecond', $4,
 				$5, $6, $7, $8,
 				$9, $10, $11, $12,
-				$13, $14, $15, $16,
+				-- The double cast on $16 is load-bearing (F38); see the note on this method.
+					$13, $14, $15, $16::text::jsonb,
 				$17, $18
 			)`,
 			[

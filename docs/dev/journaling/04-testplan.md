@@ -332,6 +332,13 @@ Dies ist der Test, der belegt, dass Phase B den Acceptance-Contract nicht berüh
 
 **Klasse:** `ci`.
 
+> **Umgesetzt am 2026-08-01 in `JR-209`** (`packages/backend/tests/adversarial/journal-ledger-tamper.adv.test.ts`,
+> 11 Fälle): alle acht Fälle unten, der Positivfall darunter, und eine Gegenprobe, dass der Append-Only-Trigger
+> dieselbe Manipulation abweist, solange er eingeschaltet ist. (c), (d) und (e) sind ohne E7/E8 darstellbar,
+> weil der **Anker im Test festgehalten** wird statt in einer Tabelle — für die Aussage zählt, dass der Wert
+> das System vor der Manipulation verlassen hat, nicht wo er liegt. `JR-805`/`JR-907` führen dieselben Fälle
+> später über die CLI; die Befundarten sind in `tests/support/ledger-verifier.ts` bereits benannt.
+
 | Fall | Manipulation                                      | Erwartung                                                                                        |
 | ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | a    | gespeichertes Objekt verändern                    | Hash-Mismatch beim **korrekten** `seq`                                                           |
@@ -379,6 +386,15 @@ absichtliche Löschung ausgewiesen werden (`JR-905`).
 
 Ergänzend `JR-208`: 20 parallele Ledger-Writer × 500 Appends ⇒ lückenlos und korrekt verkettet;
 erzwungener Rollback zwischen Seq-Ableitung und Commit ⇒ **keine** Lücke.
+
+> **`JR-208` ist umgesetzt** (2026-08-01, `journal-ledger-concurrency.adv.test.ts`): 10 000 Appends in
+> 84–96 s, `seq` genau 1…10 000, Kette über alle Zeilen neu gerechnet, 10 000 verschiedene
+> Vorgängerhashes; der Rollback-Fall läuft **unter Last**. Der Lauf ist die volle Menge aus dem Backlog,
+> nicht gesampelt — ein voller `pnpm test` dauert dadurch rund zwei Minuten. Dazu zwei Dinge, die der
+> Plan nicht vorgab und die sich als notwendig erwiesen haben: der Test bringt einen **eigenen Pool mit
+> einer Verbindung je Writer** mit (sonst wird die Konkurrenz im Treiber ausgetragen statt in Postgres),
+> und eine **Gegenprobe ohne Advisory-Lock** muss brechen — sonst kann der Lastfall grün sein, weil sich
+> nichts überlappt hat.
 
 ### §12.7 BDAT-Pfad — `JR-411`
 

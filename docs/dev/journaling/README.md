@@ -146,7 +146,14 @@ Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Beric
 (`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
 Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 
-**Nächster Schritt: E2** — der Receiver selbst. Es existiert dafür noch **kein** Produktionscode.
+**E2 ist inhaltlich fertig** (`JR-201`…`JR-209`, 2026-07-31 bis 2026-08-01): `packages/journaling` trägt
+die kanonische Kodierung, die Merkle-Aggregation und `PostgresLedgerWriter`; die Tabellen sind migriert
+und append-only; der Ledger hält 10 000 nebenläufige Appends lückenlos aus, und jede der acht
+Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. **Nächster Schritt ist die
+Abnahme `JR-210`** (Rolle PO/Tester, eigene Session). Dabei gefunden und behoben: **F38** — der Writer
+speicherte `event_payload` doppelt JSON-kodiert, sobald der Datenbanktreiber nicht durch `drizzle()`
+gelaufen war, was jede Ledger-Zeile mit Nutzlast unverifizierbar gemacht hätte. Einen SMTP-Empfangspfad
+gibt es weiterhin nicht; der beginnt mit E3/E4.
 
 **`ADR-007` ist am 2026-07-31 entschieden: eine Kette _je Mandant_**, nicht eine globale mit
 Mandanten-Tag — RFC §15 nennt das für Export und Löschung sauberere Modell, und beides muss dieses Produkt

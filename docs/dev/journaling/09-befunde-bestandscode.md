@@ -21,11 +21,14 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24               |
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34     |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35                             |
+| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                             |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38                             |
 
 Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
 Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16), `JR-1301` (F17–F23), die Abnahme
 `JR-1309` (F24–F29), die Abnahme `JR-1309a` (F30) und die Abnahme `JR-1309b` (F31–F34), Rolle
-`tester`, 2026-07-27 bis 2026-07-29.
+`tester`, 2026-07-27 bis 2026-07-29. Dazu `JR-1309c` (F36), `JR-205` (F37) und `JR-208` (F38),
+2026-07-30 bis 2026-08-01.
 
 > **F31 ist der einzige Befund dieser Liste, dessen Ursache in einer ADR liegt und nicht im Code oder
 > in seiner Umsetzung.** ADR-020 hat den Verhaltenscheck selbst „vollständig" genannt; `JR-1317` hat
@@ -1726,3 +1729,55 @@ jede tabellenseitige Maßnahme von ihr aus aufhebbar. Nachzuarbeiten in **E11**:
 Nicht in E2 behoben, weil eine Rollentrennung `.env`, `docker-compose.yml`, den Migrationspfad und die
 Betreiberdoku berührt — das ist E11s Gegenstand, und eine halb eingebaute Trennung wäre schlechter als
 eine dokumentierte Anforderung.
+
+## F38 — `event_payload` wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle gepatcht ist
+
+**Kategorie:** Neuer Code (E2) · **Schwere:** hoch — jede Ledger-Zeile mit `event_payload` wäre
+unverifizierbar · **Status:** **behoben** im selben Zug (`JR-208`) ·
+**Herkunft:** gemessen am 2026-08-01 bei `JR-208`, Rolle `tester`
+
+`PostgresLedgerWriter.insert()` band `event_payload` als `JSON.stringify(...)` an `$16`. postgres-js
+entnimmt den Parametertyp der **Parameterbeschreibung des Servers**, sieht dort `jsonb` und
+serialisiert den übergebenen String ein **zweites** Mal. In der Spalte steht dann der JSON-_String_
+`"{\"k\":1}"` statt des Objekts `{"k":1}`.
+
+Nichts schlägt beim Schreiben fehl. Was fehlschlägt, ist `verify` — Monate später und für **jede**
+Zeile mit Nutzlast: zurückgelesen wird ein String, dessen kanonische Kodierung nicht die des
+gehashten Objekts ist. Der Kettenhash der Zeile passt nicht mehr zu ihrem Inhalt.
+
+**Gemessen gegen PostgreSQL 17.10, vier Parameterformen auf einem nackten postgres-js-Client:**
+
+```
+$2                  mit JSON.stringify(obj)   ->  jsonb_typeof = string   (falsch)
+$2::jsonb           mit JSON.stringify(obj)   ->  jsonb_typeof = string   (falsch)
+$2::text::jsonb     mit JSON.stringify(obj)   ->  jsonb_typeof = object   (richtig)
+$2                  mit dem Objekt selbst     ->  jsonb_typeof = object   (richtig)
+```
+
+**Der einfache Cast `::jsonb` hilft nicht** — er lässt `jsonb` als abgeleiteten Parametertyp stehen.
+Nur der Umweg über `text` legt den Typ in der Parameterbeschreibung auf `text` fest, sodass kein
+Treiber mehr `jsonb` ableiten und ein zweites Mal kodieren kann. Behoben ist es so.
+
+**Warum `JR-206` das nicht gefunden hat, und das ist der eigentlich lehrreiche Teil.** Der einzige
+postgres-js-Client im Repository, der sich **nicht** so verhält, ist `harness.sql` — weil
+`drizzle(client, …)` den ihm übergebenen Client patcht. Und genau dieser Client ist der, durch den
+jeder Integrationstest schreibt. Gemessen, fünf Varianten, dieselbe Datenbank, derselbe Writer:
+
+```
+harness.sql (durch drizzle gelaufen)              -> object
+postgres(url, {gleiche Optionen wie der Harness}) -> string
+postgres(url)                                     -> string
+postgres(url, {max: 20})                          -> string
+```
+
+Es liegt also nicht an einer Option, sondern daran, **durch welche Bibliothek der Client einmal
+gelaufen ist**. Der Ingress-Prozess aus E3/E4 wird drizzle nicht in seiner Nähe haben — die
+Architektur verbietet es ausdrücklich (`packages/journaling` darf nicht von `packages/backend`
+abhängen) —, also wäre die Produktion die erste Stelle gewesen, an der es auffällt.
+
+**Regel, die daraus folgt und über diesen Befund hinausgeht:** ein Integrationstest, der nur über
+`harness.sql` schreibt, prüft den Treiber der _Tests_, nicht den der Anwendung. Für alles in
+`packages/journaling` — das seine Verbindung per Definition injiziert bekommt — muss mindestens ein
+Test über einen **nackten** Client schreiben. `JR-208` tut das jetzt (`pool`), und der benannte
+Regressionsfall in `journal-ledger-concurrency.adv.test.ts` prüft `jsonb_typeof` direkt statt nur
+über den Kettenhash, damit ein Rückfall sagt, _was_ kaputt ist.
