@@ -322,3 +322,32 @@ Nicht Teil dieses Risikos, aber die Ursache dafür, dass es überhaupt tragbar b
 ADR-014 **bis zur Abnahme von E12 nicht angefasst**. Die 0 in der Tabelle oben ist deshalb ein
 Momentanwert, kein Dauerzustand — sie wird beim ersten Upstream-Merge größer und ist genau die Zahl,
 die hier ab dann protokolliert wird.
+
+## R-20 — Ein Recovery-Scan neben laufender Annahme quarantänisiert eine gültige Nachricht
+
+**Auswirkung:** hoch · **Wahrscheinlichkeit:** mittel · **Epic:** E4, E6
+
+Aufgenommen am 2026-08-01 bei der Abnahme von `JR-3-05`. Der Scan entscheidet **allein am Ledger**
+— kein Dateialter, kein lokaler Zustand —, und das ist für den Absturzfall richtig: alles andere
+wäre raten. Genau dadurch ist eine Transaktion **mitten in Phase A** vom Ledger aus aber nicht von
+einem Absturz zu unterscheiden: Bytes gefsynct in `incoming/`, Ledger-Append noch offen.
+
+Läuft der Scan in diesem Moment, verschiebt er die Datei nach `quarantine/`. Danach gelingt der
+Append, `250` geht raus — und der Ledger verweist auf einen Pfad, an dem nichts mehr liegt. Kein
+Datenverlust (die Bytes sind in der Quarantäne), aber Phase B findet das Objekt nicht, und die
+Vollständigkeitsargumentation zeigt eine Lücke, deren harmlose Erklärung niemand schnell findet.
+Dazu ein Alert, der einen Absturz meldet, der nie stattfand.
+
+Real wird das nicht durch exotisches Timing, sondern durch die Prozesstopologie: `apps/smtp-ingress`
+und der `journal-inbound`-Worker sind **eigene** Prozesse (`CLAUDE.md` §3) und starten unabhängig
+neu. Der Worker kann seinen Scan also fahren, während der Ingress längst Mail annimmt.
+`02-architektur.md` §5 ließ beide den Scan „beim Start“ fahren, ohne diese Vorbedingung zu nennen —
+der Befund liegt in der Vorgabe, nicht im Code von `JR-3-05`.
+
+**Gegenmaßnahme:** `02-architektur.md` §5 trägt seit dem 2026-08-01 zwei verbindliche Vorgaben für
+die Aufrufstellen in E4/E6: der Scan läuft **vor** dem Binden von Port 25 und **exklusiv** über
+einem Spool — entweder fährt ihn nur ein Prozess, oder beide koordinieren sich über eine Sperre.
+Eine Alters- oder mtime-Schwelle ist **ausdrücklich keine** Lösung: sie ersetzte eine belegte
+Entscheidung durch eine geratene und bräche damit die Regel, die `JR-3-05` trägt. Den Wettlauf Scan
+gegen Scan deckt `JR-3-05` bereits ab (`ENOENT` beim `rename()` gilt als „schon quarantänisiert“);
+diese Maßnahme deckt Scan gegen **Annahme**.

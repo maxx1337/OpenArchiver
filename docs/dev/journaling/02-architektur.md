@@ -340,6 +340,37 @@ Beim Start von `apps/smtp-ingress` **und** des `journal-inbound`-Workers:
 
 Nie eine Spool-Datei ohne Ledger-Eintrag stillschweigend löschen.
 
+### Vorbedingung: der Scan läuft über einen Spool, in den niemand schreibt
+
+> **Ergänzt am 2026-08-01 nach der Abnahme von `JR-3-05`.** Der Abschnitt oben war unterbestimmt, und
+> die Umsetzung folgt ihm getreu — der Befund liegt hier, nicht im Code.
+
+Schritt 2 entscheidet **allein am Ledger**, ohne Dateialter und ohne lokalen Zustand. Für den
+Absturzfall ist das genau richtig und in `JR-3-05` bewusst so gebaut: alles andere wäre raten. Es
+setzt aber stillschweigend voraus, dass keine Annahme **gerade läuft**.
+
+Denn eine Transaktion mitten in Phase A sieht vom Ledger aus genauso aus wie ein Absturz: Die Bytes
+liegen gefsynct in `incoming/`, der Ledger-Append steht noch aus. Ein Scan, der in diesem Moment
+darüberläuft, verschiebt die Datei nach `quarantine/` — und **danach** gelingt der Append, `250` geht
+raus, und der Ledger verweist auf einen Pfad, an dem die Datei nicht mehr liegt.
+
+Verloren ist dabei nichts, die Bytes liegen in der Quarantäne. Aber Phase B findet das Objekt nicht,
+und die Vollständigkeitsargumentation zeigt eine Lücke mit einer harmlosen Erklärung, auf die
+niemand schnell kommt.
+
+**Daraus zwei verbindliche Vorgaben für E4 und E6, wo die Aufrufstellen entstehen:**
+
+1. Der Scan läuft **vor** dem Binden von Port 25 bzw. vor der ersten Annahme — nie parallel dazu.
+2. Über einem Spool läuft er **exklusiv**. Zwei Prozesse, die ihn unabhängig starten, sind das
+   Problem: `apps/smtp-ingress` und der `journal-inbound`-Worker sind eigene Prozesse und starten
+   unabhängig neu, der Worker also möglicherweise, während der Ingress längst Mail annimmt. Entweder
+   fährt ihn nur **ein** Prozess, oder beide koordinieren sich über eine Sperre.
+
+`JR-3-05` toleriert bereits den **anderen** Wettlauf: trifft `rename()` eine Quelle, die schon weg
+ist (`ENOENT`), gilt sie als von einem konkurrierenden Scan quarantänisiert — kein Fehler, kein
+zweiter Alert. Das deckt Scan gegen Scan ab, **nicht** Scan gegen laufende Annahme; dagegen hilft
+nur die Exklusivität oben.
+
 ## 6. Phase B — `journal-inbound` Worker
 
 Neuer Worker-Prozess in `packages/backend`, nach dem Muster von `src/workers/ingestion.worker.ts`
