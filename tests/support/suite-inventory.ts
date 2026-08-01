@@ -109,8 +109,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 20 after JR-3-02 added spool/durable-write.test.ts -- the streaming, dual-fsync durable
 		// write, plus its 150 MB heap-growth case (nightly). 21 after JR-3-04 added
 		// spool/acceptance.test.ts -- the two-phase acceptance wiring (high-water-mark -> durable write
-		// -> ledger append -> typed result) against fakes.
-		expectedFiles: 21,
+		// -> ledger append -> typed result) against fakes. 23 after JR-3-05 added
+		// ledger/ledger-lookup.test.ts (the batched spool_txid -> ledger read port, against a recording
+		// fake) and spool/crash-recovery.test.ts (the crash-recovery scan: requeue vs. quarantine,
+		// batching, quarantine/ observability, no-delete, and tolerance of a racing second scan).
+		expectedFiles: 23,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -129,8 +132,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// acceptance.test.ts's fakeBackend() doc comment), high-water mark, the three spool-failure
 		// classifications, ledger-append failure leaving the spool file in place, and the five success
 		// cases (seq/hash passthrough, generated txid, size/hash from the durable write, IP
-		// normalisation x2, receipt event shape).
-		expectedTests: { ci: 361, nightly: 1, manual: 0 },
+		// normalisation x2, receipt event shape). 371 after JR-3-05: 3 tests for
+		// PostgresLedgerLookup.findBySpoolTxIds() against a fake (empty batch skips I/O, one batched
+		// ANY($1) call with correct row mapping, a string-encoded received_at converted to Date) + 7 for
+		// the crash-recovery scan (requeue leaves the file in place, quarantine moves it and alerts, a
+		// mixed multi-shard batch resolved in exactly one ledger call, pre-existing quarantine/ files
+		// counted but never queried or moved, a fresh/empty spool scans cleanly, content preserved
+		// byte-for-byte across a run that both requeues and quarantines, and a racing second scan's
+		// already-moved source is tolerated rather than thrown).
+		expectedTests: { ci: 371, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -145,15 +155,20 @@ export const SUITES: readonly SuiteSpec[] = [
 		// measurement rather than a claim. 13 after JR-3-04 added
 		// journal-acceptance-bare-client.int.test.ts -- JournalAcceptance.accept() through a client
 		// that is never given to drizzle() (F38's rule: anything in packages/journaling that gets its
-		// connection injected needs at least one test writing through a bare client).
-		expectedFiles: 13,
+		// connection injected needs at least one test writing through a bare client). 14 after JR-3-05
+		// added journal-ledger-lookup.int.test.ts -- PostgresLedgerLookup.findBySpoolTxIds() against a
+		// real database.
+		expectedFiles: 14,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
 		// JR-3-04: the bare-client round trip through JournalAcceptance.accept() (re-verifies the chain
 		// hash after storage) and the direct F38 regression case (a non-null event_payload with keys out
-		// of order, through PostgresLedgerWriter.append() on the same bare client).
-		expectedTests: { ci: 94, nightly: 0, manual: 0 },
+		// of order, through PostgresLedgerWriter.append() on the same bare client). 97 after JR-3-05: a
+		// mixed batch of known/unknown spool_txids resolved correctly against the real schema and index,
+		// an all-unknown batch coming back empty without error, and an empty batch never reaching the
+		// database at all.
+		expectedTests: { ci: 97, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

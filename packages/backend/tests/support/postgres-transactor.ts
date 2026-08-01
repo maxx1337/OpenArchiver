@@ -43,6 +43,24 @@ export function postgresTransactor(sql: Sql): LedgerTransactor {
 }
 
 /**
+ * A `LedgerQuery` directly over a `postgres-js` connection, with **no** transaction boundary
+ * (`JR-3-05`).
+ *
+ * The write side above always needs `postgresTransactor()`'s `BEGIN`/`COMMIT` and its
+ * `pg_advisory_xact_lock` -- that is what serialises appends to one chain. A read keyed by the
+ * indexed `spool_txid` column (`PostgresLedgerLookup`) has nothing to serialise against and no chain
+ * state to protect, so a bare, unwrapped query is the whole implementation.
+ */
+export function bareLedgerQuery(sql: Sql): LedgerQuery {
+	return {
+		async query<Row>(text: string, values: readonly unknown[] = []): Promise<Row[]> {
+			const rows = await sql.unsafe(text, values as never[]);
+			return rows as unknown as Row[];
+		},
+	};
+}
+
+/**
  * A transactor that rolls back after the callback succeeded.
  *
  * Used to show that a rolled-back append consumes no `seq` — the property that rules out a Postgres

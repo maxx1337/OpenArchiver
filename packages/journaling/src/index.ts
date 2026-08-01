@@ -49,6 +49,9 @@ export {
 	type PostgresLedgerWriterOptions,
 } from './ledger/ledger-writer';
 
+export type { LedgerEntryByTxId, LedgerLookup } from './ledger/ledger-lookup-port';
+export { PostgresLedgerLookup } from './ledger/ledger-lookup';
+
 export type { SpoolDirEntry, SpoolFileHandle, SpoolFileSystem, SpoolStat } from './spool/fs-port';
 export { NodeSpoolFileSystem } from './spool/fs-port';
 
@@ -93,3 +96,13 @@ export {
 	type SpoolCapacityExceeded,
 	type SpoolWriteFailed,
 } from './spool/acceptance';
+
+export {
+	runCrashRecoveryScan,
+	type CrashRecoveryAlert,
+	type CrashRecoveryAlertSink,
+	type CrashRecoveryScanOptions,
+	type CrashRecoveryScanResult,
+	type QuarantinedEntry,
+	type RequeueCandidate,
+} from './spool/crash-recovery';
