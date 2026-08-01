@@ -6,11 +6,11 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-01 (**E2: `JR-201`…`JR-209` sind erledigt — die Kette wird
-geschrieben, hält unter Last, und jede der acht Manipulationsarten aus Testplan §12.5 wird mit
-Befundart und `seq` gemeldet. Dabei **F38** gefunden und behoben. Offen ist allein die Abnahme
-`JR-210`**) · **Branch:** `claude/journaling-e2-ledger`, abgezweigt vom Integrationsbranch (E13 ist
-zurückgemergt)
+**Letzte Aktualisierung:** 2026-08-01 (**E2 ist mit `JR-210` abgenommen — 23 Kriterien, 23 erfüllt,
+darunter die Testvektoren aus ADR-006 §6 gegen den gebauten Code und vier Mutationsproben, die alle
+rot wurden. Ein Vorbehalt: die Abnahme ist _nicht unabhängig_, deshalb ist der Rückmerge **nicht**
+vollzogen und liegt beim Auftraggeber**) · **Branch:** `claude/journaling-e2-ledger`, abgezweigt vom
+Integrationsbranch (E13 ist zurückgemergt)
 
 > **`JR-208` und `JR-209` sind erledigt (Rolle TEST, 2026-08-01), und die wichtigste Zeile ist keine
 > Testzahl:** `JR-208` hat **F38** gefunden — der Writer speicherte `event_payload` doppelt JSON-kodiert,
@@ -234,7 +234,7 @@ eingeschoben (siehe `03-backlog.md`).
 | —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                         | 6 / 6                    |
 | 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-105c` erledigt            | 10 / 10                  |
 | 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-1309c`, 4. Runde), Folge-Tasks offen | 9 / 9 + 8 / 8 Nacharbeit |
-| 3           | E2   | Ledger und Hash-Chain              | `JR-201`…`JR-209` erledigt, **Abnahme `JR-210` offen**             | 9 / 10                   |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen** (`JR-210`), Rückmerge **offen** — siehe Vorbehalt   | 10 / 10                  |
 | 4           | E3   | Spool und Acceptance-Contract      | offen                                                              | 0 / 8                    |
 | 5           | E4   | `smtp-ingress`-Service             | offen                                                              | 0 / 13                   |
 | 6           | E5   | Journal-Report-Parser              | offen                                                              | 0 / 9                    |
@@ -388,6 +388,128 @@ Gleichheit (F15 hatte genau das vorgeschlagen), und die Ausnahme für verengte L
 Dateien grün (über die Prettier-API gegen eine LF-Normalisierung in Node geprüft, wegen **F35** nicht
 über `pnpm lint`); 0 `oa_test_*`-Rückstände am Ende; der Wegwerf-Cluster ist im Scratchpad und wird
 abgebaut.
+
+---
+
+## E2 — Ledger und Hash-Chain (**abgenommen 2026-08-01 mit `JR-210`, mit einem Vorbehalt zum Verfahren**)
+
+### Abnahme `JR-210` (2026-08-01) — Ergebnis: **E2 abgenommen**
+
+**23 Kriterien geprüft, 23 erfüllt.** Keine neuen Befunde. Zwei benannte Grenzen und **ein Vorbehalt
+zum Verfahren**, der zuerst kommt, weil er die Aussagekraft dieses Protokolls betrifft.
+
+#### Der Vorbehalt: diese Abnahme ist nicht unabhängig
+
+**`JR-208` und `JR-209` wurden in derselben Sitzung von derselben Instanz geschrieben, die sie hier
+abnimmt.** ADR-014 und ADR-021 verlangen eine unabhängige Abnahme, und dieses Protokoll erfüllt das
+nicht. Es ist bei der Bewertung entsprechend zu gewichten: **der Auftraggeber entscheidet, ob eine
+zweite, unabhängige Runde nötig ist, bevor zurückgemergt wird.** Der Rückmerge ist deshalb **nicht**
+vollzogen worden — anders als bei E1 und E13, wo er der Abnahme unmittelbar folgte.
+
+Was zur Kompensation getan wurde, statt es zu behaupten: **nichts wurde aus den Berichten der
+Umsetzung übernommen.** Jede Aussage ist neu gemessen, mit eigenen Werkzeugen, und die tragenden
+Aussagen zusätzlich durch **Mutationsproben** — der Produktionscode wurde gezielt sabotiert, und die
+Suite musste das melden. Eine Mutationsprobe kann ein Testautor nicht dadurch bestehen, dass er
+optimistisch war.
+
+#### Die vier Mutationsproben — der härteste Teil des Protokolls
+
+Jede Mutation wurde am Quellcode vorgenommen, `packages/journaling` neu gebaut, der betroffene Test
+gefahren, und der Zustand danach mit `git checkout --` zurückgesetzt; `git status --porcelain` war
+vor **und** nach jeder Probe leer.
+
+| #   | Mutation                                                                                           | Erwartung                | Gemessen                                                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| M1  | `$16::text::jsonb` → `$16` (der F38-Fix rückgängig)                                                | F38-Regressionsfall rot  | **rot**: „event_payload was stored as a JSON string, not an object — F38 is back"                                          |
+| M2  | `stringField(record.tlsVersion, …)` → `stringField(null, …)`                                       | (f) und die Vektoren rot | **rot**: ADR-Vektoren 13/16 (Recordlänge, `SHA256(record)`, `chain_hash(1)`), Fall (f) rot, **und die RFC-Gegenprobe rot** |
+| M3  | `SELECT pg_advisory_xact_lock($1)` → `SELECT $1::bigint`                                           | Lasttest rot             | **rot** nach 295 ms: `duplicate key value violates unique constraint "journal_ledger_chain_scope_id_seq_pk"`               |
+| M4  | in (f) `set tls_version = 'TLSv1.3'` → `set tls_version = tls_version` (Manipulation ohne Wirkung) | (f) rot                  | **rot**: `expected [] to have a length of 1` — der Verifier meldet bei unmanipulierter Kette **nichts**                    |
+
+**M4 ist die wichtigste der vier.** Sie schließt die Fehlerklasse aus, an der eine Tamper-Suite
+lautlos scheitert: ein Verifier, der immer meckert, macht jeden Tamper-Test grün, ohne zu
+unterscheiden. Der Verifier produziert nachweislich keine Falsch-positiven — und das deckt sich mit
+der zweiten, unabhängigen Beobachtung, dass er über **10 000** unmanipulierte Zeilen keinen einzigen
+Befund meldet.
+
+**M2 belegt zusätzlich, dass die RFC-Gegenprobe ihren Zweck erfüllt.** Sie wurde rot, als die
+Kodierung um genau ein Feld in Richtung RFC-Formel zurückgeschnitten wurde — das ist die Regression,
+gegen die sie geschrieben ist, und sie fängt sie.
+
+#### Testvektoren aus ADR-006 §6 — das Kernkriterium von `JR-210`
+
+Geprüft mit einem eigenen Skript, das die Vektoren **aus `05-entscheidungen.md` parst** statt sie
+abzutippen, und sie gegen `packages/journaling/dist` (das gebaute Artefakt, das die Tests importieren)
+rechnet. Abtippen hätte belegt, dass das Skript mit sich selbst übereinstimmt; so ist belegt, dass der
+Code mit der **Entscheidung** übereinstimmt, und die Prüfung bleibt gültig, wenn eine Seite sich ändert.
+
+**16 von 16 Prüfungen bestanden**, darunter alle acht Vektoren (`G1`, `G2`, Recordlänge **351 Byte**,
+`SHA256(record)`, `chain_hash(1)`, Blatt, Wurzeln über 2 und 3 Blätter) und die Eigenschaftsnachweise,
+die die ADR als „alle ausgeführt" bezeichnet: `rcpt`-Reihenfolge getauscht ⇒ anderer Hash,
+`event_payload`-Schlüssel umgestellt ⇒ **gleicher** Hash, `chain_scope_id` getauscht ⇒ anderer Hash,
+`remote_ip` getauscht ⇒ anderer Hash, gleiche Eingabe zweimal ⇒ identische Bytes.
+
+Die Merkle-Regel wurde in beide Richtungen nachgerechnet, mit einer **hier** implementierten
+Duplizier-Regel als Vergleich: unter ihr gilt `root[A,B,C] == root[A,B,C,C]` (**true**, `D4`), unter
+RFC 6962 nicht (**false**, `D5`), und `merkleRoot()` aus dem Produktionscode liefert die RFC-6962-Wurzel.
+Damit ist ADR-022 Festlegung 1 — der Anker bezeugt die **Menge** der Ketten — nicht nur behauptet.
+
+#### Datenbankseite: `JR-204` und `JR-205`, direkt gemessen
+
+**Nicht über den Testharness des Projekts**, weil Harness und Tests Teil dessen sind, was abgenommen
+wird. Stattdessen eine eigene Datenbank, die echten Migrationen des Repositorys angewandt, und die
+Anweisungen aus den Akzeptanzkriterien direkt abgesetzt. **21 von 21 Prüfungen bestanden:**
+
+- `deployment_identity` trägt nach der Migration **genau eine** Zeile mit einer echten UUID; eine
+  zweite wird abgewiesen (`23505`).
+- Ein µs-Wert, der kein ms-Vielfaches ist, wird vom `CHECK` abgewiesen (`23514`); ein ms-Vielfaches und
+  eine ganze Sekunde werden angenommen. **Das ist das ausdrücklich benannte Kriterium von `JR-204`.**
+- `duplicate_of = seq` wird abgewiesen (`23514`) — das in `JR-204` selbst gefundene Loch ist zu.
+- Das Löschen einer `ingestion_source` mit Ledger-Zeilen ist blockiert (`23503`, `ON DELETE restrict`).
+- 18 Spalten; `size_bytes` und `content_sha256` **nullable** (ADR-006, `anchor`-Events); `remote_ip` ist
+  **`text`**, nicht `inet`.
+- **Vier** Trigger vorhanden und `tgenabled = 'O'`. `UPDATE`, `DELETE` **und `TRUNCATE`** werden auf
+  **beiden** Tabellen mit `23001` abgewiesen — sechs Anweisungen, sechs Ablehnungen. `INSERT` läuft
+  weiter, und nach den sechs abgewiesenen Anweisungen stehen noch alle drei Zeilen da.
+
+#### Die übrigen Kriterien
+
+| Kriterium                                               | Beleg                                                                                                                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JR-201`: kein Import aus `@open-archiver/backend`      | `grep` über `packages/journaling/src/` — ein Treffer, und der ist der Kommentar, der die Regel benennt. `dependencies` = nur `@open-archiver/types` |
+| `JR-206`: Hash-Vorberechnung strukturell unmöglich      | `LedgerAppendRequest` hat **15** Felder; `seq`, `prevChainHash`, `chainHash` sind **keines** davon — am gebauten `.d.ts` abgelesen                  |
+| `JR-207`: eine Vertragssuite, zwei Implementierungen    | beide Testdateien importieren `../support/ledger-backend-contract`; einmal `InMemoryLedgerBackend`, einmal `PostgresLedgerWriter`                   |
+| `JR-208`: reproduzierbar mit geloggtem Seed             | `resolveSeed('journal-ledger-concurrency')`, und der Seed steht in der Durchsatzmeldung jedes Laufs                                                 |
+| `JR-209`: (d) und (h) sind eigene Befundarten           | `LedgerFinding` führt `split_brain` als eigene Variante; das Fehlen einer Kette wird über den Ankervergleich gemeldet, nicht als `chain_break`      |
+| Die Aussagen ruhen nicht auf einer abgeschalteten Suite | ohne `DATABASE_URL` und mit `OA_TEST_REQUIRE_INFRA=1` **scheitern beide E2-Suiten laut und benannt** statt zu überspringen                          |
+| Volllauf nach allen vier Mutationsproben                | **398 passed \| 2 skipped** bei 30 Dateien, Exit 0, `unit 288/288 · integration 92/92 · adversarial 18/18`                                          |
+| `06-status.md` aktualisiert                             | dieser Abschnitt                                                                                                                                    |
+
+#### Zwei Grenzen, die zu benennen sind — keine Mängel
+
+1. **Die Fälle (c) und (e) aus Testplan §12.5 sind in E2 nur so weit darstellbar, wie es ohne E7/E8
+   geht, und das ist so gewollt.** Der Testplan sagt selbst, dass (c) E8 voraussetzt. Der „Anker" ist
+   im Test eine festgehaltene Merkle-Wurzel, kein RFC-3161-Token; (e) prüft folglich, dass ein
+   manipulierter Inklusionspfad die **Wurzel** nicht mehr trifft, nicht dass eine **Token-Signatur**
+   fehlschlägt. Für die Aussage von (c) ist das ausreichend — es zählt, dass der Wert das System vor
+   der Manipulation verlassen hat, nicht wo er liegt. **In E8/E9 ist beides gegen ein echtes Token
+   nachzuziehen** (`JR-805`, `JR-907` führen dieselben Fälle über die CLI).
+2. **Das F13-Kriterium ist sinngemäß, nicht wörtlich erfüllt.** Es verlangt, die Frist „über die
+   erwartete Laufzeit zu heben". Der Code **prüft** den wirksamen Wert und hebt ihn nur, wenn er
+   darunter liegt — beim Standardwert von zwei Stunden greift er also nicht. Das ist die sichere
+   Richtung: ein bedingungsloses Setzen auf den Bedarf (30 min) wäre gegenüber dem Standard eine
+   **Senkung** und damit genau der Fehler, der F12 war. Die Abweichung ist im Code begründet, und die
+   nicht behebbare Gegenrichtung — ein fremder Prozess liest seine eigene Umgebung — ist dort ebenfalls
+   ausgeschrieben statt überspielt.
+
+#### Was diese Abnahme ausdrücklich **nicht** behauptet
+
+- **Kein SMTP-Empfangspfad.** E2 liefert den Ledger, nicht den Receiver. Der Acceptance-Contract
+  (`250 OK` erst nach fsync von Spool **und** Ledger) ist damit **nicht** erfüllt — es gibt keinen
+  Spool und niemanden, der `250` sendet. Das ist E3/E4.
+- **Keine Durability-Aussage über Variante (b).** Die Vertragssuite prüft Signaturen; die Pflichtenliste
+  in `ledger-port.ts` ist eine Liste von Schulden, kein Nachweis.
+- **F37 bleibt offen** (die Anwendung verbindet als Superuser und Eigentümer und kann den Trigger selbst
+  abschalten). Der Trigger schließt **F1** als Manipulationsweg; die Rechtetrennung ist E11.
 
 ---
 
@@ -1603,7 +1725,7 @@ Formulierung („der Fix bricht Bestandsinstallationen") ist **nicht** nötig.
 
 ---
 
-## E2 – E12 (offen)
+## E3 – E12 (offen)
 
 Tasklisten stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics
 ausgerollt, um diese Datei lesbar zu halten.
@@ -1667,3 +1789,4 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 
 | 2026-07-31 | **`JR-207` erledigt (Rolle DEV): die Steckbarkeit des Ledger-Backends ist gemessen, nicht bewertet.** Die Schnittstelle selbst war in `JR-206` entstanden; offen war die Aussage, dass Variante (b) aus RFC §5.4 (append-only WAL) **ohne Signaturänderung** nachrüstbar ist. Diese Aussage ist jetzt eine Messung: eine gemeinsame Vertragssuite in `packages/backend/tests/support/ledger-backend-contract.ts` mit **fünf** Fällen (leere Kette beginnt bei `seq` 1 am Genesis; der zurückgegebene Hash ist aus Request und `seq` **nachrechenbar**, was jede Implementierung an die kanonische Kodierung bindet; `seq` +1 und Verkettung an den Vorgänger; zwei Ketten unabhängig mit eigenem Genesis; nebenläufige Appends lückenlos serialisiert) läuft **zweimal** — gegen `PostgresLedgerWriter` (`ledger-backend-contract.int.test.ts`) und gegen ein Backend **ohne Datenbank** (`ledger-backend-contract.test.ts`). **Der Entwurf ist die Aussage:** die Suite prüft ausschließlich die **Rückgabewerte** von `append()`, weil `seq`, `prevChainHash` und `chainHash` die Kette **sind**; eine Suite, die Tabellenzeilen liest, wäre ein Postgres-Vertrag mit allgemeinem Namen und gegen (b) nicht lauffähig — also genau der Zustand, den die Task ausschließen soll. Die speicherseitige Hälfte bleibt, wo sie hingehört: `journal-ledger-writer.int.test.ts` liest jede Spalte zurück, kodiert und hasht neu (µs-Erhaltung, Array-Reihenfolge, `bytea`), denn das sind Eigenschaften von (a). **Der Nebenläufigkeitsfall hat belegbar Zähne:** `UnsynchronisedInMemoryLedgerBackend` ist dasselbe Backend ohne Sperre, und unter 12 parallelen Appends forkt es reproduzierbar — alle lesen denselben Kopf, beanspruchen `seq` 1 und nennen denselben Vorgänger. Ohne diese Gegenprobe hätte der Fall eine Runtime-Eigenschaft statt einer Sperre beobachten können: ein einthreadiger Runtime serialisiert von selbst, solange zwischen Kopf-Lesen und Schreiben kein `await` liegt — weshalb das In-Memory-Backend eine **absichtliche** Latenz von 1 ms an genau dieser Stelle trägt. Dritter Fall dazu: ein fehlgeschlagener Append darf die Kette nicht verklemmen (die Sperre wird auf dem **settled** Ergebnis verkettet, wie `pg_advisory_xact_lock` bei Abbruch freigibt). **Die Grenze ist ausdrücklich benannt, statt sie zu überspielen:** der Vertrag prüft die **Signatur**, nicht die Durability — das In-Memory-Backend besteht ihn und ist nur so lange durabel wie der Prozess. Deshalb steht in `ledger-port.ts` jetzt eine **Pflichtenliste**, die eine echte (b)-Implementierung über die Signatur hinaus schuldet: `fsync` auf Datei **und** Verzeichnis vor dem Resolve (der Resolve ist der Moment, in dem `250 OK` erlaubt wird), prozessübergreifende Serialisierung je Kette (ein In-Process-Mutex ist keine), kein verbrauchtes `seq` bei Fehlschlag, ein Crash-Recovery-Scan plus asynchrone Replikation nach Postgres, und Lesbarkeit für `verify` — als Pflichten formuliert, weil ein WAL, das den Vertrag erfüllt und diese Liste überspringt, schlimmer als nutzlos wäre: es sähe korrekt aus. **`InMemoryLedgerBackend` liegt bewusst unter `tests/support/` und darf nie nach `src/`** — ein konfigurierbares Ledger, das vergessen kann, macht die Zusage hinter `250 OK` zur Lüge; im Testbaum kann keine Konfiguration es wählen. Der Adapter-Umzug von `postgres-transactor.ts` nach `src/` bleibt bei E3/E4, wie vorgesehen: welcher Prozess mit welchen Credentials verbindet, ist ADR-002, und die Prozesse existieren noch nicht. Volllauf: **`383 passed \| 2 skipped`** bei 28 Dateien, Exit 0, `unit: ci 288/288 · integration: ci 92/92 · adversarial: ci 3/3`, 0 `oa_test_*`-Rückstände; `test:types` grün. `expectedFiles` 14→15 und 11→12, `expectedTests.ci` 280→288 und 87→92 im selben Commit. Nachgezogen: `CLAUDE.md` §5.1 und Testplan §2.1 (beide trugen die alten Zahlen). | **`JR-208`** — adversariale Ledger-Tests, 20 Writer × 500 Appends (Rolle TEST, F13-Frist beachten) |
 | 2026-08-01 | **`JR-208` und `JR-209` erledigt (Rolle TEST) — und der Lasttest hat einen Produktionsfehler gefunden, bevor er Produktion werden konnte.** **`F38`:** `PostgresLedgerWriter` band `event_payload` als `JSON.stringify(...)` an `$16`; postgres-js entnimmt den Parametertyp der **Parameterbeschreibung des Servers**, sieht `jsonb` und kodiert den String ein **zweites** Mal — in der Spalte steht dann der JSON-_String_ `"{\"k\":1}"` statt des Objekts. Beim Schreiben schlägt nichts fehl; unverifizierbar wird **jede** Zeile mit Nutzlast, und gemerkt hätte man es mit `verify` in E9. Vier Parameterformen gegen PostgreSQL 17.10 gemessen: `$2` ⇒ string, **`$2::jsonb` ⇒ string** (der naheliegende Fix hilft nicht), `$2::text::jsonb` ⇒ object, rohes Objekt ⇒ object. Behoben mit dem doppelten Cast, weil er den Parametertyp auf `text` festnagelt und keinem Treiber mehr die Ableitung `jsonb` erlaubt. **Warum acht Integrationstests darüber hinweggelaufen sind, ist der lehrreiche Teil:** fünf Client-Varianten gegen dieselbe Datenbank gestellt — `harness.sql` ⇒ object, `postgres(url, {gleiche Optionen})` ⇒ string, `postgres(url)` ⇒ string, `postgres(url, {max: 20})` ⇒ string. Es liegt nicht an einer Option, sondern daran, dass `drizzle(client, …)` den ihm übergebenen Client **patcht** — und genau dieser eine Client ist der, durch den jeder Integrationstest schreibt. Der Ingress-Prozess aus E3/E4 wird drizzle per Architekturvorgabe nicht haben. Regel daraus, in F38 festgehalten: für alles in `packages/journaling`, das seine Verbindung injiziert bekommt, muss mindestens ein Test durch einen **nackten** Client schreiben. **`JR-208`** (4 Fälle): 10 000 Appends durch 20 nebenläufige Writer in 84–96 s (≈120/s), auf einem eigenen Pool mit **einer Verbindung je Writer** — mit dem `max: 4` des Harness wäre die Konkurrenz im Treiber ausgetragen worden statt in Postgres, und der Advisory-Lock kaum belastet. `seq` genau 1…10 000, die Leseordnung **vor** dem Kettenlauf geprüft (der lexikographische Sortierfehler aus `JR-206` wäre bei 10 000 Zeilen verheerend), Kette über alle Zeilen neu gerechnet, 10 000 verschiedene Vorgängerhashes. Der Rollback-Fall läuft **unter Last** (8 × 100 Commits gegen 4 × 25 Rollbacks in dieselbe Kette) und prüft zusätzlich, dass die Rollback-Writer wirklich `seq`-Nummern abgeleitet haben — sonst wäre der Negativtest eine Tautologie. **Gegenprobe:** derselbe Fall gegen einen Transactor, der das `pg_advisory_xact_lock`-Statement verschluckt, bricht (19 von 20 Appends scheitern, Befund `missing_entry`); ohne sie könnte der Lasttest grün sein, weil sich nichts überlappt hat. **F13** ist behandelt und die Richtung benannt: die Frist wird **nur angehoben, nie gesenkt** — wirksam gegen den **eigenen** Sweep, der sonst eine fremde lange Laufzeit abräumt; die Gegenrichtung (ein fremder Prozess räumt uns ab) ist von hier aus nicht behebbar und steht als solche im Code. **`JR-209`** (11 Fälle): alle acht Fälle aus Testplan §12.5, plus der Positivfall und die Trigger-Gegenprobe. Die Prüflogik (`tests/support/ledger-verifier.ts`) meldet **Befundart, `seq` und Feld** statt pass/fail; das Feld nur, wenn eine **zweite Quelle** vorliegt, und diese Grenze ist im Modul ausgeschrieben statt überspielt — ein Kettenhash bindet alle 16 Felder gleichzeitig, aus ihm allein ist nicht ableitbar, welches sich bewegt hat. Drei Fälle lassen die Kette **absichtlich heil**: die ab `seq` N vorwärts neu geschriebene Kette ist in sich makellos und nur gegen den vorher genommenen Anker auffällig (das ist die Begründung für Anchoring, als Assertion formuliert), die vollständig gelöschte Mandantenkette hinterlässt nichts, was brechen könnte, und wird nur durch den Vergleich zweier Merkle-Anker sichtbar — mit einer **ruhenden** Kette daneben, dem Fall, den ein Baum über nur die geänderten Ketten nicht von einer Löschung unterscheiden könnte —, und der Klon erzeugt zwei gültige Ketten aus demselben Genesis (`split_brain`, **eigene** Befundart). **(f) und (g) stehen gegen eine mitgelieferte Implementierung der RFC-Formel** (`tests/support/rfc-formula-encoding.ts`): unter den acht Feldern des RFC bleibt sowohl `tls_version: NULL → TLSv1.3` als auch eine umgeschriebene `remote_ip` **unentdeckt**, unter ADR-006s 16 Feldern nicht. Der Testplan verlangt, diese Fälle „zuerst rot gesehen" zu haben — so läuft der Nachweis auf **jedem** CI-Lauf statt einmal von Hand, und er ist über die **ganze** Liste der acht ungehashten Felder formuliert, nicht über zwei Feldnamen. Der Inklusionsnachweis wird mit einem **unabhängig** implementierten Audit-Path geführt (RFC 6962, `tests/support/merkle-audit-path.ts`), der nur `merkleLeaf`/`merkleNode` mit dem Produktionscode teilt und dieselbe Wurzel treffen muss; geprüft ist auch, dass im Nachweis **kein** fremder `chain_scope_id` vorkommt. Der Append-Only-Trigger wird gezielt abgeschaltet, im `finally` wieder aktiviert **und der Zustand danach ausgelesen** — sonst liefe der Rest der Datei unbemerkt ohne Schutz. **Ein Test des Inventar-Wächters mitrepariert:** `suite-inventory.test.ts` hatte eine adversariale Fixture-Datei hart verdrahtet und damit implizit `expectedFiles: 1` angenommen; jetzt leitet er sie ab wie die Unit-Fixtures. Volllauf: **398 passed \| 2 skipped** bei 30 Dateien, Exit 0, `unit: ci 288/288 · integration: ci 92/92 · adversarial: ci 18/18`, 0 `oa_test_*`-Rückstände; `test:types` grün für beide Pakete. `expectedFiles` adversarial 1→3, `expectedTests.ci` 3→18 im selben Commit. Nachgezogen: `CLAUDE.md` §5.1 (Testzahl und die neue Laufzeit von rund zwei Minuten), F38 in `09-befunde-bestandscode.md`. | **`JR-210`** — Abnahme E2 (Rolle PO, eigene Session) |
+| 2026-08-01 | **Abnahme `JR-210` durchgeführt — Ergebnis: E2 abgenommen, 23 von 23 Kriterien erfüllt, keine neuen Befunde. Mit einem Vorbehalt zum Verfahren, der zuerst genannt sei: die Abnahme ist _nicht unabhängig_** — `JR-208`/`JR-209` stammen aus derselben Sitzung. ADR-014/ADR-021 verlangen Unabhängigkeit; deshalb ist der **Rückmerge nicht vollzogen** und liegt beim Auftraggeber, anders als bei E1 und E13. Zur Kompensation wurde **nichts** aus den Umsetzungsberichten übernommen, sondern alles neu gemessen — und die tragenden Aussagen zusätzlich durch **vier Mutationsproben**, die ein Testautor nicht durch Optimismus besteht: (M1) den F38-Fix rückgängig ⇒ Regressionsfall **rot**; (M2) `tlsVersion` aus der Kodierung genommen ⇒ ADR-Vektoren **rot** (Recordlänge, `SHA256(record)`, `chain_hash(1)`), Fall (f) **rot** **und die RFC-Gegenprobe rot** — womit belegt ist, dass sie genau die Regression fängt, gegen die sie geschrieben wurde; (M3) `pg_advisory_xact_lock` neutralisiert ⇒ Lasttest nach 295 ms **rot** mit Primärschlüsselverletzung; (M4) die Manipulation in (f) wirkungslos gemacht ⇒ Test **rot** mit „expected [] to have a length of 1". **M4 ist die wichtigste:** sie schließt die Klasse aus, an der eine Tamper-Suite lautlos scheitert — ein Verifier, der immer meckert, macht jeden Tamper-Test grün, ohne zu unterscheiden. Vor und nach jeder Probe war `git status --porcelain` leer. **Das Kernkriterium — „die Testvektoren aus ADR-006 §6 sind vom Code reproduziert" — ist mit einem Skript belegt, das die Vektoren aus `05-entscheidungen.md` _parst_ statt sie abzutippen** und gegen `packages/journaling/dist` rechnet: Abtippen hätte belegt, dass das Skript mit sich selbst übereinstimmt. **16/16**, darunter alle acht Vektoren (Recordlänge **351 Byte**, `SHA256(record)`, `chain_hash(1)`, Blatt, Wurzeln über 2 und 3 Blätter) und die fünf Eigenschaftsnachweise. Die Merkle-Regel in beide Richtungen nachgerechnet, mit einer hier implementierten Duplizier-Regel als Vergleich: unter ihr `root[A,B,C] == root[A,B,C,C]` (**true**), unter RFC 6962 **false**, und der Produktionscode liefert die RFC-6962-Wurzel — ADR-022 Festlegung 1 ist damit nachgerechnet, nicht geglaubt. **Die Datenbankseite (`JR-204`, `JR-205`) wurde bewusst _nicht_ über den Testharness geprüft**, weil Harness und Tests Teil des Abzunehmenden sind: eigene Datenbank, echte Migrationen, Anweisungen direkt abgesetzt, **21/21** — µs-`CHECK` weist `…123456` ab (`23514`) und nimmt ms-Vielfache an, `duplicate_of = seq` abgewiesen, `ON DELETE restrict` greift (`23503`), 18 Spalten, `size_bytes`/`content_sha256` nullable, `remote_ip` ist `text`, vier Trigger `tgenabled = 'O'`, sechs Anweisungen (`UPDATE`/`DELETE`/`TRUNCATE` × zwei Tabellen) sechsmal `23001`, `INSERT` weiterhin erlaubt und alle Zeilen noch da. Ebenfalls geprüft: ohne `DATABASE_URL` und mit `OA_TEST_REQUIRE_INFRA=1` **scheitern beide E2-Suiten laut und benannt** — die Aussagen ruhen nicht auf einer abgeschalteten Suite. **Zwei Grenzen benannt, beide keine Mängel:** die Fälle (c) und (e) sind ohne E7/E8 nur so weit darstellbar, wie es geht (der „Anker" ist eine festgehaltene Merkle-Wurzel, kein RFC-3161-Token — in `JR-805`/`JR-907` gegen ein echtes Token nachzuziehen), und das F13-Kriterium ist **sinngemäß statt wörtlich** erfüllt: der Code hebt die Frist nur, wenn der wirksame Wert darunter liegt, weil ein bedingungsloses Setzen auf 30 min gegenüber dem Standard von zwei Stunden eine **Senkung** und damit genau der Fehler wäre, der F12 war. Volllauf nach allen Mutationsproben: **398 passed \| 2 skipped** bei 30 Dateien, Exit 0, `unit 288/288 · integration 92/92 · adversarial 18/18`. **Kein Code geändert.** | **Entscheidung des Auftraggebers:** zweite, unabhängige Abnahmerunde — ja oder nein? Danach Rückmerge nach ADR-014, dann **E3** (Spool und Acceptance-Contract) |

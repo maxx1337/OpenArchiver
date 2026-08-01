@@ -146,11 +146,13 @@ Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Beric
 (`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
 Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 
-**E2 ist inhaltlich fertig** (`JR-201`…`JR-209`, 2026-07-31 bis 2026-08-01): `packages/journaling` trägt
+**E2 ist abgenommen** (`JR-201`…`JR-210`, 2026-07-31 bis 2026-08-01; 23/23 Kriterien, vier bestandene
+Mutationsproben). **Der Rückmerge ist bewusst nicht vollzogen:** die Abnahme lief in derselben Sitzung
+wie `JR-208`/`JR-209` und ist damit nicht unabhängig im Sinne von ADR-014/ADR-021 — die Entscheidung
+darüber liegt beim Auftraggeber. Was E2 liefert: `packages/journaling` trägt
 die kanonische Kodierung, die Merkle-Aggregation und `PostgresLedgerWriter`; die Tabellen sind migriert
 und append-only; der Ledger hält 10 000 nebenläufige Appends lückenlos aus, und jede der acht
-Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. **Nächster Schritt ist die
-Abnahme `JR-210`** (Rolle PO/Tester, eigene Session). Dabei gefunden und behoben: **F38** — der Writer
+Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. Dabei gefunden und behoben: **F38** — der Writer
 speicherte `event_payload` doppelt JSON-kodiert, sobald der Datenbanktreiber nicht durch `drizzle()`
 gelaufen war, was jede Ledger-Zeile mit Nutzlast unverifizierbar gemacht hätte. Einen SMTP-Empfangspfad
 gibt es weiterhin nicht; der beginnt mit E3/E4.

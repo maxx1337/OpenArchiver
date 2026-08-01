@@ -85,8 +85,9 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-01 (**`JR-208` und `JR-209` erledigt, Rolle TEST** — E2 ist damit inhaltlich fertig,
-offen ist allein die Abnahme `JR-210`. Der Lasttest hat **`F38`** gefunden und behoben: der Writer
+**Stand:** 2026-08-01 (**`JR-208`, `JR-209` und die Abnahme `JR-210` erledigt** — E2 ist abgenommen,
+23/23 Kriterien, **aber die Abnahme ist nicht unabhängig**, deshalb ist der Rückmerge nicht vollzogen
+und liegt beim Auftraggeber. Der Lasttest hat **`F38`** gefunden und behoben: der Writer
 speicherte `event_payload` doppelt JSON-kodiert, sobald der Treiber nicht durch `drizzle()` gelaufen war ·
 davor am 2026-07-31 `JR-201`…`JR-207` und die ADRs `006`/`007`/`022`/`023`) · **Branch:**
 `claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
@@ -95,10 +96,14 @@ adversarial 18/18`, 0 `oa_test_*`-Rückstände, `test:types` grün für beide Pa
 
 ### Der Stand in einem Satz
 
-**Der Ledger ist gebaut, gemessen und angegriffen: er hält 10 000 nebenläufige Appends lückenlos aus, und
-jede der acht Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet.** Der nächste
-Schritt ist **`JR-210`**, die Abnahme von E2 — Rolle PO, **eigene Session**, weil eine Abnahme nicht von
-dem durchgeführt wird, der die Arbeit gemacht hat.
+**Der Ledger ist gebaut, gemessen, angegriffen und abgenommen** — er hält 10 000 nebenläufige Appends
+lückenlos aus, jede der acht Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet,
+und die Abnahme `JR-210` hat 23 von 23 Kriterien erfüllt gefunden. **Der nächste Schritt ist keine Task,
+sondern eine Entscheidung des Auftraggebers:** die Abnahme lief in derselben Sitzung wie `JR-208`/`JR-209`
+und ist damit **nicht unabhängig** im Sinne von ADR-014/ADR-021. Deshalb ist der Rückmerge **nicht**
+vollzogen. Fällt die Entscheidung „so ausreichend", folgt der Rückmerge und dann **E3**; fällt sie
+„zweite Runde", ist die Abnahme in einer frischen Sitzung zu wiederholen — das Prüfmaterial dafür liegt
+im Abnahmeprotokoll in `06-status.md`.
 
 **Eine Sache verdient beim Lesen mehr Aufmerksamkeit als jede Testzahl:** `JR-208` hat mit **F38** einen
 Fehler gefunden, der jede Ledger-Zeile mit `event_payload` unverifizierbar gemacht hätte — und acht
@@ -159,11 +164,21 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >    damit implizit `expectedFiles: 1` angenommen — er wurde rot, als die Suite auf drei Dateien wuchs, mit
 >    einer Meldung über Verletzungszahlen, die die Ursache nicht nennt. Jetzt leitet er die Fixtures ab,
 >    wie es die Unit-Fixtures schon taten.
+> 10. **`JR-210` durchgeführt: E2 abgenommen, 23/23** — und der Vorbehalt steht im Protokoll an erster
+>     Stelle, weil er die Aussagekraft betrifft: **dieselbe Sitzung, die `JR-208`/`JR-209` geschrieben
+>     hat, hat sie abgenommen.** Kompensiert wurde durch Messung statt Zitat — die ADR-Vektoren aus dem
+>     Entscheidungsdokument **geparst** und gegen `dist` gerechnet (16/16), die Datenbankseite an einer
+>     eigenen Datenbank mit den echten Migrationen (21/21, bewusst **nicht** über den Harness), und vier
+>     **Mutationsproben**, die alle rot wurden. Die aufschlussreichste war M4: die Manipulation in Fall
+>     (f) wirkungslos gemacht ⇒ der Verifier meldet **nichts** und der Test wird rot. Damit ist die
+>     Fehlerklasse ausgeschlossen, an der eine Tamper-Suite lautlos scheitert — ein Verifier, der immer
+>     meckert, macht jeden Tamper-Test grün. **Der Rückmerge ist nicht vollzogen**; er liegt beim
+>     Auftraggeber.
 >
 > **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt. Was
-> bewusst **nicht** getan wurde: die Rechtetrennung aus **F37** (gehört zu E11) und ein produktiver
-> `verify`-Kern — die Prüflogik liegt absichtlich unter `tests/support/`, weil `verify` E9s Gegenstand ist
-> und ein vorgezogener Kern dort die Entwurfsfreiheit nähme.
+> bewusst **nicht** getan wurde: der **Rückmerge** (siehe oben), die Rechtetrennung aus **F37** (gehört zu
+> E11) und ein produktiver `verify`-Kern — die Prüflogik liegt absichtlich unter `tests/support/`, weil
+> `verify` E9s Gegenstand ist und ein vorgezogener Kern dort die Entwurfsfreiheit nähme.
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -450,12 +465,22 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
 - **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-208` zehntausend Zeilen schreibt. Das ist
   die im Backlog vorgegebene Menge und wird **nicht** stillschweigend reduziert (Testplan-Regel 6).
 
+**Die Abnahme `JR-210` ist durchgeführt** (2026-08-01, 23/23, Protokoll in `06-status.md`). Offen ist
+allein die Entscheidung des Auftraggebers zur fehlenden Unabhängigkeit. Je nachdem, wie sie ausfällt:
+
 ```
-Nimm Epic 2 unabhängig ab — Rolle Tester, Kriterien aus 03-backlog.md
-(JR-201…JR-209) plus das Abnahmekriterium von JR-210: die Testvektoren aus
-ADR-006 §6 müssen vom Code reproduziert sein. Eigene Session, Branch
-claude/journaling-e2-ledger. Achte besonders auf F38 — der Fix ist neu und
-sein Regressionstest ist der einzige, der ihn hält.
+# Variante A — die Abnahme genügt:
+Vollziehe den Rückmerge von claude/journaling-e2-ledger in den
+Integrationsbranch nach ADR-014 (--no-ff, kein Squash, kein PR), und
+beginne danach E3 aus docs/dev/journaling/03-backlog.md.
+
+# Variante B — zweite, unabhängige Runde:
+Nimm Epic 2 unabhängig ab — Rolle Tester, frische Sitzung. Kriterien aus
+03-backlog.md (JR-201…JR-209) plus das Kernkriterium von JR-210: die
+Testvektoren aus ADR-006 §6 müssen vom Code reproduziert sein. Das
+Protokoll der ersten Abnahme steht in 06-status.md; prüfe seine Aussagen
+nach, statt sie zu übernehmen. Achte besonders auf F38 — der Fix ist neu
+und sein Regressionstest ist der einzige, der ihn hält.
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -516,7 +541,13 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Keine.** `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
+> **Eine, und sie blockiert den Rückmerge: genügt die Abnahme `JR-210`, obwohl sie nicht unabhängig
+> ist?** Sie lief in derselben Sitzung wie `JR-208`/`JR-209`; ADR-014 und ADR-021 verlangen eine
+> unabhängige Abnahme. Das Ergebnis ist 23/23 bei vier bestandenen Mutationsproben, aber die Regel ist
+> die Regel — deshalb ist der Rückmerge **nicht** vollzogen worden, und die Entscheidung liegt beim
+> Auftraggeber. Die zwei Folgeprompts stehen oben unter „Nächster konkreter Schritt".
+
+Ansonsten keine. `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
 `JR-203`, Rolle PO) sind entschieden. Was in E2 noch offen ist — `ADR-009`, Append-Only per Rechteentzug
 oder Trigger — ist Teil von `JR-205` und braucht keine Entscheidung des Auftraggebers vorab. Alles andere
 ist Arbeit ohne Entscheidungsbedarf.
