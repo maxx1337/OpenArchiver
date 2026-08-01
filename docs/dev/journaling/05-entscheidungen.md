@@ -1472,6 +1472,147 @@ gemeinsam mit ihnen fortgeschrieben:
 6. E9/E10 rechnen weiterhin je Kette; das Betriebsmodell ändert daran nichts, halbiert aber die
    Zahl der Ketten je `verify`-Lauf.
 
+## ADR-025 — Fork weiterführen statt eigenständige Anwendung neu bauen
+
+**Status:** **entschieden** (2026-08-01) · **Entscheider:** Auftraggeber · **Betrifft:** die
+Projektfrage „lohnt sich das noch" · **Ersetzt nichts** — ADR-002 (Code-Ablage) und ADR-024
+(Betriebsmodell) bleiben unverändert gültig, ADR-025 begründet, warum sie Bestand haben
+
+**Der Fork wird weitergeführt. Es wird keine eigenständige Anwendung neu gebaut.** Die
+Pull-Ingestionswege (Graph, IMAP, PST, Mbox, ZIP) bleiben erhalten, werden aber mit sichtbarer
+Herkunft geführt und aus dem Compliance-Pfad genommen.
+
+### Anlass
+
+Der Auftraggeber fand im Upstream-Branch `ee-1.5.1-dev` Hinweise auf eine kostenpflichtige
+Enterprise-Lizenz für Journaling und Aufbewahrungsfristen und stellte zwei Fragen: ob eine schlanke
+Eigenentwicklung ohne Pull-Wege sinnvoller wäre, und ob die Quellcodelizenz nach §12/§13
+Netzwerk-Deployments für Endkunden verbiete. Beide Annahmen wurden am 2026-08-01 gegen `e808898`
+geprüft.
+
+### Befund 1 — die Lizenzannahme trifft nicht zu
+
+`LICENSE` ist in diesem Fork **und** in `ee-1.5.1-dev` der unveränderte FSF-Text der AGPL-3.0, 650
+Zeilen.
+
+| Stelle            | Was dort steht                                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LICENSE:517` §12 | „No Surrender of Others' Freedom" — widersprüchliche Auflagen Dritter (Gerichtsbeschluss, Vertrag, Patent-Royalty). Nichts zu Netzwerkbetrieb |
+| `LICENSE:529` §13 | „Remote Network Interaction" — wer eine **modifizierte** Version betreibt, **muss** den Nutzern den Corresponding Source **anbieten**         |
+
+§13 ist eine **Herausgabepflicht, kein Betriebsverbot**. Das ist keine neue Erkenntnis dieser ADR:
+ADR-024 hält es im Abschnitt „Betriebsverantwortung und AGPL §13" bereits richtig fest. ADR-025
+schreibt es nur an die Stelle, an der die Frage gestellt wurde.
+
+Restriktiv lizenziert ist allein `packages/enterprise` / `apps/open-archiver-enterprise` von
+LogicLabs. **Diese Pakete sind in keinem öffentlichen Branch enthalten — auch nicht in
+`ee-1.5.1-dev`** (Tree-Abfrage der GitHub-API auf diesem Ref: nur `docs/enterprise/**`,
+Frontend-Gates, Schema, Types). Sie waren nie Teil dieses Forks und werden nicht benutzt. Der Code
+dieses Projekts steht vollständig auf AGPL-Boden.
+
+> Feststellung, keine Rechtsberatung — wie ADR-024 an gleicher Stelle.
+
+### Befund 2 — was in `ee-1.5.1-dev` tatsächlich passiert
+
+Stand 2026-08-01, gemessen über `git ls-remote` und die GitHub-API:
+
+- Der Branch ist aktiv; jüngste Commits 2026-07-28 und 2026-07-29.
+- `ee-feat(license): enforce the license verdict from the database` — Lizenzdurchsetzung.
+- `ee-v1.5.2-dev: retry failed journal emails and quarantine the raw message`.
+- Phone-Home-Lizenzserver seit v0.4.3 (`LicensePingRequest`/`LicensePingResponse`), Route
+  `packages/frontend/src/routes/dashboard/admin/license/`.
+- `package.json` steht dort weiterhin auf `"version": "0.5.2"` — „1.5.1" ist die EE-Zählung, nicht
+  die OSS-Version.
+
+Die Annahme „wird kostenpflichtig" **stimmt**. Sie ist aber der Ausgangsbefund aus E0 (siehe
+`06-status.md`, Zentrale Befunde 1 und 2) und damit keine neue Lage, sondern der Grund, warum dieses
+Projekt existiert.
+
+Der zweite Commit bestätigt E0-Befund 2 eher, als dass er ihn entkräftet: „retry failed journal
+emails and quarantine" repariert **nachgelagert**, was ein Acceptance-Contract **vorne** verhindert.
+Der dort dokumentierte Ablauf ist Tempfile + BullMQ-Enqueue, dann `250`; das erfüllt RFC §3 nicht.
+Das kostenpflichtige Feature ist deshalb nicht dasselbe Produkt: es leistet „Journaling-Empfang",
+dieses Projekt baut „Empfang mit einlösbarer Annahmezusage".
+
+### Befund 3 — was ein Neubau kostet, gemessen statt geschätzt
+
+| Baustein                | Umfang                     | Beim Neubau                                         |
+| ----------------------- | -------------------------- | --------------------------------------------------- |
+| `packages/journaling`   | 2.018 Zeilen               | wandert 1:1 mit — einzige Abhängigkeit ist `types`  |
+| `packages/types`        | 1.622 Zeilen               | wandert weitgehend mit (MIT)                        |
+| `packages/backend/src`  | 117 Dateien, 16.348 Zeilen | **nachzubauen**                                     |
+| `packages/frontend/src` | 226 Dateien, 17.842 Zeilen | **nachzubauen**, inkl. 11 Sprachen × 2 i18n-Systeme |
+| Migrationen             | 43                         | **neu zu schneiden**                                |
+
+Zwei Punkte tragen die Entscheidung:
+
+1. **Der Empfangspfad ist bereits entkoppelt.** `JR-401` fordert für `apps/smtp-ingress` als
+   Akzeptanzkriterium: importiert **kein** `packages/backend/src/config/*` und **kein**
+   `src/database/index.ts`. `packages/journaling` importiert heute ausschließlich `node:crypto`,
+   `@open-archiver/types` und relative Pfade. Ein Neubau spart hier **nichts**, weil ADR-002 die
+   Trennung bereits erzwingt.
+2. **Die Pull-Connectoren sind ein Schalter, kein Fundament.** `JR-1201` (Feature-Flag,
+   standardmäßig aus), `JR-1202` (Dedupe, journalisierte Kopie gewinnt) und `JR-1207`
+   (Umdokumentation auf Backfill/Reconciliation) stehen im Backlog. Was der Neubau einsparen soll,
+   ist als Konfigurationsentscheidung längst geplant.
+
+Ein Neubau würfe also rund 34.000 Zeilen weg — Storage mit S3 und Verschlüsselung, Meili-Suche,
+CASL-IAM, `FilterBuilder`, Audit-Log, Retention-Lifecycle-Worker, Tika-Extraktion, Dashboard,
+eDiscovery, Export — um eine Funktion loszuwerden, die ein Flag ist. Genau diese 34.000 Zeilen sind
+das, was ein Prüfer benutzt: suchen, exportieren, Zugriff nachweisen, Aufbewahrung steuern.
+
+### Befund 4 — wo der Einwand trägt und wo er zu weit geht
+
+**Trägt:** Pull-Ingestion garantiert keine **Vollständigkeit**. Was zwischen zwei Syncs gelöscht
+wird, kommt nie an. Das ist ein Vollständigkeits-, kein Unveränderbarkeitsproblem — Letzteres decken
+die Hashes über Klartext-Bytes (`archived_emails.storage_hash_sha256`) bereits ab. Daraus folgt
+„Journaling ist die maßgebliche Quelle", und genau so steht es in `JR-1202`.
+
+**Geht zu weit:** „nicht rechtskonform" als Pauschalurteil über die Importwege. Journaling erfasst
+erst ab Einschaltdatum; für den Altbestand ist ein Erstimport (PST/Mbox/IMAP) zulässig und praktisch
+unverzichtbar. Ein Produkt ohne Importweg kann keinen Bestand übernehmen — ein Verkaufshindernis
+ohne Compliance-Gewinn. Der richtige Schnitt ist nicht „entfernen", sondern „aus dem Compliance-Pfad
+nehmen und als Altdatenübernahme kennzeichnen".
+
+### Befund 5 — das eigentliche Risiko ist die Fork-Divergenz
+
+Dieser Fork steht auf 0.5.2; Upstream hat 0.5.2 am 2026-07-25 released und entwickelt im EE-Branch
+weiter. Jeder `main`-Merge in den Integrationsbranch wird teurer. **Das** ist der Kostenpunkt, der
+die Frage „lohnt es sich" trägt — nicht die Lizenz und nicht der Funktionsumfang. Er wurde bisher
+nicht gemessen und ist als **R-19** aufgenommen.
+
+### Konsequenzen
+
+1. **Die Abhängigkeitsregel wird von einer Paketregel zur Ausstiegsoption.** `02-architektur.md` §2
+   und `.claude/agents/senior-dev.md` halten ab sofort auch die **Richtung** fest: Journaling-Logik
+   gehört nach `packages/journaling` / `apps/smtp-ingress`, der Bestand darf sie benutzen, nie
+   umgekehrt. Damit bleibt „eigenständige Anwendung" jederzeit eine **Verpackungsentscheidung**
+   statt einer Neuentwicklung. Das ist die eigentliche Absicherung gegen die Frage, die diese ADR
+   ausgelöst hat — und der Grund, warum sie ohne Reue verneint werden kann.
+2. **Fork-Divergenz wird gemessen.** `08-risiken.md` R-19 und eine Merge-Historie in `06-status.md`:
+   je Upstream-Merge Datum, Version, Konfliktdateien, Aufwand. Übersteigt der Aufwand je Release den
+   Nutzen, ist **das** der belegte Zeitpunkt für eine ersetzende ADR — nicht ein Gefühl.
+3. **E3 bleibt der nächste Schritt.** Nichts an dieser ADR ändert die Reihenfolge.
+
+### Erst bei Erreichen des Epics anzulegende Tasks
+
+Nach ADR-021 bleibt `03-backlog.md` unverändert, bis das Epic ansteht; die Taskzahl in `06-status.md`
+wird gemeinsam mit ihnen fortgeschrieben. Beide Nummern sind beim Anlegen gegen den Bestand zu
+prüfen — **`JR-1206` ist bereits vergeben** (RFC-§13-Nicht-Behauptung im README) und darf dafür
+nicht wiederverwendet werden:
+
+1. **In E11** (nächste freie Nummer, derzeit `JR-1111`): Herkunft `journaled` vs. `imported` im
+   **Prüfbericht und im Export-Manifest** ausweisen, damit die Vollständigkeitszusage genau auf den
+   journalisierten Zeitraum bezogen werden kann. Baut auf `JR-1104` (Manifest) auf. **Zuerst zu
+   prüfen, ob eine neue Spalte nötig ist oder ein Join genügt** — die Herkunft hängt bereits an
+   `ingestion_sources` bzw. `journaling_sources`.
+2. **In E12** (nächste freie Nummer, derzeit `JR-1210`): Quelltext-Angebot nach AGPL §13 in der UI —
+   Version, Commit und Link auf das Repository oder einen Tarball-Endpoint —, plus ein Absatz im
+   Betreiberleitfaden. Neue Strings fallen unter den Skill `oa-i18n` (11 Sprachen × 2 Systeme).
+   Berührt `JR-1108` (Build-Identität zeigt Commit und Image-Digest bereits an drei Stellen) und ist
+   die operative Einlösung des in ADR-024 festgehaltenen §13-Punktes, **soweit der Auftraggeber
+   selbst betreibt**. Wer betreibt, entscheidet ADR-024 — dort weiterhin **offen**.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill

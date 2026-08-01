@@ -178,11 +178,19 @@ und ADR-022 falsche Schlüsse. Ein **Endkunde** ist eine Installation mit **eine
 ein **Mandant** ein Archiv und damit eine Kette darin, ein **Endpunkt** nur ein Attribut in der
 Ledger-Zeile. „Täglich × 50 Mandanten" in ADR-022 meint 50 Archive **einer** Installation. Das
 Betriebsmodell darüber — eine Instanz je Endkunde, empfohlen — steht in **`ADR-024`** und ist
-**noch nicht entschieden**; offen sind dort die Betriebsverantwortung und die AGPL-§13-Folge daraus.
-Seit dem E2-Merge ist die ADR gegen den Code nachgeprüft, und ihr Zeitpunkt ist präziser: **sie steht
-vor E3/E4**, weil die erste in Produktion angelegte Kette die `deployment_id` in ihren Genesis
-schreibt. Ebenfalls dort neu: ein Golden Image **nach** dem Migrationslauf gibt allen Kundeninstanzen
-dieselbe `deployment_id` — ein Split Brain, den `verify` als Manipulationsbefund meldet (R-18).
+**noch nicht entschieden**; offen ist dort die Betriebsverantwortung, also **wer** betreibt.
+
+> **Die AGPL-§13-Folge daraus ist seit `ADR-025` (2026-08-01) geklärt, die Betriebsfrage nicht.**
+> §13 ist eine **Angebotspflicht für den Quellcode**, kein Betriebsverbot — die Annahme, die Lizenz
+> untersage Deployments für Endkunden, hielt der Prüfung nicht stand. Betreibt der Auftraggeber die
+> Instanzen, schuldet er deren Nutzern den Quellcode; betreibt der Endkunde selbst, entfällt es.
+> **Was die Lizenz nicht tut, ist das Betriebsmodell verbieten.** `ADR-025` entscheidet im selben
+> Zug die übergeordnete Frage: der Fork wird weitergeführt, es wird keine eigenständige Anwendung
+> gebaut — und die Abhängigkeitsregel gilt dafür ab sofort **beidseitig** (`02-architektur.md` §2).
+> Seit dem E2-Merge ist die ADR gegen den Code nachgeprüft, und ihr Zeitpunkt ist präziser: **sie steht
+> vor E3/E4**, weil die erste in Produktion angelegte Kette die `deployment_id` in ihren Genesis
+> schreibt. Ebenfalls dort neu: ein Golden Image **nach** dem Migrationslauf gibt allen Kundeninstanzen
+> dieselbe `deployment_id` — ein Split Brain, den `verify` als Manipulationsbefund meldet (R-18).
 
 **Und die Ankerfrage gleich mit, obwohl sie zu E7/E8 gehört** — sie musste vorgezogen werden, weil die
 Baumkodierung Teil der kanonischen Kodierung ist und damit in `JR-203` fällt. **`ADR-022`:** ein

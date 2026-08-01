@@ -271,3 +271,54 @@ wird nie geklont. `docker/docker-entrypoint.sh` fährt `pnpm db:migrate` beim St
 ist also der Standardweg, solange kein Datenverzeichnis mitkopiert wird. Erkennungsseitig ist der Fall
 bereits abgedeckt: `JR-209` prüft ihn als Fall (h) mit eigener Befundart, ADR-006 §4.3 sowie
 `JR-802`/`JR-803` behandeln die Erkennung im Betrieb.
+
+## R-19 — Fork-Divergenz macht Upstream-Merges schleichend teurer
+
+**Auswirkung:** mittel · **Wahrscheinlichkeit:** hoch · **Epic:** projektübergreifend
+
+Aufgenommen am 2026-08-01 mit ADR-025. Der Auftraggeber fragte, ob sich der Fork noch lohnt; die
+Prüfung ergab, dass weder die Lizenz noch der Funktionsumfang dagegen sprechen — **wohl aber die
+Divergenz**, und die wurde bis dahin nicht gemessen. Ein Risiko, das niemand beziffert, wird nicht
+gemanagt, sondern irgendwann als Bauchgefühl zum Projektabbruch.
+
+Upstream entwickelt weiter: `v0.5.2` am 2026-07-25 released, `ee-1.5.1-dev` mit Commits vom
+2026-07-28/29. Je länger dieser Fork läuft, desto teurer wird jeder `main`-Merge — und nach ADR-014
+darf `main` **nur** in den Integrationsbranch gemergt werden, nie in einen Epic-Branch. Der Aufwand
+fällt also gebündelt an und trifft immer dieselbe Stelle.
+
+**Ausgangsmessung am 2026-08-01, Kopf `e808898` gegen `origin/main` (`a560b8c`, = Upstream-`main`):**
+
+| Größe                                                | Wert   |
+| ---------------------------------------------------- | ------ |
+| Commits im Integrationsbranch, nicht in `main`       | 88     |
+| Commits in `main`, nicht im Integrationsbranch       | **0**  |
+| Berührte Dateien gegenüber `main`                    | 115    |
+| davon **neu angelegt** (konfliktfrei)                | **94** |
+| davon **geänderte Bestandsdateien** (Konfliktfläche) | **21** |
+
+Die 21 sind die eigentliche Zahl. Sie ist heute klein, und **das ist ein Argument für ADR-025**, kein
+Zufall: die Trennung aus ADR-002 sorgt dafür, dass fast alles in neuen Dateien entsteht. Zwei der 21
+sind besonders heikel, weil Upstream sie bei **jeder** eigenen Migration ebenfalls anfasst und beide
+reine Anhängeregister sind:
+
+- `packages/backend/src/database/migrations/meta/_journal.json`
+- `packages/backend/src/database/schema.ts` (der Barrel)
+
+Dazu kommen `FilterBuilder.ts`, `SearchService.ts`, `policy-validator.ts` und `mongoToDrizzle.ts` aus
+E13 — Dateien, die Upstream aktiv pflegt.
+
+**Gegenmaßnahme:** Jeder Upstream-Merge wird in `06-status.md` unter „Upstream-Merges" protokolliert:
+Datum, Upstream-Version, Zahl der Konfliktdateien, Aufwand, und ob Tests danach unverändert grün
+waren. Zwei Auswertungen ergeben sich daraus:
+
+1. **Trend statt Einzelfall.** Steigt der Aufwand je Release monoton, ist das der belegte Zeitpunkt
+   für eine ADR, die ADR-025 ersetzt — Herauslösung als eigenständige Anwendung. ADR-025 Konsequenz 1
+   hält den Preis dafür bewusst niedrig.
+2. **Frühwarnung an einer bekannten Stelle.** Kollidiert `_journal.json` oder der Schema-Barrel, ist
+   das kein Textkonflikt, sondern eine Migrationsreihenfolge — vor dem Auflösen ist gegen
+   `pnpm db:migrate` auf einer frischen Datenbank zu prüfen, nicht nur gegen `pnpm build`.
+
+Nicht Teil dieses Risikos, aber die Ursache dafür, dass es überhaupt tragbar bleibt: `main` wird nach
+ADR-014 **bis zur Abnahme von E12 nicht angefasst**. Die 0 in der Tabelle oben ist deshalb ein
+Momentanwert, kein Dauerzustand — sie wird beim ersten Upstream-Merge größer und ist genau die Zahl,
+die hier ab dann protokolliert wird.

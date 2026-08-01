@@ -44,6 +44,13 @@ These cause correctness or compliance failures, not just review comments.
 7. **Migrations are generated.** Edit schema → `pnpm db:generate` → review and commit both the
    `.sql` and the `meta/*_snapshot.json`. Never hand-edit an applied migration. New schema files
    must be added to the `src/database/schema.ts` barrel.
+8. **Journaling logic lives in `packages/journaling` / `apps/smtp-ingress`, and the direction is
+   one-way.** `packages/backend` may consume it; it must never be written _into_ `packages/backend`
+   in a form that can only run there. Ledger, spool, canonical encoding, chain computation and the
+   journal report parser belong in the package — even when the backend is the more convenient place
+   to put them. This is ADR-025: keeping the receiver extractable is what makes "build a standalone
+   product instead" a packaging decision rather than a rewrite, and that option is deliberate. See
+   `docs/dev/journaling/02-architektur.md` §2.
 
 ## Conventions to match
 

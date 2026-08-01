@@ -94,6 +94,25 @@ seine DB-Verbindung und Konfiguration daher **injiziert** (Konstruktor-Parameter
 Erlaubte Abhängigkeit: `packages/journaling` → `packages/types`. `packages/backend` →
 `packages/journaling` ist erlaubt und gewollt (der Worker nutzt Parser und Ledger-Events).
 
+#### Die Richtung ist ebenso verbindlich wie das Verbot (ADR-025)
+
+Die Regel oben verbietet eine Richtung. Seit ADR-025 ist die **andere** Richtung ebenso verbindlich:
+
+> Journaling-spezifische Logik gehört nach `packages/journaling` bzw. `apps/smtp-ingress`.
+> `packages/backend` darf sie benutzen — sie darf aber nie so in `packages/backend` entstehen, dass
+> sie sich nur mit ihm zusammen betreiben lässt.
+
+**Grund, und er ist kein ästhetischer.** Der Auftraggeber hat am 2026-08-01 geprüft, ob statt dieses
+Forks eine eigenständige Anwendung gebaut werden sollte. Die Antwort war nein, unter anderem weil der
+Empfangspfad bereits getrennt ist (`JR-401`: kein Import aus `backend/src/config/*`, keiner aus
+`src/database/index.ts`; `packages/journaling` importiert heute nur `node:crypto`,
+`@open-archiver/types` und relative Pfade). Solange das so bleibt, ist eine spätere Herauslösung eine
+**Verpackungsentscheidung** und keine Neuentwicklung — und die Frage kann jederzeit neu gestellt
+werden, ohne dass sie dann teuer beantwortet werden muss.
+
+Wer Ledger-, Spool-, Parser- oder Chain-Logik in `packages/backend` unterbringt, weil es dort
+bequemer ist, kassiert diese Option. Das ist der Prüfpunkt bei jedem Review im Journaling-Umfeld.
+
 ## 3. Der Empfangspfad (Phase A)
 
 Ablauf innerhalb der SMTP-Session, vor der Antwort auf End-of-DATA / letztes BDAT:
