@@ -198,6 +198,23 @@ Repositorys darauf an und gibt einen postgres-js-Client plus ein Drizzle-Handle 
 `release()` schließt die Verbindungen und löscht die Datenbank; die Registrierung als `afterAll`
 läuft auch dann, wenn ein Test geworfen hat.
 
+> #### `harness.sql` sieht nackt aus und ist es nicht (Befund aus `JR-3-04`, 2026-08-01)
+>
+> `harness.sql` entsteht als schlichtes `postgres(url, …)` — deshalb liest sich jeder Test, der ihn
+> benutzt, wie ein Test gegen einen ungepatchten Client. Er ist aber keiner: `pg-harness.ts` ruft auf
+> **demselben Objekt** anschließend `drizzle(client, { schema })` auf, und `drizzle()` patcht die
+> Instanz, die es bekommt, statt sie zu umhüllen. Wer `harness.sql` benutzt, misst also den
+> gepatchten Client.
+>
+> **Das ist die mechanische Erklärung für F38**, und es ist der Grund, warum acht Integrationstests
+> an einer doppelt JSON-kodierten `event_payload` vorbeigelaufen sind, ohne dass einer von ihnen
+> nachlässig geschrieben war. Der `smtp-ingress`-Prozess wird per Architekturvorgabe **kein** drizzle
+> haben.
+>
+> **Regel:** Wer die Ledger-Seite gegen einen wirklich nackten Client prüfen will, baut eine
+> **eigene** Verbindung im Test auf und reicht sie nirgends an `drizzle()` weiter. Vorlage:
+> `packages/backend/tests/integration/journal-acceptance-bare-client.int.test.ts`.
+
 **Eigene Datenbank, nicht eigenes Schema — und das ist keine Wahl.** `search_path`-Isolation wäre
 billiger und bräuchte kein `CREATEDB`. Sie funktioniert gegen **diese** Migrationen nicht, weil
 drizzle-kit Enums und Fremdschlüsselziele schema-qualifiziert ausgibt, `CREATE TABLE` aber nicht:
