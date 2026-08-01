@@ -72,3 +72,11 @@ export {
 } from './spool/layout';
 
 export { parseSpoolConfig, spoolConfigSchema, type SpoolConfig } from './spool/config';
+
+export {
+	DurableWriteError,
+	writeDurableSpoolFile,
+	type DurableWriteRequest,
+	type DurableWriteResult,
+	type DurableWriteStage,
+} from './spool/durable-write';

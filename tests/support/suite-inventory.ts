@@ -106,7 +106,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// the fault-injectable filesystem seam (real implementation plus the independent-failure fake).
 		// 19 after JR-3-01 added spool/{txid,layout,config}.test.ts -- transaction IDs, sharded
 		// incoming/quarantine layout, the high-water-mark check, and its zod config validation.
-		expectedFiles: 19,
+		// 20 after JR-3-02 added spool/durable-write.test.ts -- the streaming, dual-fsync durable
+		// write, plus its 150 MB heap-growth case (nightly).
+		expectedFiles: 20,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -115,7 +117,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// independently against the fake, plus the real NodeSpoolFileSystem exercised on disk. 335
 		// after JR-3-01: 9 (txid: shape, uniqueness, time-ordering) + 19 (layout: sharding, paths,
 		// ensureSpoolLayout, high-water-mark) + 8 (zod config validation) = 36 new tests.
-		expectedTests: { ci: 335, nightly: 0, manual: 0 },
+		// 347 ci / 1 nightly after JR-3-02: 11 tests against FakeSpoolFileSystem (path, size, hash,
+		// empty message, byte-verbatim, fsync/close ordering, the shard directory fsync'd, the three
+		// stage-typed failures, the buffer-reuse streaming proof) + 1 against real disk
+		// (NodeSpoolFileSystem, platform-aware directory-fsync outcome) = 12 new `ci` tests, plus the
+		// 150 MB heap-growth acceptance case classified `nightly`.
+		expectedTests: { ci: 347, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',
