@@ -119,7 +119,7 @@ Ablauf innerhalb der SMTP-Session, vor der Antwort auf End-of-DATA / letztes BDA
 
 1. **Transaktions-ID** vergeben (ULID/UUID). Die `seq` steht hier noch nicht fest, weil sie erst im
    Ledger-Append vergeben wird — der Spool-Dateiname kann sie also nicht enthalten.
-2. **Raw-Wire-Bytes** streamend in `spool/incoming/<txid>.eml` schreiben. Dot-Unstuffing ist die
+2. **Raw-Wire-Bytes** streamend in `spool/incoming/<shard>/<txid>.eml` schreiben. Dot-Unstuffing ist die
    einzige erlaubte Veränderung. Kein Parsing, keine Normalisierung.
 3. `fsync()` auf den Dateideskriptor **und** `fsync()` auf das Verzeichnis. Beides. Ein Datei-fsync
    allein macht den Verzeichniseintrag nicht durabel.
@@ -128,6 +128,28 @@ Ablauf innerhalb der SMTP-Session, vor der Antwort auf End-of-DATA / letztes BDA
    Envelope-From/Rcpt, `size_bytes`, `content_sha256` — mit `synchronous_commit = on`.
 6. **`250 2.0.0 Ok: queued as <seq>`.**
 7. _Danach_ (außerhalb des Contracts): BullMQ-Job für Phase B einreihen.
+
+### Spool-Layout (seit `JR-3-01`, 2026-08-01)
+
+```
+<root>/incoming/<shard>/<txid>.eml     geschrieben und gefsynct, Ledger-Eintrag ggf. noch offen
+<root>/quarantine/<shard>/<txid>.eml   vom Crash-Recovery-Scan (JR-3-05) hierher verschoben
+```
+
+`<txid>` ist eine ULID, vergeben **vor** dem Schreiben — die `seq` steht zu diesem Zeitpunkt noch
+nicht fest (Schritt 1 oben) und kann deshalb nicht im Dateinamen stehen.
+
+`<shard>` sind die ersten zwei Hexzeichen von `SHA-256(txid)`, also **256** Unterverzeichnisse.
+**Nicht** das Zeitpräfix der ULID: das ist monoton, und genau die Transaktionen, die dicht
+beieinander eintreffen, lägen dann in derselben Handvoll Shards — also ausgerechnet dann, wenn der
+Spool am meisten zu tun hat. Der Hash entkoppelt Shard und Ankunftszeit. Ein Dateiname bestimmt
+seinen Shard vollständig, es braucht keinen Zähler und keinen Zustand daneben.
+
+`incoming/` und `quarantine/` sind identisch geshardet, und eine Datei behält beim Verschieben ihren
+Shard — das `rename()` legt also nie ein Shard-Verzeichnis an, das die Quarantäne nicht schon kennt.
+
+Die High-Water-Mark rechnet **`quarantine/` mit**. Sie wird nie automatisch geleert; würde man sie
+herausrechnen, bliebe ein langsam volllaufender Spool unsichtbar, bis nichts mehr geht.
 
 Schritt 7 ist **Optimierung, nicht Autorität.** Der Spool ist autoritativ. Ein Reconciler-Job sweept
 periodisch den Spool nach Einträgen, die einen Ledger-Eintrag haben, aber noch nicht Phase-B-fertig
