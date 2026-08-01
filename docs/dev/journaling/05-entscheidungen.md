@@ -1269,6 +1269,209 @@ Token **mit seiner Zertifikatskette** archivieren, weil das Signing-Cert 2 Jahre
 Aufbewahrungsfrist 10 Jahre; und bei Verlass auf einen kostenlosen Einzelknoten das Ausfallverhalten aus
 ADR-008 kennen — der Anker fehlt dann, die Annahme läuft weiter.
 
+## ADR-024 — Betriebsmodell: eine Instanz je Endkunde
+
+**Status:** **offen** — Empfehlung des PO vom 2026-07-31, die Entscheidung trifft der Auftraggeber ·
+**Entscheider:** Auftraggeber · **Quelle:** ADR-006/ADR-007 (`deployment_id` im Genesis), RFC §15 ·
+**Ersetzt nicht:** ADR-007 — diese ADR liegt eine Ebene darüber und widerspricht ihr nicht ·
+**Gegen den E2-Stand nachgeprüft am 2026-08-01** (Kopf `79d80f1`): jede Zahl unten neu gemessen, zwei
+korrigiert, ein Abschnitt durch den gemergten Kettencode überholt und neu gefasst, zwei Punkte
+ergänzt (Klon-Split-Brain, F37)
+
+**Empfohlen: ein vollständig getrennter Stack je Endkunde.** Eigene App, Worker, `smtp-ingress`,
+Postgres-Datenbank, Valkey, Meilisearch, Tika, Storage-Root, Schlüssel, Lizenz und eigene IP. Als
+dokumentierte Dichteoption zulässig: ein **geteilter Postgres-Server** mit eigener Datenbank und
+eigener Rolle je Kunde. **Nicht empfohlen:** ein geteilter Stack mit nachgerüsteter Tenant-Spalte.
+
+### Warum das jetzt entschieden werden muss und nicht in E12
+
+> **Dieser Abschnitt ist am 2026-08-01 neu gefasst.** Die erste Fassung argumentierte „muss vor dem
+> Kettencode entschieden werden". Der Kettencode ist seit E2 gebaut, abgenommen (`JR-210a`) und
+> zurückgemergt — das Argument ist überholt, die Dringlichkeit dadurch aber **größer**, nicht kleiner.
+
+`chain_hash(0)` enthält die `deployment_id` (ADR-006, ADR-007 Konsequenz 3), und das ist seit E2 keine
+Planung mehr, sondern Code: `deployment_identity` steht in
+`packages/backend/src/database/schema/journal-ledger.ts`, ihr `id` ist per
+`CHECK (id = 1)` auf **eine Zeile** gepinnt, die Zeile wird von der Migration `0041_even_scream.sql`
+per `gen_random_uuid()` erzeugt, und `0042_journal_ledger_append_only.sql` schützt sie zusammen mit
+`journal_ledger` gegen `UPDATE`/`DELETE`/`TRUNCATE`.
+
+Daraus folgt der neue Zeitpunkt: **die nächste in Produktion angelegte Kette schreibt das
+Betriebsmodell fest.** Ab dem ersten Genesis-Hash ist eine Änderung ein Migrationsvorgang über
+bestehende Ketten und fällt unter das, was ADR-012 für Bestandsinstallationen noch offen hat.
+Entschieden sein muss das also vor E3/E4 — dann nämlich entsteht der erste echte Empfang und mit ihm
+die erste Kette. Solange kein Receiver läuft, ist es noch billig.
+
+### Begriffsklärung: ein Endkunde ist nicht ein Mandant
+
+**Das ist der Teil dieser ADR mit der größten Schutzwirkung**, unabhängig davon, wie der
+Auftraggeber entscheidet. ADR-007 benutzt „Mandant" und meint damit `chain_scope_id` =
+`ingestion_sources.id`, also ein **Archiv innerhalb einer Installation**. Wer „Mandant" als
+„Endkunde" liest, zieht aus ADR-007 und ADR-022 falsche Schlüsse:
+
+| Begriff               | Technisch                               | Ebene                           |
+| --------------------- | --------------------------------------- | ------------------------------- |
+| **Endkunde**          | eine Installation, eine `deployment_id` | ein Stack, ein Genesis-Präfix   |
+| **Mandant** (ADR-007) | ein Archiv, `ingestion_sources.id`      | eine Kette innerhalb des Stacks |
+| **Endpunkt**          | `journaling_sources.id`                 | Attribut in der Ledger-Zeile    |
+
+Die Kostenrechnung „täglich × 50 Mandanten ⇒ 18.250 Token" in ADR-022 und R-15 meint deshalb **50
+Archive einer Installation**, nicht 50 Kunden. Ein Kunde mit Tochtergesellschaften ist ein Kunde mit
+mehreren Archiven — ADR-007 und ADR-022 bleiben dafür unverändert gültig.
+
+### Der Ist-Zustand, am Code geprüft (2026-07-31, neu gemessen am 2026-08-01 gegen `79d80f1`)
+
+Es gibt heute kein Mehrkundenkonzept, und der Bestand trägt auch keins. Nicht aus fehlender Doku
+geschlossen, sondern am Schema gemessen. **Alle Zeilen sind nach dem E2-Merge neu gemessen; zwei
+Zahlen waren falsch und sind korrigiert** — 41 → 43 Migrationen, und die `'emails'`-Literale sind
+**13**, nicht 12 (die erste Fassung hatte Zeilen statt Vorkommen gezählt). Alles andere hält
+unverändert:
+
+| Stelle                                                                                  | Befund                                                                                                                     |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| alle Tabellen unter `schema/`, **43** Migrationen (Stand E2)                            | keine Spalte `tenant_id`/`organization_id`/`account_id` — auch nicht in `journal_ledger` und `deployment_identity` aus E2  |
+| `schema/users.ts:10`, `:49`; `schema/compliance.ts:28`, `:79`; `schema/custodians.ts:6` | `users.email`, `roles.name`, `retention_policies.name`, `ediscovery_cases.name`, `custodians.email` sind global `unique()` |
+| `services/SearchService.ts`, `services/IndexingService.ts`                              | ein einziger Index, Literal `'emails'` an **13** Stellen (10 + 3), kein Env-Var, kein Prefix                               |
+| `services/IngestionService.ts:1056`, `:1199`; `config/storage.ts`                       | ein Storage-Root, ein `STORAGE_ENCRYPTION_KEY`, Pfade `open-archiver/<ingestionSourceId>/…`                                |
+| `services/SettingsService.ts`                                                           | eine Zeile `system_settings`, `UPDATE` ohne `WHERE`                                                                        |
+| `docker-compose.yml:6`, `:23`, `:36`, `:46`, `:58`                                      | feste `container_name` für alle fünf Dienste — zwei Stacks auf einem Host kollidieren beim Start                           |
+| `services/FilterBuilder.ts`                                                             | Isolation entsteht **allein** aus CASL-Policy-Bedingungen; genau diese Schicht war in 0.5.2 fail-open (F7)                 |
+
+Zwei global eindeutige Spalten allein schließen den geteilten Stack schon aus: zwei Kunden könnten
+nicht beide ein `admin@…` oder eine Richtlinie „Standard 10 Jahre" führen.
+
+### Begründung
+
+1. **Die Journaling-Architektur setzt es voraus.** Eine Installation = eine `deployment_id` = eine
+   Identität im Genesis. Siehe oben; nicht nachträglich korrigierbar.
+2. **Der SMTP-Empfang erzwingt es praktisch.** Journaling braucht MX und eingehend TCP 25 je Kunde.
+   Port 25 hat **vor** dem STARTTLS-Handshake kein SNI, also kein Routing nach Hostname. Eine
+   gemeinsame IP für N Instanzen bräuchte einen Proxy, der nach `RCPT TO` verteilt — der stünde
+   **vor** dem Acceptance-Contract, dürfte kein `250 OK` senden, bevor das Backend gefsynct hat, und
+   müsste damit Spool und Ledger aus E3 verdoppeln. Das verletzt den ersten nicht verhandelbaren
+   Punkt oder dupliziert ein ganzes Epic. Eine eigene IP je Instanz umgeht beides. Nebeneffekt:
+   getrennte IP-Reputation, relevant nach R-07 und R-08.
+3. **Schadensradius und Prüfbarkeit.** Kettenbruch, verunglückte Migration, Löschung nach Art. 17
+   DSGVO und ein Prüferexport wirken auf genau einen Kunden. Ein Kettenauszug **kann** fremde
+   Absender, Empfänger und Volumina nicht enthalten, weil sie nicht existieren — das ist stärker als
+   die Filterung, die ADR-022 dafür baut. Pro Kunde werden außerdem ein eigener
+   `STORAGE_ENCRYPTION_KEY`, eine eigene TSA-Klasse nach ADR-023 und eigene Aufbewahrungsfristen
+   möglich; heute sind das alles instanzweite Env-Vars.
+4. **Isolation strukturell statt policy-abhängig.** F7 hat gezeigt, dass die Policy-Schicht
+   fail-open sein kann, und zwar in einer veröffentlichten Version. „Die Kundentrennung hält,
+   solange niemand eine Rolle ohne Bedingung anlegt" ist gegenüber dem Prüfer eines
+   Wirtschaftsprüfers nicht vertretbar. Nach ADR-020 dürfte die Betreiberdoku eine solche Trennung
+   ohnehin nur **berichten**, nicht garantieren — bei getrennten Stacks ist die Aussage trivial
+   wahr.
+
+    > **E2 hat dieser Begründung am 2026-07-31 einen zweiten Beleg geliefert: F37.** Der
+    > Append-Only-Trigger aus `JR-205` ist von einer Rolle, die die Tabellen **besitzt**, in zwei
+    > Anweisungen abschaltbar — und in einer Standardinstallation ist `POSTGRES_USER` Superuser und
+    > Eigentümer, `DATABASE_URL` benutzt genau diese Rolle (`02-architektur.md` §1). Der Rechteentzug
+    > ist in ADR-009 festgeschrieben und **E11** zugeordnet, also noch offen. Solange er offen ist,
+    > gilt: in einem geteilten Stack erreicht eine kompromittierte Anwendung die Ledger **aller**
+    > Kunden, bei getrennten Stacks einen. F37 ist E2s Befund, nicht meiner — hier nur zitiert.
+
+### Klonen ist die Falle bei der Provisionierung — ergänzt am 2026-08-01
+
+**Diese Gefahr trifft ausgerechnet das empfohlene Modell**, und sie ist erst mit E2 sichtbar
+geworden, weil `deployment_identity` jetzt existiert. Der Schemakommentar in
+`schema/journal-ledger.ts` sagt es selbst:
+
+> _„A restore from backup keeps this value — a restore is the same installation. Two installations
+> running in parallel with the same `deployment_id` is a split brain, which is **not preventable**
+> (a restore and a clone are byte-identical) and is therefore detected rather than blocked."_
+
+Der naheliegende Weg, viele Kundeninstanzen aufzusetzen, ist ein Golden Image. Wird es **nach** dem
+Migrationslauf erzeugt, trägt es die von `0041_even_scream.sql` gezogene `deployment_id` — und jeder
+daraus geklonte Kunde bekommt **dieselbe**. Damit teilen fremde Kunden das Genesis-Präfix, und die
+Anlage ist ein Split Brain zwischen Mandanten, den `verify` als Manipulationsbefund melden wird,
+obwohl es ein Provisionierungsfehler war. `JR-209` prüft den Fall bereits als Fall (h) mit eigener
+Befundart („a clone produces two valid chains from one genesis"), und ADR-006 §4.3 sowie
+`JR-802`/`JR-803` behandeln die Erkennung.
+
+**Regel, die daraus folgt:** die Migration läuft je Instanz **frisch**; ein Post-Migrations-Volume
+oder -Image wird nie geklont. Golden Images sind erlaubt, aber nur **vor** `pnpm db:migrate` — und
+`docker/docker-entrypoint.sh` fährt die Migration beim Start, was den sauberen Weg zum Standardweg
+macht, sofern man kein Datenverzeichnis mitkopiert. Steht als Konsequenz 2 unten.
+
+### Was es kostet — nach ADR-020 benannt, nicht beschönigt
+
+- **RAM:** laut `docs/user-guides/installation.md` 4 GB je Instanz, 2 GB mit externem
+  Postgres/Redis/Meilisearch. `smtp-ingress` und das Spool-Volume kommen hinzu (`JR-1203`).
+- **Betrieb × N:** `docker/docker-entrypoint.sh` fährt `pnpm db:migrate` beim Start, also N
+  Migrationen je Upgrade. Zugleich der Vorteil: ein Kunde lässt sich als Canary hochziehen, statt
+  alle gleichzeitig zu riskieren.
+- **N Lizenzschlüssel** (`OA_LICENSE_KEY` gilt je Installation), N Backups, N `verify`-Läufe (E9), N
+  Monitoring-Ziele (E10), N TSA-Zugänge (E8).
+- **Provisionierung existiert nicht:** kein Helm-Chart, keine k8s-Manifeste, und die festen
+  `container_name` müssen weg. Das steht in keinem Epic.
+
+### Die Dichteoption und ihre Bedingungen
+
+Zulässig ist ein **geteilter Postgres-Server** mit eigener Datenbank und eigener Rolle je Kunde. Das
+funktioniert heute ohne Codeänderung, und die Rollentrennung fordert `02-architektur.md` §1 für die
+vier Prozessrollen ohnehin. Ein geteilter Tika ist vertretbar, sieht aber den Klartext aller Kunden.
+
+**Nicht geteilt werden dürfen Meilisearch und Valkey**, und der Grund ist in beiden Fällen, dass es
+**leise** scheitert:
+
+- **Meilisearch:** beide Instanzen schreiben in den Index `'emails'`. Kein Fehler, keine Warnung —
+  nur kundenübergreifende Suchtreffer. Das ist der gefährlichste Fehlermodus im ganzen Bild.
+- **Valkey:** die Queue-Namen sind global (`jobs/queues.ts:19`, `:24`, `:30`) und
+  `config/redis.ts` bietet weder einen `db`-Index noch einen `keyPrefix`. Zwei Instanzen an einer
+  Valkey ziehen sich gegenseitig die Jobs.
+
+Wer die Dichteoption fahren will, braucht deshalb vorher `MEILI_INDEX_PREFIX` und einen
+Redis-`keyPrefix` (Tasks unten). **Und einen Blick auf `config/redis.ts`:** bei
+`REDIS_TLS_ENABLED=true` wird `rejectUnauthorized: false` gesetzt — für eine Valkey über eine
+Netzgrenze ist das TLS ohne Zertifikatsprüfung. Nicht Teil dieser ADR, aber Bedingung für jede
+geteilte Infrastruktur.
+
+### Verworfen: geteilter Stack mit nachgerüsteter Tenant-Spalte
+
+Er berührt jede Tabelle, alle fünf globalen Uniques, die Storage-Pfade, den Meili-Index, die
+Import-Zeit-Config (`CLAUDE.md` §5.6) und `system_settings`. `chain_scope_id` kann das **nicht**
+auffangen: es ist an `ingestion_sources.id` gebunden und steckt im Genesis-Hash. Entscheidend ist
+aber nicht der Aufwand, sondern dass dieses Modell die Kundentrennung genau von der Schicht abhängig
+macht, die in 0.5.2 fail-open war. Bleibt Rückfalloption, falls der Ressourcenbedarf des empfohlenen
+Modells sich als untragbar erweist — dann braucht es eine neue ADR, die diese hier ersetzt.
+
+### Offen und ausdrücklich nicht entschieden: Betriebsverantwortung und AGPL §13
+
+Die Repo-Lizenz ist AGPL-3.0 (`LICENSE`). Betreibt der Auftraggeber die Instanzen **für** Endkunden
+mit Netzzugriff, greift §13: den Nutzern ist der entsprechende Quellcode anzubieten, einschließlich
+des hier entstehenden Journaling-Codes. Betreibt der Endkunde selbst, entfällt das, und „der
+Betreiber" in der gesamten Doku bleibt der Kunde — so wie sie heute geschrieben ist.
+
+Das ist eine Feststellung, keine Rechtsberatung. Sie steht hier, weil sie das Betriebsmodell
+mitbestimmt und nicht danach entdeckt werden sollte. Bis der Auftraggeber entscheidet, bleibt dieser
+Punkt **offen**, wie ADR-008 und ADR-012.
+
+### Konsequenzen, wenn so entschieden wird
+
+Die folgenden Tasks werden **erst bei der Entscheidung** in E12 angelegt — nach ADR-021 bleibt
+`03-backlog.md` unverändert, bis das Epic ansteht, und die Taskzahl in `06-status.md` §150 wird
+gemeinsam mit ihnen fortgeschrieben:
+
+1. `docker-compose.yml` ohne feste `container_name`, damit mehrere Stacks auf einem Host koexistieren
+   (berührt `JR-1203`).
+2. Provisionierungs- und Stilllegungs-Checkliste je Instanz: Schlüssel, Lizenz, MX, IP, Bucket,
+   TSA-Zugang, Monitoring-Ziel, Backup — und was beim Kundenabgang wie zu übergeben ist. **Zwei
+   Punkte daraus sind seit E2 nicht mehr optional:**
+    - **Die Migration läuft je Instanz frisch, ein Post-Migrations-Image wird nie geklont** — sonst
+      teilen fremde Kunden eine `deployment_id` (Abschnitt „Klonen ist die Falle" oben).
+    - **Stilllegung ist ein Verfahren, kein `DELETE`.** `journalLedger.chainScopeId` trägt
+      `onDelete: 'restrict'`, ein Archiv mit Ledger-Zeilen lässt sich also nicht löschen — laut
+      Schemakommentar ausdrücklich Absicht und nach E12 zu verfahren.
+3. `MEILI_INDEX_PREFIX` in `config/search.ts` und die **13** `'emails'`-Literale gegen eine Konstante.
+   Auch im empfohlenen Modell sinnvoll, als Schutz gegen versehentlich geteilte Infrastruktur.
+4. Redis-`keyPrefix` bzw. `db`-Index in `config/redis.ts`, gleicher Grund.
+5. `JR-1204` (Deployment-Guide) nimmt das Betriebsmodell auf: eine IP je Instanz, MX je Kunde, und
+   warum kein gemeinsamer Port-25-Proxy davor steht.
+6. E9/E10 rechnen weiterhin je Kette; das Betriebsmodell ändert daran nichts, halbiert aber die
+   Zahl der Ketten je `verify`-Lauf.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill
