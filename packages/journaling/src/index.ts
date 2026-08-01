@@ -48,3 +48,6 @@ export {
 	advisoryLockKey,
 	type PostgresLedgerWriterOptions,
 } from './ledger/ledger-writer';
+
+export type { SpoolDirEntry, SpoolFileHandle, SpoolFileSystem, SpoolStat } from './spool/fs-port';
+export { NodeSpoolFileSystem } from './spool/fs-port';

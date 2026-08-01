@@ -102,14 +102,16 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ADR-006 golden vectors, all under src/ledger/); 14 after JR-2-06 added ledger-writer.test.ts;
 		// 15 after JR-2-07 added tests/unit/ledger-backend-contract.test.ts -- the shared LedgerBackend
 		// contract against a backend with no database, plus the counter-check that its concurrency case
-		// fails without a lock.
-		expectedFiles: 15,
+		// fails without a lock. 16 after JR-3-03 added packages/journaling/src/spool/fs-port.test.ts --
+		// the fault-injectable filesystem seam (real implementation plus the independent-failure fake).
+		expectedFiles: 16,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
 		// case has teeth (unlocked backend forks, locked one does not, a failed append does not wedge
-		// the chain).
-		expectedTests: { ci: 288, nightly: 0, manual: 0 },
+		// the chain). 299 after JR-3-03: 11 tests proving write/file-fsync/directory-fsync fail
+		// independently against the fake, plus the real NodeSpoolFileSystem exercised on disk.
+		expectedTests: { ci: 299, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'integration',
