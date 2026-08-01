@@ -54,26 +54,33 @@ function baseInput(overrides: Partial<JournalTransactionInput> = {}): JournalTra
 	};
 }
 
-/** A minimal, controllable `LedgerBackend` that records every call onto a shared timeline. */
+/**
+ * A minimal, controllable `LedgerBackend` that records every call onto a shared timeline.
+ *
+ * Deliberately exposes only `backend` and `requests` -- no separate `calls` counter. `requests` is a
+ * plain array, and a caller that destructures it (`const { requests } = fakeBackend(...)`) keeps the
+ * *same* array reference, so `requests.length` reflects calls made after the destructuring point. A
+ * getter-backed `calls: number` property looks equivalent but is not: `const { calls } = fakeBackend(...)`
+ * evaluates the getter once, at destructuring time, and copies out that snapshot into a plain local
+ * variable -- it does not keep a live binding to the getter. That is exactly how the "does not touch
+ * the spool again" test below used to read `calls === 0` no matter how many times `append()` was
+ * later called: the destructure ran before `backend.append()` had ever been invoked, so it captured 0
+ * and nothing after that could change it. `requests.length` has no such trap.
+ */
 function fakeBackend(
 	result: LedgerAppendResult | (() => LedgerAppendResult),
 	timeline: string[] = []
-): { backend: LedgerBackend; requests: LedgerAppendRequest[]; calls: number } {
+): { backend: LedgerBackend; requests: LedgerAppendRequest[] } {
 	const requests: LedgerAppendRequest[] = [];
-	const state = { calls: 0 };
 	return {
 		backend: {
 			async append(request: LedgerAppendRequest): Promise<LedgerAppendResult> {
 				requests.push(request);
-				state.calls += 1;
 				timeline.push('ledger-append');
 				return typeof result === 'function' ? result() : result;
 			},
 		},
 		requests,
-		get calls() {
-			return state.calls;
-		},
 	};
 }
 
@@ -147,15 +154,19 @@ suite('ci', 'JournalAcceptance.accept(): order', () => {
 	it('does not touch the spool again, and does not call the ledger a second time, once append() has resolved', async () => {
 		// The empirical half of "nothing after a successful append can still fail": if any code path
 		// reachable from the success branch touched the fs or the backend again, this timeline would
-		// grow past the single 'ledger-append' entry it ends on.
+		// grow past the single 'ledger-append' entry it ends on, and `requests` would grow past one
+		// entry. `requests` is asserted by length rather than through a separate counter -- see the
+		// `fakeBackend()` doc comment for why a getter-backed counter read through destructuring cannot
+		// do this job: it would capture a snapshot before `accept()` had called `append()` even once,
+		// and stay at that snapshot forever, passing regardless of what `accept()` actually does.
 		const timeline: string[] = [];
 		const fs = timelineFileSystem(new FakeSpoolFileSystem(), timeline);
-		const { backend, calls } = fakeBackend(SUCCESS_RESULT, timeline);
+		const { backend, requests } = fakeBackend(SUCCESS_RESULT, timeline);
 		const acceptance = new JournalAcceptance({ fs, backend, spoolConfig: spoolConfig() });
 
 		await acceptance.accept(baseInput());
 
-		expect(calls).toBe(1);
+		expect(requests.length).toBe(1);
 		const countAfterLastAppend = timeline
 			.slice(timeline.lastIndexOf('ledger-append') + 1)
 			.filter((entry) => entry !== 'ledger-append').length;

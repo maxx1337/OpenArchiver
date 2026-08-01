@@ -107,8 +107,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 19 after JR-3-01 added spool/{txid,layout,config}.test.ts -- transaction IDs, sharded
 		// incoming/quarantine layout, the high-water-mark check, and its zod config validation.
 		// 20 after JR-3-02 added spool/durable-write.test.ts -- the streaming, dual-fsync durable
-		// write, plus its 150 MB heap-growth case (nightly).
-		expectedFiles: 20,
+		// write, plus its 150 MB heap-growth case (nightly). 21 after JR-3-04 added
+		// spool/acceptance.test.ts -- the two-phase acceptance wiring (high-water-mark -> durable write
+		// -> ledger append -> typed result) against fakes.
+		expectedFiles: 21,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -121,8 +123,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// empty message, byte-verbatim, fsync/close ordering, the shard directory fsync'd, the three
 		// stage-typed failures, the buffer-reuse streaming proof) + 1 against real disk
 		// (NodeSpoolFileSystem, platform-aware directory-fsync outcome) = 12 new `ci` tests, plus the
-		// 150 MB heap-growth acceptance case classified `nightly`.
-		expectedTests: { ci: 347, nightly: 1, manual: 0 },
+		// 150 MB heap-growth acceptance case classified `nightly`. 361 ci after JR-3-04: 14 tests
+		// wiring high-water-mark -> durable write -> ledger append -> typed result against fakes --
+		// order (2 cases, one of them the fix for the getter-destructuring trap described in
+		// acceptance.test.ts's fakeBackend() doc comment), high-water mark, the three spool-failure
+		// classifications, ledger-append failure leaving the spool file in place, and the five success
+		// cases (seq/hash passthrough, generated txid, size/hash from the durable write, IP
+		// normalisation x2, receipt event shape).
+		expectedTests: { ci: 361, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -134,12 +142,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		// added journal-ledger-writer.int.test.ts (append() against a real database); 12 after JR-2-07
 		// added ledger-backend-contract.int.test.ts -- the same contract against PostgresLedgerWriter.
 		// One suite, two implementations: that pair is what makes "the backend is pluggable" a
-		// measurement rather than a claim.
-		expectedFiles: 12,
+		// measurement rather than a claim. 13 after JR-3-04 added
+		// journal-acceptance-bare-client.int.test.ts -- JournalAcceptance.accept() through a client
+		// that is never given to drizzle() (F38's rule: anything in packages/journaling that gets its
+		// connection injected needs at least one test writing through a bare client).
+		expectedFiles: 13,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
-		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time.
-		expectedTests: { ci: 92, nightly: 0, manual: 0 },
+		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
+		// JR-3-04: the bare-client round trip through JournalAcceptance.accept() (re-verifies the chain
+		// hash after storage) and the direct F38 regression case (a non-null event_payload with keys out
+		// of order, through PostgresLedgerWriter.append() on the same bare client).
+		expectedTests: { ci: 94, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
