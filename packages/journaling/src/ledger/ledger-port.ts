@@ -82,12 +82,50 @@ export interface LedgerAppendResult {
 }
 
 /**
- * The pluggable ledger backend (RFC section 5.4, ADR-011).
+ * The pluggable ledger backend (RFC section 5.4, ADR-011, `JR-207`).
  *
  * Variant (a), Postgres with `synchronous_commit = on`, is `PostgresLedgerWriter`. Variant (b), a local
  * WAL, is **not** implemented and is not needed for v1 — but it has to be retrofittable without a
  * signature change, which is what this interface is for. Anything a WAL implementation would need is
  * already here: the request, the returned head, and nothing that names Postgres.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * That retrofittability is measured, not asserted (`JR-207`)
+ * ---------------------------------------------------------------------------------------------
+ * `packages/backend/tests/support/ledger-backend-contract.ts` states the contract below as an
+ * executable suite, and it runs twice: against `PostgresLedgerWriter`
+ * (`ledger-backend-contract.int.test.ts`) and against a backend with no database at all
+ * (`ledger-backend-contract.test.ts`). Both pass, so nothing Postgres-specific has leaked into this
+ * port. Had it leaked — a transaction handle, a lock, a `bytea` — the second implementation could not
+ * exist, and that is the signal the criterion asks for.
+ *
+ * The contract asserts only what `append()` **returns**, because `seq`, `prevChainHash` and
+ * `chainHash` *are* the chain; where the bytes are put is the implementation's business.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * What a variant (b) implementation owes beyond this signature
+ * ---------------------------------------------------------------------------------------------
+ * **Satisfying the contract is not sufficient**, and the in-memory backend is the proof: it passes and
+ * is durable only for as long as the process lives. Fitting the signature is a statement about
+ * signatures. A WAL implementation additionally owes:
+ *
+ *  1. **`fsync` the record and its containing directory before `append()` resolves.** Both — a file
+ *     `fsync` alone does not make the directory entry durable. The resolve of this promise is the
+ *     moment `250 OK` becomes permissible, so it must not precede durability.
+ *  2. **Serialisation per chain across processes**, not just within one. The Postgres variant gets this
+ *     from `pg_advisory_xact_lock`; a WAL needs its own cross-process equivalent, and an in-process
+ *     mutex is not one.
+ *  3. **No `seq` consumed on failure.** A rejected append must leave the chain exactly as it was; a
+ *     gap is a tamper signal (skill `journal-ledger` section 4), so a benign gap destroys the
+ *     completeness argument.
+ *  4. **A crash-recovery scan** that reconciles a partially written record on startup, and
+ *     asynchronous replication into Postgres — the reason variant (b) exists at all is surviving a
+ *     database outage, which means the two stores diverge by design and have to converge again.
+ *  5. **`verify` (E9) must be able to read it.** A chain that only its writer can walk is not evidence.
+ *
+ * Whoever implements (b) starts here, and the list is deliberately written as obligations rather than
+ * as reassurance: a WAL that satisfies the contract and skips this list would be worse than useless,
+ * because it would look correct.
  */
 export interface LedgerBackend {
 	/**

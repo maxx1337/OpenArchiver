@@ -93,7 +93,7 @@ keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant
 Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
 behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
 `claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
-Docker-Postgres **370 passed | 2 skipped** bei 26 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
+Docker-Postgres **383 passed | 2 skipped** bei 28 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
 
 ### Der Stand in einem Satz
 
@@ -424,14 +424,29 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
   einen Kettenbruch, der nicht existierte — und kann in der Gegenrichtung einen echten verdecken.
   `ORDER BY` immer qualifizieren, und die Leseordnung selbst prüfen.
 
+**`JR-207` ist erledigt.** Die Steckbarkeit ist **gemessen**: eine Vertragssuite
+(`packages/backend/tests/support/ledger-backend-contract.ts`, fünf Fälle) läuft gegen
+`PostgresLedgerWriter` **und** gegen ein Backend ohne Datenbank. Drei Dinge daraus für die nächsten Tasks:
+
+- **Die Suite prüft nur die Rückgabewerte von `append()`.** Wer ihr einen Fall hinzufügt, der eine
+  Tabelle liest, macht sie zu einem Postgres-Vertrag und entwertet den Beleg. Speicherseitige
+  Zusicherungen gehören in `journal-ledger-writer.int.test.ts`.
+- **`InMemoryLedgerBackend` bleibt im Testbaum.** Ein konfigurierbares Ledger, das vergessen kann, macht
+  die Zusage hinter `250 OK` zur Lüge. Es ist ein Beweismittel, kein Backend.
+- **Die Pflichtenliste für Variante (b) steht in `ledger-port.ts`** — fsync auf Datei und Verzeichnis,
+  prozessübergreifende Serialisierung, kein `seq` bei Fehlschlag, Crash-Recovery, `verify`-Lesbarkeit.
+  Der Vertrag prüft die Signatur, nicht die Durability; wer (b) baut, fängt bei dieser Liste an.
+
 ```
-Arbeite JR-207 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
-Branch claude/journaling-e2-ledger (existiert). JR-207 ist zum großen Teil schon
-da: das Interface LedgerBackend/LedgerTransactor/LedgerQuery steht in
-src/ledger/ledger-port.ts und ist dokumentiert. Offen ist die ausdrückliche
-Bewertung, dass Variante (b) (lokales WAL, RFC §5.4) ohne Signaturänderung
-nachrüstbar ist. Danach JR-208/JR-209 — Rolle TEST, adversariale Last und
-Tamper-Erkennung. JR-209 muss den Append-Only-Trigger gezielt abschalten.
+Arbeite JR-208 und JR-209 aus docs/dev/journaling/03-backlog.md ab — Rolle
+tester, Branch claude/journaling-e2-ledger (existiert). JR-208: 20 parallele
+Writer x 500 Appends gegen echtes Postgres, lückenlos und korrekt verkettet,
+plus erzwungener Rollback zwischen Vergabe und Commit; OA_TEST_PG_STALE_MS
+über die erwartete Laufzeit heben und das im Test sichtbar begründen (F13).
+JR-209: Tamper-Fälle (a)-(h) aus Testplan §12.5, inklusive tls_version und
+remote_ip als Gegenprobe auf die 16 gehashten Felder — der Append-Only-Trigger
+muss dafür gezielt abgeschaltet und danach wieder aktiviert werden. Danach
+JR-210 (Abnahme E2, Rolle PO, eigene Session).
 ```
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -448,7 +463,7 @@ Konsequenzen für jede E2-Task:
   `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
 - **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
   prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
-  **370 passed | 2 skipped** bei 26 Dateien (274 bei 19 vor E2).
+  **383 passed | 2 skipped** bei 28 Dateien (274 bei 19 vor E2).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
 können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin

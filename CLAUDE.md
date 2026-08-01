@@ -127,7 +127,7 @@ Four things about it are easy to trip over:
   message states the number to write. `globalSetup` checks the files before the run; a reporter plus the
   `globalSetup` teardown check the **executed** test counts after it (JR-105c, findings F14/F15).
 - **A green run can be a disabled run** — the reason all of the above exists. Quote test counts, not
-  just "green": a full local run is `370 passed | 2 skipped` at 26 files (274 before E2 started; the
+  just "green": a full local run is `383 passed | 2 skipped` at 28 files (274 before E2 started; the
   ledger encoding, schema, trigger and writer added the rest). A run narrowed with `-t`, a file filter,
   `--project` or `--shard` prints `verified NOTHING` and checks no counts.
 - **Integration tests acquire a real database** via `acquireTestDatabase()` in the **module scope**, and
