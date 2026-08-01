@@ -155,8 +155,8 @@ mit eigener Evidenz geschlossen (Mutationsproben am Encoder, sabotierte Backends
 Vertragssuite, Nebenläufigkeit direkt über `pg_stat_activity`, eine eigene Befundart-Matrix,
 Migrationen gegen Bestandsdaten). Der PO hat den Bericht in **zwei** Rückfragen gegengelesen und dabei
 dreizehn Punkte gefunden, die zitiert statt gemessen waren — darunter ein ganz fehlendes Kriterium;
-alle sind nachgemessen und bestätigt. **Nur der Rückmerge steht noch aus; er liegt beim
-Auftraggeber.** Ein neuer Befund **F39** (niedrig, Testharness). Was E2 liefert: `packages/journaling` trägt
+alle sind nachgemessen und bestätigt. **Der Rückmerge ist am 2026-08-01 vollzogen** (`eb340a9`,
+`--no-ff`, kein Squash). Ein neuer Befund **F39** (niedrig, Testharness). Was E2 liefert: `packages/journaling` trägt
 die kanonische Kodierung, die Merkle-Aggregation und `PostgresLedgerWriter`; die Tabellen sind migriert
 und append-only; der Ledger hält 10 000 nebenläufige Appends lückenlos aus, und jede der acht
 Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. Dabei gefunden und behoben: **F38** — der Writer

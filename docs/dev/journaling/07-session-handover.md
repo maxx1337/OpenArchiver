@@ -85,21 +85,24 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-01 (**E2 ist abgenommen** — die zweite, **unabhängige** Runde `JR-210a` hat 24 von 24
-Kriterien erfüllt gefunden und dabei alle sechs dünnen Stellen der ersten Runde mit eigener Evidenz
-geschlossen. Ein neuer Befund **F39**, niedrig, Testharness. **Der Rückmerge ist der nächste Schritt und
-liegt beim Auftraggeber** · davor `JR-208`/`JR-209` mit **`F38`**, und am 2026-07-31 `JR-201`…`JR-207`
-sowie die ADRs `006`/`007`/`022`/`023`) · **Branch:** `claude/journaling-e2-ledger` (E2, abgezweigt vom
-Integrationsbranch) · Volllauf gegen das Docker-Postgres **398 passed | 2 skipped** bei 30 Dateien,
-Exit 0, `unit 288/288 · integration 92/92 · adversarial 18/18`, `test:types` grün für beide Pakete
+**Stand:** 2026-08-01 (**E2 ist abgenommen und zurückgemergt** — die zweite, **unabhängige** Runde
+`JR-210a` hat 24 von 24 Kriterien erfüllt gefunden und dabei alle sechs dünnen Stellen der ersten Runde
+mit eigener Evidenz geschlossen; der **Rückmerge ist vollzogen** (`eb340a9`, `--no-ff`, kein Squash).
+Ein neuer Befund **F39**, niedrig, Testharness. **Nächstes Epic: E3** · davor `JR-208`/`JR-209` mit
+**`F38`**, und am 2026-07-31 `JR-201`…`JR-207` sowie die ADRs `006`/`007`/`022`/`023`) · **Branch:**
+`claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch — E2s Branch
+`claude/journaling-e2-ledger` ist gemergt und wird nicht weiterverwendet) · Volllauf gegen das
+Docker-Postgres **398 passed | 2 skipped** bei 30 Dateien, Exit 0, `unit 288/288 · integration 92/92 ·
+adversarial 18/18`, `test:types` grün für beide Pakete
 
 ### Der Stand in einem Satz
 
 **Der Ledger ist gebaut, gemessen, angegriffen und — jetzt unabhängig — abgenommen.** Er hält 10 000
 nebenläufige Appends lückenlos aus, jede der acht Manipulationsarten aus Testplan §12.5 wird mit
 Befundart und `seq` gemeldet, und **`JR-210a`** hat das in einer frischen Sitzung nachgemessen, die
-weder `JR-208` noch `JR-209` noch `JR-210` geschrieben hat. **Das Einzige, was noch offen ist, ist der
-Rückmerge** in den Integrationsbranch nach ADR-014 — er liegt beim Auftraggeber. Danach beginnt **E3**.
+weder `JR-208` noch `JR-209` noch `JR-210` geschrieben hat. **Der Rückmerge ist vollzogen** (`eb340a9`,
+`--no-ff`, kein Squash, vom Auftraggeber freigegeben). **E2 ist damit abgeschlossen; als Nächstes
+beginnt E3** auf einem eigenen Branch vom Integrationsbranch.
 
 **Eine Sache aus dem Abnahmeverlauf ist wichtiger als das Ergebnis**, weil sie sich wiederholen wird:
 die erste Berichtsfassung von `JR-210a` nannte „22 von 22" — eine Zahl, die sich aus der eigenen
@@ -501,24 +504,39 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
 - **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-208` zehntausend Zeilen schreibt. Das ist
   die im Backlog vorgegebene Menge und wird **nicht** stillschweigend reduziert (Testplan-Regel 6).
 
-**Beide Abnahmerunden sind durchgeführt, und `JR-210a` hat E2 abgenommen** (2026-08-01, 24/24,
-unabhängig; Protokoll in `06-status.md`). **Damit ist E2 fertig bis auf den Rückmerge**, und der ist
-eine Entscheidung des Auftraggebers, keine Task.
+**E2 ist abgeschlossen: abgenommen durch `JR-210a` (24/24, unabhängig) und am 2026-08-01
+zurückgemergt** — `eb340a9`, `--no-ff`, kein Squash, wie bei E13 (`89d701f`). Vor dem Merge waren beide
+Branches deckungsgleich mit `origin` und der Integrationsbranch hatte **0** Commits, die E2 nicht hatte;
+der Merge-Commit wurde trotzdem erzwungen, weil er die Epic-Grenze markiert. Nach dem Merge nachgeprüft:
+zwei Eltern, Baum **byteidentisch** mit `b4eda03`, und seit dem zitierten Volllauf war außerhalb von
+`docs/` nichts geändert. `main` unangetastet, kein Pull Request.
 
-**Der Rückmerge nach ADR-014**, wenn der Auftraggeber ihn freigibt:
+**Der nächste Schritt ist E3** — Spool und Acceptance-Contract, 8 Tasks, `JR-301`…`JR-308` in
+`03-backlog.md`. Vorgehen nach ADR-014:
 
 ```bash
-git checkout claude/enterprise-product-implementation-cxmmqe
-git merge --no-ff claude/journaling-e2-ledger
+git fetch origin claude/enterprise-product-implementation-cxmmqe
+git checkout -b claude/journaling-e3-spool \
+    origin/claude/enterprise-product-implementation-cxmmqe
 ```
 
-**`--no-ff`, kein Squash** — wie bei E13 (`89d701f`). Ein Squash tilgt die Zwischenschritte, und bei E2
-wären das die beiden Abnahmerunden und `F38`: der Beleg, dass das Verfahren funktioniert hat, liegt
-gerade in den Commits, die eine Ablehnung und eine Nachmessung dokumentieren.
+**Der Einstiegsprompt:**
 
-**Danach beginnt E3** (Spool und Acceptance-Contract, 8 Tasks) auf einem eigenen Branch
-`claude/journaling-e3-<kurzname>` vom Integrationsbranch. Was aus E2 dorthin mitgeht, steht unten unter
-„`JR-208` und `JR-209` sind erledigt" — vor allem die **Regel mit dem nackten Client** (F38).
+```
+Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
+und arbeite E3 ab — Spool und Acceptance-Contract, JR-301 ff. aus 03-backlog.md.
+```
+
+**Was aus E2 nach E3 mitgeht**, und zwar so, dass man es nicht erst suchen muss:
+
+- **Die Regel mit dem nackten Client (F38).** Alles in `packages/journaling` bekommt seine Verbindung
+  injiziert; der Ingress-Prozess wird drizzle per Architekturvorgabe **nicht** haben. Mindestens ein
+  Test muss deshalb durch einen **ungepatchten** `postgres()`-Client schreiben — `harness.sql` ist der
+  einzige gepatchte im Repository und deshalb kein Maßstab.
+- **`ADR-021` gilt weiter:** Abnahmeeinheit ist die Scheibe, nicht das Epic. Und aus `JR-210a` neu
+  dazu: **ein Abnahmeprotokoll führt eine durchnummerierte Kriterienliste**, eine Zeile je Kriterium.
+- **Der Acceptance-Contract ist erst in E3/E4 erfüllbar.** E2 hat den Ledger, aber keinen Spool und
+  niemanden, der `250` sendet — das ist genau der Gegenstand von E3.
 
 > **Die Liste „Was die erste Runde nicht geprüft hat" ist abgearbeitet** und deshalb hier entfernt. Alle
 > sechs Punkte sind in `JR-210a` mit eigener Evidenz beantwortet; die Tabelle dazu steht in
@@ -591,11 +609,12 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-> **Offen und wirklich beim Auftraggeber: der Rückmerge von E2** in den Integrationsbranch. Die
-> Bedingung aus ADR-014 — unabhängige Abnahme — ist mit `JR-210a` erfüllt (24/24, frische Sitzung).
-> Das Kommando steht oben unter „Nächster konkreter Schritt"; `--no-ff`, kein Squash. Danach **E3**.
+> **~~Der Rückmerge von E2~~ — freigegeben und am 2026-08-01 vollzogen** (`eb340a9`, `--no-ff`, kein
+> Squash). Die Bedingung aus ADR-014 war mit `JR-210a` erfüllt (24/24, frische Sitzung). Kein
+> Entscheidungsbedarf mehr; der nächste Schritt ist **E3**.
 >
-> **Zweite, kleinere Frage: `F39`** (niedrig, Testharness) — beheben oder bewusst akzeptieren? Der
+> **Offen und wirklich beim Auftraggeber: `F39`** (niedrig, Testharness) — beheben oder bewusst
+> akzeptieren? Der
 > Test „is length-prefixed…" bleibt grün, wenn man das Längenpräfix entfernt; gefangen wird die
 > Mutation nur vom Golden-File. Kein Produktdefekt, blockiert nichts. Ein Vorschlag steht im Befund.
 > Sinnvoller Ort wäre die nächste Arbeit an `packages/journaling`.
