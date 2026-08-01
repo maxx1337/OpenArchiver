@@ -215,7 +215,7 @@ Ingestion niemals stoppt.
 Sobald mehr als ein Endkunde bedient wird, ist der naheliegende Sparschritt, Meilisearch und Valkey
 zwischen Instanzen zu teilen. Beides scheitert **leise**, und das ist der eigentliche Schaden:
 
-- **Meilisearch:** der Indexname ist das Literal `'emails'`, an 12 Stellen in
+- **Meilisearch:** der Indexname ist das Literal `'emails'`, an 13 Stellen in
   `services/SearchService.ts` und `services/IndexingService.ts` hart verdrahtet, ohne Env-Var und
   ohne Prefix. Zwei Instanzen an einem Meili-Server schreiben in **denselben** Index. Es gibt keinen
   Fehler und keine Warnung — nur kundenübergreifende Suchtreffer in einem Archivprodukt.
@@ -249,3 +249,25 @@ nicht mit Komfort, sondern mit diesem Konflikt. `JR-1204` nimmt das in den Deplo
 (Konsequenz 5 der ADR): eine IP je Instanz, MX je Kunde, und ausdrücklich kein gemeinsamer
 Port-25-Proxy. Der Skill `journal-ledger` hält den Contract fest, damit er nicht aus dem Gedächtnis
 reproduziert wird.
+
+## R-18 — Ein geklontes Instanz-Image gibt fremden Kunden dieselbe `deployment_id`
+
+**Auswirkung:** hoch · **Wahrscheinlichkeit:** mittel · **Epic:** E12
+
+Aufgenommen am 2026-08-01, weil `deployment_identity` seit E2 existiert und das Risiko damit real ist.
+Der Schemakommentar in `schema/journal-ledger.ts` benennt es selbst: zwei Installationen mit derselben
+`deployment_id` sind ein Split Brain, _„not preventable (a restore and a clone are byte-identical)"_,
+und werden deshalb erkannt statt verhindert.
+
+Der naheliegende Weg, viele Kundeninstanzen aufzusetzen, ist ein Golden Image. Entsteht es **nach**
+dem Migrationslauf, trägt es die von `0041_even_scream.sql` gezogene `deployment_id`, und jeder Klon
+bekommt dieselbe. Folge: fremde Kunden teilen das Genesis-Präfix ihrer Ketten. `verify` wird das als
+Manipulationsbefund melden, obwohl es ein Provisionierungsfehler war — und der Befund erscheint
+womöglich erst Monate später, bei der ersten Prüfung.
+
+**Gegenmaßnahme:** ADR-024 Konsequenz 2 macht zwei Punkte verbindlich, sobald das Betriebsmodell
+entschieden ist: die Migration läuft je Instanz frisch, und ein Post-Migrations-Volume oder -Image
+wird nie geklont. `docker/docker-entrypoint.sh` fährt `pnpm db:migrate` beim Start, der saubere Weg
+ist also der Standardweg, solange kein Datenverzeichnis mitkopiert wird. Erkennungsseitig ist der Fall
+bereits abgedeckt: `JR-209` prüft ihn als Fall (h) mit eigener Befundart, ADR-006 §4.3 sowie
+`JR-802`/`JR-803` behandeln die Erkennung im Betrieb.
