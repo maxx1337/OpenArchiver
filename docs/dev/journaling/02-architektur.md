@@ -163,6 +163,25 @@ Feld `tempFilePath` verweist künftig auf den Spool-Pfad, nicht auf `tmpdir()`.
 Vollständige Tabelle im Skill `journal-ledger` §2. Kern: **lokale Fehler ⇒ `4xx`, nie `5xx`.**
 Object-Store- oder Redis-Ausfall ⇒ trotzdem `250`, weil Phase B asynchron ist.
 
+#### Was der Spool nach oben meldet (seit `JR-3-02`, vom PO bestätigt 2026-08-01)
+
+`writeDurableSpoolFile()` wirft `DurableWriteError` mit genau **drei** Stufen —
+`'write' | 'file-fsync' | 'directory-fsync'` — und hängt den ursprünglichen Fehler als `cause` an.
+
+**`'write'` deckt auch das Anlegen des Shard-Verzeichnisses und das Öffnen der Datei ab.** Das ist
+Absicht und keine Ungenauigkeit: Für den Aufrufer sind alle drei dasselbe Ereignis — _die Bytes
+liegen nicht sicher auf der Platte, der Sender soll es erneut versuchen._ Eine vierte Stufe würde
+eine Unterscheidung einführen, die auf **keinen** anderen SMTP-Code abbildet.
+
+Denn die Stufe ist **nicht** das, was über `451` gegen `452` entscheidet. Nach Skill §2 trennt dort
+_Disk voll / High-Water-Mark_ von _allem anderen_, und diese Information steckt in `cause` (etwa
+`cause.code === 'ENOSPC'`), nicht in der Stufe. `JR-3-04` bildet also aus **Stufe und `cause`
+zusammen** ab, nicht aus der Stufe allein.
+
+Für `JR-3-06` folgt daraus: Die Fehlerinjektionsmatrix prüft die drei Stufen, muss unter `'write'`
+aber **auch** ein fehlschlagendes `mkdir` und ein fehlschlagendes `createFile` führen — sonst bleibt
+zwei Dritteln dieser Stufe unbelegt.
+
 ## 4. Ledger
 
 ### Tabelle
