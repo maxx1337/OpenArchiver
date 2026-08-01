@@ -18,7 +18,7 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------- |
 | **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29 |
 | **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22              |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24               |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39          |
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34     |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35                             |
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                             |
@@ -27,8 +27,8 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
 Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16), `JR-1301` (F17–F23), die Abnahme
 `JR-1309` (F24–F29), die Abnahme `JR-1309a` (F30) und die Abnahme `JR-1309b` (F31–F34), Rolle
-`tester`, 2026-07-27 bis 2026-07-29. Dazu `JR-1309c` (F36), `JR-205` (F37) und `JR-208` (F38),
-2026-07-30 bis 2026-08-01.
+`tester`, 2026-07-27 bis 2026-07-29. Dazu `JR-1309c` (F36), `JR-205` (F37), `JR-208` (F38) und die
+zweite Abnahme `JR-210a` (F39), 2026-07-30 bis 2026-08-01.
 
 > **F31 ist der einzige Befund dieser Liste, dessen Ursache in einer ADR liegt und nicht im Code oder
 > in seiner Umsetzung.** ADR-020 hat den Verhaltenscheck selbst „vollständig" genannt; `JR-1317` hat
@@ -1781,3 +1781,43 @@ abhängen) —, also wäre die Produktion die erste Stelle gewesen, an der es au
 Test über einen **nackten** Client schreiben. `JR-208` tut das jetzt (`pool`), und der benannte
 Regressionsfall in `journal-ledger-concurrency.adv.test.ts` prüft `jsonb_typeof` direkt statt nur
 über den Kettenhash, damit ein Rückfall sagt, _was_ kaputt ist.
+
+---
+
+## F39 — ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was ihn rot macht
+
+**Schwere:** niedrig · **Kategorie:** Testharness · **Ort:**
+`packages/journaling/src/ledger/canonical-encoding.test.ts:166–180`, Fall „is length-prefixed, so
+field boundaries cannot be shifted" · **Gefunden:** `JR-210a` (zweite Abnahme E2, 2026-08-01, Rolle
+`tester`), Mutationsprobe M4 · **Keine Auswirkung auf das Produkt** — die Kodierung selbst ist
+korrekt und das Längenpräfix vorhanden.
+
+Der Test soll belegen, dass die kanonische Kodierung ihre Felder längenpräfigiert, sodass sich
+Feldgrenzen nicht verschieben lassen. Er stellt zwei Records gegenüber, bei denen zwei benachbarte
+`STRING`-Felder ein Zeichen zwischen sich verschieben (`ehloName:'ab', tlsVersion:'cd'` gegen
+`ehloName:'a', tlsVersion:'bcd'`), und fordert unterschiedliche Bytes.
+
+**Entfernt man das Längenpräfix vollständig** — `field()` liefert `tag ‖ value` statt
+`tag ‖ len ‖ value` —, **bleibt dieser Test grün.** Die beiden Records unterscheiden sich dann
+immer noch, aber aus einem anderen Grund: das Tag-Byte des Folgefelds (`0x03`) landet an einer
+anderen Position, und die Bytefolgen weichen zufällig trotzdem voneinander ab. Die Länge selbst
+trägt in genau diesem Wertepaar nichts zur Unterscheidung bei.
+
+**Gefangen wird die Mutation trotzdem** — vom Golden-File (`adr-006-vectors.test.ts`: Recordlänge
+351 und `SHA256(record)` weichen ab), also von einem Test, der die Eigenschaft nicht im Namen führt.
+Das ist der ganze Befund: die Eigenschaft ist abgesichert, aber nicht dort, wo ein Leser sie
+abgesichert glaubt. Wer das Golden-File einmal anfasst oder ersetzt, verliert die Absicherung, ohne
+dass ein rot werdender Test ihn darauf stößt.
+
+> Die übrigen vier Mutationsproben derselben Runde (M1, M2, M3, M5) wurden **genau** von den
+> zuständigen Tests gefangen, ohne Übersprechen auf unbeteiligte Fälle. F39 ist die eine Ausnahme
+> von fünf.
+
+**Vorschlag (nicht umgesetzt — eine Abnahme ist nicht der Ort für stille Änderungen):** die
+Testwerte so wählen, dass die Länge die einzige Unterscheidung ist — etwa ein Feld variabler Länge
+am **Ende** des Records, wo kein Tag-Byte folgt, das die Verschiebung sichtbar macht. Dann prüft der
+Fall die Länge und nicht die Tag-Position.
+
+**Entscheidung des Auftraggebers offen:** beheben (kleine Teständerung, gehört sinnvollerweise in
+die nächste Arbeit an `packages/journaling`), oder bewusst akzeptieren, weil das Golden-File die
+Eigenschaft trägt. **Blockiert nichts** und war kein Hindernis für die Abnahme von E2.
