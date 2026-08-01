@@ -552,26 +552,70 @@ Die ADR wird in E8 auf _entschieden_ gesetzt, sobald das Eskalationsverhalten im
 
 ## ADR-009 — Erzwingung der Append-Only-Eigenschaft
 
-**Status:** **offen** — zu entscheiden in E2 (`JR-205`)
+**Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Umsetzung:** `JR-205`
+(Trigger, E2) und **E11** (Rechteentzug)
 
-Rechteentzug (`REVOKE UPDATE, DELETE`) oder Trigger, der auf `UPDATE`/`DELETE` eine Exception wirft?
+**Beides, aber nicht gleichzeitig: der Trigger jetzt, der Rechteentzug in E11.** Die ursprüngliche
+Frage lautete „Rechteentzug **oder** Trigger". Die Antwort ist beides — die zwei Mechanismen decken
+verschiedene Angreifer ab —, und sie sind unterschiedlich weit umsetzbar, weshalb die Entscheidung sie
+zeitlich trennt.
 
-**Abwägung:** Rechteentzug ist einfacher und billiger, hängt aber daran, dass die Anwendung nicht mit
-einer privilegierten Rolle verbindet. Ein Trigger wirkt rollenunabhängig, ist aber selbst
-veränderbar, wer `ALTER TABLE` darf. Beides ist kombinierbar.
+**Umfang beider Mechanismen: `journal_ledger` _und_ `deployment_identity`.** Die `deployment_id` steckt
+im Genesis-Hash jeder Kette (ADR-006 §4.2); sie zu ändern entwertet jede Kette der Installation genauso
+sicher wie das Umschreiben einer Ledger-Zeile.
 
-Zu beachten: die Migrationsrolle braucht genug Rechte, um die Einschränkung überhaupt anzulegen.
+### Was in E2 umgesetzt ist (`JR-205`, Migration `0042_journal_ledger_append_only.sql`)
 
-**Konkretes Argument aus der Praxis — Befund F1** (siehe `09-befunde-bestandscode.md`): Über
-Policy-Condition-Keys lässt sich heute rohes SQL in die `WHERE`-Klausel jeder gescopeten Abfrage
-injizieren. Voraussetzung ist Super-Admin, es ist also keine unauthentifizierte Lücke — aber es ist
-eine Eskalation von „Anwendungsadministrator" zu „beliebiges SQL". Ein solcher Akteur könnte
-`journal_ledger` direkt manipulieren und jede anwendungsseitige Append-Only-Disziplin umgehen.
+Eine `plpgsql`-Triggerfunktion, die `RAISE EXCEPTION` mit `ERRCODE = restrict_violation` wirft, und
+**vier** Trigger — je Tabelle einer für `UPDATE OR DELETE` (row level) und einer für `TRUNCATE`
+(statement level).
 
-Daraus folgt für diese ADR: **Anwendungscode-Disziplin allein genügt nicht.** Die Einschränkung muss
-auf Datenbank-Rechteebene wirken, und die Rolle, mit der die Anwendung verbindet, darf sie nicht
-selbst aufheben können. Das spricht dafür, Rechteentzug **und** Trigger zu kombinieren, statt sich
-für eines zu entscheiden.
+**Der TRUNCATE-Trigger ist kein Beiwerk.** `TRUNCATE` löst Row-Level-Trigger überhaupt nicht aus, also
+hätte ein reiner Row-Trigger `TRUNCATE journal_ledger` als offene Tür stehen lassen — eine Anweisung,
+die den gesamten Ledger entfernt.
+
+**Gemessen** (PostgreSQL 17.10, Rolle `admin`, siehe F37):
+
+```
+UPDATE / DELETE / TRUNCATE auf journal_ledger und deployment_identity  ⇒ refused [23001]
+INSERT                                                                 ⇒ allowed
+```
+
+### Warum der Rechteentzug trotzdem nötig ist — und warum er nach E11 gehört
+
+Der Trigger hält gegen den Weg, der praktisch zählt: **F1** injiziert rohes SQL in eine `WHERE`-Klausel
+und kann weder ein `SET` noch ein `ALTER TABLE` absetzen (`postgres-js` benutzt das erweiterte Protokoll,
+also kein Statement-Stacking). Ein Akteur, der darüber eine Ledger-Zeile umschreiben will, scheitert.
+
+Er hält **nicht** gegen jemanden mit beliebigem SQL auf dieser Verbindung, und das ist **gemessen, nicht
+vermutet** (F37): `SET session_replication_role = replica` und
+`ALTER TABLE … DISABLE TRIGGER` sind beide erfolgreich, weil `POSTGRES_USER` in einem `postgres`-Image
+**Superuser** und Eigentümer aller Tabellen ist — und `.env.example` bildet `DATABASE_URL` aus genau
+dieser Rolle. In einer Standardinstallation ist der Trigger vom Anwendungskonto aus zwei Anweisungen weit
+entfernt.
+
+**Die Konsequenz ist eine Deployment-Anforderung, keine Codeänderung**, und deshalb ist sie in E11
+verankert und nicht in E2 hineingezogen worden: eine eigene Rolle für die Anwendung, die nichts besitzt
+und auf beiden Tabellen nur `INSERT` und `SELECT` hält; die Migration unter einer anderen Rolle; und ein
+Startup-Check, der laut wird, wenn die Anwendung als Superuser oder als Eigentümer dieser Tabellen
+verbindet. Ohne den dritten Punkt ist eine korrekt konfigurierte Installation von einer
+Standardinstallation nicht unterscheidbar, und der Betreiber erfährt den Unterschied nie.
+
+**Verworfen: die Rollentrennung in E2 mitnehmen.** Sie berührt `.env`, `docker-compose.yml`, den
+Migrationspfad und die Betreiberdoku. Eine halb eingebaute Trennung — Rolle angelegt, aber Migration und
+Doku nicht angepasst — wäre schlechter als eine dokumentierte Anforderung, weil sie den Anschein der
+Erledigung erzeugt.
+
+**Verworfen: nur Rechteentzug, ohne Trigger.** Er wirkt nicht gegen die Rolle, die die Objekte besitzt,
+und genau die führt heute die Migrationen aus.
+
+### Was diese ADR nicht behauptet
+
+Der Trigger macht das Ledger nicht unangreifbar für einen Datenbankadministrator. Dagegen wirkt allein
+das **Ankern** (E8): ein externer RFC-3161-Zeitstempel über die Merkle-Wurzel, den niemand mit
+Datenbankzugriff rückwirkend fälschen kann. Trigger und Rechteentzug erhöhen die Kosten eines Eingriffs
+und machen den unbeabsichtigten unmöglich; der Nachweis gegen den absichtlichen liegt außerhalb der
+Datenbank.
 
 ## ADR-010 — `processEmail` erweitern oder eigener Journaling-Pfad
 

@@ -97,25 +97,48 @@ export const SUITES: readonly SuiteSpec[] = [
 		// (src/iam-policy/policy-validator.f1-conditions.test.ts) and the ADR-017 call-site
 		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-1313 added the
 		// cross-gate check (tests/unit/condition-key-gates.test.ts); 10 after JR-105c added
-		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts.
-		expectedFiles: 10,
-		expectedTests: { ci: 216, nightly: 0, manual: 0 },
+		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts; 13 after JR-202
+		// added the canonical encoding of packages/journaling (canonical-encoding, merkle and the
+		// ADR-006 golden vectors, all under src/ledger/); 14 after JR-206 added ledger-writer.test.ts;
+		// 15 after JR-207 added tests/unit/ledger-backend-contract.test.ts -- the shared LedgerBackend
+		// contract against a backend with no database, plus the counter-check that its concurrency case
+		// fails without a lock.
+		expectedFiles: 15,
+		// 216 before JR-202; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
+		// 280 with the 14 statement-order tests of the ledger writer (JR-206).
+		// 288 after JR-207: the 5 shared contract cases, plus 3 that show the contract's concurrency
+		// case has teeth (unlocked backend forks, locked one does not, a failed append does not wedge
+		// the chain).
+		expectedTests: { ci: 288, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'integration',
 		include: ['packages/*/tests/integration/**/*.int.test.ts'],
 		// 4 after JR-104; 8 after JR-1301 split the F1/F3/F7/F8 regressions out of
-		// filter-builder.int.test.ts and added predefined-roles.int.test.ts.
-		expectedFiles: 8,
-		expectedTests: { ci: 55, nightly: 0, manual: 0 },
+		// filter-builder.int.test.ts and added predefined-roles.int.test.ts; 9 after JR-204 added
+		// journal-ledger-schema.int.test.ts (the CHECK constraints and keys of the ledger table);
+		// 10 after JR-205 added journal-ledger-append-only.int.test.ts (the trigger); 11 after JR-206
+		// added journal-ledger-writer.int.test.ts (append() against a real database); 12 after JR-207
+		// added ledger-backend-contract.int.test.ts -- the same contract against PostgresLedgerWriter.
+		// One suite, two implementations: that pair is what makes "the backend is pluggable" a
+		// measurement rather than a claim.
+		expectedFiles: 12,
+		// 55 before JR-204; 71 with the 16 schema tests of journal_ledger/deployment_identity;
+		// 79 with the 8 append-only tests of JR-205; 87 with the 8 writer tests of JR-206.
+		// 92 after JR-207: the same 5 contract cases, against PostgresLedgerWriter this time.
+		expectedTests: { ci: 92, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
 		include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
-		expectedFiles: 1,
-		// The one `nightly` and one `manual` suite in the repository, both in
+		// 1 until JR-208/JR-209; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
+		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)).
+		expectedFiles: 3,
+		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
-		expectedTests: { ci: 3, nightly: 1, manual: 1 },
+		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-208 (load, rollback-under-load,
+		// the no-lock counter-check, and the F38 regression); 18 with the 11 tamper cases of JR-209.
+		expectedTests: { ci: 18, nightly: 1, manual: 1 },
 	},
 ];
 

@@ -52,8 +52,24 @@ Punkt als _offen_ markiert ist, entscheidet ihn das jeweilige Epic und trägt da
 | `verify`                 | **read-only** Credentials, damit Prüfer es selbst ausführen können                                                                                                           | read-only                                                                                                                                    | —                                         |
 
 Die Trennung wird über getrennte Umgebungsvariablen und getrennte Postgres-Rollen realisiert, nicht
-über Code-Konventionen. Die Append-Only-Eigenschaft von `journal_ledger` wird zusätzlich in der
-Datenbank erzwungen (Rechteentzug oder Trigger — Festlegung in E2, siehe Skill `oa-migration`).
+über Code-Konventionen.
+
+**Append-Only ist seit dem 2026-07-31 in der Datenbank erzwungen — durch einen Trigger (`JR-205`,
+ADR-009), Migration `0042_journal_ledger_append_only.sql`.** Eine `plpgsql`-Funktion wirft mit
+`ERRCODE = restrict_violation`, und **vier** Trigger hängen daran: je Tabelle einer für
+`UPDATE OR DELETE` (row level) und einer für `TRUNCATE` (statement level). Umfang ist `journal_ledger`
+**und** `deployment_identity`, weil die `deployment_id` im Genesis-Hash jeder Kette steckt.
+
+Der `TRUNCATE`-Trigger ist Pflicht, nicht Beiwerk: `TRUNCATE` löst Row-Level-Trigger **nicht** aus, ein
+reiner Row-Trigger hätte eine Anweisung offen gelassen, die den ganzen Ledger entfernt.
+
+> **Die zweite Hälfte fehlt noch, und sie ist eine Deployment-Aufgabe (E11).** Der Trigger ist von einer
+> Rolle, die die Tabellen **besitzt**, in zwei Anweisungen abschaltbar — gemessen, siehe **F37**: in einer
+> Standardinstallation ist `POSTGRES_USER` Superuser und Eigentümer, und `DATABASE_URL` benutzt genau
+> diese Rolle. Der Rechteentzug (eigene Rolle ohne Eigentum, nur `INSERT`/`SELECT`, plus Startup-Check)
+> ist in ADR-009 festgeschrieben und E11 zugeordnet. Was der Trigger heute leistet: er schließt **F1**
+> als Manipulationsweg, weil eine `WHERE`-Klausel-Injection kein `SET` und kein `ALTER TABLE` absetzen
+> kann.
 
 ## 2. Paketstruktur
 
@@ -122,6 +138,31 @@ Stilvorgaben: `timestamp(..., { withTimezone: true })`, typisiertes JSONB, `pgEn
 `event_type` mindestens: `receipt` · `anchor` · `retention_expiry` · `object_erased` ·
 `legal_hold_set`. Enum-Werte lassen sich in Postgres nicht entfernen — Erweiterungen sind später
 möglich, Umbenennungen nicht.
+
+**Umgesetzt am 2026-07-31 (`JR-204`, Migration `0041_even_scream.sql`).** Vier Festlegungen darin
+weichen von der naheliegenden Lösung ab und sind es wert, hier zu stehen — die vollständige Begründung
+steht als Doc-Kommentar an der jeweiligen Spalte:
+
+- **Hashes sind `bytea`, nicht hex-`text`** wie im Bestand (`archived_emails.storage_hash_sha256`).
+  Diese Bytes gehen **in** einen Hash, und eine Textform fügt eine Groß-/Kleinschreibungsfrage an einem
+  Wert hinzu, von dem die Kettenverifikation abhängt. Preis: **eine** explizite Konversion dort, wo ein
+  Ledger-Hash gegen die Bestandsspalte verglichen wird (Phase B, `verify`).
+- **`remote_ip` ist `text`, nicht `inet`.** Der gehashte Wert **ist** diese kanonische Textform; `inet`
+  würde beim Lesen eine zweite Normalisierung anwenden, die davon abweichen kann.
+- **Kein Fremdschlüssel auf `journaling_sources`.** Jede Referenzaktion wäre `SET NULL` — ändert ein
+  gehashtes Feld und bricht die Kette — oder `CASCADE`, was Beweise löscht. Die Aussage „dieser Endpunkt
+  hat gesendet" bleibt wahr, nachdem der Endpunkt entfernt wurde.
+- **`chain_scope_id` hat `ON DELETE restrict`.** Das Löschen eines Archivs mit Ledger-Zeilen ist
+  **blockiert**; ein Beleg, der mit der Konfiguration verschwindet, die ihn erzeugt hat, beweist nichts.
+  **Konsequenz für E12:** „Archiv nach Fristablauf entfernen" braucht ein eigenes Verfahren, ein
+  `DELETE` ist es nicht.
+
+Dazu sechs `CHECK`-Constraints: ms-Vielfache in `received_at` (ADR-006 §3.1), 32 Byte für alle drei
+Hash-Spalten, `seq >= 0` und **`duplicate_of < seq`**. Der letzte ist beim Testschreiben entstanden: der
+zusammengesetzte Fremdschlüssel `(chain_scope_id, duplicate_of) → (chain_scope_id, seq)` verhindert den
+**Selbstverweis nicht**, weil Postgres Referenzintegrität am Ende des Statements prüft und das
+referenzierte Paar dann die gerade eingefügte Zeile ist — eine Quittung wäre ihr eigenes Original
+geworden.
 
 ### Lückenlose `seq`
 
@@ -360,7 +401,7 @@ offene ADRs geführt:
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
 | ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: eine Kette je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                    | E2     | ADR-007, RFC §15                      |
 | ~~Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id`~~ — **entschieden 2026-07-31: 16 gehashte Felder, Genesis mit `chain_scope_id`, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962** | E2     | ADR-006                               |
-| Append-Only-Erzwingung: Rechteentzug oder Trigger                                                                                                                                                                      | E2     | ADR-009                               |
+| ~~Append-Only-Erzwingung: Rechteentzug oder Trigger~~ — **entschieden 2026-07-31: beides. Trigger in E2 (`JR-205`), Rechteentzug als Deployment-Anforderung in E11 (F37)**                                             | E2     | ADR-009                               |
 | Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                                                                                                  | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
 | `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                                                                                     | E6     | ADR-010                               |
 | Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                                                                                     | E12    | RFC §15                               |

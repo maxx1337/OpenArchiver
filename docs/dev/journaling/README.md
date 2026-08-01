@@ -146,7 +146,23 @@ Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Beric
 (`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
 Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 
-**Nächster Schritt: E2** — der Receiver selbst. Es existiert dafür noch **kein** Produktionscode.
+**E2 ist abgenommen** (`JR-201`…`JR-210a`, 2026-07-31 bis 2026-08-01). Die erste Abnahme `JR-210` fand
+23 von 23 Kriterien erfüllt, **zählte aber nicht**: sie lief in derselben Sitzung wie
+`JR-208`/`JR-209` und war damit nicht unabhängig im Sinne von ADR-014/ADR-021. Der Auftraggeber hat
+deshalb eine **zweite Runde `JR-210a`** angeordnet — sie ist durchgeführt, hat in einer frischen
+Sitzung **24 von 24** Kriterien erfüllt gefunden und dabei die sechs dünnen Stellen der ersten Runde
+mit eigener Evidenz geschlossen (Mutationsproben am Encoder, sabotierte Backends gegen die
+Vertragssuite, Nebenläufigkeit direkt über `pg_stat_activity`, eine eigene Befundart-Matrix,
+Migrationen gegen Bestandsdaten). Der PO hat den Bericht in **zwei** Rückfragen gegengelesen und dabei
+dreizehn Punkte gefunden, die zitiert statt gemessen waren — darunter ein ganz fehlendes Kriterium;
+alle sind nachgemessen und bestätigt. **Der Rückmerge ist am 2026-08-01 vollzogen** (`eb340a9`,
+`--no-ff`, kein Squash). Ein neuer Befund **F39** (niedrig, Testharness). Was E2 liefert: `packages/journaling` trägt
+die kanonische Kodierung, die Merkle-Aggregation und `PostgresLedgerWriter`; die Tabellen sind migriert
+und append-only; der Ledger hält 10 000 nebenläufige Appends lückenlos aus, und jede der acht
+Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. Dabei gefunden und behoben: **F38** — der Writer
+speicherte `event_payload` doppelt JSON-kodiert, sobald der Datenbanktreiber nicht durch `drizzle()`
+gelaufen war, was jede Ledger-Zeile mit Nutzlast unverifizierbar gemacht hätte. Einen SMTP-Empfangspfad
+gibt es weiterhin nicht; der beginnt mit E3/E4.
 
 **`ADR-007` ist am 2026-07-31 entschieden: eine Kette _je Mandant_**, nicht eine globale mit
 Mandanten-Tag — RFC §15 nennt das für Export und Löschung sauberere Modell, und beides muss dieses Produkt

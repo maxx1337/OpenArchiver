@@ -1,0 +1,20 @@
+{
+	// Type-checks the test files that tsconfig.json excludes from the build.
+	// `pnpm --filter @open-archiver/journaling test:types`. Mirrors
+	// packages/backend/tsconfig.test.json: noEmit + composite:false so it never interferes with the
+	// incremental build outputs, and `module: esnext` + `moduleResolution: bundler` because the tests
+	// are executed by vitest, i.e. by a bundler in ESM mode, not by node's CommonJS resolver.
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"composite": false,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"types": ["node"],
+		"paths": {
+			"@oa-test/*": ["../../tests/support/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "tests/**/*.ts"],
+	"exclude": ["node_modules", "dist"]
+}
