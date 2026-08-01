@@ -146,10 +146,11 @@ Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Beric
 (`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
 Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 
-**E2 ist abgenommen** (`JR-201`…`JR-210`, 2026-07-31 bis 2026-08-01; 23/23 Kriterien, vier bestandene
-Mutationsproben). **Der Rückmerge ist bewusst nicht vollzogen:** die Abnahme lief in derselben Sitzung
-wie `JR-208`/`JR-209` und ist damit nicht unabhängig im Sinne von ADR-014/ADR-021 — die Entscheidung
-darüber liegt beim Auftraggeber. Was E2 liefert: `packages/journaling` trägt
+**E2 erfüllt in `JR-210` 23 von 23 Kriterien** (`JR-201`…`JR-210`, 2026-07-31 bis 2026-08-01; vier
+bestandene Mutationsproben) — **gilt aber noch nicht als abgenommen.** Die Abnahme lief in derselben
+Sitzung wie `JR-208`/`JR-209` und war damit nicht unabhängig im Sinne von ADR-014/ADR-021; der
+Auftraggeber hat am 2026-08-01 eine **zweite Runde `JR-210a`** angeordnet, und der Rückmerge wartet
+darauf. Was E2 liefert: `packages/journaling` trägt
 die kanonische Kodierung, die Merkle-Aggregation und `PostgresLedgerWriter`; die Tabellen sind migriert
 und append-only; der Ledger hält 10 000 nebenläufige Appends lückenlos aus, und jede der acht
 Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. Dabei gefunden und behoben: **F38** — der Writer

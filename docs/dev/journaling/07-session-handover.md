@@ -85,9 +85,9 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-01 (**`JR-208`, `JR-209` und die Abnahme `JR-210` erledigt** — E2 ist abgenommen,
-23/23 Kriterien, **aber die Abnahme ist nicht unabhängig**, deshalb ist der Rückmerge nicht vollzogen
-und liegt beim Auftraggeber. Der Lasttest hat **`F38`** gefunden und behoben: der Writer
+**Stand:** 2026-08-01 (**`JR-208`, `JR-209` und die Abnahme `JR-210` erledigt** — E2 erfüllt 23/23
+Kriterien, **aber die Abnahme war nicht unabhängig; der Auftraggeber hat eine zweite Runde `JR-210a`
+angeordnet**, und der Rückmerge wartet darauf. Der Lasttest hat **`F38`** gefunden und behoben: der Writer
 speicherte `event_payload` doppelt JSON-kodiert, sobald der Treiber nicht durch `drizzle()` gelaufen war ·
 davor am 2026-07-31 `JR-201`…`JR-207` und die ADRs `006`/`007`/`022`/`023`) · **Branch:**
 `claude/journaling-e2-ledger` (E2, abgezweigt vom Integrationsbranch) · Volllauf gegen das
@@ -98,12 +98,11 @@ adversarial 18/18`, 0 `oa_test_*`-Rückstände, `test:types` grün für beide Pa
 
 **Der Ledger ist gebaut, gemessen, angegriffen und abgenommen** — er hält 10 000 nebenläufige Appends
 lückenlos aus, jede der acht Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet,
-und die Abnahme `JR-210` hat 23 von 23 Kriterien erfüllt gefunden. **Der nächste Schritt ist keine Task,
-sondern eine Entscheidung des Auftraggebers:** die Abnahme lief in derselben Sitzung wie `JR-208`/`JR-209`
-und ist damit **nicht unabhängig** im Sinne von ADR-014/ADR-021. Deshalb ist der Rückmerge **nicht**
-vollzogen. Fällt die Entscheidung „so ausreichend", folgt der Rückmerge und dann **E3**; fällt sie
-„zweite Runde", ist die Abnahme in einer frischen Sitzung zu wiederholen — das Prüfmaterial dafür liegt
-im Abnahmeprotokoll in `06-status.md`.
+und die Abnahme `JR-210` hat 23 von 23 Kriterien erfüllt gefunden. **Sie zählt trotzdem nicht als
+Abnahme:** sie lief in derselben Sitzung wie `JR-208`/`JR-209` und ist damit nicht unabhängig im Sinne
+von ADR-014/ADR-021. **Der Auftraggeber hat am 2026-08-01 eine zweite, unabhängige Runde angeordnet —
+`JR-210a`, in einer frischen Sitzung.** Das ist der nächste Schritt; der Rückmerge wartet darauf. Das
+Protokoll der ersten Runde steht in `06-status.md` und ist **Prüfgegenstand, nicht Beleg**.
 
 **Eine Sache verdient beim Lesen mehr Aufmerksamkeit als jede Testzahl:** `JR-208` hat mit **F38** einen
 Fehler gefunden, der jede Ledger-Zeile mit `event_payload` unverifizierbar gemacht hätte — und acht
@@ -465,23 +464,42 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
 - **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-208` zehntausend Zeilen schreibt. Das ist
   die im Backlog vorgegebene Menge und wird **nicht** stillschweigend reduziert (Testplan-Regel 6).
 
-**Die Abnahme `JR-210` ist durchgeführt** (2026-08-01, 23/23, Protokoll in `06-status.md`). Offen ist
-allein die Entscheidung des Auftraggebers zur fehlenden Unabhängigkeit. Je nachdem, wie sie ausfällt:
+**Die Abnahme `JR-210` ist durchgeführt** (2026-08-01, 23/23, Protokoll in `06-status.md`) — und der
+**Auftraggeber hat am 2026-08-01 entschieden: es gibt eine zweite, unabhängige Runde** (`JR-210a`). Die
+erste Runde bleibt als Protokoll stehen, zählt aber nicht als Abnahme. **Der Rückmerge wartet auf
+`JR-210a`.**
 
 ```
-# Variante A — die Abnahme genügt:
-Vollziehe den Rückmerge von claude/journaling-e2-ledger in den
-Integrationsbranch nach ADR-014 (--no-ff, kein Squash, kein PR), und
-beginne danach E3 aus docs/dev/journaling/03-backlog.md.
-
-# Variante B — zweite, unabhängige Runde:
-Nimm Epic 2 unabhängig ab — Rolle Tester, frische Sitzung. Kriterien aus
-03-backlog.md (JR-201…JR-209) plus das Kernkriterium von JR-210: die
-Testvektoren aus ADR-006 §6 müssen vom Code reproduziert sein. Das
-Protokoll der ersten Abnahme steht in 06-status.md; prüfe seine Aussagen
-nach, statt sie zu übernehmen. Achte besonders auf F38 — der Fix ist neu
-und sein Regressionstest ist der einzige, der ihn hält.
+Nimm Epic 2 unabhängig ab — Rolle Tester, frische Sitzung, Task JR-210a.
+Kriterien aus 03-backlog.md (JR-201…JR-209) plus das Kernkriterium von
+JR-210: die Testvektoren aus ADR-006 §6 müssen vom Code reproduziert sein.
+Das Protokoll der ersten Abnahme steht in 06-status.md — prüfe seine
+Aussagen nach, statt sie zu übernehmen, und lies zuerst „Was die erste
+Runde nicht geprüft hat" im Handover.
 ```
+
+**Was die erste Runde _nicht_ geprüft hat — hier anzusetzen lohnt mehr, als sie nachzuspielen.** Diese
+Liste stammt vom Prüfer der ersten Runde selbst und benennt dessen eigene dünne Stellen:
+
+1. **Die 50 Unit-Tests der kanonischen Kodierung sind nicht einzeln nachgeprüft**, nur die acht Vektoren
+   aus ADR-006 §6. Ein Test, der die falsche Eigenschaft prüft, fiele dabei nicht auf. Lohnende Probe:
+   je Eigenschaftsklasse eine Mutation im Encoder und schauen, **welcher** Test rot wird — und ob einer
+   rot wird, der es nicht sollte.
+2. **`JR-207`s Vertragssuite ist nicht mutiert worden.** Sie behauptet eigene Zähne
+   (`UnsynchronisedInMemoryLedgerBackend`); dass die Behauptung trägt, ist ungeprüft geblieben.
+3. **Die gemessene Gleichzeitigkeit von `JR-208` ist nur _indirekt_ belegt.** Dass ohne Advisory-Lock
+   Primärschlüsselkonflikte auftreten, beweist Überlappung — die **Zahl** gleichzeitig offener
+   Transaktionen ist nie gemessen worden. `pg_stat_activity` während des Laufs abzufragen wäre die
+   direkte Messung.
+4. **`readLedgerChain()` und `readChainHeads()` sind ungeprüfte Prüfwerkzeuge.** Beide sind Testcode, von
+   dem jede Tamper-Aussage abhängt; die Leseordnung ist im Lasttest assertiert, das `DISTINCT ON` in
+   `readChainHeads()` dagegen nirgends. Ein falscher Kopf ließe (c) und (d) grün aussehen.
+5. **`verifyChain()` steht keiner dritten Implementierung gegenüber.** Die erste Runde hat gezeigt, dass
+   er bei unmanipulierten Ketten schweigt und bei manipulierten meldet — aber nicht, dass er bei
+   **jeder** Manipulationsart die **richtige** Befundart wählt. Eine Tabelle „Manipulation → erwartete
+   Befundart" gegen ihn zu fahren, wäre die schärfere Prüfung.
+6. **Die Migration wurde nur vorwärts geprüft.** Ob `0041`/`0042` auf einer Datenbank mit Bestandsdaten
+   sauber laufen (E12 wird das brauchen), ist offen.
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
 Meilisearch und Tika laufen seit dem 2026-07-31 über **Docker Desktop** aus `docker-compose.yml`, alle vier
@@ -541,11 +559,13 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-> **Eine, und sie blockiert den Rückmerge: genügt die Abnahme `JR-210`, obwohl sie nicht unabhängig
-> ist?** Sie lief in derselben Sitzung wie `JR-208`/`JR-209`; ADR-014 und ADR-021 verlangen eine
-> unabhängige Abnahme. Das Ergebnis ist 23/23 bei vier bestandenen Mutationsproben, aber die Regel ist
-> die Regel — deshalb ist der Rückmerge **nicht** vollzogen worden, und die Entscheidung liegt beim
-> Auftraggeber. Die zwei Folgeprompts stehen oben unter „Nächster konkreter Schritt".
+> **~~Genügt die Abnahme `JR-210`, obwohl sie nicht unabhängig ist?~~ — entschieden am 2026-08-01:
+> nein, es gibt eine zweite Runde (`JR-210a`).** Die erste Runde lief in derselben Sitzung wie
+> `JR-208`/`JR-209`; ADR-014 und ADR-021 verlangen Unabhängigkeit, und der Auftraggeber hat auf der
+> Regel bestanden. Das Ergebnis der ersten Runde (23/23, vier bestandene Mutationsproben) bleibt als
+> **Protokoll** stehen und ist als solches zu prüfen, nicht zu übernehmen. **Der Rückmerge wartet auf
+> `JR-210a`.** Prompt und die Liste „Was die erste Runde nicht geprüft hat" stehen oben unter
+> „Nächster konkreter Schritt".
 
 Ansonsten keine. `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
 `JR-203`, Rolle PO) sind entschieden. Was in E2 noch offen ist — `ADR-009`, Append-Only per Rechteentzug
