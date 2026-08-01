@@ -104,14 +104,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		// contract against a backend with no database, plus the counter-check that its concurrency case
 		// fails without a lock. 16 after JR-3-03 added packages/journaling/src/spool/fs-port.test.ts --
 		// the fault-injectable filesystem seam (real implementation plus the independent-failure fake).
-		expectedFiles: 16,
+		// 19 after JR-3-01 added spool/{txid,layout,config}.test.ts -- transaction IDs, sharded
+		// incoming/quarantine layout, the high-water-mark check, and its zod config validation.
+		expectedFiles: 19,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
 		// case has teeth (unlocked backend forks, locked one does not, a failed append does not wedge
 		// the chain). 299 after JR-3-03: 11 tests proving write/file-fsync/directory-fsync fail
-		// independently against the fake, plus the real NodeSpoolFileSystem exercised on disk.
-		expectedTests: { ci: 299, nightly: 0, manual: 0 },
+		// independently against the fake, plus the real NodeSpoolFileSystem exercised on disk. 335
+		// after JR-3-01: 9 (txid: shape, uniqueness, time-ordering) + 19 (layout: sharding, paths,
+		// ensureSpoolLayout, high-water-mark) + 8 (zod config validation) = 36 new tests.
+		expectedTests: { ci: 335, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'integration',

@@ -51,3 +51,24 @@ export {
 
 export type { SpoolDirEntry, SpoolFileHandle, SpoolFileSystem, SpoolStat } from './spool/fs-port';
 export { NodeSpoolFileSystem } from './spool/fs-port';
+
+export { generateTxId, isValidTxId } from './spool/txid';
+
+export {
+	INCOMING_DIR_NAME,
+	QUARANTINE_DIR_NAME,
+	checkSpoolHighWaterMark,
+	computeDirectoryUsageBytes,
+	ensureIncomingShardDir,
+	ensureQuarantineShardDir,
+	ensureSpoolLayout,
+	evaluateHighWaterMark,
+	incomingFilePath,
+	incomingShardDir,
+	quarantineFilePath,
+	quarantineShardDir,
+	shardOf,
+	type HighWaterMarkStatus,
+} from './spool/layout';
+
+export { parseSpoolConfig, spoolConfigSchema, type SpoolConfig } from './spool/config';
