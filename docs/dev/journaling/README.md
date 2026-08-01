@@ -150,11 +150,13 @@ Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 23 von 23 Kriterien erfüllt, **zählte aber nicht**: sie lief in derselben Sitzung wie
 `JR-208`/`JR-209` und war damit nicht unabhängig im Sinne von ADR-014/ADR-021. Der Auftraggeber hat
 deshalb eine **zweite Runde `JR-210a`** angeordnet — sie ist durchgeführt, hat in einer frischen
-Sitzung ebenfalls 23/23 gefunden und dabei die sechs dünnen Stellen der ersten Runde mit eigener
-Evidenz geschlossen (Mutationsproben am Encoder, sabotierte Backends gegen die Vertragssuite,
-Nebenläufigkeit direkt über `pg_stat_activity`, eine eigene Befundart-Matrix, Migrationen gegen
-Bestandsdaten). **Nur der Rückmerge steht noch aus; er liegt beim Auftraggeber.** Ein neuer Befund
-**F39** (niedrig, Testharness). Was E2 liefert: `packages/journaling` trägt
+Sitzung **24 von 24** Kriterien erfüllt gefunden und dabei die sechs dünnen Stellen der ersten Runde
+mit eigener Evidenz geschlossen (Mutationsproben am Encoder, sabotierte Backends gegen die
+Vertragssuite, Nebenläufigkeit direkt über `pg_stat_activity`, eine eigene Befundart-Matrix,
+Migrationen gegen Bestandsdaten). Der PO hat den Bericht in **zwei** Rückfragen gegengelesen und dabei
+dreizehn Punkte gefunden, die zitiert statt gemessen waren — darunter ein ganz fehlendes Kriterium;
+alle sind nachgemessen und bestätigt. **Nur der Rückmerge steht noch aus; er liegt beim
+Auftraggeber.** Ein neuer Befund **F39** (niedrig, Testharness). Was E2 liefert: `packages/journaling` trägt
 die kanonische Kodierung, die Merkle-Aggregation und `PostgresLedgerWriter`; die Tabellen sind migriert
 und append-only; der Ledger hält 10 000 nebenläufige Appends lückenlos aus, und jede der acht
 Manipulationsarten aus Testplan §12.5 wird mit Befundart und `seq` gemeldet. Dabei gefunden und behoben: **F38** — der Writer

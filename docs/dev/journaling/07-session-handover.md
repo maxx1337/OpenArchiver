@@ -85,7 +85,7 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-01 (**E2 ist abgenommen** — die zweite, **unabhängige** Runde `JR-210a` hat 23 von 23
+**Stand:** 2026-08-01 (**E2 ist abgenommen** — die zweite, **unabhängige** Runde `JR-210a` hat 24 von 24
 Kriterien erfüllt gefunden und dabei alle sechs dünnen Stellen der ersten Runde mit eigener Evidenz
 geschlossen. Ein neuer Befund **F39**, niedrig, Testharness. **Der Rückmerge ist der nächste Schritt und
 liegt beim Auftraggeber** · davor `JR-208`/`JR-209` mit **`F38`**, und am 2026-07-31 `JR-201`…`JR-207`
@@ -106,10 +106,19 @@ die erste Berichtsfassung von `JR-210a` nannte „22 von 22" — eine Zahl, die 
 Kriterientabelle nicht herleiten ließ. Die Rückfrage förderte **zwei echte Lücken** zutage, nicht nur
 einen Zählfehler; eine davon war ein **ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer
 abgeschalteten Suite" — ausgerechnet das, welches alle anderen trägt, weil jede Zahl auf
-`integration 92/92` ruht). Möglich war das, weil die **erste** Runde ihre 23 nie als nummerierte Liste
-geführt hat, sondern als vier Prosablöcke mit je eigener Zählung. **Regel für jede weitere Abnahme:
-eine durchnummerierte Liste, eine Zeile je Kriterium, Kopfzahl nachzählbar.** Beide Lücken sind
-geschlossen und haben den Befund bestätigt — hätte eine widersprochen, wäre E2 nicht abgenommen.
+`integration 92/92` ruht). **Der daraufhin verlangte _vollständige_ Abgleich gegen alle drei Blöcke
+der ersten Runde brachte elf weitere Punkte** ans Licht, die nur gelesen statt gemessen waren: drei
+der 16 Vektorprüfungen und acht der 21 Datenbankprüfungen. Alle nachgeholt, alle grün — Endstand
+**24 von 24**. Möglich war das, weil die **erste** Runde ihre 23 nie als nummerierte Liste geführt
+hat, sondern als vier Prosablöcke mit je eigener Zählung. **Regel für jede weitere Abnahme: eine
+durchnummerierte Liste, eine Zeile je Kriterium, Kopfzahl nachzählbar.**
+
+> **Zwei Lehren für den PO, nicht für den Prüfer.** Erstens: es hat **zwei** Rückfragen gebraucht —
+> die erste deckte nur ab, was der PO selbst durchgesehen hatte (die 8-Zeilen-Tabelle), die zweite
+> erst die 16 Vektor- und 21 Datenbankprüfungen. **Wer einen Bericht gegenliest, liest ihn gegen die
+> _ganze_ Vorlage, nicht gegen den Teil, den er im Kopf hat.** Zweitens: die Statuspflege wurde einmal
+> **zu früh** committet (`443e083`, „23/23"), obwohl der vollständige Abgleich schon beauftragt war.
+> Berichtigt im Folgecommit — **wer eine Nachforderung stellt, wartet ihr Ergebnis ab.**
 
 **Eine Sache verdient beim Lesen mehr Aufmerksamkeit als jede Testzahl:** `JR-208` hat mit **F38** einen
 Fehler gefunden, der jede Ledger-Zeile mit `event_payload` unverifizierbar gemacht hätte — und acht
@@ -179,7 +188,7 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >     (f) wirkungslos gemacht ⇒ der Verifier meldet **nichts** und der Test wird rot. Damit ist die
 >     Fehlerklasse ausgeschlossen, an der eine Tamper-Suite lautlos scheitert — ein Verifier, der immer
 >     meckert, macht jeden Tamper-Test grün. **Diese Runde zählt nicht als Abnahme** (nicht unabhängig).
-> 11. **`JR-210a` durchgeführt — E2 ist abgenommen, 23/23, unabhängig.** Frische Sitzung, Rolle TEST.
+> 11. **`JR-210a` durchgeführt — E2 ist abgenommen, 24/24, unabhängig.** Frische Sitzung, Rolle TEST.
 >     Alle sechs dünnen Stellen der ersten Runde mit **neuer** Evidenz beantwortet: fünf Mutationsproben
 >     am Encoder (vier exakt gefangen, ohne Übersprechen — die Ausnahme ist **F39**), drei selbst
 >     geschriebene **sabotierte Backends** gegen `JR-207`s Vertragssuite (alle gefangen, plus Kalibrierung
@@ -189,13 +198,17 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >     `verifyChain()`, und die Migrationen gegen eine Datenbank **mit Bestandsdaten**. Die ADR-Vektoren
 >     ein zweites Mal nachgerechnet, diesmal **frisch aus der ADR-Markdown transkribiert** statt aus der
 >     Repo-Fixture: 12/12. **Der Rückmerge ist weiterhin nicht vollzogen** und liegt beim Auftraggeber.
-> 12. **Zwei Lücken im Abnahmebericht, vom PO gefunden — und das ist die eigentliche Lehre.** Die erste
->     Fassung nannte „22 von 22", nicht herleitbar aus der eigenen Tabelle. Dahinter steckten zwei echte
->     Lücken: **ein ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer abgeschalteten
->     Suite") und **zwei nur zitierte statt gemessene Aussagen** (F38-Regression, Datenbankseite). Alle
->     drei nachgemessen, alle drei bestätigt. Möglich war das Durchrutschen, weil die **erste** Runde
->     ihre 23 nie als nummerierte Liste geführt hat. **Ab jetzt: durchnummerierte Kriterienliste, eine
->     Zeile je Kriterium.**
+> 12. **Dreizehn Lücken im Abnahmebericht, in zwei Rückfragen gefunden — das ist die eigentliche
+>     Lehre.** Die erste Fassung nannte „22 von 22", nicht herleitbar aus der eigenen Tabelle.
+>     **Erste Rückfrage:** ein **ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer
+>     abgeschalteten Suite") und **zwei nur zitierte statt gemessene Aussagen** (F38-Regression,
+>     Datenbankseite). **Zweite Rückfrage**, weil die erste nur abdeckte, was der PO selbst
+>     durchgesehen hatte: der vollständige Abgleich gegen `JR-210`s 16 Vektor- und 21
+>     Datenbankprüfungen brachte **elf weitere** Punkte, die gelesen statt gemessen waren — drei
+>     Vektorprüfungen, acht Datenbankprüfungen. **Alle dreizehn nachgemessen, alle bestätigt**,
+>     Endstand 24/24. Möglich war das Durchrutschen, weil die **erste** Runde ihre 23 nie als
+>     nummerierte Liste geführt hat. **Ab jetzt: durchnummerierte Kriterienliste, eine Zeile je
+>     Kriterium** — und wer gegenliest, liest gegen die **ganze** Vorlage.
 >
 > **Nichts steht offen aus diesen Sessions.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt. Was
 > bewusst **nicht** getan wurde: der **Rückmerge** (Entscheidung des Auftraggebers), die Rechtetrennung
@@ -488,7 +501,7 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
 - **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-208` zehntausend Zeilen schreibt. Das ist
   die im Backlog vorgegebene Menge und wird **nicht** stillschweigend reduziert (Testplan-Regel 6).
 
-**Beide Abnahmerunden sind durchgeführt, und `JR-210a` hat E2 abgenommen** (2026-08-01, 23/23,
+**Beide Abnahmerunden sind durchgeführt, und `JR-210a` hat E2 abgenommen** (2026-08-01, 24/24,
 unabhängig; Protokoll in `06-status.md`). **Damit ist E2 fertig bis auf den Rückmerge**, und der ist
 eine Entscheidung des Auftraggebers, keine Task.
 
@@ -579,7 +592,7 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 ### Offene Fragen an den Auftraggeber
 
 > **Offen und wirklich beim Auftraggeber: der Rückmerge von E2** in den Integrationsbranch. Die
-> Bedingung aus ADR-014 — unabhängige Abnahme — ist mit `JR-210a` erfüllt (23/23, frische Sitzung).
+> Bedingung aus ADR-014 — unabhängige Abnahme — ist mit `JR-210a` erfüllt (24/24, frische Sitzung).
 > Das Kommando steht oben unter „Nächster konkreter Schritt"; `--no-ff`, kein Squash. Danach **E3**.
 >
 > **Zweite, kleinere Frage: `F39`** (niedrig, Testharness) — beheben oder bewusst akzeptieren? Der
