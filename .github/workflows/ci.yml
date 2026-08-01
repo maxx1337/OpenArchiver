@@ -1,6 +1,6 @@
 name: CI
 
-# JR-105. This workflow is **check-only**: it never writes a file back into the repository.
+# JR-1-05. This workflow is **check-only**: it never writes a file back into the repository.
 # No `pnpm format`, no auto-fix, no commit, no push. Reason (ADR-015): `docs/api/openapi.json`
 # and `packages/backend/src/database/migrations/meta/` are generated and both generators write
 # them back with `JSON.stringify(..., null, 2)`, so they live in `.prettierignore`. A formatting
@@ -50,7 +50,7 @@ jobs:
             # integration suite never touches `config/storage.ts`.
             DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
             PGPASSWORD: postgres
-            # JR-105b. This job *provisions* Postgres, so a suite skipping because Postgres is
+            # JR-1-05b. This job *provisions* Postgres, so a suite skipping because Postgres is
             # unreachable is a broken job, not a legitimate skip. With this set, `suiteRequiring()`
             # emits a failing test instead of a visible skip. Positive expectation, in the suite --
             # it replaces the log grep that used to look for the absence of a skip notice.
@@ -89,10 +89,10 @@ jobs:
             - name: Build shared types
               run: pnpm --filter @open-archiver/types build
 
-            # Same mechanism as the step above, one package later (JR-206). Since `packages/backend`
+            # Same mechanism as the step above, one package later (JR-2-06). Since `packages/backend`
             # depends on `@open-archiver/journaling`, its `dist` has to exist before `test:types` runs
             # -- otherwise `tests/support/postgres-transactor.ts` and the writer integration test fail
-            # with TS2307, exactly the way the types package did. This bit once already: the JR-206 CI
+            # with TS2307, exactly the way the types package did. This bit once already: the JR-2-06 CI
             # run was red here while the local run was green, because a local `dist` was lying around.
             - name: Build journaling
               run: pnpm --filter @open-archiver/journaling build
@@ -110,10 +110,10 @@ jobs:
               id: test
               shell: bash
               env:
-                  # vitest's globalSetup writes the suite inventory here (JR-105b). Under RUNNER_TEMP
+                  # vitest's globalSetup writes the suite inventory here (JR-1-05b). Under RUNNER_TEMP
                   # like the log: this workflow writes nothing into the checkout.
                   OA_TEST_INVENTORY_REPORT: ${{ runner.temp }}/suite-inventory.json
-                  # And the executed-test measurement plus its verdict here (JR-105c). Same reason
+                  # And the executed-test measurement plus its verdict here (JR-1-05c). Same reason
                   # for the location; without the override it lands under node_modules/.cache.
                   OA_TEST_EXECUTED_REPORT: ${{ runner.temp }}/executed-tests.json
               run: |
@@ -123,7 +123,7 @@ jobs:
                   pnpm test 2>&1 | tee "$RUNNER_TEMP/test-output.log"
 
             # A suite that does not exist is green, and so is a `*.test.ts` file under
-            # `tests/integration/` that matches no project glob -- both were found during the JR-106
+            # `tests/integration/` that matches no project glob -- both were found during the JR-1-06
             # acceptance, and both were invisible to the log grep this step used to be.
             #
             # The replacement is a positive expectation: the run has to have produced an inventory
@@ -132,7 +132,7 @@ jobs:
             # the `globalSetup` entry from `vitest.config.ts` cannot silently disable the guard
             # either. The counts live in `tests/support/suite-inventory.ts` only.
             #
-            # JR-105c adds the second report. Counting files cannot see coverage that disappears
+            # JR-1-05c adds the second report. Counting files cannot see coverage that disappears
             # without the filesystem changing -- a suite relabelled from `ci` to `nightly`, a file
             # whose tests are all `it.skip`, a deletion absorbed by an addition (F14, F15) -- so the
             # run also has to have produced an executed-test measurement whose verdict is
@@ -154,10 +154,10 @@ jobs:
             # after a killed worker. A leftover here is a harness defect and must fail the job
             # rather than accumulate silently. `OA_TEST_PG_STALE_MS` is deliberately left at its
             # default -- lowering it lets the sweeper delete a *foreign* running job's database
-            # (F12). Since JR-104a the harness refuses a lowered threshold that is not paired with an
+            # (F12). Since JR-1-04a the harness refuses a lowered threshold that is not paired with an
             # explicit list of names, so this is enforced there too, not only by this comment.
             #
-            # Since JR-105c the globalSetup teardown drops this run's residue itself, and in an
+            # Since JR-1-05c the globalSetup teardown drops this run's residue itself, and in an
             # unnarrowed run it also fails the run for having produced any (F16, F24). That does not
             # make this step redundant: the teardown only knows what the ledger recorded, so a
             # database created between `CREATE DATABASE` and the ledger write, or by something that

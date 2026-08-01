@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { CanonicalJsonValue, JournalLedgerRecord } from '@open-archiver/types';
 
 /**
- * Canonical encoding of a ledger record (`JR-202`, specified by **ADR-006**).
+ * Canonical encoding of a ledger record (`JR-2-02`, specified by **ADR-006**).
  *
  * ---------------------------------------------------------------------------------------------
  * Read this before changing a single byte
@@ -104,7 +104,7 @@ function uint64Field(value: bigint | null, name: string): Buffer {
  * value that passed through a `Date` loses its last three digits, so the writer would hash different
  * bytes than `verify` reads back, in roughly one of a thousand rows. Failing here turns that into an
  * error at write time instead of an unverifiable chain discovered months later. A `CHECK` constraint
- * on the column backs the same rule up in the database (`JR-204`).
+ * on the column backs the same rule up in the database (`JR-2-04`).
  */
 function timestampField(micros: bigint): Buffer {
 	if (micros % 1000n !== 0n) {

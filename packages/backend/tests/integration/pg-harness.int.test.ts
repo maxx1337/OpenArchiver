@@ -14,14 +14,14 @@ import {
 } from '../support/pg-harness';
 
 /**
- * JR-104 -- the harness proves its own contract.
+ * JR-1-04 -- the harness proves its own contract.
  *
  * This file tests `tests/support/pg-harness.ts`, not production code. That is deliberate: every
  * later integration and adversarial test in this project inherits its isolation and teardown
  * guarantees from that module, and an isolation mechanism that silently does nothing would let a
  * whole epic report green while running against a shared database.
  *
- * The three acceptance criteria of JR-104, each with tests below:
+ * The three acceptance criteria of JR-1-04, each with tests below:
  *   - isolation per run, two runs in parallel without interference
  *     -> "own database per acquisition", "a write in one harness is invisible in the other",
  *        "four concurrent acquisitions"
@@ -37,7 +37,7 @@ import {
  * collision between them would fail the run.
  *
  * Cross-*process* parallelism -- two whole runs against the same server -- is what F12 broke and
- * JR-104a repaired. Nothing in this file may use a name, or a sweep scope, that a second concurrent
+ * JR-1-04a repaired. Nothing in this file may use a name, or a sweep scope, that a second concurrent
  * run of this very file could also produce or reach. Every fixture name goes through
  * `buildForeignFixtureName()` and every lowered-threshold sweep passes `restrictTo`.
  *
@@ -50,7 +50,7 @@ const postgresProbe = await probePostgres();
 /** Set by the nested "throwing test" describe so the sibling assertion can read it. */
 let doomedDatabaseName = '';
 
-suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', postgresProbe, () => {
+suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-1-04)', postgresProbe, () => {
 	let primary: PgHarness;
 	let secondary: PgHarness;
 
@@ -183,7 +183,7 @@ suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', pos
 	 * What this does NOT cover: a hard kill (SIGKILL) of the worker, where no hook of any kind
 	 * runs. That residue is reclaimed by `sweepStaleHarnessDatabases()` on the next acquisition and
 	 * announced by the exit handler; verifying it needs a child-process driver and is out of scope
-	 * for JR-104.
+	 * for JR-1-04.
 	 */
 	describe('teardown after a throwing test', () => {
 		let doomed: PgHarness;
@@ -213,7 +213,7 @@ suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', pos
 	});
 
 	/**
-	 * Fixture ages for the sweeper tests (JR-104a).
+	 * Fixture ages for the sweeper tests (JR-1-04a).
 	 *
 	 * `FIXTURE_STALE_AGE_MS` must stay far **below** the default threshold of 2 h: a fixture that
 	 * looks older than the default is indistinguishable from real residue, and a concurrently
@@ -258,7 +258,7 @@ suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', pos
 	});
 
 	it('cannot touch a database outside restrictTo, however sweepable it looks', async () => {
-		// The guard JR-104a adds. `bystander` qualifies on *every* one of the sweeper's three guards
+		// The guard JR-1-04a adds. `bystander` qualifies on *every* one of the sweeper's three guards
 		// -- foreign pid, no backends, older than the threshold -- and stands in for the fixture of
 		// another process running this same test at the same time. It must survive, because it is not
 		// in the list.
@@ -318,7 +318,7 @@ suiteRequiring('ci', 'pg-harness: isolation, migrations, teardown (JR-104)', pos
 
 	it('states what it did not cover', () => {
 		coverageNotice(
-			'JR-104 pg-harness: teardown is verified for the throwing-test path and for a leaked ' +
+			'JR-1-04 pg-harness: teardown is verified for the throwing-test path and for a leaked ' +
 				'connection. It is NOT verified for a hard kill (SIGKILL) of the vitest worker; that ' +
 				'residue is only reclaimed by sweepStaleHarnessDatabases() on a later run.'
 		);

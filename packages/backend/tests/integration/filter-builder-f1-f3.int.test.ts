@@ -10,7 +10,7 @@ import { seedArchivedEmail, seedIngestionSource, seedPrincipal } from '../suppor
 import { archivedEmails } from '../../src/database/schema';
 
 /**
- * FINDINGS F1 and F3 regression -- against real rows in real Postgres (JR-1301, epic E13).
+ * FINDINGS F1 and F3 regression -- against real rows in real Postgres (JR-13-01, epic E13).
  * Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
@@ -31,13 +31,13 @@ import { archivedEmails } from '../../src/database/schema';
  *
  *   - **F3's fail-open is load-bearing on `mongoToMeli`.** `FilterBuilder.create()` builds both
  *     halves in one object literal and awaits the Meili half, so `mongoToMeli`'s throw is what
- *     makes the whole call reject. Before `JR-1304` the Drizzle half on its own was fail-open --
+ *     makes the whole call reject. Before `JR-13-04` the Drizzle half on its own was fail-open --
  *     measured, with rows -- so any future caller that skips the search translator, or any lenient
  *     rewrite of it, silently made the same policy unrestricted. The test below therefore demands
  *     the refusal from `mongoToDrizzle` **alone**, with no Meili call anywhere in it, and executes
  *     whatever it does return against the seeded rows.
  *
- * Both tests are RED until `JR-1306` (F1) resp. `JR-1304` (F3).
+ * Both tests are RED until `JR-13-06` (F1) resp. `JR-13-04` (F3).
  */
 
 const postgresProbe = await probePostgres();
@@ -81,7 +81,7 @@ const EXECUTABLE_INJECTION_KEY = 'userEmail" is not null or "id" is not null or 
 
 suiteRequiring(
 	'ci',
-	'FilterBuilder against Postgres -- FINDINGS F1 and F3 (JR-1301)',
+	'FilterBuilder against Postgres -- FINDINGS F1 and F3 (JR-13-01)',
 	postgresProbe,
 	() => {
 		const db = () => harness!.db;
@@ -116,12 +116,12 @@ suiteRequiring(
 		}
 
 		it(
-			redUntil('JR-1306', 'a hostile condition key cannot widen a scoped policy (F1)'),
+			redUntil('JR-13-06', 'a hostile condition key cannot widen a scoped policy (F1)'),
 			async () => {
 				coverageNotice(
-					'FINDING F1 regression (JR-1301): a policy condition key containing SQL syntax is ' +
+					'FINDING F1 regression (JR-13-01): a policy condition key containing SQL syntax is ' +
 						'rendered into the WHERE clause unescaped, and the injected predicate executes. ' +
-						'Expected RED until JR-1306. Precondition for exploitation is a principal who ' +
+						'Expected RED until JR-13-06. Precondition for exploitation is a principal who ' +
 						'may write roles.policies, i.e. Super Admin -- the finding is an escalation from ' +
 						'application administrator to arbitrary SQL, not an unauthenticated hole.'
 				);
@@ -160,7 +160,7 @@ suiteRequiring(
 						!outcome.includes(rows.theirs),
 					`a policy whose condition key injects SQL must not expose a row it does not name. ` +
 						`Observed: ${JSON.stringify(outcome)}. Accepted outcomes are 'rejected' ` +
-						`(JR-1306's allowlist refuses the key), 'postgres-error', or a row set without ` +
+						`(JR-13-06's allowlist refuses the key), 'postgres-error', or a row set without ` +
 						`${rows.theirs}.`
 				).toBe(true);
 			}
@@ -195,7 +195,7 @@ suiteRequiring(
 				}
 				expect(
 					['postgres-error', 'rejected'],
-					`${key}: expected no rows (${why}), or a refusal once JR-1306 lands. Observed: ` +
+					`${key}: expected no rows (${why}), or a refusal once JR-13-06 lands. Observed: ` +
 						`${JSON.stringify(outcome)}`
 				).toContain(outcome);
 			}
@@ -203,16 +203,16 @@ suiteRequiring(
 
 		it(
 			redUntil(
-				'JR-1304',
+				'JR-13-04',
 				'the Drizzle half alone is fail-closed for an untranslatable condition (F3)'
 			),
 			async () => {
 				coverageNotice(
-					'FINDING F3 regression (JR-1301): mongoToDrizzle() drops an untranslatable ' +
+					'FINDING F3 regression (JR-13-01): mongoToDrizzle() drops an untranslatable ' +
 						'condition and returns undefined, which every FilterBuilder caller reads as ' +
 						'"no restriction". Today FilterBuilder.create() nevertheless rejects, but only ' +
 						'because mongoToMeli() throws -- the fail-closed behaviour of the whole rests on ' +
-						'the search translator staying strict. Expected RED until JR-1304.'
+						'the search translator staying strict. Expected RED until JR-13-04.'
 				);
 				const rows = await seedTwoMailboxes('f3');
 				const untranslatable = { subject: { $regex: 'confidential' } };
@@ -244,7 +244,7 @@ suiteRequiring(
 
 				// The shape `rulesToQuery` produces for a role with exactly one conditional `can`
 				// whose condition cannot be translated: `{ $or: [ <untranslatable> ] }`. Before
-				// `JR-1304`, `or()` over the empty list of surviving branches was `undefined`, so the
+				// `JR-13-04`, `or()` over the empty list of surviving branches was `undefined`, so the
 				// policy placed no restriction at all -- measured here, against rows. This is the half
 				// that reaches `ArchivedEmailService.findAll` (ArchivedEmailService.ts:62) directly:
 				// no Meilisearch involved, no throw to save it.
@@ -254,20 +254,20 @@ suiteRequiring(
 				);
 
 				// The partially translatable disjunction, asserted as a refusal for the same reason
-				// rather than as a row set. `JR-1304`'s criterion is "kein Zweig wird stillschweigend
+				// rather than as a row set. `JR-13-04`'s criterion is "kein Zweig wird stillschweigend
 				// weggelassen"; the expectation `[rows.mine]` that stood here until 2026-07-29 pinned
 				// exactly that omission as the wanted result and therefore contradicted the task it
 				// was red for. The unit suite states the same requirement on the emitted predicate
 				// (mongoToDrizzle.test.ts, "an untranslatable $or branch is not silently dropped").
 				//
 				// Finding F22 stays worth recording, and it is a measurement rather than a reading of
-				// F3's write-up ("erweitert die Disjunktion"): pre-`JR-1304` this shape rendered
+				// F3's write-up ("erweitert die Disjunktion"): pre-`JR-13-04` this shape rendered
 				// `"user_email" = $1`, so dropping a branch from the `$or` of `can` conditions made
 				// the filter *narrower*, not wider. The fail-open direction sat in the `$and` of
 				// negated `cannot` conditions and in the empty branch list above -- and in this very
 				// shape as soon as it is negated: `FilterBuilder` wraps every `cannot` condition in
 				// `$not`, and `not (A or U)` losing its second branch renders `not A`, which is true
-				// for every row `U` was there to prohibit (measured on the pre-`JR-1304` translator).
+				// for every row `U` was there to prohibit (measured on the pre-`JR-13-04` translator).
 				// "Narrowing" is thus a property of the top-level `can` composition, never of the drop
 				// itself, which is why the requirement reads "do not drop it", not "do not widen it".
 				await refusesAndExposesNothing('a partially translatable disjunction', {
@@ -287,13 +287,16 @@ suiteRequiring(
 		 * branch is not taken; `mongoToDrizzle` then translates the single empty branch to nothing
 		 * and `or()` over an empty list is `undefined`. Result: full access.
 		 *
-		 * It belongs to F3's family (untranslatable/empty -> no filter) and to `JR-1304`'s
+		 * It belongs to F3's family (untranslatable/empty -> no filter) and to `JR-13-04`'s
 		 * criterion, so it is stated as a requirement and is RED until then. Filed separately as
 		 * F19 because neither F3 nor F7 names this shape, and a fix for `{}` or `{ $or: [] }` alone
 		 * would leave it open.
 		 */
 		it(
-			redUntil('JR-1304', 'a can rule with empty conditions must not mean full access (F19)'),
+			redUntil(
+				'JR-13-04',
+				'a can rule with empty conditions must not mean full access (F19)'
+			),
 			async () => {
 				const rows = await seedTwoMailboxes('f3-empty');
 				const policies = [
@@ -312,10 +315,10 @@ suiteRequiring(
 					outcome = 'rejected';
 				}
 				coverageNotice(
-					'FINDING F19 (JR-1301): a `can` rule whose `conditions` is `{}` yields ' +
+					'FINDING F19 (JR-13-01): a `can` rule whose `conditions` is `{}` yields ' +
 						"{ $or: [ {} ] } from rulesToQuery, which passes FilterBuilder's empty-query deny " +
 						'branch (one key) and then translates to no filter at all. Expected RED until ' +
-						'JR-1304. Not named by F3 or F7 -- filed as F19.'
+						'JR-13-04. Not named by F3 or F7 -- filed as F19.'
 				);
 				expect(
 					outcome,
@@ -328,7 +331,7 @@ suiteRequiring(
 		 * FINDING F20 -- an unconditional `cannot` is ignored entirely.
 		 *
 		 * This test was written as the counter-check for the "No access" branch
-		 * (`FilterBuilder.ts:53`) that `JR-1302` is told to reuse, expecting an unconditional `can`
+		 * (`FilterBuilder.ts:53`) that `JR-13-02` is told to reuse, expecting an unconditional `can`
 		 * plus an unconditional `cannot` to reduce to an empty query. It does not. The guard is
 		 *
 		 *     cannotConditions = rules.filter((rule) => rule.inverted === true && rule.conditions)
@@ -337,13 +340,13 @@ suiteRequiring(
 		 * holds, and line 31 returns full access -- for a principal whose permission was revoked
 		 * outright. `ability.can('read', 'archive')` is `false` for this principal, so the route gate
 		 * `requirePermission('read','archive')` does return 403 and there is defence in depth. But
-		 * `FilterBuilder`'s own answer is wrong, and `JR-1302`'s criterion ("unbeschränkte Rückgabe
+		 * `FilterBuilder`'s own answer is wrong, and `JR-13-02`'s criterion ("unbeschränkte Rückgabe
 		 * nur noch bei nachweislich unbedingtem `can`") is not met while it stands: a revoked `can`
 		 * is not an unconditional one.
 		 *
-		 * Filed as F20. RED until `JR-1302`.
+		 * Filed as F20. RED until `JR-13-02`.
 		 */
-		it(redUntil('JR-1302', 'an unconditional `cannot` is not ignored (F20)'), async () => {
+		it(redUntil('JR-13-02', 'an unconditional `cannot` is not ignored (F20)'), async () => {
 			const rows = await seedTwoMailboxes('f20-blanket-cannot');
 			const policies: CaslPolicy[] = [
 				{ action: 'read', subject: 'archive' },
@@ -356,11 +359,11 @@ suiteRequiring(
 				'read'
 			);
 			coverageNotice(
-				'FINDING F20 (JR-1301): FilterBuilder ignores a `cannot` rule that carries no ' +
+				'FINDING F20 (JR-13-01): FilterBuilder ignores a `cannot` rule that carries no ' +
 					'conditions -- the cannotConditions filter requires `rule.conditions` to be ' +
 					'truthy -- so `can read archive` + `cannot read archive` returns full access. ' +
 					'Mitigated in the HTTP path by requirePermission (ability.can() is false), but ' +
-					'FilterBuilder is also called from services. Expected RED until JR-1302.'
+					'FilterBuilder is also called from services. Expected RED until JR-13-02.'
 			);
 			expect(
 				await visible(drizzleFilter, [rows.mine, rows.theirs]),

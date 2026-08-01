@@ -12,7 +12,7 @@ import {
 } from './canonical-encoding';
 
 /**
- * Properties of the canonical encoding (`JR-202`, specified by **ADR-006**).
+ * Properties of the canonical encoding (`JR-2-02`, specified by **ADR-006**).
  *
  * Classification: `ci`. Pure computation, no socket, no database.
  *

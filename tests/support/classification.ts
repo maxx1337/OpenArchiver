@@ -9,7 +9,7 @@ import {
 } from './test-classes';
 
 /**
- * Test classification (JR-102, Testplan section 2).
+ * Test classification (JR-1-02, Testplan section 2).
  *
  * Every suite declares whether it belongs to `ci`, `nightly` or `manual`. The classification is
  * visible **in the test itself** and in the reported suite name — not only in the testplan — so
@@ -19,7 +19,7 @@ import {
  * A suite whose class was not selected is reported as skipped *and* emits a coverage notice.
  *
  * The class list, the selection parser and the `[ci] `-style label live in `./test-classes`, which
- * imports nothing: the executed-test guard (JR-105c) runs in vitest's main process and reads the
+ * imports nothing: the executed-test guard (JR-1-05c) runs in vitest's main process and reads the
  * class back out of the reported suite name, so it needs the same definition without being able to
  * import `vitest`. See the header of that module.
  */
@@ -43,7 +43,7 @@ function selectionLabel(): string {
 }
 
 /* -------------------------------------------------------------------------------------------- */
-/* Environments where a skip is not acceptable (JR-105b)                                        */
+/* Environments where a skip is not acceptable (JR-1-05b)                                        */
 /* -------------------------------------------------------------------------------------------- */
 
 const REQUIRE_INFRA_VAR = 'OA_TEST_REQUIRE_INFRA';

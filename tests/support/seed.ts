@@ -1,7 +1,7 @@
 import { coverageNotice } from './notice';
 
 /**
- * Deterministic randomness for adversarial tests (JR-102, Testplan rule 3).
+ * Deterministic randomness for adversarial tests (JR-1-02, Testplan rule 3).
  *
  * Any randomised test must (a) derive every random choice from a single seed and (b) print that
  * seed, so a failure can be replayed exactly with `OA_TEST_SEED=<n>`. A flaky adversarial test is

@@ -15,7 +15,7 @@ import {
 } from '@oa-test/harness-ledger';
 
 /**
- * Units for the harness ledger (JR-105c, findings F16 and F24).
+ * Units for the harness ledger (JR-1-05c, findings F16 and F24).
  *
  * The ledger is how the **main** process learns which test databases a worker acquired and never
  * released. Before it, that knowledge lived only in the worker, and the worker's `process.on('exit')`
@@ -61,7 +61,7 @@ function entry(databaseName: string, label = 'filter-builder'): LedgerEntry {
 	};
 }
 
-suite('ci', 'harness ledger: bookkeeping (JR-105c)', () => {
+suite('ci', 'harness ledger: bookkeeping (JR-1-05c)', () => {
 	it('records an acquisition and forgets it on release', () => {
 		useTempLedger();
 		recordAcquisition(entry('oa_test_1785250142201_13433_bdeb2d_filter_builder'));
@@ -126,7 +126,7 @@ suite('ci', 'harness ledger: bookkeeping (JR-105c)', () => {
 	});
 });
 
-suite('ci', 'harness ledger: the loud failure (JR-105c)', () => {
+suite('ci', 'harness ledger: the loud failure (JR-1-05c)', () => {
 	it('refuses to acquire without a ledger directory instead of recording nothing', () => {
 		// This is the guard against the ledger quietly not being there: `acquireTestDatabase()` calls
 		// `requireLedgerDirectory()` before it creates anything, so a run whose globalSetup did not

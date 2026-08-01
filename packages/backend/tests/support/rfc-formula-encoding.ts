@@ -20,7 +20,7 @@ import type { JournalLedgerRecord } from '@open-archiver/types';
  *   - under this formula, (f) and (g) are undetectable — the chain still verifies after the edit;
  *   - under `chainHash()` from `@open-archiver/journaling`, both are caught at the right `seq`.
  *
- * That pair is the actual assertion of `JR-209`'s ADR-006 half. If somebody ever narrows the
+ * That pair is the actual assertion of `JR-2-09`'s ADR-006 half. If somebody ever narrows the
  * production encoding back towards the RFC's field list, the first half of the pair keeps passing
  * and the second fails — which is the direction a regression has to be caught from.
  *

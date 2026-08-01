@@ -6,12 +6,12 @@ import type { LedgerAppendRequest, LedgerQuery, LedgerTransactor } from './ledge
 import { PostgresLedgerWriter, advisoryLockKey } from './ledger-writer';
 
 /**
- * `LedgerWriter.append()` against a recording fake (`JR-206`). Classification: `ci`.
+ * `LedgerWriter.append()` against a recording fake (`JR-2-06`). Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * What a fake can prove here that a real database cannot
  * ---------------------------------------------------------------------------------------------
- * The acceptance criterion of `JR-206` is about **order**: durability setting, then lock, then read
+ * The acceptance criterion of `JR-2-06` is about **order**: durability setting, then lock, then read
  * head, then hash, then insert. Against a real Postgres all of that is invisible — a correct chain and
  * a chain hashed before the lock look identical until two writers race, and then the failure is
  * intermittent. The fake below records every statement, so the order is asserted directly instead of

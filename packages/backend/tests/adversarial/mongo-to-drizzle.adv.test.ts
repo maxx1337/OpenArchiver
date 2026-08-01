@@ -6,7 +6,7 @@ import { mongoToDrizzle } from '../../src/helpers/mongoToDrizzle';
 import { renderSql } from '../support/render-sql';
 
 /**
- * JR-101 / JR-102 -- the reference example for the `adversarial` category.
+ * JR-1-01 / JR-1-02 -- the reference example for the `adversarial` category.
  *
  * It is model-based rather than golden-file based: the generator builds a random condition tree
  * *together with* the exact list of parameters that tree must bind, and the test compares the

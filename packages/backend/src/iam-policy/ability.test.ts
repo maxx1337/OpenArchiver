@@ -6,7 +6,7 @@ import { createAbilityFor } from './ability';
 import { loadPolicyFixture } from '../../tests/support/policy-fixtures';
 
 /**
- * JR-103 -- unit tests for `createAbilityFor()`.
+ * JR-1-03 -- unit tests for `createAbilityFor()`.
  *
  * Classification: `ci`. Pure; `ability.ts` imports only schema *definitions*, no connection.
  *
@@ -37,7 +37,7 @@ const UNRELATED = '00000000-0000-0000-0000-000000000000';
  * level, and every record-level check has to be cast. Production code does exactly that --
  * `AuthorizationService.can()` ends in `ability.can(action, subjectInstance as AppSubjects)`
  * (packages/backend/src/services/AuthorizationService.ts). These helpers mirror that cast so the
- * tests exercise the same call shape as production; see FINDING F2 in the JR-103 report.
+ * tests exercise the same call shape as production; see FINDING F2 in the JR-1-03 report.
  */
 const asSubject = (value: unknown) => value as AppSubjects;
 const tagged = (type: 'ingestion' | 'archive', fields: Record<string, unknown>) =>

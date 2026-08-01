@@ -3,7 +3,7 @@ import type { SQL } from 'drizzle-orm';
 import { renderSql, type RenderedSql } from './render-sql';
 
 /**
- * Shared fail-closed contract assertions (JR-1301, epic E13).
+ * Shared fail-closed contract assertions (JR-13-01, epic E13).
  *
  * ---------------------------------------------------------------------------------------------
  * Why a helper and not an inline `expect`
@@ -17,7 +17,7 @@ import { renderSql, type RenderedSql } from './render-sql';
  * What "fail closed" is allowed to look like
  * ---------------------------------------------------------------------------------------------
  * The tests must not dictate the implementation the senior developer picks in
- * `JR-1302`/`JR-1304`/`JR-1305`/`JR-1306`. Two outcomes are therefore both accepted:
+ * `JR-13-02`/`JR-13-04`/`JR-13-05`/`JR-13-06`. Two outcomes are therefore both accepted:
  *
  *   1. **Rejection** -- the call throws / the promise rejects. Loud, and the recommendation in
  *      `09-befunde-bestandscode.md` for F3 ("laut scheitern lassen").
@@ -90,7 +90,7 @@ export function expectFailClosed(context: string, produce: () => SQL | undefined
 			`An untranslatable or unsafe policy condition must either be rejected (throw) or ` +
 			`produce a never-true predicate (1=0 / false). "undefined" is read as "no restriction" ` +
 			`by every FilterBuilder caller. See docs/dev/journaling/09-befunde-bestandscode.md F1/F3 ` +
-			`and backlog tasks JR-1304 / JR-1306.`
+			`and backlog tasks JR-13-04 / JR-13-06.`
 	);
 }
 
@@ -122,7 +122,7 @@ export function expectSearchFilterDenies(context: string, searchFilter: string |
  * Title prefix for a test that is expected to be red until a specific backlog task lands.
  *
  * There is deliberately **no** switch that turns these tests green, skips them or inverts them.
- * `JR-1301`'s acceptance criterion is "red before the fix, green after the fix, both logged"; any
+ * `JR-13-01`'s acceptance criterion is "red before the fix, green after the fix, both logged"; any
  * opt-out would be a lever for making the epic look finished while the defect is open, and the
  * previous generation of these tests failed exactly by asserting the defect as if it were correct.
  * Vitest already gives the isolation that is actually needed: a failing test fails its own case,

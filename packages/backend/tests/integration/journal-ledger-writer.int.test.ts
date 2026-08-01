@@ -14,7 +14,7 @@ import { postgresTransactor, rollingBackTransactor } from '../support/postgres-t
 import { seedIngestionSource } from '../support/iam-seed';
 
 /**
- * `LedgerWriter.append()` against real Postgres (`JR-206`). Classification: `ci`.
+ * `LedgerWriter.append()` against real Postgres (`JR-2-06`). Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * What this proves that the unit test cannot
@@ -150,7 +150,7 @@ async function readChain(
 	}));
 }
 
-suiteRequiring('ci', 'LedgerWriter.append() against Postgres (JR-206)', postgresProbe, () => {
+suiteRequiring('ci', 'LedgerWriter.append() against Postgres (JR-2-06)', postgresProbe, () => {
 	it('starts a chain at seq 1, chained to the genesis hash', async () => {
 		const deployment = await deploymentId();
 		const source = await seedIngestionSource(harness!.db);
@@ -292,7 +292,7 @@ suiteRequiring('ci', 'LedgerWriter.append() against Postgres (JR-206)', postgres
 	it('serialises concurrent appends to the same chain, gaplessly', async () => {
 		// The contract of ADR-007 consequence 2. Ten appends started at once on separate connections:
 		// the advisory lock has to turn them into 1..10 with no gap, no duplicate and a chain that
-		// verifies. The load version of this is JR-208; this is the functional case.
+		// verifies. The load version of this is JR-2-08; this is the functional case.
 		const deployment = await deploymentId();
 		const source = await seedIngestionSource(harness!.db);
 		const writer = writerFor(deployment);

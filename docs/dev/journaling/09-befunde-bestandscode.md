@@ -10,7 +10,7 @@ einplanen**, oder **bewusst akzeptieren**.
 **Die `F`-Nummerierung ist fortlaufend und liegt ausschließlich in dieser Datei.** Andere Dokumente
 verweisen auf `F<N>`, führen aber keine eigenen Befunde — eine über zwei Dateien verteilte
 Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-status.md`, verschoben am
-2026-07-28 im Rahmen von `JR-106`).
+2026-07-28 im Rahmen von `JR-1-06`).
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
@@ -24,19 +24,19 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                             |
 | **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38                             |
 
-Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
-Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16), `JR-1301` (F17–F23), die Abnahme
-`JR-1309` (F24–F29), die Abnahme `JR-1309a` (F30) und die Abnahme `JR-1309b` (F31–F34), Rolle
-`tester`, 2026-07-27 bis 2026-07-29. Dazu `JR-1309c` (F36), `JR-205` (F37), `JR-208` (F38) und die
-zweite Abnahme `JR-210a` (F39), 2026-07-30 bis 2026-08-01.
+Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
+Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
+`JR-13-09` (F24–F29), die Abnahme `JR-13-09a` (F30) und die Abnahme `JR-13-09b` (F31–F34), Rolle
+`tester`, 2026-07-27 bis 2026-07-29. Dazu `JR-13-09c` (F36), `JR-2-05` (F37), `JR-2-08` (F38) und die
+zweite Abnahme `JR-2-10a` (F39), 2026-07-30 bis 2026-08-01.
 
 > **F31 ist der einzige Befund dieser Liste, dessen Ursache in einer ADR liegt und nicht im Code oder
-> in seiner Umsetzung.** ADR-020 hat den Verhaltenscheck selbst „vollständig" genannt; `JR-1317` hat
+> in seiner Umsetzung.** ADR-020 hat den Verhaltenscheck selbst „vollständig" genannt; `JR-13-17` hat
 > diesen Anspruch folgerichtig auf die Betreiberseite übernommen. Die Berichtigung steht in ADR-020
-> unter „Berichtigung (2026-07-29, nach der Abnahme `JR-1309b` — F31)". Wer F31 liest, ohne sie zu
+> unter „Berichtigung (2026-07-29, nach der Abnahme `JR-13-09b` — F31)". Wer F31 liest, ohne sie zu
 > lesen, hält den Befund für einen Schreibfehler — er ist ein Denkfehler des PO.
 
-> **Seit `JR-1301` (2026-07-29) markiert der Testcode die vier E13-Befunde nicht mehr als bestanden.**
+> **Seit `JR-13-01` (2026-07-29) markiert der Testcode die vier E13-Befunde nicht mehr als bestanden.**
 > F1, F3, F7 und F8 waren bis dahin mit `it.fails` bzw. mit Assertions auf den **Ist**-Zustand
 > festgehalten — ein grüner Test, der eine Sicherheitslücke beschreibt. Sie fordern jetzt den
 > gewünschten Zustand, mit dem Titelpräfix `RED UNTIL JR-13xx`. Die Rot-Läufe sind in
@@ -44,13 +44,13 @@ zweite Abnahme `JR-210a` (F39), 2026-07-30 bis 2026-08-01.
 > weiter: Ist-Zustand festhalten, laut in einer `coverageNotice` benennen, nicht beheben — es gibt
 > keine Task dafür, und ein roter Test ohne Zuständigen blockiert nur die Abnahme.
 
-> **Stand 2026-07-29 nach den Fixes `JR-1302`–`JR-1306`: F1, F3, F7, F8, F19 und F20 sind behoben**,
+> **Stand 2026-07-29 nach den Fixes `JR-13-02`–`JR-13-06`: F1, F3, F7, F8, F19 und F20 sind behoben**,
 > F21 ist umgesetzt. 20 der 21 roten Tests sind grün, kein vorher grüner Test ist rot geworden. Der
-> eine noch rote Test ist ein Widerspruch zwischen zwei `JR-1301`-Tests und keine offene Lücke —
+> eine noch rote Test ist ein Widerspruch zwischen zwei `JR-13-01`-Tests und keine offene Lücke —
 > Vorlage in `06-status.md` unter „Der eine verbleibende rote Test".
 >
 > **Unverändert offen und ausdrücklich nicht mitbehandelt:** F2, F4, F5, F6, F9, F10, F13–F18, F22,
-> F23. `JR-1309` prüft, dass sie nicht stillschweigend mitverändert wurden.
+> F23. `JR-13-09` prüft, dass sie nicht stillschweigend mitverändert wurden.
 
 ---
 
@@ -58,9 +58,9 @@ zweite Abnahme `JR-210a` (F39), 2026-07-30 bis 2026-08-01.
 
 **Schwere:** hoch im Wirkungsgrad, aber **Super-Admin-Rechte als Voraussetzung** ·
 **Ort:** `packages/backend/src/helpers/mongoToDrizzle.ts`, `getDrizzleColumn()` ·
-**Status:** **behoben** in `JR-1306` (`dcec017`, 2026-07-29)
+**Status:** **behoben** in `JR-13-06` (`dcec017`, 2026-07-29)
 
-> **Behoben (`JR-1306`, `dcec017`).** Condition-Keys werden gegen eine Allowlist geprüft statt
+> **Behoben (`JR-13-06`, `dcec017`).** Condition-Keys werden gegen eine Allowlist geprüft statt
 > escaped: angenommen wird ein einzelner Identifier oder `<relation>.<identifier>` mit einer Relation
 > aus `relationToTableMap`, alles andere wirft. `sql.raw` ist aus dem Relationszweig entfernt, beide
 > Hälften gehen durch `sql.identifier`. `PolicyValidator.isValid()` weist dieselben Keys **vor** dem
@@ -111,7 +111,7 @@ Einschränkung nicht selbst aufheben können. In ADR-009 ist F1 als Begründung 
 Allowlist ist hier die stärkere Lösung, weil ein unbekannter Key ohnehin ein Fehler ist und
 fail-closed behandelt werden sollte (siehe F3).
 
-**Ausnutzbarkeit gegen echtes Postgres nachgewiesen (`JR-1301`, 2026-07-29).** Bis hierher war F1 am
+**Ausnutzbarkeit gegen echtes Postgres nachgewiesen (`JR-13-01`, 2026-07-29).** Bis hierher war F1 am
 **gerenderten** SQL belegt, nicht am ausgeführten. Der Nachweis fehlte, und er ist nicht trivial: von
 vier Payloads laufen drei **nicht**.
 
@@ -155,9 +155,9 @@ spiegeln den Cast bewusst und dokumentieren das in `ability.test.ts`.
 ## F3 — Fail-open-Übersetzung in `mongoToDrizzle`
 
 **Schwere:** mittel · **Ort:** `packages/backend/src/helpers/mongoToDrizzle.ts` ·
-**Status:** **behoben** in `JR-1304` (`45ac0e9`, 2026-07-29) — eine Testfassung bleibt rot, siehe unten
+**Status:** **behoben** in `JR-13-04` (`45ac0e9`, 2026-07-29) — eine Testfassung bleibt rot, siehe unten
 
-> **Behoben (`JR-1304`, `45ac0e9`).** `mongoToDrizzle` wirft, statt eine Bedingung zu verwerfen:
+> **Behoben (`JR-13-04`, `45ac0e9`).** `mongoToDrizzle` wirft, statt eine Bedingung zu verwerfen:
 > unbekannter Operator, leeres Bedingungsobjekt, leeres `$or`/`$and`, ein unübersetzbarer Zweig in
 > `$or`/`$and`, ein unübersetzbares `$not`. Der Rückgabetyp ist `SQL`, nicht mehr `SQL | undefined`;
 > `FilterBuilder` behandelt ein trotzdem auftretendes `undefined` als deny. Nicht mitbehoben, weil
@@ -185,7 +185,7 @@ Ein `$not` um eine unübersetzbare Bedingung verwirft die Negation komplett.
 **Empfehlung:** `undefined` bei den Aufrufern als **deny** behandeln, und unübersetzbare Bedingungen
 laut scheitern lassen statt weglassen.
 
-**Richtung korrigiert (`JR-1301`, 2026-07-29) — siehe F22.** Der oben zitierte `$or`-Fall ist
+**Richtung korrigiert (`JR-13-01`, 2026-07-29) — siehe F22.** Der oben zitierte `$or`-Fall ist
 gemessen eine **Verengung**, keine Erweiterung: `A or B` wird zu `A`, der Nutzer sieht also _weniger_
 Zeilen als die Policy gewährt. Fail-open ist die Richtung dort, wo das Weglassen die Bedingung
 vollständig verschwinden lässt — beim `$and` negierter `cannot`-Bedingungen und bei einer Disjunktion,
@@ -229,12 +229,12 @@ Keine Rechteausweitung, aber eben auch keine Validierung.
 ## F7 — `FilterBuilder` ist fail-open, wenn keine `can`-Regel greift
 
 **Schwere:** hoch · **Ort:** `packages/backend/src/services/FilterBuilder.ts` ·
-**Status:** **behoben** in `JR-1302` (`a309fd1`) und `JR-1303` (`bcac6bd`), 2026-07-29 ·
-**Herkunft:** `JR-104`, gegen echtes Postgres verifiziert
+**Status:** **behoben** in `JR-13-02` (`a309fd1`) und `JR-13-03` (`bcac6bd`), 2026-07-29 ·
+**Herkunft:** `JR-1-04`, gegen echtes Postgres verifiziert
 
-> **Behoben.** `JR-1302` (`a309fd1`) bildet `null` von `rulesToQuery` auf denselben Deny ab, den der
+> **Behoben.** `JR-13-02` (`a309fd1`) bildet `null` von `rulesToQuery` auf denselben Deny ab, den der
 > vorhandene „No access"-Zweig liefert (``sql`1=0` `` plus ein nie zutreffender Suchfilter); die
-> unbeschränkte Rückgabe bleibt allein dem nachweislich unbedingten `can`. `JR-1303` (`bcac6bd`)
+> unbeschränkte Rückgabe bleibt allein dem nachweislich unbedingten `can`. `JR-13-03` (`bcac6bd`)
 > beseitigt den Action-Versatz, über den F7 durch die Suchroute erreichbar war. Alle vier roten F7-Fälle
 > und der ADR-017-Fall sind grün, `predefined-roles.int.test.ts` ist grün geblieben.
 
@@ -282,7 +282,7 @@ Formen: einen Nutzer **ohne jede Rolle** (F7a), eine handgeschriebene Policy mit
 `cannot`-Regeln auf `archive` (F7b), und eine handgeschriebene Rolle mit `can search archive` **ohne**
 `read archive` (der Action-Versatz, siehe ADR-017).
 
-**Zwei Präzisierungen aus `JR-1301` (2026-07-29)** — die Aussage oben gilt **für die
+**Zwei Präzisierungen aus `JR-13-01` (2026-07-29)** — die Aussage oben gilt **für die
 (Action, Subject)-Paare der heutigen vier Aufrufstellen**, nicht für jedes Paar je Rolle (**F18**: über
 das volle Vokabular treffen `predefined_end_user` 39 und `predefined_read_only_user` 46 von 56 Paaren
 den Zweig). Und „ausgeliefert" trifft auf zwei der drei Rollen gar nicht zu (**F17**): der
@@ -293,15 +293,15 @@ Rolle entsteht schon durch das Löschen einer Rolle, und weil ausgeliefert **kei
 existiert (F17), ist jeder eingeschränkte Nutzer eine handgeschriebene Policy in der Form von
 `auditor-specific-mailbox.json` — also in genau der Form, die F7 ins Gegenteil verkehrt. Das ist nicht
 der Ausnahmefall, sondern der einzige Weg, den ein Betreiber hat. Es korrigiert nur eine frühere, zu scharfe Aussage des PO, der
-Fix aus `JR-1302` „bräche Bestandsinstallationen": eine Standardinstallation mit den drei
+Fix aus `JR-13-02` „bräche Bestandsinstallationen": eine Standardinstallation mit den drei
 `predefined_*`-Rollen verhält sich vor und nach dem Fix gleich. Der Nachweis dafür ist der
-Integrationstest aus `JR-1301`, nicht diese Feststellung.
+Integrationstest aus `JR-13-01`, nicht diese Feststellung.
 
 **Bewertung des PO:** Das ist der schwerste Befund dieser Session — schwerer als F1. F1 setzt
 Super-Admin voraus; F7 ist von einer **eingeschränkten** Rolle aus erreichbar und kehrt die Wirkung
 einer restriktiven Policy ins Gegenteil. Betroffen ist die released Version 0.5.2.
 
-**Direkte Projektrelevanz:** Die Auditor-Rolle aus `JR-1101` ist auf genau diesen Mechanismus
+**Direkte Projektrelevanz:** Die Auditor-Rolle aus `JR-11-01` ist auf genau diesen Mechanismus
 gebaut. `read-only-all.json` wäre unkritisch (es erteilt `can`), aber jede scope-einschränkende
 Auditor-Policy im Stil von `auditor-specific-mailbox.json` wäre wirkungslos. **E11 kann nicht
 abgenommen werden, solange F7 offen ist** — ein „read-only"-Auditor, der unbeschränkt liest, ist
@@ -311,9 +311,9 @@ keine Auditor-Rolle.
 vorhandene „No access"-Zweig für das leere Query tut — Einschränkung dazu unter F19), und die
 unbeschränkte Rückgabe auf den Fall „nachweislich unbedingtes `can`" beschränken. Zusätzlich
 Action-Angleichung zwischen Route-Gate und `FilterBuilder`-Aufruf — **entschieden in ADR-017 als
-Variante B**, umzusetzen in `JR-1303`.
+Variante B**, umzusetzen in `JR-13-03`.
 
-**Reichweite bestätigt (`JR-1301`, 2026-07-29) — mit zwei Einschränkungen.** Der in ADR-017
+**Reichweite bestätigt (`JR-13-01`, 2026-07-29) — mit zwei Einschränkungen.** Der in ADR-017
 angekündigte Nachweis ist erbracht: für die drei (Action, Subject)-Paare, die die vier
 `FilterBuilder.create()`-Aufrufstellen verwenden, trifft keine der drei `predefined_*`-Rollen den
 `null`-Zweig, und die Ergebnisse für `('archive','read')` und `('archive','search')` sind je Rolle
@@ -331,14 +331,14 @@ Action-Versatz).
 ## F8 — Der `cannot`-Ausschluss verarbeitet Operator-Bedingungen falsch
 
 **Schwere:** mittel · **Ort:** `packages/backend/src/services/FilterBuilder.ts` ·
-**Status:** **behoben** in `JR-1305` (`2311996`, 2026-07-29) · **Herkunft:** `JR-104`
+**Status:** **behoben** in `JR-13-05` (`2311996`, 2026-07-29) · **Herkunft:** `JR-1-04`
 
-> **Behoben (`JR-1305`, `2311996`).** Die Negation entsteht auf Query-Ebene (`{ $not: condition }`
+> **Behoben (`JR-13-05`, `2311996`).** Die Negation entsteht auf Query-Ebene (`{ $not: condition }`
 > je `cannot`-Regel, alle per `$and` verknüpft) statt durch Einwickeln des **Werts** in `$ne`. `$not`
 > komponiert mit jedem Operator, und beide Übersetzer implementieren es bereits. Die drei roten Fälle
 > (`$in`, `$nin`, `$gte`) sind grün, der Gegenprobefall für die skalare Bedingung ist grün geblieben.
 
-> **Regressionstests seit `JR-1301`:** `tests/integration/filter-builder-f8.int.test.ts`, drei rote
+> **Regressionstests seit `JR-13-01`:** `tests/integration/filter-builder-f8.int.test.ts`, drei rote
 > Fälle (`$in`, `$nin`, `$gte` auf einer numerischen Spalte) und ein grüner Gegenprobefall für die
 > skalare Bedingung, die schon heute korrekt ausschließt. Die Meili-Hälfte wird strukturell geprüft
 > (kein `[object Object]`, die ausgeschlossene ID kommt weiter vor) — es läuft kein Meilisearch in
@@ -367,7 +367,7 @@ Der Ausschluss, den der Policy-Autor geschrieben hat, findet nicht statt. Betrof
 ## F9 — `mongoToMeli`-Platzhalter greift nur bei skalarer Bedingung
 
 **Schwere:** niedrig bis mittel · **Ort:** `packages/backend/src/helpers/mongoToMeli.ts` ·
-**Status:** offen · **Herkunft:** `JR-104`
+**Status:** offen · **Herkunft:** `JR-1-04`
 
 Die Sonderbehandlung für `ingestionSource.userId` — Auflösung zu
 `ingestionSourceId IN [...]` über eine Abfrage auf `ingestion_sources` — liegt im `else`-Zweig und
@@ -383,7 +383,7 @@ Container läuft kein Meilisearch. Geprüft ist der emittierte Attributname.
 ## F10 — Die expandierte `IN`-Liste ist unsortiert
 
 **Schwere:** niedrig · **Ort:** `packages/backend/src/helpers/mongoToMeli.ts` · **Status:** offen ·
-**Herkunft:** `JR-104`
+**Herkunft:** `JR-1-04`
 
 `select id from ingestion_sources where user_id = …` hat kein `order by`, die erzeugte
 Filter-Zeichenkette ist für gleiche Eingaben also nicht stabil. Für Meilisearch selbst irrelevant,
@@ -401,8 +401,8 @@ Eine bereichsbeschränkende Policy wird damit auf **beiden** Pfaden zu still erw
 
 **Kategorie:** vorgegebenes Verfahren — **kein Defekt im Produktionscode** ·
 **Schwere:** mittel (blockierte jeden CI-Lauf, bis der Schritt ergänzt war) ·
-**Ort:** die Schrittfolge in `03-backlog.md`, Task `JR-105`; behoben in `.github/workflows/ci.yml` ·
-**Status:** **behoben** (2026-07-28, `1bad10c`) · **Herkunft:** `JR-105`, erster echter CI-Lauf
+**Ort:** die Schrittfolge in `03-backlog.md`, Task `JR-1-05`; behoben in `.github/workflows/ci.yml` ·
+**Status:** **behoben** (2026-07-28, `1bad10c`) · **Herkunft:** `JR-1-05`, erster echter CI-Lauf
 
 Lauf 1 des neuen Workflows (`d0bb792`, Push) wurde bei „Build backend" rot:
 **54 × `TS2307: Cannot find module '@open-archiver/types'`**.
@@ -419,7 +419,7 @@ Kommandos bleiben wörtlich erhalten; im Job-Log ist sichtbar, welches Paket bri
 bricht.
 
 Warum die lokalen Läufe das verdeckten: `packages/types/dist` lag im Container aus früheren Sessions
-bereits gebaut vor. **Lokal beidseitig belegt**, zuletzt in der Abnahme `JR-106` (2026-07-28) nach
+bereits gebaut vor. **Lokal beidseitig belegt**, zuletzt in der Abnahme `JR-1-06` (2026-07-28) nach
 `rm -rf` **aller** gitignorierten Build-Artefakte (`packages/types/dist`, `packages/backend/dist`,
 `packages/frontend/.svelte-kit`, beide `tsconfig.tsbuildinfo`):
 
@@ -432,7 +432,7 @@ Der `tsbuildinfo`-Hinweis ist keine Nebensache: `packages/types/tsconfig.json` h
 `composite: true`, ein bloßes Löschen von `dist` lässt `tsc` also wegen der stehengebliebenen
 Build-Info **nichts** emittieren. Wer das nachstellen will, muss beides löschen.
 
-> ### Nachtrag 2026-07-31 (`JR-206`): dieser Befund wiederholt sich mit **jedem** neuen Workspace-Paket
+> ### Nachtrag 2026-07-31 (`JR-2-06`): dieser Befund wiederholt sich mit **jedem** neuen Workspace-Paket
 >
 > Sobald `packages/backend` von `@open-archiver/journaling` abhing, war der CI-Lauf an genau derselben
 > Stelle rot — `test:types` mit `TS2307: Cannot find module '@open-archiver/journaling'` —, während der
@@ -457,8 +457,8 @@ Fakt. Sie gilt erst als lauffähig, wenn sie ohne vorhandene Build-Artefakte dur
 **Kategorie:** Testharness — unsere eigene E1-Arbeit, **kein Bestandsproblem** ·
 **Schwere:** mittel (Harness-Defekt; kein Durability- oder Autorisierungsrisiko, CI unberührt) ·
 **Ort:** `packages/backend/tests/integration/pg-harness.int.test.ts`, Zeile 212 ·
-**Status:** **behoben in `JR-104a`, 2026-07-28** (Nachweis unten) ·
-**Herkunft:** `JR-106` (Abnahme E1), 2026-07-28
+**Status:** **behoben in `JR-1-04a`, 2026-07-28** (Nachweis unten) ·
+**Herkunft:** `JR-1-06` (Abnahme E1), 2026-07-28
 
 Der Test `sweeps a stale database from a dead run but leaves a fresh one alone` legt seine
 Fixture-Datenbanken unter **festen** Namen an:
@@ -484,7 +484,7 @@ pnpm test:integration & pnpm test:integration & wait
 ⇒ ein Lauf `exit=0` (32/32), der andere `exit=1` (`1 failed | 31 passed`). Welcher der beiden
 verliert, ist Zeitfrage; dass einer verliert, war in dieser Umgebung nicht vermeidbar.
 
-**Damit ist das Akzeptanzkriterium von `JR-104`** — „Zwei Integrationstests können parallel laufen,
+**Damit ist das Akzeptanzkriterium von `JR-1-04`** — „Zwei Integrationstests können parallel laufen,
 ohne sich zu beeinflussen" — **in der prozessübergreifenden Lesart nicht erfüllt.** Innerhalb eines
 Laufs hält es (4 Dateien parallel, 32 Tests grün, plus der eigene Testfall
 `keeps four concurrent acquisitions apart`). Der in `06-status.md` als Nachweis geführte Satz
@@ -500,7 +500,7 @@ die `fresh`-Fixture eines **gleichzeitig** laufenden fremden Prozesses löschen 
 offenen Verbindungen, Alter > 1 ms). Ein Fix, der nur den festen Namen ändert, lässt diesen Pfad
 offen.
 
-Bei der Reproduktion für `JR-104a` ist der Pfad **eingetreten**, nicht nur hergeleitet. Runde 2 von
+Bei der Reproduktion für `JR-1-04a` ist der Pfad **eingetreten**, nicht nur hergeleitet. Runde 2 von
 drei Doppelläufen gegen den unveränderten Stand `d2441fb` machte **beide** Läufe rot, mit zwei
 verschiedenen Fehlern:
 
@@ -532,7 +532,7 @@ Alterskennzeichen behalten. Für den zweiten Pfad zusätzlich das Fixture-Paar �
 Label kenntlich machen und den Sweeper im Test auf dieses Label einschränken, statt ihn global mit
 `STALE_MS=1` laufen zu lassen. Danach die prozessübergreifende Parallelität erneut belegen, und
 zwar mehrfach — ein einzelner grüner Doppellauf ist bei einem Zeitfensterdefekt kein Nachweis.
-**Behoben in `JR-104a` (2026-07-28).** Beide Teile, wie in der Abnahme gefordert:
+**Behoben in `JR-1-04a` (2026-07-28).** Beide Teile, wie in der Abnahme gefordert:
 
 1. **Namen prozessspezifisch.** Neu `buildForeignFixtureName(label, createdAtMs)` in
    `tests/support/pg-harness.ts`. Das PID-Feld des Namens trägt weiter die Fremd-PID
@@ -559,7 +559,7 @@ Bystander-Fixture erfüllt **alle drei** Wächter (fremde PID, keine Verbindunge
 muss trotzdem überleben, weil sie nicht in der Liste steht. Damit ist der Schutz selbst geprüft und
 nicht nur benutzt.
 
-**Nachweis (2026-07-28, PostgreSQL 16.13 lokal, Code-Stand des `JR-104a`-Commits).** Ein einzelner
+**Nachweis (2026-07-28, PostgreSQL 16.13 lokal, Code-Stand des `JR-1-04a`-Commits).** Ein einzelner
 grüner Doppellauf ist bei einem Zeitfensterdefekt kein Nachweis, deshalb wiederholt:
 
 ```bash
@@ -595,7 +595,7 @@ Suite (5 s) unerreichbar, für die geplanten Soaks in E2/E3 nicht — siehe **F1
 **Schwere:** niedrig heute, **mittel ab E2/E3** (latent; wird erst durch lange Läufe erreichbar) ·
 **Ort:** `packages/backend/tests/support/pg-harness.ts`, `sweepStaleHarnessDatabases()` und
 `acquireTestDatabase()` · **Status:** **offen** — Regel dokumentiert, konstruktiv nicht ausgeschlossen ·
-**Herkunft:** `JR-104a`, 2026-07-28
+**Herkunft:** `JR-1-04a`, 2026-07-28
 
 `acquireTestDatabase()` ruft bei **jedem** Aufruf `sweepStaleHarnessDatabases()` ohne `restrictTo`
 und mit der Standardfrist von 2 h (`OA_TEST_PG_STALE_MS`). Die einzige Absicherung gegen einen
@@ -604,14 +604,14 @@ Frist. Läuft ein fremder Prozess **länger als die Frist**, sind seine noch ben
 diesen Sweep nicht mehr von echtem Rückstand zu unterscheiden — offene Verbindungen schützen sie
 nicht, weil `postgres-js` nach `idle_timeout` schließt und Wächter 2 dann null Backends sieht.
 
-Das ist keine Neuentdeckung des Mechanismus — er steht seit `JR-104` im Kopfkommentar des Moduls und
-in `04-testplan.md` §2.6. Neu ist die Einordnung: mit `JR-104a` sind alle anderen
+Das ist keine Neuentdeckung des Mechanismus — er steht seit `JR-1-04` im Kopfkommentar des Moduls und
+in `04-testplan.md` §2.6. Neu ist die Einordnung: mit `JR-1-04a` sind alle anderen
 prozessübergreifenden Pfade geschlossen, dieser ist der letzte, und die in E2/E3 geplanten Soaks
-(`JR-208` 20 × 500 Appends, die 100k-Nachrichten-Nachtläufe) sind der erste Anlass, bei dem ein Lauf
+(`JR-2-08` 20 × 500 Appends, die 100k-Nachrichten-Nachtläufe) sind der erste Anlass, bei dem ein Lauf
 die 2 h überhaupt erreichen kann. Eine bekannte Schwäche im Messinstrument nur in einem Docstring zu
 führen, widerspricht Grundregel 6 des Testplans — deshalb steht sie jetzt hier mit einer Nummer.
 
-**Warum nicht in `JR-104a` mitbehoben:** die Behebung ist keine Testkorrektur, sondern eine
+**Warum nicht in `JR-1-04a` mitbehoben:** die Behebung ist keine Testkorrektur, sondern eine
 Verhaltensänderung des Sweepers, und sie hat mindestens drei plausible Formen, zwischen denen der PO
 entscheiden sollte:
 
@@ -633,11 +633,11 @@ Laufzeit heben. Die CI ist unberührt: ein Job hat seinen eigenen Service-Contai
 ## F14 — Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests
 
 **Kategorie:** Testharness — unsere eigene E1-Arbeit ·
-**Schwere:** mittel (kein Kriteriumsbruch, aber genau die Fehlerklasse, gegen die `JR-105b` existiert) ·
+**Schwere:** mittel (kein Kriteriumsbruch, aber genau die Fehlerklasse, gegen die `JR-1-05b` existiert) ·
 **Ort:** `tests/support/suite-inventory.ts` zusammen mit `tests/support/classification.ts` ·
-**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+**Status:** **behoben** in `b5b2190` (`JR-1-05c`, 2026-07-30) · **Herkunft:** Abnahme `JR-1-06a`, 2026-07-28
 
-`JR-105b` hat die zwei in `JR-106` gefundenen Löcher geschlossen: eine abwesende Suite und eine
+`JR-1-05b` hat die zwei in `JR-1-06` gefundenen Löcher geschlossen: eine abwesende Suite und eine
 falsch benannte Testdatei machen den Lauf rot. Beide Kriterien sind erfüllt und beidseitig belegt.
 Die Prüfung zählt aber **Dateien**, und der Schaden, den sie verhindern soll — „die
 `integration`-Abdeckung verschwindet, während CI grün bleibt" — ist ohne jede Datei­änderung
@@ -658,7 +658,7 @@ Die gesamte `integration`-Suite läuft nicht mehr, und **beide** Wächter melden
 `OA_TEST_REQUIRE_INFRA=1` greift nicht: `suiteRequiring()` prüft die Klassenauswahl **vor** der
 Infrastruktur und delegiert bei nicht gewählter Klasse an `suite()`, das regulär skippt. Der
 Coverage-Hinweis wird gedruckt (`class 'nightly' not selected`), ist aber vom legitimen
-Klassen-Skip nicht zu unterscheiden — und genau dieses Nichtunterscheiden ist in `JR-105b` bewusst
+Klassen-Skip nicht zu unterscheiden — und genau dieses Nichtunterscheiden ist in `JR-1-05b` bewusst
 so gebaut worden.
 
 **Dieselbe Klasse, zweiter Weg:** eine korrekt benannte Datei, deren Tests alle `it.skip` / `it.todo`
@@ -678,7 +678,7 @@ Test), gehört aber genannt.
    `ci`" neben den Include-Globs), sodass eine Umetikettierung im Diff **und** zur Laufzeit auffällt.
 3. **Skip-Budget**: eine Obergrenze übersprungener Tests im `ci`-Lauf, überschritten ⇒ rot.
 
-**Behoben in `JR-105c` (`b5b2190`, 2026-07-30) — Variante 1, plus eine Ergänzung.** Der Wächter zählt
+**Behoben in `JR-1-05c` (`b5b2190`, 2026-07-30) — Variante 1, plus eine Ergänzung.** Der Wächter zählt
 jetzt **ausgeführte Tests je Suite _und je Klasse_** (`tests/support/executed-tests.ts`), verglichen mit
 `SUITES[].expectedTests`. Je Klasse ist der Teil, der Weg (a) trifft: die Umetikettierung lässt die
 Gesamtzahl unverändert und verschiebt die Tests nur in eine Klasse, die die Standardauswahl nicht fährt,
@@ -689,7 +689,7 @@ das Entfernen des Reporters rot macht statt abzuschalten.
 
 Beide Zustände am 2026-07-30 gegen PostgreSQL 17.10 gemessen, jeweils **vorher und nachher**:
 
-| Zustand                                | Elternstand `e09b981`       | mit `JR-105c`                                   |
+| Zustand                                | Elternstand `e09b981`       | mit `JR-1-05c`                                  |
 | -------------------------------------- | --------------------------- | ----------------------------------------------- | ---------- |
 | alle 8 Integrationsdateien → `nightly` | **Exit 0**, beide grün      | **Exit 1**, `integration: ci 0/55`, Dateien 8/8 |
 | eine Datei nur `it.skip`               | (Klasse belegt, s. F14 (b)) | **Exit 1**, `integration: ci 52/55`             |
@@ -705,7 +705,7 @@ Erkennungsregel bleibt bei vitests Namenskonvention.
 **Kategorie:** Testharness — unsere eigene E1-Arbeit ·
 **Schwere:** niedrig heute (Spiel = 0), **mittel ab E2** (wird durch jede neue Testdatei erreichbar) ·
 **Ort:** `tests/support/suite-inventory.ts`, `SUITES[].minimumFiles` ·
-**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+**Status:** **behoben** in `b5b2190` (`JR-1-05c`, 2026-07-30) · **Herkunft:** Abnahme `JR-1-06a`, 2026-07-28
 
 Die Mindestzahlen sind hartkodiert und stehen heute **genau** auf dem Bestand (`unit` 5/5,
 `integration` 4/4, `adversarial` 1/1). Deshalb macht jede Löschung heute rot — das ist belegt und
@@ -713,7 +713,7 @@ das Kriterium ist erfüllt. Der Wert ist aber eine **Untergrenze**, kein Soll: s
 ihre Mindestzahl wächst, entsteht Spiel, und eine Löschung in Höhe des Spiels geht still durch.
 
 **Reproduktion (belegt):** eine zusätzliche `integration`-Datei anlegen (⇒ `5 (min 4)`, grün), dann
-`pg-harness.int.test.ts` löschen — die eine Datei, die den gesamten `JR-104`-Isolationsvertrag
+`pg-harness.int.test.ts` löschen — die eine Datei, die den gesamten `JR-1-04`-Isolationsvertrag
 trägt, 13 Tests:
 
 ```
@@ -730,7 +730,7 @@ Konsolidierung danach verliert Abdeckung, ohne dass etwas rot wird. Behebung sin
 zusammen mit F14 (Variante 1 dort deckt beides ab); minimal: die Zahlen als **Gleichheit** statt als
 Untergrenze prüfen, mit einer Meldung, die zum Anpassen in derselben Änderung auffordert.
 
-**Behoben in `JR-105c` (`b5b2190`, 2026-07-30) — beide vorgeschlagenen Wege, nicht nur einer.**
+**Behoben in `JR-1-05c` (`b5b2190`, 2026-07-30) — beide vorgeschlagenen Wege, nicht nur einer.**
 `minimumFiles` heißt jetzt `expectedFiles` und wird auf **Gleichheit** geprüft; die Testzahlen aus F14
 ebenso. Damit gibt es kein Spiel mehr, in dem eine Löschung Platz findet. Der Preis ist genau der
 benannte: eine Zahl je Commit, der die Zählung ändert — und beide Fehlermeldungen nennen die
@@ -745,7 +745,7 @@ gleichzeitig eine Datei mit einem Test hinzugefügt ⇒ Dateien weiter `8/8` gr�
 **Kategorie:** Testharness — unsere eigene E1-Arbeit ·
 **Schwere:** niedrig (CI fängt es, lokaler Rückstand verfällt nach 2 h) ·
 **Ort:** `packages/backend/tests/support/pg-harness.ts`, `installExitWarning()` ·
-**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** Abnahme `JR-106a`, 2026-07-28
+**Status:** **behoben** in `b5b2190` (`JR-1-05c`, 2026-07-30) · **Herkunft:** Abnahme `JR-1-06a`, 2026-07-28
 
 Eine `integration`-Datei ruft `acquireTestDatabase()` im **Modul-Scope** — sie muss das, weil
 `src/database` sein Singleton beim Import baut (Testplan §2.6). Das Teardown hängt dagegen an einem
@@ -778,7 +778,7 @@ im Hauptprozess feststellen statt im Worker — etwa eine `globalTeardown`, die 
 wie der CI-Schritt und ihr Ergebnis ausgibt. Das würde zugleich den lokalen Lauf auf dieselbe
 Zusicherung heben, die die CI schon hat.
 
-**Behoben in `JR-105c` (`b5b2190`, 2026-07-30) — auf dem vorgeschlagenen Weg: der Rückstand wird im
+**Behoben in `JR-1-05c` (`b5b2190`, 2026-07-30) — auf dem vorgeschlagenen Weg: der Rückstand wird im
 Hauptprozess festgestellt.** Nicht über eine erneute Abfrage aller `oa_test_*`-Namen, sondern über ein
 **Ledger-Verzeichnis je Lauf** (`tests/support/harness-ledger.ts`): der Worker schreibt jede geholte
 Datenbank hinein und löscht den Eintrag erst, wenn der Drop stattgefunden hat. Was übrig bleibt, ist
@@ -798,10 +798,10 @@ gedroppt, danach `leftovers: 0`. Zusätzlich zeigte die F14-Reproduktion (alle a
 ## F17 — Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt
 
 **Kategorie:** Bestandscode · **Schwere:** mittel (kein Sicherheitsloch, aber die
-Wirkungsanalyse von ADR-017 und die Betreiberanleitung in `JR-1307` stehen darauf) ·
+Wirkungsanalyse von ADR-017 und die Betreiberanleitung in `JR-13-07` stehen darauf) ·
 **Ort:** `packages/backend/src/api/controllers/iam.controller.ts:17`,
 `packages/backend/src/services/UserService.ts:231/:252` · **Status:** offen, **nicht behoben** ·
-**Herkunft:** `JR-1301`, gegen echtes Postgres verifiziert
+**Herkunft:** `JR-13-01`, gegen echtes Postgres verifiziert
 
 `createDefaultRoles()` — die einzige Stelle, die `predefined_end_user` und
 `predefined_read_only_user` anlegt — hat genau einen Aufrufer, und der ist bedingt:
@@ -829,7 +829,7 @@ vor der Ersteinrichtung existiert kein Nutzer.
 1. **ADR-017s Wirkungsanalyse betrachtet drei Rollen; eine Standardinstallation hat eine.** Die
    Analyse bleibt richtig — sie ist nur weiter auf der sicheren Seite als gedacht, weil die beiden
    nicht existierenden Rollen ohnehin keinen `null`-Zweig treffen können.
-2. **`JR-1307`s Prüfanleitung muss das sagen.** „Keine der drei ausgelieferten Rollen ist betroffen"
+2. **`JR-13-07`s Prüfanleitung muss das sagen.** „Keine der drei ausgelieferten Rollen ist betroffen"
    liest sich, als gäbe es drei; ein Betreiber, der nach `predefined_read_only_user` sucht, findet
    nichts und weiß nicht, ob das ein Fehler ist.
 3. **Es gibt ausgeliefert keine Read-Only-Rolle.** Wer einen eingeschränkten Nutzer braucht — der
@@ -846,7 +846,7 @@ Default-Rollen in `createFirstAdmin()` mitanlegen.
 
 **Kategorie:** Vorgegebenes Verfahren (Präzision einer ADR-Aussage) · **Schwere:** niedrig ·
 **Ort:** `05-entscheidungen.md` ADR-017, Abschnitt „Auswirkung auf die ausgelieferten Rollen"; die
-Wiederholung in F7 dieses Dokuments · **Status:** offen · **Herkunft:** `JR-1301`
+Wiederholung in F7 dieses Dokuments · **Status:** offen · **Herkunft:** `JR-13-01`
 
 ADR-017 formuliert rollenbezogen und unbedingt: „Keine dieser drei Rollen erreicht den `null`-Zweig
 in `FilterBuilder.ts:49`". Über das gesamte Vokabular ist das falsch. Gemessen (8 Actions × 7
@@ -864,7 +864,7 @@ liefert `rulesToQuery` `null`.
 
 **Harmlos, solange die Aussage richtig gelesen wird:** keine Aufrufstelle baut heute einen Filter für
 eines dieser Paare. Für die drei Paare, die die vier `FilterBuilder.create()`-Aufrufe tatsächlich
-verwenden, hält die Aussage — siehe die Tabelle unter „Rot-Läufe `JR-1301`" in `06-status.md`.
+verwenden, hält die Aussage — siehe die Tabelle unter „Rot-Läufe `JR-13-01`" in `06-status.md`.
 
 **Warum es trotzdem notiert wird:** eine unausgesprochene Vorbedingung wird falsch, sobald jemand
 eine fünfte Aufrufstelle mit einer anderen Action ergänzt — `export archive` für den Export aus E11
@@ -877,8 +877,8 @@ Aufrufstellen" ergänzen.
 
 **Kategorie:** Bestandscode · **Schwere:** mittel · **Ort:**
 `packages/backend/src/services/FilterBuilder.ts:53`, `src/helpers/mongoToDrizzle.ts` ·
-**Status:** **behoben** in `JR-1302` (`a309fd1`) und `JR-1304` (`45ac0e9`), 2026-07-29 ·
-**Herkunft:** `JR-1301`
+**Status:** **behoben** in `JR-13-02` (`a309fd1`) und `JR-13-04` (`45ac0e9`), 2026-07-29 ·
+**Herkunft:** `JR-13-01`
 
 > **Behoben.** Zwei voneinander unabhängige Riegel: `FilterBuilder` behandelt ein `undefined` aus dem
 > Übersetzer als deny (`a309fd1`), und `mongoToDrizzle` wirft für das leere Bedingungsobjekt, aus dem
@@ -895,30 +895,30 @@ Regel `{ action: 'read', subject: 'archive', conditions: {} }` läuft so durch:
 
 Ergebnis: kein Filter, also alle Zeilen. Belegt gegen echtes Postgres in
 `tests/integration/filter-builder-f1-f3.int.test.ts` (roter Test
-`RED UNTIL JR-1304: a can rule with empty conditions must not mean full access (F19)`).
+`RED UNTIL JR-13-04: a can rule with empty conditions must not mean full access (F19)`).
 
 Eigene Nummer, obwohl es zur F3-Familie gehört: F3 benennt „leeres `$or`/`$and` oder leere Query".
 `{ $or: [ {} ] }` ist keine davon, und eine Behebung, die nur `{}` und `{ $or: [] }` abfängt, lässt
 diese Form offen.
 
 **Nebenbefund, nicht abgesichert: der Deny-Zweig in Zeile 53 ist womöglich unerreichbar.**
-`JR-1302` soll ihn als Vorlage benutzen („wie der bereits vorhandene ‚No access'-Zweig"). Er feuert
+`JR-13-02` soll ihn als Vorlage benutzen („wie der bereits vorhandene ‚No access'-Zweig"). Er feuert
 nur, wenn `rulesToQuery` ein **leeres, nicht-`null`** Objekt liefert. Nach der Implementierung von
 `@casl/ability/extra` passiert das genau dann, wenn eine nicht-invertierte Regel **ohne** Bedingungen
 gefunden wird und keine invertierte mit Bedingungen davor lag — und dieser Fall wird schon von Zeile 31
 abgefangen. In keinem der über zwanzig Policy-Zuschnitte, die jetzt unter Test stehen, wurde der Zweig
 erreicht. **Nicht bewiesen:** eine Konstruktion, die ihn erreicht, wurde nicht gefunden, und
-„unerreichbar" lässt sich mit Tests nicht zeigen. Für `JR-1302` heißt das: die Vorlage existiert im
+„unerreichbar" lässt sich mit Tests nicht zeigen. Für `JR-13-02` heißt das: die Vorlage existiert im
 Quelltext, aber es gibt keinen laufenden Fall und keinen Test, der sie abdeckt.
 
 ## F20 — Ein `cannot` **ohne** Bedingungen wird vollständig ignoriert
 
 **Kategorie:** Bestandscode · **Schwere:** mittel (in der HTTP-Kette durch `requirePermission`
 abgefedert, in Serviceaufrufen nicht) · **Ort:**
-`packages/backend/src/services/FilterBuilder.ts:27–33` · **Status:** **behoben** in `JR-1302`
-(`a309fd1`, 2026-07-29) · **Herkunft:** `JR-1301`
+`packages/backend/src/services/FilterBuilder.ts:27–33` · **Status:** **behoben** in `JR-13-02`
+(`a309fd1`, 2026-07-29) · **Herkunft:** `JR-13-01`
 
-> **Behoben (`JR-1302`, `a309fd1`).** `FilterBuilder` sammelt jetzt zusätzlich die `cannot`-Regeln
+> **Behoben (`JR-13-02`, `a309fd1`).** `FilterBuilder` sammelt jetzt zusätzlich die `cannot`-Regeln
 > **ohne** Bedingung und antwortet für sie mit deny, bevor der Zweig „unbedingtes `can`" greift. Ein
 > pauschales Verbot lässt sich nicht als Filter ausdrücken, also ist deny die einzige richtige Antwort.
 
@@ -931,29 +931,29 @@ const cannotConditions = rules.filter((rule) => rule.inverted === true && rule.c
 Ein pauschales `cannot read archive` fällt damit heraus, `cannotConditions.length === 0` gilt, und
 Zeile 31 antwortet mit **Vollzugriff** — für einen Nutzer, dem die Action ausdrücklich entzogen
 wurde. Belegt gegen echtes Postgres (`filter-builder-f1-f3.int.test.ts`, roter Test
-`RED UNTIL JR-1302: an unconditional cannot is not ignored (F20)`).
+`RED UNTIL JR-13-02: an unconditional cannot is not ignored (F20)`).
 
 `ability.can('read', 'archive')` ist für diesen Nutzer `false`, das Route-Gate liefert also `403` —
 Verteidigung in der Tiefe ist vorhanden. Trotzdem ist `FilterBuilder`s eigene Antwort falsch, und
-`JR-1302`s Kriterium („unbeschränkte Rückgabe nur noch bei nachweislich **unbedingtem** `can`") ist
+`JR-13-02`s Kriterium („unbeschränkte Rückgabe nur noch bei nachweislich **unbedingtem** `can`") ist
 nicht erfüllt, solange sie so bleibt: ein widerrufenes `can` ist kein unbedingtes.
 
-## F21 — `JR-1306`s Allowlist widerspricht drei bestehenden, grünen Pins
+## F21 — `JR-13-06`s Allowlist widerspricht drei bestehenden, grünen Pins
 
 **Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig (Arbeitsplanung, kein Defekt) ·
 **Ort:** `packages/backend/src/helpers/mongoToDrizzle.test.ts` (Suite „column name mapping"),
 `packages/backend/tests/fixtures/mongo-to-drizzle-golden.json` Fall „unknown relation key is emitted
 as one identifier containing a dot" · **Status:** **erledigt** — strenge Variante entschieden (PO,
-2026-07-29) und in `JR-1306` (`dcec017`) umgesetzt, die drei Pins im selben Commit invertiert ·
-**Herkunft:** `JR-1301`
+2026-07-29) und in `JR-13-06` (`dcec017`) umgesetzt, die drei Pins im selben Commit invertiert ·
+**Herkunft:** `JR-13-01`
 
-`JR-1306` soll Condition-Keys „gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen".
+`JR-13-06` soll Condition-Keys „gegen eine **Allowlist** bekannter Spalten prüfen statt zu escapen".
 Das Akzeptanzkriterium spricht nur von Keys mit `"`. Eine echte Allowlist weist aber auch
 **unbekannte, syntaktisch harmlose** Keys ab, und drei grüne Assertions halten für genau die das
 heutige Verhalten fest: `attachment.name` ⇒ `"attachment.name" = $1`, `foo.bar` ⇒ `"foo.bar" = $1`
 (Golden-Datei), sowie die Aussage „resolves only the relations listed in `relationToTableMap`".
 
-Die Regressionstests aus `JR-1301` fordern **nicht** die Abweisung solcher Keys — bewusst, damit der
+Die Regressionstests aus `JR-13-01` fordern **nicht** die Abweisung solcher Keys — bewusst, damit der
 Test nicht eine Entscheidung vorwegnimmt, die die Task offenlässt. Zu klären ist also: gilt die
 Allowlist nur für Keys mit SQL-Syntax (dann bleiben die drei Pins gültig) oder für alle unbekannten
 Keys (dann gehören sie im selben Commit invertiert)? **Empfehlung:** die strenge Variante, mit
@@ -961,29 +961,29 @@ Anpassung der drei Pins — ein unbekannter Key ist ein Policy-Fehler und trifft
 Spalte, führt also entweder zu einem Laufzeitfehler oder zu einem falschen Ergebnis.
 
 **Entscheidung (PO, 2026-07-29): die strenge Variante, der Empfehlung folgend.** Sie war ohnehin schon
-im Aufgabentext von `JR-1306` angelegt — „ein unbekannter Key ist ohnehin ein Fehler und gehört
+im Aufgabentext von `JR-13-06` angelegt — „ein unbekannter Key ist ohnehin ein Fehler und gehört
 fail-closed behandelt" lässt die milde Lesart nicht zu. Kein Vorlagebedarf beim Auftraggeber: für
 einen Betreiber ändert sich nur, dass ein Tippfehler in einer Policy künftig beim Anlegen auffällt
 statt stillschweigend eine Regel ohne Wirkung zu erzeugen. Die drei Pins werden im selben Commit wie
 der Fix invertiert, damit kein Zwischenstand existiert, in dem Test und Code sich widersprechen.
 
-**Umgesetzt in `JR-1306` (`dcec017`, 2026-07-29), mit einer benannten Einschränkung.** Abgewiesen wird
+**Umgesetzt in `JR-13-06` (`dcec017`, 2026-07-29), mit einer benannten Einschränkung.** Abgewiesen wird
 jeder Key mit SQL-Syntax und jeder Key mit **unbekannter Relation** (`attachment.name`, `foo.bar`,
 `a.b.c`). Ein einzelner, unbekannter, syntaktisch harmloser Key (`foo`) wird dagegen **weiter
 übersetzt**: `mongoToDrizzle` kennt die Zieltabelle nicht, eine spaltengenaue Allowlist ist dort also
 nicht formulierbar, und sie hätte drei weitere heute grüne Pins gebrochen (`{a:1}`, `{b:2}`,
 `{n:{$gt:1}}` sowie die `FIELDS`-Liste der adversarialen Suite) — was der Auftrag ausdrücklich
 ausschloss. Die spaltengenaue Prüfung gehört dorthin, wo das Subject bekannt ist, also in die Nähe von
-`JR-1310`. Die drei Pins sind wie vorgesehen im Fix-Commit invertiert; der Golden-Fall trägt dafür den
-eigenen Marker `mustRefuseKey`, damit die von `JR-1301` assertierte Zahl der drei
+`JR-13-10`. Die drei Pins sind wie vorgesehen im Fix-Commit invertiert; der Golden-Fall trägt dafür den
+eigenen Marker `mustRefuseKey`, damit die von `JR-13-01` assertierte Zahl der drei
 `mustFailClosed`-Fälle (F3) unverändert bleibt.
 
 ## F22 — F3s `$or`-Beispiel beschreibt die Wirkungsrichtung falsch
 
 **Kategorie:** Vorgegebenes Verfahren · **Schwere:** niedrig, aber irreführend ·
-**Ort:** F3 in diesem Dokument, sowie das Akzeptanzkriterium von `JR-1304` („der `$or`-Fall aus F3
-erweitert die Disjunktion nicht mehr") · **Status:** **behoben** in `JR-1304` (`45ac0e9`), Beschreibung
-am 2026-07-29 korrigiert (siehe unten) · **Herkunft:** `JR-1301`
+**Ort:** F3 in diesem Dokument, sowie das Akzeptanzkriterium von `JR-13-04` („der `$or`-Fall aus F3
+erweitert die Disjunktion nicht mehr") · **Status:** **behoben** in `JR-13-04` (`45ac0e9`), Beschreibung
+am 2026-07-29 korrigiert (siehe unten) · **Herkunft:** `JR-13-01`
 
 `{ $or: [ {id:'a'}, {subject:{$regex:'x'}} ] }` ⇒ `"id" = $1`. Beide Texte nennen das eine
 Erweiterung der Disjunktion. Gemessen ist `A` **enger** als `A or B`: der Nutzer sieht weniger
@@ -994,25 +994,25 @@ Fail-open ist derselbe Mechanismus an zwei anderen Stellen: im `$and` negierter
 `cannot`-Bedingungen — dort ist jeder weggelassene Zweig ein weggelassenes Verbot — und wenn **alle**
 Zweige verschwinden, weil `or()`/`and()` über eine leere Liste `undefined` liefert.
 
-**Warum das zählt:** wer `JR-1304` nach dem Kriterium abarbeitet, kann aus „erweitert die Disjunktion"
+**Warum das zählt:** wer `JR-13-04` nach dem Kriterium abarbeitet, kann aus „erweitert die Disjunktion"
 schließen, der `$or`-Fall sei der gefährliche und die Leerheits-Fälle Randfälle. Es ist umgekehrt.
-**Empfehlung:** das Kriterium von `JR-1304` auf „lässt keinen Zweig stillschweigend weg" umformulieren.
+**Empfehlung:** das Kriterium von `JR-13-04` auf „lässt keinen Zweig stillschweigend weg" umformulieren.
 
 ### Korrektur 2026-07-29 — „im `$or` nur verengend" ist selbst zu grob
 
-**Status:** **behoben** in `JR-1304` (`45ac0e9`); die Beschreibung hier war zweimal ungenau.
+**Status:** **behoben** in `JR-13-04` (`45ac0e9`); die Beschreibung hier war zweimal ungenau.
 
-Der Abschnitt oben — und in seinem Gefolge die Fassung, die ich am 2026-07-29 in `JR-1304`s
+Der Abschnitt oben — und in seinem Gefolge die Fassung, die ich am 2026-07-29 in `JR-13-04`s
 Akzeptanzkriterium geschrieben habe („weder im `$or` (**dort verengend**, F22) …") — sagt, der `$or`-Fall
 sei die harmlose Richtung. Das gilt nur, solange die Disjunktion **oben** in einer
-`can`-Komposition steht. Unter einem `$not` kippt sie, und `FilterBuilder` setzt seit `JR-1305`
+`can`-Komposition steht. Unter einem `$not` kippt sie, und `FilterBuilder` setzt seit `JR-13-05`
 **jede** `cannot`-Bedingung genau dort hin (`FilterBuilder.ts:84`):
 
 ```ts
 query = { $and: cannotConditions.map((condition) => ({ $not: condition })) };
 ```
 
-Gemessen am Übersetzer vor `JR-1304` (`git show 45ac0e9^:…`, in einer Wegwerf-Kopie):
+Gemessen am Übersetzer vor `JR-13-04` (`git show 45ac0e9^:…`, in einer Wegwerf-Kopie):
 
 ```
 { $and: [ { $not: { $or: [ {userEmail}, {subject:{$regex}} ] } } ] }
@@ -1027,13 +1027,13 @@ und die kennt der Übersetzer nicht.** Genau deshalb darf `mongoToDrizzle` auch 
 milden Modus bekommen (ADR-018).
 
 Keine eigene F-Nummer: es ist derselbe Mechanismus wie F22, nur mit korrekt bestimmter Richtung.
-Herkunft der Messung: die Nacharbeit an `JR-1301` (`704e8d1`).
+Herkunft der Messung: die Nacharbeit an `JR-13-01` (`704e8d1`).
 
 ## F23 — `tsconfig.test.json` und `tsconfig.json` sind sich über globale Augmentierungen nicht einig
 
 **Kategorie:** Testharness — unsere eigene E1-Arbeit · **Schwere:** niedrig ·
-**Ort:** `packages/backend/tsconfig.test.json` · **Status:** in `JR-1301` umgangen, Ursache offen ·
-**Herkunft:** `JR-1301`
+**Ort:** `packages/backend/tsconfig.test.json` · **Status:** in `JR-13-01` umgangen, Ursache offen ·
+**Herkunft:** `JR-13-01`
 
 Sobald eine Testdatei einen Express-Controller importiert, meldet
 `pnpm --filter @open-archiver/backend test:types` Fehler in **unberührtem Produktionscode**:
@@ -1057,30 +1057,30 @@ Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.
 
 **Kategorie:** Testharness · **Schwere:** niedrig (Entwicklerkomfort, kein Produktdefekt) ·
 **Ort:** `packages/backend/tests/support/pg-harness.ts` im Zusammenspiel mit vitests `-t`-Filter ·
-**Status:** **behoben** in `b5b2190` (`JR-105c`, 2026-07-30) · **Herkunft:** `JR-1302`–`JR-1306` (Rolle DEV, 2026-07-29)
+**Status:** **behoben** in `b5b2190` (`JR-1-05c`, 2026-07-30) · **Herkunft:** `JR-13-02`–`JR-13-06` (Rolle DEV, 2026-07-29)
 
 `acquireTestDatabase()` wird im **Modul-Scope** der Integrationsdateien aufgerufen, also beim Laden —
 und das passiert **vor** der Auswertung des `-t`-Filters. Der Teardown einer Suite, deren Fälle der
 Filter alle überspringt, läuft dagegen nicht. Ein gezielter Lauf wie
-`pnpm test -t "RED UNTIL JR-1302"` legt daher `oa_test_*`-Datenbanken an und lässt sie liegen. Ein
+`pnpm test -t "RED UNTIL JR-13-02"` legt daher `oa_test_*`-Datenbanken an und lässt sie liegen. Ein
 **vollständiger** Lauf hinterlässt nachweislich 0.
 
 Nicht gefährlich, aber irreführend: wer nach einem gefilterten Lauf auf Rückstände prüft, findet
 welche und sucht den Fehler an der falschen Stelle. Dieselbe Wurzel wie **F16** (Wurf im Modul-Scope
 nach `acquireTestDatabase()`) — der Erwerb liegt vor allem, was ihn absichern könnte.
 
-**Gehört nach `JR-105c`**, das ohnehin die Messinstrument-Befunde F14–F16 zusammenfasst und **vor E2**
+**Gehört nach `JR-1-05c`**, das ohnehin die Messinstrument-Befunde F14–F16 zusammenfasst und **vor E2**
 fällig ist. Umgehung bis dahin: nach einem gefilterten Lauf einmal vollständig laufen, oder
 `sweepStaleHarnessDatabases()` von Hand aufrufen.
 
-**Behoben in `JR-105c` (`b5b2190`, 2026-07-30), zusammen mit F16 — dieselbe Wurzel, dieselbe Lösung.**
+**Behoben in `JR-1-05c` (`b5b2190`, 2026-07-30), zusammen mit F16 — dieselbe Wurzel, dieselbe Lösung.**
 Das Ledger sieht die im Modul-Scope geholten Datenbanken unabhängig davon, ob der Filter später alle
 Fälle der Datei überspringt. Der Teardown meldet und droppt sie; **rot wird ein gefilterter Lauf davon
 nicht** — ein Wächter, der `pnpm test -t` rot macht, ist ein Wächter, den man abzuschalten lernt.
 
 Vorher/nachher mit demselben Kommando (`pnpm test -t "idempotent"`) am 2026-07-30 gemessen:
 
-|                    | Elternstand `e09b981` | mit `JR-105c`                             |
+|                    | Elternstand `e09b981` | mit `JR-1-05c`                            |
 | ------------------ | --------------------- | ----------------------------------------- |
 | Exit               | 0                     | 0                                         |
 | `oa_test_*` danach | **6**                 | **0**                                     |
@@ -1093,11 +1093,11 @@ gegenstandslos.
 
 **Kategorie:** Doku über den eigenen Code · **Schwere:** niedrig ·
 **Ort:** `06-status.md` („Bewusst nicht angefasst"), `07-session-handover.md` ·
-**Status:** **behoben** in `5c8a521` (`JR-1315`) · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+**Status:** **behoben** in `5c8a521` (`JR-13-15`) · **Herkunft:** Abnahme `JR-13-09` (2026-07-29)
 
-> **Behebung (`JR-1315`, 2026-07-29):** beide Seiten, nicht eine. Die Aussage in `06-status.md` und
+> **Behebung (`JR-13-15`, 2026-07-29):** beide Seiten, nicht eine. Die Aussage in `06-status.md` und
 > `07-session-handover.md` ist auf F4 eingeschränkt und benennt ausdrücklich, dass der F5-Kommentar
-> erst mit `JR-1315` kam — eine Umschreibung, die eine alte Behauptung durch eine Codeänderung
+> erst mit `JR-13-15` kam — eine Umschreibung, die eine alte Behauptung durch eine Codeänderung
 > nachträglich wahr macht, würde verfälschen, welcher Commit was getan hat. **Zusätzlich** trägt
 > `mongoToDrizzle.ts:130–134` jetzt den F5-Kommentar, weil ein Leser von `eq(column, value)` sonst
 > nicht erkennen kann, dass `= NULL` bekannt und gewollt offen ist. Prüfung wie im Kriterium:
@@ -1131,7 +1131,7 @@ gegen den von `HEAD` auf denselben Eingaben verglichen wurde:
 Beide sind zusätzlich durch grüne Golden-Pins festgehalten (`second operator in the same object is
 dropped`, `literal null becomes = NULL, not IS NULL`). Es ist also **kein** Code- und **kein**
 Verhaltensdefekt, sondern eine unbelegte Aussage über den eigenen Code — genau die Klasse, die
-`JR-1309` gegen den Code prüfen sollte. Behebung: entweder den F5-Kommentar nachziehen oder die
+`JR-13-09` gegen den Code prüfen sollte. Behebung: entweder den F5-Kommentar nachziehen oder die
 Aussage in beiden Statusdateien auf F4 einschränken.
 
 ## F26 — Ein `can` mit **falsy**, aber vorhandenem `conditions` bedeutet weiter Vollzugriff
@@ -1139,20 +1139,20 @@ Aussage in beiden Statusdateien auf F4 einschränken.
 **Schwere:** mittel (Voraussetzung: Rollenschreibrecht, also Super Admin — dieselbe Vorbedingung wie
 F1) · **Ort:** `packages/backend/src/services/FilterBuilder.ts:51–53`,
 `packages/backend/src/iam-policy/policy-validator.ts:76` ·
-**Status:** **Schreibseite behoben** in `cfb1462` (`JR-1313`), **Laufzeitseite offen** (`JR-1311`) ·
-**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+**Status:** **Schreibseite behoben** in `cfb1462` (`JR-13-13`), **Laufzeitseite offen** (`JR-13-11`) ·
+**Herkunft:** Abnahme `JR-13-09` (2026-07-29)
 
-> **Behebung, halb (`JR-1313`, 2026-07-29):** `PolicyValidator.isValid()` prüft die Form von
+> **Behebung, halb (`JR-13-13`, 2026-07-29):** `PolicyValidator.isValid()` prüft die Form von
 > `conditions` selbst über `checkConditionsShape()` — `conditions` muss ein Objekt sein oder fehlen,
 > Skalar, Array und `null` werden **beim Anlegen** mit `400` abgewiesen. Eine solche Policy kann also
 > nicht mehr neu entstehen. **Bewusst nicht geändert:** das Verhalten für **bereits gespeicherte**
 > Policies dieser Form. `FilterBuilder.ts:51–53` liest weiter `!rule.conditions`, also bleibt ein
 > gespeichertes `conditions: null` / `""` / `0` / `false` unbeschränkt — das ist ADR-016s Familie und
-> gehört zu `JR-1311`. Gemessen (Übersetzer `efea6bc` gegen HEAD, rein, ohne DB): für die falsy
+> gehört zu `JR-13-11`. Gemessen (Übersetzer `efea6bc` gegen HEAD, rein, ohne DB): für die falsy
 > Familie entscheidet `FilterBuilder` vor dem Übersetzer, das Ergebnis ist vor und nach E13
-> `UNRESTRICTED`. Die Betreiber-SQL aus `JR-1314` meldet beide Hälften.
+> `UNRESTRICTED`. Die Betreiber-SQL aus `JR-13-14` meldet beide Hälften.
 
-`JR-1302` hat **F19** behoben: ein `can` mit `conditions: {}` gilt nicht mehr als unbedingt. Die
+`JR-13-02` hat **F19** behoben: ein `can` mit `conditions: {}` gilt nicht mehr als unbedingt. Die
 Prüfung ist aber eine **Truthiness**-Prüfung (`!rule.conditions`), und `{}` ist das einzige _truthy_
 Mitglied dieser Familie. Jeder falsy Wert wird weiter als „unbedingtes `can`" gelesen und liefert
 `{ drizzleFilter: undefined, searchFilter: undefined }` — Vollzugriff. Gegen echtes Postgres 16.13
@@ -1177,18 +1177,18 @@ Recht auf dieses Subject" und „darf alles sehen" dürfen nicht vom selben Wert
 `conditions: null` ist Vollzugriff vertretbar („keine Bedingung"); für `""`, `0` und `false` ist es
 ein stillschweigend erweitertes Recht aus einer offensichtlich fehlerhaften Policy.
 
-**Bricht kein Akzeptanzkriterium von `JR-1302`** (dessen Kriterien nennen
+**Bricht kein Akzeptanzkriterium von `JR-13-02`** (dessen Kriterien nennen
 `auditor-specific-mailbox.json` und den Nutzer ohne Rolle, beide erfüllt). Vorschlag: zusammen mit
-`JR-1311` behandeln — dort wird `conditions` ohnehin schärfer geprüft. PO entscheidet über den Ort.
+`JR-13-11` behandeln — dort wird `conditions` ohnehin schärfer geprüft. PO entscheidet über den Ort.
 
 ## F27 — Query 2 der Betreiberanleitung hat **falsch-negative**: `conditions` als Skalar oder Array wird nicht gefunden
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 2 **und** Query 3,
-jeweils die `cond`-CTE · **Status:** **behoben** in `c17144e` (`JR-1314`) ·
-**Herkunft:** Abnahme `JR-1309` (2026-07-29)
+jeweils die `cond`-CTE · **Status:** **behoben** in `c17144e` (`JR-13-14`) ·
+**Herkunft:** Abnahme `JR-13-09` (2026-07-29)
 
-> **Behebung (`JR-1314`, 2026-07-29):** beides, wie vom PO entschieden.
+> **Behebung (`JR-13-14`, 2026-07-29):** beides, wie vom PO entschieden.
 >
 > 1. **Query 2 hat einen eigenen Befundtyp** `conditions is not an object`, gespeist aus `pair`
 >    (nicht aus `cond`, denn es gibt in einem Skalar keine Keys zu begehen). Die Detailzeile gibt den
@@ -1201,7 +1201,7 @@ jeweils die `cond`-CTE · **Status:** **behoben** in `c17144e` (`JR-1314`) ·
 >    kann. Ein neuer Absolutsatz ist bewusst **nicht** an seine Stelle getreten.
 >
 > Zusätzlich als **Änderung 8** dokumentiert: ein `conditions`, das kein Objekt ist, wird beim
-> Speichern abgewiesen (`JR-1313`); die Lesart bereits gespeicherter Policies ist unverändert, und die
+> Speichern abgewiesen (`JR-13-13`); die Lesart bereits gespeicherter Policies ist unverändert, und die
 > Seite sagt, welche davon weiter unbeschränkt sind und welche jetzt verweigert werden.
 >
 > **Beleg:** die ` ```sql `-Blöcke aus der veröffentlichten Datei extrahiert und **wörtlich** gegen
@@ -1244,9 +1244,9 @@ Absolutsatz entschärfen.
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig bis mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 3, CTE `resolved` ·
-**Status:** **behoben** in `c17144e` (`JR-1314`) · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+**Status:** **behoben** in `c17144e` (`JR-13-14`) · **Herkunft:** Abnahme `JR-13-09` (2026-07-29)
 
-> **Behebung (`JR-1314`, 2026-07-29):** die `CASE`-Kette in `resolved` ist durch einen Join auf eine
+> **Behebung (`JR-13-14`, 2026-07-29):** die `CASE`-Kette in `resolved` ist durch einen Join auf eine
 > neue CTE `subject_table (subject, table_name)` ersetzt, die `all` auf **beide** Tabellen abbildet
 > (`archive`→`archived_emails`, `ingestion`→`ingestion_sources`, `all`→beide). `resolved` ist
 > `SELECT DISTINCT`, weil ein relationspräfigierter Key sonst zwei identische Zeilen ergäbe.
@@ -1288,9 +1288,9 @@ Tabellen abbilden (zwei Zeilen je Key) oder die Grenze ausdrücklich mit `all` b
 **Schwere:** niedrig (fail-closed, kein Injektionsweg) · **Ort:**
 `packages/backend/src/iam-policy/policy-validator.ts` `areConditionKeysValid()` gegen
 `packages/backend/src/helpers/mongoToDrizzle.ts` `getDrizzleColumn()` ·
-**Status:** **behoben** in `cfb1462` (`JR-1313`) · **Herkunft:** Abnahme `JR-1309` (2026-07-29)
+**Status:** **behoben** in `cfb1462` (`JR-13-13`) · **Herkunft:** Abnahme `JR-13-09` (2026-07-29)
 
-> **Behebung (`JR-1313`, 2026-07-29):** nicht „dieselbe Regel zweimal richtig geschrieben", sondern
+> **Behebung (`JR-13-13`, 2026-07-29):** nicht „dieselbe Regel zweimal richtig geschrieben", sondern
 > **ein** Prädikat. `packages/backend/src/helpers/conditionKey.ts` ist ein Modul, das **nichts**
 > importiert, und besitzt `relationToTableMap`, `resolveConditionKey()`, `isConditionOperatorKey()`
 > und `checkConditionsShape()`. Beide Gates fragen es: `PolicyValidator.areConditionKeysValid()` und
@@ -1308,7 +1308,7 @@ Tabellen abbilden (zwei Zeilen je Key) oder die Grenze ausdrücklich mit `all` b
 > gleichsinnig kaputten Gates erfüllt wird. 20 Keys, 9 `conditions`-Formen.
 >
 > **Die drei Restspalte sind als grüne Assertions festgehalten**, nicht als Kommentar — genau das hat
-> F29 stehen lassen: Spaltenexistenz (`foo`, ADR-019, `JR-1311`), Operatornamen (`$regex` — SQL- und
+> F29 stehen lassen: Spaltenexistenz (`foo`, ADR-019, `JR-13-11`), Operatornamen (`$regex` — SQL- und
 > Suchübersetzer haben verschiedene Mengen, eine Schreibzeit-Allowlist könnte mit keiner der beiden
 > übereinstimmen) und `conditions: {}` (ein Objekt, also speicherbar; bei Benutzung verweigert).
 >
@@ -1321,7 +1321,7 @@ Relation; der Übersetzer akzeptiert höchstens zwei Segmente und nur Relationen
 `relationToTableMap`. Gemessen, beide Gates auf demselben Key:
 
 ```
-key="foo"                       validator=ACCEPT  mongoToDrizzle=TRANSLATED   (ADR-019-Restspalt, JR-1311)
+key="foo"                       validator=ACCEPT  mongoToDrizzle=TRANSLATED   (ADR-019-Restspalt, JR-13-11)
 key="a.b.c"                     validator=ACCEPT  mongoToDrizzle=REFUSED      ← Divergenz
 key="attachment.name"           validator=ACCEPT  mongoToDrizzle=REFUSED      ← Divergenz
 key="foo.bar"                   validator=ACCEPT  mongoToDrizzle=REFUSED      ← Divergenz
@@ -1339,7 +1339,7 @@ aber zwei Aussagen sind damit falsch:
    a key with more than two parts, is **refused**." Die Form ist dort als „column name, optionally
    prefixed by a **resolvable** relation" definiert — `attachment.name` erfüllt sie nicht und wird beim
    Speichern trotzdem angenommen.
-2. **`JR-1306`s Akzeptanzkriterium** endet auf „Relationszweig ebenso; `PolicyValidator` weist solche
+2. **`JR-13-06`s Akzeptanzkriterium** endet auf „Relationszweig ebenso; `PolicyValidator` weist solche
    Policies **beim Anlegen** ab". Für den Relationszweig und für Keys mit mehr als zwei Segmenten tut
    er das nicht.
 
@@ -1354,11 +1354,11 @@ deckungsgleich und die Doku stimmt wieder.
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md`, Query 2 (Befundtyp
 `empty conditions object` und `conditions is not an object`) sowie der Abschnitt „How to read an
-empty result" · **Status:** **behoben** in `JR-1317` (2026-07-29) · **Herkunft:** Abnahme `JR-1309a`
+empty result" · **Status:** **behoben** in `JR-13-17` (2026-07-29) · **Herkunft:** Abnahme `JR-13-09a`
 (2026-07-29)
 
-`JR-1314` hat **F27** für die Wurzel behoben: ein `conditions`, das existiert und kein Objekt ist,
-wird gemeldet. Die Prüfung, die `mongoToDrizzle` seit `JR-1313` vornimmt, gilt aber **rekursiv** —
+`JR-13-14` hat **F27** für die Wurzel behoben: ein `conditions`, das existiert und kein Objekt ist,
+wird gemeldet. Die Prüfung, die `mongoToDrizzle` seit `JR-13-13` vornimmt, gilt aber **rekursiv** —
 `checkConditionsShape()` läuft in jedem `$or`/`$and`/`$not`-Zweig erneut, und ein leerer
 Bedingungsknoten wird auf jeder Ebene mit `the condition object is empty` abgewiesen. Query 2 prüft
 beides nur an der Wurzel: der Befundtyp `conditions is not an object` speist sich aus `pair`
@@ -1404,14 +1404,14 @@ eine unvollständige Abfrage mit ehrlicher Grenzangabe wäre vertretbar:
    und die Wirkung kippt von „alle Zeilen sichtbar" auf „jede Anfrage scheitert".
 
 **Kein Codedefekt.** Das Laufzeitverhalten ist fail-closed und richtig; F30 liegt ausschließlich in
-der betreibersichtbaren Hälfte. **Kein Regress gegenüber `JR-1309`:** die Vorher/Nachher-Tabelle aus
-`JR-1314` (17 `conditions`-Werte an der Wurzel) hält vollständig — alle acht Formen hier sind
+der betreibersichtbaren Hälfte. **Kein Regress gegenüber `JR-13-09`:** die Vorher/Nachher-Tabelle aus
+`JR-13-14` (17 `conditions`-Werte an der Wurzel) hält vollständig — alle acht Formen hier sind
 verschachtelt und standen in keiner der bisher geprüften Listen.
 
-**Bricht `JR-1307`s Akzeptanzkriterium** („ein Betreiber kann **vor** dem Update feststellen, welche
-seiner Rollen betroffen sind") und die PO-Vorgabe zu `JR-1314` („die Abfragen decken alle **heute
+**Bricht `JR-13-07`s Akzeptanzkriterium** („ein Betreiber kann **vor** dem Update feststellen, welche
+seiner Rollen betroffen sind") und die PO-Vorgabe zu `JR-13-14` („die Abfragen decken alle **heute
 bekannten** Formen ab, und das Dokument sagt genau, welche das sind") — die Knotenform ist seit
-`JR-1313` bekannt, sie steht im Prädikat, das beide Gates benutzen. `JR-1314`s eigene, engere
+`JR-13-13` bekannt, sie steht im Prädikat, das beide Gates benutzen. `JR-13-14`s eigene, engere
 Kriterien sind erfüllt.
 
 **Behebung ist klein und liegt an einer Stelle:** in Query 2 die beiden Formbefunde aus `cond` statt
@@ -1420,7 +1420,7 @@ weder `object` noch ein Operandenwert ist, plus `c.node = '{}'::jsonb` für jede
 für die Wurzel. Dazu die zwei zitierten Sätze berichtigen. Solange das offen ist, darf die Seite den
 leeren Objektknoten nicht als geprüft aufführen.
 
-### Behoben in `JR-1317` (`07ac661`, 2026-07-29) — und der Anspruch ist mit weg (ADR-020)
+### Behoben in `JR-13-17` (`07ac661`, 2026-07-29) — und der Anspruch ist mit weg (ADR-020)
 
 **(a) Die zwei Formbefunde stehen auf Knotenebene.** Query 2s `cond` trägt jetzt eine Spalte `path`
 (Wurzel `"conditions"`, Objektkind `-> "key"`, Arrayelement `-> []`), und die Befunde speisen aus
@@ -1484,10 +1484,10 @@ Ziel. Suite unverändert `250 passed | 2 skipped`, Exit 0.
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** mittel ·
 **Ort:** `docs/user-guides/upgrade-and-migration/access-control-changes.md:625–632`, `:621–623` und
-`:498–500`, alle drei von `JR-1317` neu geschrieben · **Status:** offen, Behebung in `JR-1318` ·
-**Herkunft:** Abnahme `JR-1309b` (2026-07-29) · **Ursache:** ADR-020 selbst, siehe deren Berichtigung
+`:498–500`, alle drei von `JR-13-17` neu geschrieben · **Status:** offen, Behebung in `JR-13-18` ·
+**Herkunft:** Abnahme `JR-13-09b` (2026-07-29) · **Ursache:** ADR-020 selbst, siehe deren Berichtigung
 
-`JR-1317` hat den Abdeckungsanspruch der **Abfrage** gestrichen — korrekt und unabhängig belegt. Er ist
+`JR-13-17` hat den Abdeckungsanspruch der **Abfrage** gestrichen — korrekt und unabhängig belegt. Er ist
 dabei nicht verschwunden, sondern auf den **Verhaltenscheck** gewandert, den dieselbe Task neu
 geschrieben hat. Die tragende Stelle:
 
@@ -1531,8 +1531,8 @@ Rest", nicht der jeweilige Satz. Die ADR ist berichtigt.
 ## F32 — Der zitierte Fehlertext gilt nur für ein `policies`, das ein Objekt ist
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig ·
-**Ort:** `access-control-changes.md:512–516` · **Status:** offen, Behebung in `JR-1318` ·
-**Herkunft:** Abnahme `JR-1309b` (2026-07-29)
+**Ort:** `access-control-changes.md:512–516` · **Status:** offen, Behebung in `JR-13-18` ·
+**Herkunft:** Abnahme `JR-13-09b` (2026-07-29)
 
 Die Seite zitiert genau einen Fehlertext für den Abbruchfall. Gemessen für alle fünf Nicht-Array-Typen:
 
@@ -1552,8 +1552,8 @@ SQL-`NULL` ist ausgeschlossen.)
 ## F33 — „is skipped without a row" untertreibt, was die Abfrage tut
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig, Richtung sicher ·
-**Ort:** `access-control-changes.md:493–497` · **Status:** offen, Behebung in `JR-1318` ·
-**Herkunft:** Abnahme `JR-1309b` (2026-07-29)
+**Ort:** `access-control-changes.md:493–497` · **Status:** offen, Behebung in `JR-13-18` ·
+**Herkunft:** Abnahme `JR-13-09b` (2026-07-29)
 
 Unter _What it does not report_ steht, eine Regel mit `action`/`subject`, das weder String noch
 String-Array ist, werde „skipped without a row". Gemessen:
@@ -1565,7 +1565,7 @@ action/subject not a string or array of strings -> Q2 rows: 2
 ```
 
 Bedingungsbefunde erscheinen trotzdem, weil die CTE `cond` aus `rule` speist und nicht aus `pair` —
-seit `JR-1317` (a) ist das gerade der Zweck der Umstellung. Eine **bare Skalar-Regel** (`5`,
+seit `JR-13-17` (a) ist das gerade der Zweck der Umstellung. Eine **bare Skalar-Regel** (`5`,
 `"nonsense"` im Policy-Array) wird tatsächlich ohne Zeile übersprungen und bricht die Abfrage **nicht**
 ab; dieser Teil der Aussage hält. Die Richtung ist harmlos — die Seite verspricht weniger, als sie
 liefert —, die Aussage ist trotzdem falsch.
@@ -1573,8 +1573,8 @@ liefert —, die Aussage ist trotzdem falsch.
 ## F34 — „The known case" liest sich als Aufzählung, ist aber keine
 
 **Kategorie:** veröffentlichte Betreiberdokumentation · **Schwere:** niedrig, Richtung sicher ·
-**Ort:** `access-control-changes.md:502–510` · **Status:** offen, Behebung in `JR-1318` ·
-**Herkunft:** Abnahme `JR-1309b` (2026-07-29)
+**Ort:** `access-control-changes.md:502–510` · **Status:** offen, Behebung in `JR-13-18` ·
+**Herkunft:** Abnahme `JR-13-09b` (2026-07-29)
 
 Der Abschnitt über Übermeldungen nennt **einen** Fall. Gemessen sind sechs derselben Klasse, alle
 wertseitig und alle mit Position:
@@ -1589,7 +1589,7 @@ OVER-REPORT accepted | reported | {"userEmail":{"$eq":{}}}
             accepted | silent   | {"id":{"$in":[{"a":1}]}} · {"subject":{"$in":[[]]}} · {"userEmail":{"$in":[null]}}
 ```
 
-Vier sind älter als `JR-1317`; **neu** durch die Knotenebene sind `{"id":{"$in":[{}]}}` (dokumentiert)
+Vier sind älter als `JR-13-17`; **neu** durch die Knotenebene sind `{"id":{"$in":[{}]}}` (dokumentiert)
 und `{"userEmail":{"$eq":{}}}` (nicht dokumentiert). Der generelle Vorbehalt darüber deckt die Klasse
 ab — nur die Formulierung „The known case" suggeriert Vollständigkeit. Dieselbe Lesefalle wie F31,
 hier ohne Schaden.
@@ -1626,7 +1626,7 @@ halbe Repository und macht jede Codearchäologie unmöglich. **Diesen Fehler nic
 **Task-Vorschlag, PO entscheidet — nicht in E13:** eine `.gitattributes` mit `* text=auto eol=lf` ist die
 richtige Lösung, weil sie unabhängig von der lokalen `core.autocrlf` gilt. Der Preis ist ein einmaliger
 Normalisierungs-Commit über den Bestand (`git add --renormalize .`), der **allein stehen** muss, wie
-`JR-105a`. Die billige Alternative `endOfLine: "auto"` in `.prettierrc` schwächt die Prüfung und lässt
+`JR-1-05a`. Die billige Alternative `endOfLine: "auto"` in `.prettierrc` schwächt die Prüfung und lässt
 gemischte Zeilenenden im Repository zu. **Gehört auf den Integrationsbranch, nicht in ein Epic**, und
 nicht in denselben Commit wie eine inhaltliche Änderung.
 
@@ -1634,9 +1634,9 @@ nicht in denselben Commit wie eine inhaltliche Änderung.
 
 **Kategorie:** Messfehler in einem Prüfbericht (kein Produktdefekt) · **Schwere:** keine ·
 **Status:** **widerlegt, kein Befund** — hier geführt, damit der Kandidat nicht erneut „gefunden" wird ·
-**Herkunft:** Prüfbericht `JR-1309c` (2026-07-30), widerlegt vom PO am selben Tag
+**Herkunft:** Prüfbericht `JR-13-09c` (2026-07-30), widerlegt vom PO am selben Tag
 
-Der Bericht zu `JR-1309c` meldete einen neuen niedrigen Befund: `prettier --check` warne an
+Der Bericht zu `JR-13-09c` meldete einen neuen niedrigen Befund: `prettier --check` warne an
 `docs/user-guides/upgrade-and-migration/access-control-changes.md`, und zwar **auch nach**
 CRLF→LF-Normalisierung, verursacht durch einen mit **Tabs statt Leerzeichen** eingerückten JSON-Block
 (Zeilen 44–54). **Beide Hälften sind falsch:**
@@ -1666,12 +1666,12 @@ stehen vor **und** nach dem Commit unverändert da (`git show 939df10^:…` lief
 
 Diese wurden in E0 gefunden und haben schon eine Task — sie gehören nicht in die Liste oben:
 
-| Problem                                                                                                                              | Task                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| ~~`docs/services/iam-service/iam-policy.md` listet die Action `export` nicht und beschreibt `manage` falsch~~ **behoben 2026-07-30** | `JR-1312` (nicht `JR-1103`)                      |
-| Frontend hat keine Nav-Filterung; eingeschränkte Nutzer sehen Menüpunkte, die 403 liefern                                            | `JR-1102`                                        |
-| `IamService`-Slug-Bug: `name.toLocaleLowerCase().replaceAll('', '_')`                                                                | Workaround in `JR-1101` (`slug` explizit setzen) |
-| `docs/enterprise/journaling/guide.md` beschreibt abwesenden Code                                                                     | `JR-1205`                                        |
+| Problem                                                                                                                              | Task                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| ~~`docs/services/iam-service/iam-policy.md` listet die Action `export` nicht und beschreibt `manage` falsch~~ **behoben 2026-07-30** | `JR-13-12` (nicht `JR-11-03`)                     |
+| Frontend hat keine Nav-Filterung; eingeschränkte Nutzer sehen Menüpunkte, die 403 liefern                                            | `JR-11-02`                                        |
+| `IamService`-Slug-Bug: `name.toLocaleLowerCase().replaceAll('', '_')`                                                                | Workaround in `JR-11-01` (`slug` explizit setzen) |
+| `docs/enterprise/journaling/guide.md` beschreibt abwesenden Code                                                                     | `JR-12-05`                                        |
 
 ## Offene Vorschläge, die Produktionscode betreffen
 
@@ -1680,7 +1680,7 @@ Bewusst nicht umgesetzt, weil sie über den jeweiligen Task hinausgehen:
 1. **`FilterBuilder` eine Ability injizieren**, statt sie über `IamService.getAbilityForUser()` zu
    holen (optionaler Parameter `ability?: AppAbility` mit Fallback auf die heutige Auflösung). Damit
    wäre `FilterBuilder.create()` ohne Datenbank unit-testbar. Aktuell hängt es über `IamService` am
-   `db`-Singleton, der beim Import wirft. `JR-104` hat den Weg über eine echte Datenbank genommen und
+   `db`-Singleton, der beim Import wirft. `JR-1-04` hat den Weg über eine echte Datenbank genommen und
    die Lücke damit geschlossen; der Vorschlag bleibt sinnvoll, ist aber nicht mehr blockierend.
 2. **`src/api/server.ts` type-checkt nicht unter `moduleResolution: bundler`** (Default-Import von
    `i18next-http-middleware`). Deshalb schließt `packages/backend/tsconfig.test.json` den
@@ -1690,7 +1690,7 @@ Bewusst nicht umgesetzt, weil sie über den jeweiligen Task hinausgehen:
 
 **Kategorie:** Deployment / Rechtetrennung · **Schwere:** mittel (hoch, sobald ein
 Compliance-Anspruch daran hängt) · **Status:** offen, **Nacharbeit in E11** ·
-**Herkunft:** gemessen am 2026-07-31 bei `JR-205`
+**Herkunft:** gemessen am 2026-07-31 bei `JR-2-05`
 
 `docker-compose.yml` setzt `POSTGRES_USER: ${POSTGRES_USER:-admin}`, `.env.example` setzt
 `POSTGRES_USER=admin`, und `DATABASE_URL` wird aus genau dieser Rolle gebildet. Die
@@ -1707,7 +1707,7 @@ SET session_replication_role = replica, dann UPDATE                    ⇒ ALLOW
 ALTER TABLE journal_ledger DISABLE TRIGGER journal_ledger_append_only  ⇒ ALLOWED
 ```
 
-**Was das für den Append-Only-Trigger aus `JR-205` bedeutet.** Er hält gegen den Weg, der praktisch
+**Was das für den Append-Only-Trigger aus `JR-2-05` bedeutet.** Er hält gegen den Weg, der praktisch
 zählt — **F1** (SQL-Injection über Policy-Condition-Keys) injiziert in eine `WHERE`-Klausel und kann
 weder ein `SET` noch ein `ALTER TABLE` absetzen, weil `postgres-js` das erweiterte Protokoll benutzt
 und kein Statement-Stacking erlaubt. Ein Akteur, der über diesen Weg eine Ledger-Zeile umschreiben
@@ -1733,8 +1733,8 @@ eine dokumentierte Anforderung.
 ## F38 — `event_payload` wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle gepatcht ist
 
 **Kategorie:** Neuer Code (E2) · **Schwere:** hoch — jede Ledger-Zeile mit `event_payload` wäre
-unverifizierbar · **Status:** **behoben** im selben Zug (`JR-208`) ·
-**Herkunft:** gemessen am 2026-08-01 bei `JR-208`, Rolle `tester`
+unverifizierbar · **Status:** **behoben** im selben Zug (`JR-2-08`) ·
+**Herkunft:** gemessen am 2026-08-01 bei `JR-2-08`, Rolle `tester`
 
 `PostgresLedgerWriter.insert()` band `event_payload` als `JSON.stringify(...)` an `$16`. postgres-js
 entnimmt den Parametertyp der **Parameterbeschreibung des Servers**, sieht dort `jsonb` und
@@ -1758,7 +1758,7 @@ $2                  mit dem Objekt selbst     ->  jsonb_typeof = object   (richt
 Nur der Umweg über `text` legt den Typ in der Parameterbeschreibung auf `text` fest, sodass kein
 Treiber mehr `jsonb` ableiten und ein zweites Mal kodieren kann. Behoben ist es so.
 
-**Warum `JR-206` das nicht gefunden hat, und das ist der eigentlich lehrreiche Teil.** Der einzige
+**Warum `JR-2-06` das nicht gefunden hat, und das ist der eigentlich lehrreiche Teil.** Der einzige
 postgres-js-Client im Repository, der sich **nicht** so verhält, ist `harness.sql` — weil
 `drizzle(client, …)` den ihm übergebenen Client patcht. Und genau dieser Client ist der, durch den
 jeder Integrationstest schreibt. Gemessen, fünf Varianten, dieselbe Datenbank, derselbe Writer:
@@ -1778,7 +1778,7 @@ abhängen) —, also wäre die Produktion die erste Stelle gewesen, an der es au
 **Regel, die daraus folgt und über diesen Befund hinausgeht:** ein Integrationstest, der nur über
 `harness.sql` schreibt, prüft den Treiber der _Tests_, nicht den der Anwendung. Für alles in
 `packages/journaling` — das seine Verbindung per Definition injiziert bekommt — muss mindestens ein
-Test über einen **nackten** Client schreiben. `JR-208` tut das jetzt (`pool`), und der benannte
+Test über einen **nackten** Client schreiben. `JR-2-08` tut das jetzt (`pool`), und der benannte
 Regressionsfall in `journal-ledger-concurrency.adv.test.ts` prüft `jsonb_typeof` direkt statt nur
 über den Kettenhash, damit ein Rückfall sagt, _was_ kaputt ist.
 
@@ -1788,7 +1788,7 @@ Regressionsfall in `journal-ledger-concurrency.adv.test.ts` prüft `jsonb_typeof
 
 **Schwere:** niedrig · **Kategorie:** Testharness · **Ort:**
 `packages/journaling/src/ledger/canonical-encoding.test.ts:166–180`, Fall „is length-prefixed, so
-field boundaries cannot be shifted" · **Gefunden:** `JR-210a` (zweite Abnahme E2, 2026-08-01, Rolle
+field boundaries cannot be shifted" · **Gefunden:** `JR-2-10a` (zweite Abnahme E2, 2026-08-01, Rolle
 `tester`), Mutationsprobe M4 · **Keine Auswirkung auf das Produkt** — die Kodierung selbst ist
 korrekt und das Längenpräfix vorhanden.
 

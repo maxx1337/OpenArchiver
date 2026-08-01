@@ -8,7 +8,7 @@ import { residueNotice, settleHarnessResidue } from './harness-residue';
 import { assertSuiteInventory } from './suite-inventory';
 
 /**
- * Vitest `globalSetup` (JR-105b, extended by JR-105c).
+ * Vitest `globalSetup` (JR-1-05b, extended by JR-1-05c).
  *
  * Runs once per `vitest` invocation, in the main process. Everything asserted here fails the run with
  * a non-zero exit code regardless of which project was selected, which is what makes these checks
@@ -17,7 +17,7 @@ import { assertSuiteInventory } from './suite-inventory';
  * There is deliberately **no** environment variable to switch any of it off.
  *
  * Before the run:
- *   - the **file** inventory (JR-105b): which test files exist and which project collects them;
+ *   - the **file** inventory (JR-1-05b): which test files exist and which project collects them;
  *   - the previous run's executed-test measurement is deleted, so a run in which the reporter never
  *     executed cannot be judged against stale numbers;
  *   - a ledger directory for this run's test databases is created and published to the workers.

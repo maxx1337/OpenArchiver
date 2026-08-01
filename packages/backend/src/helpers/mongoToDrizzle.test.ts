@@ -9,7 +9,7 @@ import { renderSql } from '../../tests/support/render-sql';
 import { expectFailClosed, redUntil } from '../../tests/support/fail-closed';
 
 /**
- * JR-103 -- unit tests for `mongoToDrizzle()`.
+ * JR-1-03 -- unit tests for `mongoToDrizzle()`.
  *
  * Classification: `ci`. Pure; the helper imports only `drizzle-orm`, no connection.
  *
@@ -31,12 +31,12 @@ interface GoldenCase {
 	sql?: string | null;
 	params?: unknown[];
 	/**
-	 * JR-1301: the translator must refuse this input rather than drop the condition. Accepted
+	 * JR-13-01: the translator must refuse this input rather than drop the condition. Accepted
 	 * outcomes are defined in `tests/support/fail-closed.ts`. Mutually exclusive with `sql`.
 	 */
 	mustFailClosed?: boolean;
 	/**
-	 * JR-1306: the condition **key** is not a column reference the translator can resolve, so the
+	 * JR-13-06: the condition **key** is not a column reference the translator can resolve, so the
 	 * whole condition must be refused. Kept apart from `mustFailClosed` so that the F3 case count
 	 * asserted below still counts F3 cases. Mutually exclusive with `sql`.
 	 */
@@ -76,23 +76,23 @@ suite('ci', 'mongoToDrizzle() -- golden file', () => {
 	);
 
 	/**
-	 * FINDING F3 regression (JR-1301, epic E13).
+	 * FINDING F3 regression (JR-13-01, epic E13).
 	 *
 	 * Until 2026-07-28 the three cases below were tagged `failOpen: true` in the golden file and
 	 * asserted to produce `undefined` -- the test recorded the defect as the contract. They now
 	 * demand the fail-closed contract from `tests/support/fail-closed.ts` and are therefore RED
-	 * until `JR-1304` lands. Do not weaken them to get a green run: the red state is the evidence
+	 * until `JR-13-04` lands. Do not weaken them to get a green run: the red state is the evidence
 	 * that the fix changed something.
 	 */
-	it(redUntil('JR-1304', 'every input that used to yield no filter now fails closed'), () => {
+	it(redUntil('JR-13-04', 'every input that used to yield no filter now fails closed'), () => {
 		expect(
 			failClosedCases.length,
 			'the golden file must still carry the fail-closed cases'
 		).toBe(3);
 		coverageNotice(
-			`F3 regression (JR-1301): ${failClosedCases.length} input shapes must fail closed ` +
+			`F3 regression (JR-13-01): ${failClosedCases.length} input shapes must fail closed ` +
 				`in mongoToDrizzle(): ${failClosedCases.map((entry) => entry.name).join('; ')}. ` +
-				`Expected RED until JR-1304; "undefined" means "no restriction" to every ` +
+				`Expected RED until JR-13-04; "undefined" means "no restriction" to every ` +
 				`FilterBuilder caller.`
 		);
 		for (const entry of failClosedCases) {
@@ -101,7 +101,7 @@ suite('ci', 'mongoToDrizzle() -- golden file', () => {
 	});
 
 	/**
-	 * JR-1306 (finding F21, strict allowlist). The case this covers used to be a *translating* case
+	 * JR-13-06 (finding F21, strict allowlist). The case this covers used to be a *translating* case
 	 * in the golden file: `{ 'foo.bar': 'x' }` rendered `"foo.bar" = $1`. It was inverted in the
 	 * same commit as the fix, and `observedBeforeE13` records what it rendered before, so the change
 	 * of expectation is legible from the fixture alone.
@@ -210,15 +210,15 @@ suite('ci', 'mongoToDrizzle() -- logical operators and nesting', () => {
 	});
 
 	/**
-	 * FINDING F3 regression (JR-1301) -- the three shapes named in `JR-1304`'s acceptance
+	 * FINDING F3 regression (JR-13-01) -- the three shapes named in `JR-13-04`'s acceptance
 	 * criteria: "kein stilles Erweitern eines `$or`, kein Verlust einer `$not`-Negation".
 	 *
 	 * Each of these used to be pinned as observed behaviour. They now state the requirement and
-	 * are RED until `JR-1304`.
+	 * are RED until `JR-13-04`.
 	 */
-	it(redUntil('JR-1304', 'an untranslatable $or branch is not silently dropped'), () => {
+	it(redUntil('JR-13-04', 'an untranslatable $or branch is not silently dropped'), () => {
 		// `{ $regex: ... }` is unsupported, that branch vanishes, and the `$or` collapses to
-		// `"id" = $1`. F3's write-up and JR-1304's criterion both call this a *widening* of the
+		// `"id" = $1`. F3's write-up and JR-13-04's criterion both call this a *widening* of the
 		// disjunction; measured, it is a **narrowing** -- `A or B` becomes `A`, so a principal sees
 		// fewer rows than the policy grants (finding F22). It is still a defect: the stored policy
 		// silently means something else than it says, and the same drop in the `$and` of negated
@@ -244,7 +244,7 @@ suite('ci', 'mongoToDrizzle() -- logical operators and nesting', () => {
 	});
 
 	it(
-		redUntil('JR-1304', 'a disjunction whose only branch is untranslatable must not vanish'),
+		redUntil('JR-13-04', 'a disjunction whose only branch is untranslatable must not vanish'),
 		() => {
 			// This is the fail-open boundary of the same defect, and the shape `rulesToQuery` produces
 			// for a role with exactly one conditional `can`: `{ $or: [ <untranslatable> ] }`. `or()` over
@@ -256,14 +256,17 @@ suite('ci', 'mongoToDrizzle() -- logical operators and nesting', () => {
 		}
 	);
 
-	it(redUntil('JR-1304', 'an $and whose branches all vanish must not yield "no filter"'), () => {
+	it(redUntil('JR-13-04', 'an $and whose branches all vanish must not yield "no filter"'), () => {
 		expectFailClosed('{ $and: [ {subject: {$regex}} ] }', () =>
 			mongoToDrizzle({ $and: [{ subject: { $regex: 'x' } }] })
 		);
 	});
 
 	it(
-		redUntil('JR-1304', 'a $not around an untranslatable condition must not lose the negation'),
+		redUntil(
+			'JR-13-04',
+			'a $not around an untranslatable condition must not lose the negation'
+		),
 		() => {
 			// The guard `if (subQuery)` means an unsupported inner condition removes the NOT rather
 			// than failing, so a deny-style condition evaporates.
@@ -306,7 +309,7 @@ suite('ci', 'mongoToDrizzle() -- column name mapping', () => {
 		expect(render({ 'ingestionSource.status': 'active' })!.sql).toBe(
 			'"ingestion_sources"."status" = $1'
 		);
-		// INVERTED in JR-1306 (finding F21, decided by the PO 2026-07-29: strict allowlist).
+		// INVERTED in JR-13-06 (finding F21, decided by the PO 2026-07-29: strict allowlist).
 		// Until then this line pinned the observed behaviour -- a relation that is not in the map
 		// was emitted verbatim as one quoted identifier containing a dot
 		// (`"attachment.name" = $1`), which names no column and therefore fails at query time for
@@ -319,7 +322,7 @@ suite('ci', 'mongoToDrizzle() -- column name mapping', () => {
 });
 
 /**
- * FINDING F1 (JR-103, adversarial) -- condition **keys** are not escaped.
+ * FINDING F1 (JR-1-03, adversarial) -- condition **keys** are not escaped.
  *
  * `getDrizzleColumn()` builds the column reference from the policy condition key, either via
  * `sql.identifier()` or, for a mapped relation, via `sql.raw()`. In drizzle-orm's Postgres dialect
@@ -332,12 +335,12 @@ suite('ci', 'mongoToDrizzle() -- column name mapping', () => {
  * `FilterBuilder` scopes.
  *
  * ---------------------------------------------------------------------------------------------
- * JR-1301 (epic E13): these tests used to pin the observed behaviour and carried an `it.fails`
- * marker. They now demand the behaviour `JR-1306` has to deliver -- "ein Key mit `\"` wird
+ * JR-13-01 (epic E13): these tests used to pin the observed behaviour and carried an `it.fails`
+ * marker. They now demand the behaviour `JR-13-06` has to deliver -- "ein Key mit `\"` wird
  * abgewiesen, nicht escaped-durchgelassen; Relationszweig ebenso" -- and are therefore RED until
  * that task lands.
  *
- * The requirement is stated as *rejection*, not as *escaping*, on purpose: `JR-1306` chose an
+ * The requirement is stated as *rejection*, not as *escaping*, on purpose: `JR-13-06` chose an
  * allowlist of known columns over escaping, because an unknown condition key is a policy error and
  * belongs fail-closed. Escaping the quote (`"id"" or 1=1 --"`) would also close the injection, and
  * `expectFailClosed` does not accept it -- an escaped hostile identifier still names a column that
@@ -366,12 +369,12 @@ suite('ci', 'mongoToDrizzle() -- FINDING F1: unescaped condition keys', () => {
 		'id"; drop table archived_emails; --',
 	];
 
-	it(redUntil('JR-1306', 'a condition key that injects SQL is rejected'), () => {
+	it(redUntil('JR-13-06', 'a condition key that injects SQL is rejected'), () => {
 		coverageNotice(
-			'FINDING F1 regression (JR-1301): mongoToDrizzle() must reject condition KEYS that ' +
+			'FINDING F1 regression (JR-13-01): mongoToDrizzle() must reject condition KEYS that ' +
 				'contain SQL syntax. Today it does not escape them, so a policy condition key with ' +
 				'a double quote writes raw SQL into the WHERE clause of every FilterBuilder-scoped ' +
-				'query. Expected RED until JR-1306.'
+				'query. Expected RED until JR-13-06.'
 		);
 		for (const key of hostileKeys) {
 			expectFailClosed(`hostile condition key ${JSON.stringify(key)}`, () =>
@@ -380,10 +383,10 @@ suite('ci', 'mongoToDrizzle() -- FINDING F1: unescaped condition keys', () => {
 		}
 	});
 
-	it(redUntil('JR-1306', 'no rendered predicate ever contains an injected SQL fragment'), () => {
+	it(redUntil('JR-13-06', 'no rendered predicate ever contains an injected SQL fragment'), () => {
 		// Independent of *how* the key is refused: if a predicate comes out at all, it must not
 		// carry the attacker's syntax. This is the assertion that stays meaningful whichever
-		// design JR-1306 picks.
+		// design JR-13-06 picks.
 		for (const key of hostileKeys) {
 			let sqlText: string | undefined;
 			try {
@@ -405,7 +408,7 @@ suite('ci', 'mongoToDrizzle() -- FINDING F1: unescaped condition keys', () => {
 		// The counter-check. A fix that rejects everything would satisfy the two tests above and
 		// break every predefined role, so the keys that actually occur in
 		// `iam.controller.ts createDefaultRoles` and in `src/iam-policy/test-policies/*.json` are
-		// pinned here. This test is green before and after JR-1306.
+		// pinned here. This test is green before and after JR-13-06.
 		const render = (query: Record<string, unknown>) => renderSql(mongoToDrizzle(query));
 		expect(render({ userId: 'u' })!.sql).toBe('"user_id" = $1');
 		expect(render({ id: 'a' })!.sql).toBe('"id" = $1');

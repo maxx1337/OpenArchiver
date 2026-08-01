@@ -18,14 +18,14 @@ import type { CanonicalJsonValue } from '@open-archiver/types';
 import { ingestionSources } from './ingestion-sources';
 
 /**
- * The journal ledger (`JR-204`, epic E2). RFC section 5.2, with the corrections from **ADR-006**.
+ * The journal ledger (`JR-2-04`, epic E2). RFC section 5.2, with the corrections from **ADR-006**.
  *
  * Read `docs/dev/journaling/05-entscheidungen.md` ADR-006 and ADR-007 before changing anything here.
  * Every column below except `chain_hash` and `prev_chain_hash` is an **input to the chain hash**, so
  * a type change, a rename or an added column is a chain-invalidating format change, not a
  * refactoring — it needs a new `FORMAT_VERSION` in `packages/journaling` and a migration.
  *
- * Append-only enforcement (`REVOKE`/trigger) is **not** here: it is `JR-205` and ADR-009, and its
+ * Append-only enforcement (`REVOKE`/trigger) is **not** here: it is `JR-2-05` and ADR-009, and its
  * scope is this table **and** `deployment_identity` below.
  */
 
@@ -43,7 +43,7 @@ import { ingestionSources } from './ingestion-sources';
  *  2. RFC section 5.2 specifies `BYTEA` for all three hash columns.
  *
  * The consequence is one explicit conversion where a ledger hash is compared against
- * `archived_emails.storage_hash_sha256` (phase B, `JR-605`, and `verify` in E9). One conversion at a
+ * `archived_emails.storage_hash_sha256` (phase B, `JR-6-05`, and `verify` in E9). One conversion at a
  * known boundary beats carrying 32 bytes as hex through the whole system and re-parsing them at
  * every hash boundary.
  */
@@ -91,7 +91,7 @@ export const journalLedger = pgTable(
 		 * Gapless and strictly monotonic **per chain** — never globally (ADR-007 consequence 1).
 		 *
 		 * A bare Postgres sequence is not sufficient: sequences advance on rolled-back transactions
-		 * and leave permanent holes, and a hole is a tamper signal. `JR-206` derives it inside the
+		 * and leave permanent holes, and a hole is a tamper signal. `JR-2-06` derives it inside the
 		 * advisory lock instead.
 		 */
 		seq: bigint('seq', { mode: 'bigint' }).notNull(),
@@ -188,7 +188,7 @@ export const journalLedger = pgTable(
 			'journal_ledger_duplicate_of_precedes',
 			sql`${table.duplicateOf} is null or ${table.duplicateOf} < ${table.seq}`
 		),
-		// Crash recovery looks a spool file up by its transaction id (E3, `JR-305`).
+		// Crash recovery looks a spool file up by its transaction id (E3, `JR-3-05`).
 		index('journal_ledger_spool_txid_idx').on(table.spoolTxId),
 		// Monitoring counts per endpoint (E10); the chain itself is never queried this way.
 		index('journal_ledger_source_received_idx').on(table.journalingSourceId, table.receivedAt),
@@ -222,7 +222,7 @@ export const journalLedgerRelations = relations(journalLedger, ({ one }) => ({
  * A restore from backup keeps this value — a restore is the same installation. Two installations
  * running in parallel with the same `deployment_id` is a split brain, which is **not preventable**
  * (a restore and a clone are byte-identical) and is therefore detected rather than blocked: see
- * ADR-006 section 4.3, `JR-802`, `JR-803` and `JR-209`.
+ * ADR-006 section 4.3, `JR-8-02`, `JR-8-03` and `JR-2-09`.
  */
 export const deploymentIdentity = pgTable(
 	'deployment_identity',

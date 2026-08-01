@@ -1,4 +1,4 @@
-# Upstream-Meldung — Entwurf (`JR-1308`)
+# Upstream-Meldung — Entwurf (`JR-13-08`)
 
 > **Status: ENTWURF. NICHT VERSENDET. NICHT VERÖFFENTLICHEN.**
 >
@@ -9,7 +9,7 @@
 >
 > **Kanal, Zeitpunkt und Absender entscheidet der Auftraggeber, nicht ein Agent.** Kein Agent
 > versendet diesen Text, öffnet damit ein Issue, kommentiert ihn in ein Repository oder legt einen
-> Pull Request an. Das Akzeptanzkriterium von `JR-1308` lautet ausdrücklich: „Entwurf liegt vor und
+> Pull Request an. Das Akzeptanzkriterium von `JR-13-08` lautet ausdrücklich: „Entwurf liegt vor und
 > ist **nicht** versendet."
 
 ## Worum es geht

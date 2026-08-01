@@ -4,7 +4,7 @@ import { ExecutedTestsReporter } from './tests/support/executed-tests';
 import { suiteInclude } from './tests/support/suite-inventory';
 
 /**
- * Root vitest configuration for the Open Archiver monorepo (JR-101).
+ * Root vitest configuration for the Open Archiver monorepo (JR-1-01).
  *
  * There is exactly one config file and it defines **suites as vitest projects**, so that
  * `pnpm test` from the repository root discovers tests in every workspace package.
@@ -18,13 +18,13 @@ import { suiteInclude } from './tests/support/suite-inventory';
  * See docs/dev/journaling/04-testplan.md section 2.
  *
  * The include globs are **not** literals here: they come from `tests/support/suite-inventory.ts`,
- * which also enforces them in `globalSetup` (JR-105b). A suite that matches too few files, and a
+ * which also enforces them in `globalSetup` (JR-1-05b). A suite that matches too few files, and a
  * test-looking file that no glob reaches, both fail the run before the first test executes. Two
- * silent failure modes found during the JR-106 acceptance -- an absent `integration` directory and a
+ * silent failure modes found during the JR-1-06 acceptance -- an absent `integration` directory and a
  * `*.test.ts` file under `tests/integration/` -- are closed by that check rather than by inspecting
  * the log afterwards.
  *
- * `ExecutedTestsReporter` is the second half of that guard (JR-105c). Counting files cannot see the
+ * `ExecutedTestsReporter` is the second half of that guard (JR-1-05c). Counting files cannot see the
  * three ways of removing coverage without touching the filesystem -- relabelling a suite's class,
  * filling a file with `it.skip`, deleting one file while adding another (F14, F15) -- so it measures
  * how many tests of each class actually ran and writes that down; the `globalSetup` teardown asserts
@@ -71,14 +71,14 @@ export default defineConfig({
 					// Postgres that is comfortably slower than the 10s default.
 					testTimeout: 60_000,
 					hookTimeout: 120_000,
-					// JR-104: an integration test file points `process.env.DATABASE_URL` at the
+					// JR-1-04: an integration test file points `process.env.DATABASE_URL` at the
 					// isolated database it acquired, because `src/database` reads it at import time.
 					// A separate process per file with a fresh module registry is what keeps that
 					// mutation from leaking into a sibling file. Pinned rather than inherited from
 					// the vitest defaults, because the isolation guarantee depends on it.
 					pool: 'forks',
 					isolate: true,
-					// Files still run in parallel -- that is the case JR-104 has to survive, so it is
+					// Files still run in parallel -- that is the case JR-1-04 has to survive, so it is
 					// exercised on every run rather than only asserted inside one file.
 					fileParallelism: true,
 				},

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { REPO_ROOT } from './suite-inventory';
 
 /**
- * Which test databases does this run currently own? (JR-105c, findings F16 and F24)
+ * Which test databases does this run currently own? (JR-1-05c, findings F16 and F24)
  *
  * ---------------------------------------------------------------------------------------------
  * The problem

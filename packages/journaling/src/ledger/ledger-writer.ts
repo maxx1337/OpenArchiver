@@ -10,7 +10,7 @@ import type {
 } from './ledger-port';
 
 /**
- * `LedgerWriter.append()` — the serialised, durable append (`JR-206`, RFC sections 5.2 and 5.4).
+ * `LedgerWriter.append()` — the serialised, durable append (`JR-2-06`, RFC sections 5.2 and 5.4).
  *
  * ---------------------------------------------------------------------------------------------
  * The sequence, and why it is exactly this one
@@ -168,7 +168,7 @@ export class PostgresLedgerWriter implements LedgerBackend {
 	 * help** — measured against postgres-js, it stores the doubly-encoded string exactly as a bare
 	 * `$16` does, because the cast still leaves `jsonb` as the inferred parameter type.
 	 *
-	 * Found by `JR-208`, which writes through a plain postgres-js client. Every integration test
+	 * Found by `JR-2-08`, which writes through a plain postgres-js client. Every integration test
 	 * before it wrote through `harness.sql`, and `drizzle()` patches the client it is handed — so the
 	 * one client in the repository that behaves differently was the only one being tested. The
 	 * regression case lives in `journal-ledger-concurrency.adv.test.ts` and asserts `jsonb_typeof`

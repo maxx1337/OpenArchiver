@@ -3,7 +3,7 @@
 Ausgangslage **bei Abfassung dieses Dokuments (2026-07-27)**: das Repository hatte null Tests und keinen
 Test-Runner — kein vitest, jest oder playwright, kein `test`-Script, kein Test-Job in der CI;
 `CONTRIBUTING.md` verlangte Tests rein aspirativ. **E1 hat die Infrastruktur gebaut und ist abgenommen**
-(`JR-106a`, 2026-07-28; Messinstrument-Nacharbeit `JR-105c` am 2026-07-30). Was in §2 steht, beschreibt
+(`JR-1-06a`, 2026-07-28; Messinstrument-Nacharbeit `JR-1-05c` am 2026-07-30). Was in §2 steht, beschreibt
 also den **Ist-Zustand**; ab §3 definiert dieses Dokument, was noch zu prüfen ist.
 
 RFC §12 ist der Maßstab: _„Vollständigkeitsaussagen brauchen adversariale Tests, keine
@@ -33,7 +33,7 @@ Happy-Path-Tests."_
 
 ## 2. Konventionen
 
-> Umgesetzt in JR-101/JR-102 (2026-07-27). Die Tabelle unten ist nicht mehr Entwurf, sondern
+> Umgesetzt in JR-1-01/JR-1-02 (2026-07-27). Die Tabelle unten ist nicht mehr Entwurf, sondern
 > beschreibt den Ist-Zustand; jede Zeile hat ein lauffähiges Beispiel im Repository.
 
 ### 2.1 Orte und Namen
@@ -47,14 +47,14 @@ Happy-Path-Tests."_
 | Harness, paketübergreifend | `tests/support/` in der Repo-Wurzel, Alias `@oa-test/*` | `<thema>.ts`          | `tests/support/classification.ts`                                      |
 | Harness, paketspezifisch   | `tests/support/` im jeweiligen Paket                    | `<thema>.ts`          | `packages/backend/tests/support/render-sql.ts`                         |
 
-**Diese Namensschemata sind ab `JR-105b` erzwungen, nicht empfohlen.** Die Include-Globs der drei
+**Diese Namensschemata sind ab `JR-1-05b` erzwungen, nicht empfohlen.** Die Include-Globs der drei
 Projects stehen in `tests/support/suite-inventory.ts`; `vitest.config.ts` importiert sie von dort, es
 gibt sie also nur einmal. Derselbe Modul prüft in `globalSetup` — vor dem ersten Test, in **jedem**
 Lauf und in jeder Umgebung — zwei positive Erwartungen:
 
 1. **Jede Suite trifft genau `expectedFiles` Dateien.** Null Dateien ist ein Fehlschlag. Eine
    umbenannte oder gelöschte Suite macht damit rot, statt als „grün, weil nichts zu tun" zu gelten.
-   Bis `JR-105c` war das eine **Untergrenze**; siehe unten, warum die Gleichheit gebraucht wird.
+   Bis `JR-1-05c` war das eine **Untergrenze**; siehe unten, warum die Gleichheit gebraucht wird.
 2. **Keine testartig benannte Datei ohne Project.** Alles, was `*.test.ts` / `*.spec.ts` (und die
    `.js`/`.mjs`/`.tsx`-Varianten) heißt und von keinem Include-Glob getroffen wird, bricht den Lauf
    mit Pfadangabe ab. Eine Datei `foo.test.ts` unter `tests/integration/` läuft also nicht bloß nicht
@@ -72,7 +72,7 @@ füllen, eine Datei löschen und gleichzeitig eine andere hinzufügen. Der erste
 ein Token je Datei schaltet die ganze `integration`-Suite ab, und **beide** Wächter melden „verified"
 (am 2026-07-30 am Elternstand nachgemessen: Exit 0).
 
-**Ab `JR-105c` gibt es deshalb eine dritte Erwartung, nach dem Lauf** (`tests/support/executed-tests.ts`):
+**Ab `JR-1-05c` gibt es deshalb eine dritte Erwartung, nach dem Lauf** (`tests/support/executed-tests.ts`):
 
 3. **Je Suite und je Klasse müssen genau `expectedTests[klasse]` Tests _ausgeführt_ worden sein.**
    Ausgeführt heißt `passed` oder `failed`; `skipped` und `todo` zählen nicht. Eine nicht gewählte
@@ -166,7 +166,7 @@ Ein Tippfehler in `OA_TEST_CLASSES` bricht den Lauf ab, statt stillschweigend ni
 `suiteRequiring(klasse, name, probe, fn)` ergänzt das um Infrastruktur: ist die Probe negativ, wird
 mit dem Grund der Probe übersprungen — „`DATABASE_URL` is not set" liest sich anders als „skipped".
 
-**`OA_TEST_REQUIRE_INFRA=1` dreht das um** (`JR-105b`). In einer Umgebung, die die Infrastruktur
+**`OA_TEST_REQUIRE_INFRA=1` dreht das um** (`JR-1-05b`). In einer Umgebung, die die Infrastruktur
 selbst bereitstellt — die CI mit ihrem Postgres-Service-Container — ist ein Skip wegen fehlender
 Infrastruktur kein legitimer Skip, sondern ein defekter Job, der grün meldet. Mit gesetzter Variable
 erzeugt `suiteRequiring` in diesem Fall einen **fehlschlagenden** Test mit dem Grund der Probe. Die
@@ -191,7 +191,7 @@ maschinell umgesetzt und nicht nur Absicht.
 
 ### 2.6 Die Postgres-Basis der `integration`-Suite
 
-> Umgesetzt in JR-104 (2026-07-28): `packages/backend/tests/support/pg-harness.ts`.
+> Umgesetzt in JR-1-04 (2026-07-28): `packages/backend/tests/support/pg-harness.ts`.
 
 `acquireTestDatabase(label)` legt **eine eigene Datenbank je Aufruf** an, wendet die Migrationen des
 Repositorys darauf an und gibt einen postgres-js-Client plus ein Drizzle-Handle zurück.
@@ -220,14 +220,14 @@ ausgeschlossen (CLAUDE.md 5.2). In einer frischen Datenbank ist `"public"` dageg
 | `OA_TEST_PG_STALE_MS`       | `7200000`  | Ab welchem Alter ein `oa_test_*`-Rest als verwaist gilt und gelöscht wird                                                                                                       |
 | `OA_TEST_REQUIRE_INFRA`     | `0`        | `1` ⇒ fehlende Infrastruktur **schlägt fehl**, statt sichtbar zu skippen                                                                                                        |
 | `OA_TEST_INVENTORY_REPORT`  | —          | Pfad, unter dem `globalSetup` die Suite-Inventur als JSON ablegt                                                                                                                |
-| `OA_TEST_EXECUTED_REPORT`   | —          | Pfad für Messung **und Urteil** der ausgeführten Tests (`JR-105c`). Ohne ihn `node_modules/.cache/oa-test/executed-tests.json`                                                  |
+| `OA_TEST_EXECUTED_REPORT`   | —          | Pfad für Messung **und Urteil** der ausgeführten Tests (`JR-1-05c`). Ohne ihn `node_modules/.cache/oa-test/executed-tests.json`                                                 |
 | `OA_TEST_HARNESS_LEDGER`    | —          | Wird von `globalSetup` je Lauf gesetzt. Verzeichnis, in dem der Harness seine geholten Datenbanken einträgt. **Nicht von Hand setzen**, außer man fährt den Harness ohne vitest |
 
 **Rechteanforderung (relevant für ADR-009).** Die Rolle in `DATABASE_URL` braucht `CREATEDB` sowie
 das Recht, in der neuen Datenbank DDL auszuführen. Das ist die **Bootstrap**-Rolle der Tests, nicht
-die Anwendungsrolle: sobald `JR-205` Append-Only über Rechteentzug erzwingt, muss der Test die
+die Anwendungsrolle: sobald `JR-2-05` Append-Only über Rechteentzug erzwingt, muss der Test die
 eingeschränkte Anwendungsrolle **zusätzlich** anlegen und sich für die Append-Only-Prüfungen mit ihr
-verbinden. Eine einzige allmächtige Rolle für beides würde `JR-205` unprüfbar machen.
+verbinden. Eine einzige allmächtige Rolle für beides würde `JR-2-05` unprüfbar machen.
 
 **`DATABASE_URL` und der Import-Throw.** `src/database/index.ts` baut sein `db`-Singleton **beim
 Import** und wirft ohne `DATABASE_URL`. Wer `FilterBuilder` oder `mongoToMeli` testet, muss daher in
@@ -247,14 +247,14 @@ einzige Absicherung gegen einen **fremden** laufenden Prozess: `OA_TEST_PG_STALE
 längste Suite-Laufzeit zu setzen kann dessen Datenbank löschen (beim Verifizieren mit 1000 ms
 beobachtet, und in **F12** noch einmal unfreiwillig). Default nicht absenken.
 
-**Seit `JR-104a` ist das strukturell abgesichert, nicht nur eine Bitte.** `sweepStaleHarnessDatabases()`
+**Seit `JR-1-04a` ist das strukturell abgesichert, nicht nur eine Bitte.** `sweepStaleHarnessDatabases()`
 nimmt `{ staleMs?, restrictTo? }`; `restrictTo` filtert im SQL, ein gesenkter `staleMs` **ohne**
 `restrictTo` wirft. Wer eine kurze Frist braucht, muss also benennen, welche Datenbanken er meint —
 fremde sind damit nicht „verschont", sondern unerreichbar. Fixture-Namen für die Sweeper-Tests kommen
 aus `buildForeignFixtureName()`: fremdes PID-Feld (sonst greift der Eigen-PID-Wächter und der Test
 prüft nichts), Eindeutigkeit über `process.pid` + Zufallsbytes im Tag.
 
-**Seit `JR-105c` besitzt der Hauptprozess den Rückstand dieses Laufs — er rät ihn nicht.** Der Sweeper
+**Seit `JR-1-05c` besitzt der Hauptprozess den Rückstand dieses Laufs — er rät ihn nicht.** Der Sweeper
 oben räumt Reste **fremder, toter** Läufe auf; er sagt aber nichts über den eigenen. Und der eigene
 entstand regelmäßig: `acquireTestDatabase()` läuft im **Modul-Scope** (es muss, siehe Import-Throw
 oben), das Teardown hängt an `afterAll`. Wirft der Modul-Scope danach, läuft das `afterAll` nie
@@ -280,7 +280,7 @@ ist unberührt, ein Job hat seinen eigenen Service-Container.
 
 ## 3. RFC §12 → konkrete Testfälle
 
-### §12.1 Kill während DATA — `JR-410`
+### §12.1 Kill während DATA — `JR-4-10`
 
 **Klasse:** `nightly` (500 Iterationen) + `ci`-Smoke mit 20 Iterationen.
 
@@ -295,7 +295,7 @@ teilweise.
 **Technik:** Kill-Punkt als Byte-Offset aus dem Seed ableiten; Prozess über Prozess-Signal beenden,
 nicht über einen In-Process-Hook (ein Hook, der aufräumt, testet den Kill nicht).
 
-### §12.2 fsync-Fault-Injection — `JR-306`
+### §12.2 fsync-Fault-Injection — `JR-3-06`
 
 **Klasse:** `ci`.
 
@@ -304,10 +304,10 @@ Drei getrennte Fälle: Write scheitert, Datei-`fsync` scheitert, Verzeichnis-`fs
 **Assertion:** jeweils Fehlersignal für `451`, **nichts** quittiert, kein halber Spool-Eintrag, und
 nach dem Fall ein sauberer Zustand.
 
-**Technik:** die injizierbare Dateisystem-Schnittstelle aus `JR-303`. Der Verzeichnis-fsync-Fall ist
+**Technik:** die injizierbare Dateisystem-Schnittstelle aus `JR-3-03`. Der Verzeichnis-fsync-Fall ist
 der leicht zu vergessene — er muss explizit dabei sein.
 
-### §12.3 Disk full — `JR-307`
+### §12.3 Disk full — `JR-3-07`
 
 **Klasse:** `nightly` (braucht ein eigenes Volume).
 
@@ -319,7 +319,7 @@ die Kapazität.
 **Fallback für `ci`:** derselbe Pfad über die injizierbare Schnittstelle mit `ENOSPC` — als
 Ergänzung, nicht als Ersatz. Beide Varianten benennen.
 
-### §12.4 Object-Store-Ausfall — `JR-606`
+### §12.4 Object-Store-Ausfall — `JR-6-06`
 
 **Klasse:** `ci` (MinIO gestoppt) .
 
@@ -328,15 +328,15 @@ vollständig ab, die Kette ist unberührt.
 
 Dies ist der Test, der belegt, dass Phase B den Acceptance-Contract nicht berührt.
 
-### §12.5 Ledger-Tamper-Tests — `JR-209`, `JR-805`, `JR-907`
+### §12.5 Ledger-Tamper-Tests — `JR-2-09`, `JR-8-05`, `JR-9-07`
 
 **Klasse:** `ci`.
 
-> **Umgesetzt am 2026-08-01 in `JR-209`** (`packages/backend/tests/adversarial/journal-ledger-tamper.adv.test.ts`,
+> **Umgesetzt am 2026-08-01 in `JR-2-09`** (`packages/backend/tests/adversarial/journal-ledger-tamper.adv.test.ts`,
 > 11 Fälle): alle acht Fälle unten, der Positivfall darunter, und eine Gegenprobe, dass der Append-Only-Trigger
 > dieselbe Manipulation abweist, solange er eingeschaltet ist. (c), (d) und (e) sind ohne E7/E8 darstellbar,
 > weil der **Anker im Test festgehalten** wird statt in einer Tabelle — für die Aussage zählt, dass der Wert
-> das System vor der Manipulation verlassen hat, nicht wo er liegt. `JR-805`/`JR-907` führen dieselben Fälle
+> das System vor der Manipulation verlassen hat, nicht wo er liegt. `JR-8-05`/`JR-9-07` führen dieselben Fälle
 > später über die CLI; die Befundarten sind in `tests/support/ledger-verifier.ts` bereits benannt.
 
 | Fall | Manipulation                                      | Erwartung                                                                                        |
@@ -372,9 +372,9 @@ und **nichts** über andere Ketten — und muss damit verifizieren. Schlägt das
 Mandantentrennung aus ADR-007 nur behauptet.
 
 Zusatzfall aus E9: ein `object_erased`-Eintrag darf **kein** Kettenbruch sein, sondern muss als
-absichtliche Löschung ausgewiesen werden (`JR-905`).
+absichtliche Löschung ausgewiesen werden (`JR-9-05`).
 
-### §12.6 Soak — `JR-607`, plus Ledger-Nebenläufigkeit `JR-208`
+### §12.6 Soak — `JR-6-07`, plus Ledger-Nebenläufigkeit `JR-2-08`
 
 **Klasse:** `nightly` (100.000 Nachrichten) + `ci`-Smoke (1.000).
 
@@ -384,10 +384,10 @@ absichtliche Löschung ausgewiesen werden (`JR-905`).
 
 **Nicht** die Nightly-Menge stillschweigend auf CI-Größe reduzieren. Zwei benannte Varianten.
 
-Ergänzend `JR-208`: 20 parallele Ledger-Writer × 500 Appends ⇒ lückenlos und korrekt verkettet;
+Ergänzend `JR-2-08`: 20 parallele Ledger-Writer × 500 Appends ⇒ lückenlos und korrekt verkettet;
 erzwungener Rollback zwischen Seq-Ableitung und Commit ⇒ **keine** Lücke.
 
-> **`JR-208` ist umgesetzt** (2026-08-01, `journal-ledger-concurrency.adv.test.ts`): 10 000 Appends in
+> **`JR-2-08` ist umgesetzt** (2026-08-01, `journal-ledger-concurrency.adv.test.ts`): 10 000 Appends in
 > 84–96 s, `seq` genau 1…10 000, Kette über alle Zeilen neu gerechnet, 10 000 verschiedene
 > Vorgängerhashes; der Rollback-Fall läuft **unter Last**. Der Lauf ist die volle Menge aus dem Backlog,
 > nicht gesampelt — ein voller `pnpm test` dauert dadurch rund zwei Minuten. Dazu zwei Dinge, die der
@@ -396,7 +396,7 @@ erzwungener Rollback zwischen Seq-Ableitung und Commit ⇒ **keine** Lücke.
 > und eine **Gegenprobe ohne Advisory-Lock** muss brechen — sonst kann der Lastfall grün sein, weil sich
 > nichts überlappt hat.
 
-### §12.7 BDAT-Pfad — `JR-411`
+### §12.7 BDAT-Pfad — `JR-4-11`
 
 **Klasse:** `ci`.
 
@@ -407,7 +407,7 @@ Einzel-Chunk, Multi-Chunk, `BDAT 0 LAST`, Chunk-Grenze mitten in einer Zeile.
 Exchange Online nutzt BDAT. Ein `DATA`-only-Receiver ist mit Exchange Online funktionslos — dieser
 Test ist keine Randabdeckung.
 
-### §12.8 Ende-zu-Ende mit echtem Exchange-Online-Tenant — `JR-1208`
+### §12.8 Ende-zu-Ende mit echtem Exchange-Online-Tenant — `JR-12-08`
 
 **Klasse:** `manual`. Ergebnis wird protokolliert; ohne echten Tenant ist E12 nicht abnehmbar.
 
@@ -417,9 +417,9 @@ Test ist keine Randabdeckung.
 4. Reconciliation-Job holt sie nach, ohne Duplikate im Storage.
 
 **Nicht durch Mocks ersetzbar.** Die Journal-Report-Struktur echter Tenants ist der Punkt.
-Der Parser-Korpus (`JR-508`) ist die Vorarbeit, nicht der Ersatz.
+Der Parser-Korpus (`JR-5-08`) ist die Vorarbeit, nicht der Ersatz.
 
-### §12.9 Oversize an der SIZE-Grenze — `JR-412`
+### §12.9 Oversize an der SIZE-Grenze — `JR-4-12`
 
 **Klasse:** `ci`.
 
@@ -430,20 +430,20 @@ und den Alert nicht, geht am Punkt vorbei.
 
 ## 4. Zusätzliche Testfelder außerhalb von §12
 
-| Feld                   | Task    | Klasse       | Kern                                                                                                   |
-| ---------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------ |
-| Kanonische Kodierung   | JR-202  | `ci`         | Determinismus, Golden File, Permutations-Sensitivität, `event_payload`-Schlüsselreihenfolge irrelevant |
-| Append-Only-Erzwingung | JR-205  | `ci`         | `UPDATE`/`DELETE` scheitern mit Anwendungsrechten                                                      |
-| Crash-Recovery         | JR-305  | `ci`         | beide Zustände (Ledger vorhanden / fehlt), Quarantäne alarmiert, nie stilles Löschen                   |
-| Response-Code-Tabelle  | JR-406  | `ci`         | jede Zeile der Tabelle als eigener Fall; kein lokaler Fehler erzeugt `5xx`                             |
-| Byte-Treue             | JR-407  | `ci`         | ungewöhnliche Zeilenenden, 8-Bit-Inhalte, Dot-Stuffing-Grenzfälle                                      |
-| Idempotenz             | JR-603  | `ci`         | zweifache Zustellung ⇒ 1 Objekt, 2 Ledger-Einträge, `duplicate_of` gesetzt                             |
-| Hash über Plaintext    | JR-605  | `ci`         | exportieren, entschlüsseln, neu hashen ⇒ identisch                                                     |
-| WORM                   | JR-705  | `ci` (MinIO) | Overwrite, Delete, Retention setzen, Verkürzung — alle vier                                            |
-| Parser-Korpus          | JR-508  | `ci`         | DL-Expansion, Bcc-only, `On-Behalf-Of`, S/MIME, kein Innenteil, Plain-BCC, NDR                         |
-| Monitoring             | JR-1007 | `ci`         | Signale lösen unter den erwarteten Bedingungen aus — **und nur dann**                                  |
-| Auditor-Rechte         | JR-1109 | `ci`         | positiv und **negativ**; jeder Schreibversuch abgewiesen                                               |
-| IAM-Grundlagen         | JR-103  | `ci`         | `PolicyValidator`, `createAbilityFor`, `FilterBuilder` über die bestehenden Fixtures                   |
+| Feld                   | Task     | Klasse       | Kern                                                                                                   |
+| ---------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------ |
+| Kanonische Kodierung   | JR-2-02  | `ci`         | Determinismus, Golden File, Permutations-Sensitivität, `event_payload`-Schlüsselreihenfolge irrelevant |
+| Append-Only-Erzwingung | JR-2-05  | `ci`         | `UPDATE`/`DELETE` scheitern mit Anwendungsrechten                                                      |
+| Crash-Recovery         | JR-3-05  | `ci`         | beide Zustände (Ledger vorhanden / fehlt), Quarantäne alarmiert, nie stilles Löschen                   |
+| Response-Code-Tabelle  | JR-4-06  | `ci`         | jede Zeile der Tabelle als eigener Fall; kein lokaler Fehler erzeugt `5xx`                             |
+| Byte-Treue             | JR-4-07  | `ci`         | ungewöhnliche Zeilenenden, 8-Bit-Inhalte, Dot-Stuffing-Grenzfälle                                      |
+| Idempotenz             | JR-6-03  | `ci`         | zweifache Zustellung ⇒ 1 Objekt, 2 Ledger-Einträge, `duplicate_of` gesetzt                             |
+| Hash über Plaintext    | JR-6-05  | `ci`         | exportieren, entschlüsseln, neu hashen ⇒ identisch                                                     |
+| WORM                   | JR-7-05  | `ci` (MinIO) | Overwrite, Delete, Retention setzen, Verkürzung — alle vier                                            |
+| Parser-Korpus          | JR-5-08  | `ci`         | DL-Expansion, Bcc-only, `On-Behalf-Of`, S/MIME, kein Innenteil, Plain-BCC, NDR                         |
+| Monitoring             | JR-10-07 | `ci`         | Signale lösen unter den erwarteten Bedingungen aus — **und nur dann**                                  |
+| Auditor-Rechte         | JR-11-09 | `ci`         | positiv und **negativ**; jeder Schreibversuch abgewiesen                                               |
+| IAM-Grundlagen         | JR-1-03  | `ci`         | `PolicyValidator`, `createAbilityFor`, `FilterBuilder` über die bestehenden Fixtures                   |
 
 ## 5. Was in der CI nicht geht
 

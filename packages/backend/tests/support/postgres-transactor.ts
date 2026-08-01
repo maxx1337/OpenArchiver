@@ -2,7 +2,7 @@ import type { Sql } from 'postgres';
 import type { LedgerQuery, LedgerTransactor } from '@open-archiver/journaling';
 
 /**
- * A `LedgerTransactor` over a `postgres-js` connection (`JR-206`).
+ * A `LedgerTransactor` over a `postgres-js` connection (`JR-2-06`).
  *
  * ---------------------------------------------------------------------------------------------
  * Why this lives under `tests/support/` and not in `src/`

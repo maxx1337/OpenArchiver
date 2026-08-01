@@ -19,7 +19,7 @@ zu dokumentieren, dass Folge-Sessions nichts neu erklärt bekommen müssen. Ein 
 Projektgedächtnis ist die Voraussetzung für jede weitere Arbeit; verschränkt man es mit
 Implementierung, entsteht beides halb.
 
-**Konsequenz:** Nächster Schritt ist E1 (`JR-101`). Es existiert kein Receiver-Code.
+**Konsequenz:** Nächster Schritt ist E1 (`JR-1-01`). Es existiert kein Receiver-Code.
 
 ## ADR-002 — Code-Ablage: `apps/smtp-ingress` + `packages/journaling`
 
@@ -161,7 +161,7 @@ Ausnahme.
 
 > Der Skill `journal-ledger` gibt die RFC-Formel wörtlich wieder. Er ist für E2 verbindlich, und diese
 > ADR weicht von ihm **nicht in der Form** ab (`SHA256(record ‖ prev)` bleibt), sondern **erweitert die
-> Feldliste**. Das ist die Präzisierung, für die `JR-203` existiert.
+> Feldliste**. Das ist die Präzisierung, für die `JR-2-03` existiert.
 
 ### 2. Die Bytes
 
@@ -224,7 +224,7 @@ Die Empfangsreihenfolge von `envelope_rcpt` ist **nicht** sortiert, weil die Rei
 Verteilerlisten-Expansion erst nachvollziehbar macht.
 
 Bei Ereignissen ohne SMTP-Transaktion (`anchor`, `retention_expiry`, `object_erased`,
-`legal_hold_set`) sind die Felder 5–13 und 15 `NULL`. **Das ist eine Vorgabe an `JR-204`:**
+`legal_hold_set`) sind die Felder 5–13 und 15 `NULL`. **Das ist eine Vorgabe an `JR-2-04`:**
 `size_bytes` und `content_sha256` müssen `NULL`-fähig sein, anders als im `CREATE TABLE` des RFC.
 `0` statt `NULL` zu schreiben wäre eine Behauptung über eine Nachricht, die es nicht gibt.
 
@@ -240,7 +240,7 @@ in PostgreSQL Mikrosekundenauflösung, JavaScripts `Date` hat Millisekunden. Ein
 
 Festlegung: das Feld bleibt `TIMESTAMP_US` (das Format soll nicht an der Auflösung einer
 Laufzeitumgebung hängen), aber die Anwendung schreibt **ausschließlich Werte, deren
-Mikrosekundenanteil durch 1000 teilbar ist**. `JR-204` sichert das mit einem `CHECK`-Constraint ab,
+Mikrosekundenanteil durch 1000 teilbar ist**. `JR-2-04` sichert das mit einem `CHECK`-Constraint ab,
 damit die Invariante in der Datenbank steht und nicht in einem Kommentar. Millisekunden sind für einen
 SMTP-Empfangszeitpunkt reichlich; ein nicht nachbaubarer Hash ist fatal. **Verworfen:** die Spalte als
 `bigint`-Mikrosekunden zu führen — das verliert Zeitzonen- und Vergleichssemantik in SQL und macht
@@ -301,7 +301,7 @@ Festlegung: eine eigene Tabelle `deployment_identity` mit genau einer Zeile, `de
 erzeugt **in der Migration selbst** per `gen_random_uuid()`. Gründe: kein Anwendungscode, kein Race
 zwischen zwei startenden Prozessen, und es funktioniert auch im Container-Entrypoint, der
 `pnpm db:migrate` vor dem ersten Start ausführt. Die Tabelle wird durch dieselbe
-Append-Only-Erzwingung geschützt wie `journal_ledger` (**Vorgabe an ADR-009/`JR-205`**: der Umfang der
+Append-Only-Erzwingung geschützt wie `journal_ledger` (**Vorgabe an ADR-009/`JR-2-05`**: der Umfang der
 Erzwingung ist `journal_ledger` **und** `deployment_identity`) und trägt einen `CHECK`, der eine
 zweite Zeile ausschließt.
 
@@ -322,10 +322,10 @@ Festlegung in drei Teilen:
 (chain_scope_id, seq)` innerhalb einer Datenbank, und das externe append-only Ankerziel (ADR-022
    Festlegung 7) — zwei Anker mit derselben `deployment_id` für denselben Zeitraum, aber
    verschiedenen Wurzeln, sind ein Split-Brain und nichts anderes. **Vorgaben:** das externe Ziel
-   erhält die `deployment_id` mit (`JR-803`), und `verify` meldet den Fall als eigenen Befund neben
-   „Kette fehlt" (`JR-209`, `JR-805`).
+   erhält die `deployment_id` mit (`JR-8-03`), und `verify` meldet den Fall als eigenen Befund neben
+   „Kette fehlt" (`JR-2-09`, `JR-8-05`).
 3. **Der Anchor-Job weigert sich, wenn das externe Ziel schon einen späteren Anker derselben
-   `deployment_id` trägt** (**Vorgabe an `JR-802`**). Damit fällt ein Klon beim **ersten** Ankerlauf
+   `deployment_id` trägt** (**Vorgabe an `JR-8-02`**). Damit fällt ein Klon beim **ersten** Ankerlauf
    auf und nicht Monate später bei einer Prüfung. Das ist die billigste wirksame Härtung, die ohne
    Sperre auskommt.
 
@@ -380,7 +380,7 @@ damit niemand die Präfixe später „vereinheitlicht" und dabei jede bestehende
 
 ### 6. Testvektoren
 
-Erzeugt mit der Referenzimplementierung am 2026-07-31. **`JR-202` muss diese Werte reproduzieren** —
+Erzeugt mit der Referenzimplementierung am 2026-07-31. **`JR-2-02` muss diese Werte reproduzieren** —
 sie sind der Golden-File-Test, den das Akzeptanzkriterium dort verlangt.
 
 Eingaben: `deployment_id = 00000000-0000-4000-8000-000000000001`,
@@ -421,14 +421,14 @@ Gleichheit, **false**.
 
 ### 7. Was diese ADR anderen Tasks vorgibt
 
-| Task     | Vorgabe                                                                                         |
-| -------- | ----------------------------------------------------------------------------------------------- |
-| `JR-202` | 16 Felder in der Reihenfolge aus §2; Vektoren aus §6 als Golden-File; JCS-Teilmenge aus §3.3    |
-| `JR-204` | `size_bytes`/`content_sha256` nullable; `CHECK` auf ms-Vielfache; Tabelle `deployment_identity` |
-| `JR-205` | Append-Only-Erzwingung umfasst `deployment_identity` mit                                        |
-| `JR-802` | Ankern verweigern, wenn das Ziel einen späteren Anker derselben `deployment_id` trägt           |
-| `JR-803` | `deployment_id` geht an das externe Ziel mit                                                    |
-| `JR-209` | Split-Brain (gleicher Genesis, divergierende Ketten) ist ein eigener Befund                     |
+| Task      | Vorgabe                                                                                         |
+| --------- | ----------------------------------------------------------------------------------------------- |
+| `JR-2-02` | 16 Felder in der Reihenfolge aus §2; Vektoren aus §6 als Golden-File; JCS-Teilmenge aus §3.3    |
+| `JR-2-04` | `size_bytes`/`content_sha256` nullable; `CHECK` auf ms-Vielfache; Tabelle `deployment_identity` |
+| `JR-2-05` | Append-Only-Erzwingung umfasst `deployment_identity` mit                                        |
+| `JR-8-02` | Ankern verweigern, wenn das Ziel einen späteren Anker derselben `deployment_id` trägt           |
+| `JR-8-03` | `deployment_id` geht an das externe Ziel mit                                                    |
+| `JR-2-09` | Split-Brain (gleicher Genesis, divergierende Ketten) ist ein eigener Befund                     |
 
 ### 8. Warum es eine ADR braucht
 
@@ -533,7 +533,7 @@ es eine neue ADR, die diese hier ausdrücklich ersetzt.
 
 ## ADR-008 — Verhalten bei TSA-Ausfall
 
-**Status:** **offen** — zu bestätigen in E8 (`JR-804`) · **Quelle:** RFC §15
+**Status:** **offen** — zu bestätigen in E8 (`JR-8-04`) · **Quelle:** RFC §15
 
 Soll der Anchor-Job bei mehrtägiger TSA-Nichterreichbarkeit „fail closed" gehen und die Ingestion
 anhalten?
@@ -552,7 +552,7 @@ Die ADR wird in E8 auf _entschieden_ gesetzt, sobald das Eskalationsverhalten im
 
 ## ADR-009 — Erzwingung der Append-Only-Eigenschaft
 
-**Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Umsetzung:** `JR-205`
+**Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Umsetzung:** `JR-2-05`
 (Trigger, E2) und **E11** (Rechteentzug)
 
 **Beides, aber nicht gleichzeitig: der Trigger jetzt, der Rechteentzug in E11.** Die ursprüngliche
@@ -564,7 +564,7 @@ zeitlich trennt.
 im Genesis-Hash jeder Kette (ADR-006 §4.2); sie zu ändern entwertet jede Kette der Installation genauso
 sicher wie das Umschreiben einer Ledger-Zeile.
 
-### Was in E2 umgesetzt ist (`JR-205`, Migration `0042_journal_ledger_append_only.sql`)
+### Was in E2 umgesetzt ist (`JR-2-05`, Migration `0042_journal_ledger_append_only.sql`)
 
 Eine `plpgsql`-Triggerfunktion, die `RAISE EXCEPTION` mit `ERRCODE = restrict_violation` wirft, und
 **vier** Trigger — je Tabelle einer für `UPDATE OR DELETE` (row level) und einer für `TRUNCATE`
@@ -619,7 +619,7 @@ Datenbank.
 
 ## ADR-010 — `processEmail` erweitern oder eigener Journaling-Pfad
 
-**Status:** **offen** — zu entscheiden in E6 (`JR-602`)
+**Status:** **offen** — zu entscheiden in E6 (`JR-6-02`)
 
 `IngestionService.processEmail()` enthält die vollständige Hash-, Dedupe- und
 Storage-Pfad-Logik (Drei-Gate-Dedupe plus Byte-Hash-Gate) und ist bereits umfangreich. Erweitern
@@ -641,7 +641,7 @@ nachrüstbar.
 das ist akzeptabel und liefert ein klares `451`, wenn die DB weg ist. (b) überlebt DB-Ausfälle, hat
 aber mehr bewegliche Teile.
 
-**Konsequenz:** `JR-207` baut die Schnittstelle steckbar. Solange (a) gilt: DB nicht erreichbar ⇒
+**Konsequenz:** `JR-2-07` baut die Schnittstelle steckbar. Solange (a) gilt: DB nicht erreichbar ⇒
 `451`, nicht `250`.
 
 ## ADR-012 — Migrationspfad für Bestandsinstallationen
@@ -701,7 +701,7 @@ Integrationsbranch.
 
 ## ADR-015 — Generierte Dateien werden von Prettier ausgenommen, nicht formatiert
 
-**Status:** entschieden (2026-07-27) · **Entscheider:** DEV (im Rahmen von `JR-105a`)
+**Status:** entschieden (2026-07-27) · **Entscheider:** DEV (im Rahmen von `JR-1-05a`)
 
 Die sechs generierten Dateien unter den 13 Prettier-Beanstandungen werden **nicht** mitformatiert,
 sondern in `.prettierignore` aufgenommen. Nur die sieben handgeschriebenen Dateien gehen in den
@@ -732,7 +732,7 @@ Gegenprobe nach der Änderung: beide Generatoren erneut ausgeführt → `pnpm li
 ist das Akzeptanzkriterium „`pnpm db:generate` erzeugt danach keine erneute Lint-Verletzung" erfüllt.
 
 **Verworfene Alternative:** die generierten Dateien mitformatieren und nach jedem Generatorlauf
-`pnpm format` nachziehen. Das macht den künftigen CI-Job aus `JR-105` bei jeder Schema- oder
+`pnpm format` nachziehen. Das macht den künftigen CI-Job aus `JR-1-05` bei jeder Schema- oder
 API-Änderung grundlos rot und verlagert die Reparatur auf den Entwickler, der zufällig die nächste
 Migration schreibt.
 
@@ -755,20 +755,20 @@ sehen will, braucht eine neue ADR, die diese ersetzt. Der Review von Snapshots (
 `oa-migration`) bleibt unverändert Pflicht — „von Prettier ignoriert" heißt nicht „nicht
 reviewpflichtig".
 
-## ADR-016 — Fail-closed rechtfertigt den Verhaltensbruch aus `JR-1302`
+## ADR-016 — Fail-closed rechtfertigt den Verhaltensbruch aus `JR-13-02`
 
-**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F7, F19, F20, `JR-1302`,
-`JR-1307`, E11
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F7, F19, F20, `JR-13-02`,
+`JR-13-07`, E11
 
 > **Zur Nummer:** ADR-016 liegt zwischen ADR-015 und ADR-017, und das ist Absicht — **nicht
-> umnummerieren.** ADR-017 wurde zuerst geschrieben, weil sie `JR-1302` blockierte; ADR-016
+> umnummerieren.** ADR-017 wurde zuerst geschrieben, weil sie `JR-13-02` blockierte; ADR-016
 > beschreibt dessen Ergebnis und hat die Nummer reserviert bekommen. Die Reihenfolge der Nummern ist
 > die Reihenfolge der Sachlogik, nicht die der Entstehung.
 
 **Entscheidung:** `FilterBuilder.create()` antwortet für **jedes** Ergebnis mit deny, das kein
 nachweislich **unbedingtes `can`** ist — kein passendes Recht, nur Verbote, ein widerrufenes Recht,
 eine Bedingungsmenge, die sich nicht ausdrücken lässt. Der damit verbundene Verhaltensbruch wird
-**hingenommen** und über einen Release-Hinweis samt Prüfanleitung begleitet (`JR-1307`), nicht über
+**hingenommen** und über einen Release-Hinweis samt Prüfanleitung begleitet (`JR-13-07`), nicht über
 einen Kompatibilitätsschalter abgefedert.
 
 Wer bisher den `null`-Zweig traf, sah das **ganze** Archiv und sieht künftig **nichts**. Das ist die
@@ -802,7 +802,7 @@ lediglich zu dokumentieren — „wer einschränken will, muss ein `can` erteile
 Schalter, der die alte Semantik erhält. Das ist nicht tragfähig, aus einem konkreten Grund und nicht
 aus Vorsicht:
 
-**E11s Auditor-Rolle ist auf genau diesen Mechanismus gebaut.** `JR-1101` liefert eine Rolle, die
+**E11s Auditor-Rolle ist auf genau diesen Mechanismus gebaut.** `JR-11-01` liefert eine Rolle, die
 lesen und suchen darf und sonst nichts, in der Form von `auditor-specific-mailbox.json`. Diese Form
 erteilt für `archive` **kein** `can`, sondern nur ein Verbot — und traf damit exakt den `null`-Zweig.
 Ein „read-only"-Auditor, der unbeschränkt liest, ist keine Auditor-Rolle; **E11 wäre mit dem alten
@@ -825,26 +825,26 @@ die jeder künftige Test mitprüfen müsste.
   `tests/integration/predefined-roles.int.test.ts`, das durch alle fünf Fixes grün geblieben ist
   (Einschränkungen: ADR-017, Nachtrag, Punkte 1 und 2).
 - Die betroffenen Formen sind **benennbar und abfragbar**: drei Formen für den `null`-Zweig plus die
-  Formen aus F19/F20 und `JR-1306`. Deshalb ist `JR-1307` eine Prüfanleitung mit SQL gegen
+  Formen aus F19/F20 und `JR-13-06`. Deshalb ist `JR-13-07` eine Prüfanleitung mit SQL gegen
   `roles.policies` und keine Pauschalwarnung.
 - Der Bruch ist **laut**, nicht still: ein deny fällt auf, eine leere Ergebnisliste ist auffindbar.
   Der Zustand davor war das Gegenteil.
 
 ### Konsequenz
 
-- `JR-1307` liefert Release-Hinweis und Prüfanleitung in der **öffentlichen** Doku
+- `JR-13-07` liefert Release-Hinweis und Prüfanleitung in der **öffentlichen** Doku
   (`docs/user-guides/upgrade-and-migration/access-control-changes.md`), englisch nach ADR-003, samt
   der getesteten SQL. Die Prüfanleitung ist Teil dieser Entscheidung, nicht Beigabe: der Bruch ist
   nur deshalb vertretbar, weil er vorab feststellbar ist.
 - Wer die alte Semantik zurückholen will — auch als Schalter —, braucht eine ADR, die diese ersetzt.
 - Die Anleitung darf **nicht** als „vollständig geprüft" gelesen werden: der Restspalt aus ADR-019
   (ein Key, der nur die Spaltenexistenz verletzt) fällt weiter erst zur Abfragezeit auf und ist als
-  `JR-1311` geführt.
+  `JR-13-11` geführt.
 
 ## ADR-017 — Action-Versatz zwischen Route-Gate und `FilterBuilder`
 
-**Status:** entschieden (2026-07-29) · **Entscheider:** Auftraggeber · **Betrifft:** F7, `JR-1302`,
-`JR-1303`
+**Status:** entschieden (2026-07-29) · **Entscheider:** Auftraggeber · **Betrifft:** F7, `JR-13-02`,
+`JR-13-03`
 
 **Entscheidung: Variante B.** `SearchService` baut seinen Row-Level-Filter künftig für die Action,
 unter der die Route den Request tatsächlich autorisiert hat:
@@ -893,15 +893,15 @@ minimale Änderung, die F7s Weg über die Suchroute schließt.
 | `predefined_read_only_user` | `action: ['read','search']`, unbedingt | `search` ist explizit erteilt ⇒ Vollzugriff, wie bei `read`                                    |
 
 Keine dieser drei Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` — weder vor noch nach der
-Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-1301`, nicht diese Tabelle.
+Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-13-01`, nicht diese Tabelle.
 
-### Nachtrag 2026-07-29 — nachgemessen in `JR-1301`, zwei Einschränkungen
+### Nachtrag 2026-07-29 — nachgemessen in `JR-13-01`, zwei Einschränkungen
 
 Die Entscheidung bleibt Variante B, und sie ist jetzt **belegt statt hergeleitet**:
 `tests/integration/predefined-roles.int.test.ts` legt die drei Rollen über Produktionscode an und
 zeigt, dass `('archive','read')` und `('archive','search')` je Rolle **identischen** Filtertext,
-identische Bind-Parameter und identischen Meili-Filter ergeben. `JR-1303` ist damit für eine
-Standardinstallation nachweisbar wirkungsfrei — unabhängig davon, was `JR-1302` mit dem `null`-Zweig
+identische Bind-Parameter und identischen Meili-Filter ergeben. `JR-13-03` ist damit für eine
+Standardinstallation nachweisbar wirkungsfrei — unabhängig davon, was `JR-13-02` mit dem `null`-Zweig
 macht.
 
 Zwei Aussagen dieses Abschnitts waren aber zu weit gefasst:
@@ -925,7 +925,7 @@ Zweig erst gar nicht treffen —, aber er verschiebt die Lesart von F7 in die un
 Policy, und die naheliegende Form dafür ist die von `auditor-specific-mailbox.json` — genau die Form,
 die F7 ins Gegenteil verkehrt. **F7s praktische Schwere steigt dadurch.** Der Fix für F17 ist eine
 Produktentscheidung (welche Rollen liefert Open Archiver aus?) und gehört **nicht** in E13;
-`JR-1307`s Betreiberanleitung muss den Sachverhalt aber benennen, sonst sucht ein Betreiber nach
+`JR-13-07`s Betreiberanleitung muss den Sachverhalt aber benennen, sonst sucht ein Betreiber nach
 einer Rolle, die es nicht gibt.
 
 ### Verworfen: Variante A — Suchrouten zusätzlich auf `read` gaten
@@ -943,44 +943,44 @@ speisen, statt sie im Service erneut zu wählen. Damit könnte der Versatz nicht
 Fehlerklasse verschwindet, nicht nur dieser Fall. Das ist richtig, aber es berührt die Middleware,
 alle vier Aufrufstellen und die Service-Signaturen: eine Refaktorierung, keine Sicherheitskorrektur,
 und sie gehört nicht in ein Epic, dessen Zweck das Schließen einer Autorisierungslücke ist. **Als
-`JR-1310` nach E13 vorgemerkt**, ausdrücklich nicht Teil von E13s Abnahme.
+`JR-13-10` nach E13 vorgemerkt**, ausdrücklich nicht Teil von E13s Abnahme.
 
 ### Konsequenz
 
-- `JR-1303` ist damit entschieden und gibt `JR-1302` frei.
-- `JR-1301` muss die gewählte Semantik fordern: der Filter für eine Rolle mit bedingtem
+- `JR-13-03` ist damit entschieden und gibt `JR-13-02` frei.
+- `JR-13-01` muss die gewählte Semantik fordern: der Filter für eine Rolle mit bedingtem
   `search archive` entsteht aus deren `search`-Regeln.
 - Wer diese Entscheidung umkehren will, braucht eine neue ADR, die diese ersetzt — keine stille
   Änderung des dritten Arguments.
 
 ## ADR-018 — Ein unübersetzbarer Zweig wird verweigert, nicht durch ein Sentinel ersetzt
 
-**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F3, F22, `JR-1304`,
-`JR-1301`
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F3, F22, `JR-13-04`,
+`JR-13-01`
 
 `mongoToDrizzle` **wirft**, wenn eine Policy-Bedingung nicht übersetzbar ist. Es gibt **keinen**
 milden Modus, und ein verworfener Zweig wird **nicht** durch ein „never-true"-Prädikat je Zweig
 ersetzt.
 
-**Anlass:** Nach den Fixes `JR-1302`–`JR-1306` blieb genau ein roter Test übrig, und zwar nicht
-wegen eines fehlenden Fixes, sondern weil zwei Erwartungen aus `JR-1301` sich widersprachen:
+**Anlass:** Nach den Fixes `JR-13-02`–`JR-13-06` blieb genau ein roter Test übrig, und zwar nicht
+wegen eines fehlenden Fixes, sondern weil zwei Erwartungen aus `JR-13-01` sich widersprachen:
 
 | Ort                                             | Eingabe                                       | Forderung                                        |
 | ----------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
 | `src/helpers/mongoToDrizzle.test.ts:227`        | `{ $or: [{id:'a'}, {subject:{$regex:'x'}}] }` | fail-closed, und **nicht** `"id" = $1`           |
 | `tests/integration/filter-builder-f1-f3.int.ts` | strukturell identisch                         | ein Prädikat, unter dem `rows.mine` sichtbar ist |
 
-Beide trugen `RED UNTIL JR-1304`. Unabhängig nachgemessen: die beiden sind **unter jeder
+Beide trugen `RED UNTIL JR-13-04`. Unabhängig nachgemessen: die beiden sind **unter jeder
 Implementierung** unvereinbar — es gibt keine prinzipielle Regel, die `{id:'a'}` anders behandelt als
 `{userEmail:…}`, beide sind Gleichheit auf einer erlaubten Spalte.
 
 **Entscheidung: die Unit-Erwartung gilt, die Integrationszeile war falsch.** Drei Gründe:
 
-1. `JR-1304`s Kriterium lautet „kein Zweig wird stillschweigend weggelassen" und nennt das `$or`
+1. `JR-13-04`s Kriterium lautet „kein Zweig wird stillschweigend weggelassen" und nennt das `$or`
    ausdrücklich. Die Integrationszeile forderte genau dieses Weglassen.
 2. **Das Sentinel-Verfahren ist unsicher.** `FilterBuilder.ts:84` setzt jede `cannot`-Bedingung unter
    ein `$not`. Ein „never-true" je verworfenem Zweig ergibt dort `not(false)` = **wahr**: ein
-   vakuumer Konjunkt, das Verbot ist weg. Gemessen am Übersetzer vor `JR-1304`:
+   vakuumer Konjunkt, das Verbot ist weg. Gemessen am Übersetzer vor `JR-13-04`:
    `{ $and: [{ $not: {userEmail} }, { $not: <unübersetzbar> }] }` ⇒ `not "user_email" = $1`, das
    zweite Verbot fehlt schlicht.
 3. `mongoToMeli` wirft für dieselbe Form schon **vor** E13, festgehalten von einem grünen Test
@@ -993,15 +993,15 @@ Verweigerung nicht will, muss die Policy reparieren, nicht den Übersetzer aufwe
 
 **Nebenwirkung, bewusst akzeptiert:** eine Policy, die vor E13 stillschweigend zu wenig oder zu viel
 zeigte, führt jetzt zu einem Fehler statt zu einem falschen Ergebnis. Das ist die Absicht — ein
-Fehler ist auffindbar, ein falsches Ergebnis nicht. `JR-1307` muss es in der Betreiberanleitung
+Fehler ist auffindbar, ein falsches Ergebnis nicht. `JR-13-07` muss es in der Betreiberanleitung
 nennen.
 
 ## ADR-019 — Die Key-Allowlist prüft Form und Relation, nicht Spaltenexistenz
 
-**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F1, F21, `JR-1306`,
-`JR-1311`
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F1, F21, `JR-13-06`,
+`JR-13-11`
 
-Die in `JR-1306` gebaute Allowlist lässt einen Key durch, wenn er **formal** eine Spaltenreferenz ist
+Die in `JR-13-06` gebaute Allowlist lässt einen Key durch, wenn er **formal** eine Spaltenreferenz ist
 — ein einzelner Identifier oder `<relation>.<identifier>` mit einer Relation aus
 `relationToTableMap`. Sie prüft **nicht**, ob die Spalte existiert. Ein einzelner unbekannter, aber
 syntaktisch harmloser Key wie `foo` wird weiter übersetzt und scheitert erst an Postgres.
@@ -1018,16 +1018,16 @@ Anlegen ab (400 aus `iam.controller.ts`), und `mongoToDrizzle` weist sie zur Abf
 `sql.raw` ist aus dem Relationszweig entfernt. Der Restspalt ist ein **Policy-Schreibfehler**, kein
 Angriffsweg: `"foo" = $1` trifft keine Spalte und erzeugt einen Fehler, kein stilles Ergebnis.
 
-**Konsequenz:** Der Restspalt wird als **`JR-1311`** geführt, nicht offen gelassen — spaltengenaue
+**Konsequenz:** Der Restspalt wird als **`JR-13-11`** geführt, nicht offen gelassen — spaltengenaue
 Prüfung in `FilterBuilder.create()`, das `resourceType` bereits als Parameter hat. Unabhängig von
-`JR-1310`; Variante C wird dafür nicht gebraucht. Bis dahin gilt: **ein Tippfehler in einer Policy
+`JR-13-10`; Variante C wird dafür nicht gebraucht. Bis dahin gilt: **ein Tippfehler in einer Policy
 fällt beim Anlegen auf, wenn er die Form verletzt, und erst zur Abfragezeit, wenn er nur die
 Spaltenexistenz verletzt.**
 
 ## ADR-020 — Betreiberdokumentation sagt, was sie meldet, nie was sie garantiert
 
-**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F27, F30, `JR-1307`,
-`JR-1314`, `JR-1317`
+**Status:** entschieden (2026-07-29) · **Entscheider:** PO · **Betrifft:** F27, F30, `JR-13-07`,
+`JR-13-14`, `JR-13-17`
 
 Eine Prüfanleitung für Betreiber beschreibt **die Befunde, die sie meldet**. Sie behauptet **keine
 Vollständigkeit** über Daten ohne festes Schema. Sätze der Form „es prüft rekursiv alle …", „ein
@@ -1037,10 +1037,10 @@ Release nicht" sind in `docs/user-guides/upgrade-and-migration/access-control-ch
 **Begründung — zwei Ablehnungen derselben Klasse.** E13 ist zweimal an der betreibersichtbaren Hälfte
 gescheitert, und beide Male an einem **positiven Abdeckungssatz**, nicht am Code:
 
-| Runde      | Befund  | Widerlegter Satz                                                         | Gefundene Form                            |
-| ---------- | ------- | ------------------------------------------------------------------------ | ----------------------------------------- |
-| `JR-1309`  | **F27** | „No rows means no role … is affected"                                    | `conditions: 5` (Skalar an der Wurzel)    |
-| `JR-1309a` | **F30** | „walked recursively … the empty object" · „not one this release changes" | `{"$or": [{…}, {}]}`, `{"userEmail": {}}` |
+| Runde       | Befund  | Widerlegter Satz                                                         | Gefundene Form                            |
+| ----------- | ------- | ------------------------------------------------------------------------ | ----------------------------------------- |
+| `JR-13-09`  | **F27** | „No rows means no role … is affected"                                    | `conditions: 5` (Skalar an der Wurzel)    |
+| `JR-13-09a` | **F30** | „walked recursively … the empty object" · „not one this release changes" | `{"$or": [{…}, {}]}`, `{"userEmail": {}}` |
 
 Die Policies liegen als JSONB, also ohne Schema. Zu jeder Abfrage, die Abdeckung behauptet, lässt sich
 eine Ebene tiefer eine Form konstruieren, die sie nicht kennt — der Anspruch ist **prinzipiell**
@@ -1055,20 +1055,20 @@ sie misst genau die Oberflächen, die sie ausübt, und nur die (siehe Berichtigu
 
 **Verworfene Alternative:** die Abfragen so lange erweitern, bis sie vollständig sind. Zweimal
 versucht, zweimal von einer tieferen Form eingeholt; die dritte Runde hätte dasselbe Ergebnis. Die
-billige Erweiterung wird trotzdem mitgenommen (`JR-1317` (a)) — sie ist eine Verbesserung, nur keine
+billige Erweiterung wird trotzdem mitgenommen (`JR-13-17` (a)) — sie ist eine Verbesserung, nur keine
 Grundlage für eine Zusage.
 
-**Konsequenz:** `JR-1316` (Regressionstest für diese Abfragen) bleibt nach E13 und ist damit eine
+**Konsequenz:** `JR-13-16` (Regressionstest für diese Abfragen) bleibt nach E13 und ist damit eine
 Verbesserung statt einer Abnahmevoraussetzung — genau deshalb war es richtig, ihn aus E13 zu nehmen.
 Wer künftig einen Abdeckungssatz in diese Seite schreibt, braucht eine ADR, die diese ersetzt.
 
-### Berichtigung (2026-07-29, nach der Abnahme `JR-1309b` — F31)
+### Berichtigung (2026-07-29, nach der Abnahme `JR-13-09b` — F31)
 
 **Der Satz „Diese Prüfung ist vollständig, weil sie das Verhalten misst statt die Datenform zu raten"
 ist gestrichen. Er war selbst ein Abdeckungssatz** — derselbe, den diese ADR verbietet, nur über den
 Verhaltenscheck statt über die Abfrage. Der Fehler liegt damit **in dieser ADR**, nicht in ihrer
-Umsetzung: `JR-1317` hat den Anspruch folgerichtig auf die Betreiberseite übernommen
-(`access-control-changes.md:621–623`, `:498–500`, `:631–632`), und `JR-1309b` hat ihn dort widerlegt.
+Umsetzung: `JR-13-17` hat den Anspruch folgerichtig auf die Betreiberseite übernommen
+(`access-control-changes.md:621–623`, `:498–500`, `:631–632`), und `JR-13-09b` hat ihn dort widerlegt.
 
 **Wie er widerlegt ist.** Der vorgeschriebene Vergleich nennt **zwei** Zahlen (Zeilen der Archivliste,
 Trefferzahl einer Suche). Dieselbe Seite benennt in Zeile 223–224 **drei** Oberflächen, für die die
@@ -1092,8 +1092,8 @@ einer Stelle, **wandert er** (Abfrage ⇒ Verhaltenscheck) statt zu verschwinden
 Ersatzbürgschaft ist damit ausgeschlossen.
 
 **Was diese Berichtigung nicht ändert:** die Streichung der Abdeckungsansprüche der Abfrage und die
-Knotenebene aus `JR-1317` (a) bleiben richtig und sind in `JR-1309b` unabhängig belegt (alle acht
-F30-Formen gemeldet, keine Falsch-positiven). Umgesetzt wird die Berichtigung in **`JR-1318`**.
+Knotenebene aus `JR-13-17` (a) bleiben richtig und sind in `JR-13-09b` unabhängig belegt (alle acht
+F30-Formen gemeldet, keine Falsch-positiven). Umgesetzt wird die Berichtigung in **`JR-13-18`**.
 
 ---
 
@@ -1111,11 +1111,11 @@ Die fünf Fix-Tasks liefen in einer Session durch (fünf Commits). Was Wochen ko
 Abnahmerunden** mit 21, 23, 18 und einer offenen Kriterienliste — und **alle drei Ablehnungen trafen
 dasselbe Artefakt**, die betreibersichtbare Dokumentation:
 
-| Runde      | Gebrochen an | Artefakt                 | Der Autorisierungscode |
-| ---------- | ------------ | ------------------------ | ---------------------- |
-| `JR-1309`  | F27, F29     | Prüf-SQL + Betreibertext | hielt                  |
-| `JR-1309a` | F30          | Prüf-SQL + Betreibertext | hielt                  |
-| `JR-1309b` | F31          | Betreibertext            | hielt                  |
+| Runde       | Gebrochen an | Artefakt                 | Der Autorisierungscode |
+| ----------- | ------------ | ------------------------ | ---------------------- |
+| `JR-13-09`  | F27, F29     | Prüf-SQL + Betreibertext | hielt                  |
+| `JR-13-09a` | F30          | Prüf-SQL + Betreibertext | hielt                  |
+| `JR-13-09b` | F31          | Betreibertext            | hielt                  |
 
 Der Code war nach Runde 1 unabhängig belegt und wurde danach **dreimal mitgeprüft, ohne je zu brechen**.
 Wären Code und Betreiberdoku getrennte Scheiben gewesen, wäre die Codehälfte nach Runde 1 abgenommen und
@@ -1211,7 +1211,7 @@ Konsequenz 4 als gleichwertige Option genannt; das war ein Fehler und ist dort a
 **Status:** **entschieden** (2026-07-31) · **Entscheider:** Auftraggeber · **Quelle:** RFC §5.5 ·
 **Berührt nicht:** ADR-008 (Ausfallverhalten)
 
-**Ausgeliefert wird weiterhin _kein_ TSA-URL.** Das war schon Akzeptanzkriterium von `JR-801` und steht in
+**Ausgeliefert wird weiterhin _kein_ TSA-URL.** Das war schon Akzeptanzkriterium von `JR-8-01` und steht in
 `02-architektur.md` §7; diese ADR bestätigt es und beantwortet die bis dahin offene Frage „welche TSA?":
 
 | Klasse                                 | TSA                                                                                       |
@@ -1235,7 +1235,7 @@ ohne gepinnte CA   ⇒ nicht verifizierbar              (Root ist nicht im Trust
 
 | Punkt                 | Befund                                                                                             |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
-| Protokoll             | RFC 3161, `https://tsr.open-tsa.eu`, SHA-256/384/512 — passt unmittelbar auf `JR-801`              |
+| Protokoll             | RFC 3161, `https://tsr.open-tsa.eu`, SHA-256/384/512 — passt unmittelbar auf `JR-8-01`             |
 | Kosten / Lizenz       | kostenlos, Code MIT, spendenfinanziert (Ko-fi)                                                     |
 | Betrieb               | **ein** Knoten, Nürnberg. Redundanz (Helsinki/Falkenstein, GeoDNS) laut Roadmap **Phase 3, 2028+** |
 | Reife                 | live seit **April 2026**, ~5.161 Token ausgestellt                                                 |
@@ -1257,11 +1257,11 @@ nicht das Fehlen einer Behauptung auf der Website, sondern die **Policy-OID im T
 2. **Dokumentierte Option** für Installationen ohne GoBD/eIDAS-Anspruch (NGO, Forschung, interne Archive),
    im Deployment-Guide mit den Auflagen aus der Tabelle im Fließtext.
 3. **Optional als _zweiter_, unabhängiger Zeitstempel** neben einer qualifizierten TSA — zwei unabhängige
-   Bezeugungen zum Preis von einer. `JR-801` muss dafür eine **Liste** von TSA-URLs akzeptieren, nicht
+   Bezeugungen zum Preis von einer. `JR-8-01` muss dafür eine **Liste** von TSA-URLs akzeptieren, nicht
    einen Einzelwert.
 
 **Ausdrücklich nicht in `ci`.** Ein CI-Lauf darf nicht von einem fremden, spendenfinanzierten Einzelknoten
-abhängen: das erzeugt rote Läufe ohne eigenen Defekt — genau die Fehlerklasse, gegen die `JR-105c` das
+abhängen: das erzeugt rote Läufe ohne eigenen Defekt — genau die Fehlerklasse, gegen die `JR-1-05c` das
 Messinstrument gehärtet hat, und die schnellste Art, einen Wächter unglaubwürdig zu machen.
 
 **Auflagen, die in die Betreiberdoku gehören:** `ca.crt` pinnen (der Root ist in keinem Trust Store); das
@@ -1286,7 +1286,7 @@ eigener Rolle je Kunde. **Nicht empfohlen:** ein geteilter Stack mit nachgerüst
 ### Warum das jetzt entschieden werden muss und nicht in E12
 
 > **Dieser Abschnitt ist am 2026-08-01 neu gefasst.** Die erste Fassung argumentierte „muss vor dem
-> Kettencode entschieden werden". Der Kettencode ist seit E2 gebaut, abgenommen (`JR-210a`) und
+> Kettencode entschieden werden". Der Kettencode ist seit E2 gebaut, abgenommen (`JR-2-10a`) und
 > zurückgemergt — das Argument ist überholt, die Dringlichkeit dadurch aber **größer**, nicht kleiner.
 
 `chain_hash(0)` enthält die `deployment_id` (ADR-006, ADR-007 Konsequenz 3), und das ist seit E2 keine
@@ -1365,7 +1365,7 @@ nicht beide ein `admin@…` oder eine Richtlinie „Standard 10 Jahre" führen.
    wahr.
 
     > **E2 hat dieser Begründung am 2026-07-31 einen zweiten Beleg geliefert: F37.** Der
-    > Append-Only-Trigger aus `JR-205` ist von einer Rolle, die die Tabellen **besitzt**, in zwei
+    > Append-Only-Trigger aus `JR-2-05` ist von einer Rolle, die die Tabellen **besitzt**, in zwei
     > Anweisungen abschaltbar — und in einer Standardinstallation ist `POSTGRES_USER` Superuser und
     > Eigentümer, `DATABASE_URL` benutzt genau diese Rolle (`02-architektur.md` §1). Der Rechteentzug
     > ist in ADR-009 festgeschrieben und **E11** zugeordnet, also noch offen. Solange er offen ist,
@@ -1386,9 +1386,9 @@ Der naheliegende Weg, viele Kundeninstanzen aufzusetzen, ist ein Golden Image. W
 Migrationslauf erzeugt, trägt es die von `0041_even_scream.sql` gezogene `deployment_id` — und jeder
 daraus geklonte Kunde bekommt **dieselbe**. Damit teilen fremde Kunden das Genesis-Präfix, und die
 Anlage ist ein Split Brain zwischen Mandanten, den `verify` als Manipulationsbefund melden wird,
-obwohl es ein Provisionierungsfehler war. `JR-209` prüft den Fall bereits als Fall (h) mit eigener
+obwohl es ein Provisionierungsfehler war. `JR-2-09` prüft den Fall bereits als Fall (h) mit eigener
 Befundart („a clone produces two valid chains from one genesis"), und ADR-006 §4.3 sowie
-`JR-802`/`JR-803` behandeln die Erkennung.
+`JR-8-02`/`JR-8-03` behandeln die Erkennung.
 
 **Regel, die daraus folgt:** die Migration läuft je Instanz **frisch**; ein Post-Migrations-Volume
 oder -Image wird nie geklont. Golden Images sind erlaubt, aber nur **vor** `pnpm db:migrate` — und
@@ -1398,7 +1398,7 @@ macht, sofern man kein Datenverzeichnis mitkopiert. Steht als Konsequenz 2 unten
 ### Was es kostet — nach ADR-020 benannt, nicht beschönigt
 
 - **RAM:** laut `docs/user-guides/installation.md` 4 GB je Instanz, 2 GB mit externem
-  Postgres/Redis/Meilisearch. `smtp-ingress` und das Spool-Volume kommen hinzu (`JR-1203`).
+  Postgres/Redis/Meilisearch. `smtp-ingress` und das Spool-Volume kommen hinzu (`JR-12-03`).
 - **Betrieb × N:** `docker/docker-entrypoint.sh` fährt `pnpm db:migrate` beim Start, also N
   Migrationen je Upgrade. Zugleich der Vorteil: ein Kunde lässt sich als Canary hochziehen, statt
   alle gleichzeitig zu riskieren.
@@ -1455,7 +1455,7 @@ Die folgenden Tasks werden **erst bei der Entscheidung** in E12 angelegt — nac
 gemeinsam mit ihnen fortgeschrieben:
 
 1. `docker-compose.yml` ohne feste `container_name`, damit mehrere Stacks auf einem Host koexistieren
-   (berührt `JR-1203`).
+   (berührt `JR-12-03`).
 2. Provisionierungs- und Stilllegungs-Checkliste je Instanz: Schlüssel, Lizenz, MX, IP, Bucket,
    TSA-Zugang, Monitoring-Ziel, Backup — und was beim Kundenabgang wie zu übergeben ist. **Zwei
    Punkte daraus sind seit E2 nicht mehr optional:**
@@ -1467,7 +1467,7 @@ gemeinsam mit ihnen fortgeschrieben:
 3. `MEILI_INDEX_PREFIX` in `config/search.ts` und die **13** `'emails'`-Literale gegen eine Konstante.
    Auch im empfohlenen Modell sinnvoll, als Schutz gegen versehentlich geteilte Infrastruktur.
 4. Redis-`keyPrefix` bzw. `db`-Index in `config/redis.ts`, gleicher Grund.
-5. `JR-1204` (Deployment-Guide) nimmt das Betriebsmodell auf: eine IP je Instanz, MX je Kunde, und
+5. `JR-12-04` (Deployment-Guide) nimmt das Betriebsmodell auf: eine IP je Instanz, MX je Kunde, und
    warum kein gemeinsamer Port-25-Proxy davor steht.
 6. E9/E10 rechnen weiterhin je Kette; das Betriebsmodell ändert daran nichts, halbiert aber die
    Zahl der Ketten je `verify`-Lauf.
@@ -1546,13 +1546,13 @@ dieses Projekt baut „Empfang mit einlösbarer Annahmezusage".
 
 Zwei Punkte tragen die Entscheidung:
 
-1. **Der Empfangspfad ist bereits entkoppelt.** `JR-401` fordert für `apps/smtp-ingress` als
+1. **Der Empfangspfad ist bereits entkoppelt.** `JR-4-01` fordert für `apps/smtp-ingress` als
    Akzeptanzkriterium: importiert **kein** `packages/backend/src/config/*` und **kein**
    `src/database/index.ts`. `packages/journaling` importiert heute ausschließlich `node:crypto`,
    `@open-archiver/types` und relative Pfade. Ein Neubau spart hier **nichts**, weil ADR-002 die
    Trennung bereits erzwingt.
-2. **Die Pull-Connectoren sind ein Schalter, kein Fundament.** `JR-1201` (Feature-Flag,
-   standardmäßig aus), `JR-1202` (Dedupe, journalisierte Kopie gewinnt) und `JR-1207`
+2. **Die Pull-Connectoren sind ein Schalter, kein Fundament.** `JR-12-01` (Feature-Flag,
+   standardmäßig aus), `JR-12-02` (Dedupe, journalisierte Kopie gewinnt) und `JR-12-07`
    (Umdokumentation auf Backfill/Reconciliation) stehen im Backlog. Was der Neubau einsparen soll,
    ist als Konfigurationsentscheidung längst geplant.
 
@@ -1566,7 +1566,7 @@ das, was ein Prüfer benutzt: suchen, exportieren, Zugriff nachweisen, Aufbewahr
 **Trägt:** Pull-Ingestion garantiert keine **Vollständigkeit**. Was zwischen zwei Syncs gelöscht
 wird, kommt nie an. Das ist ein Vollständigkeits-, kein Unveränderbarkeitsproblem — Letzteres decken
 die Hashes über Klartext-Bytes (`archived_emails.storage_hash_sha256`) bereits ab. Daraus folgt
-„Journaling ist die maßgebliche Quelle", und genau so steht es in `JR-1202`.
+„Journaling ist die maßgebliche Quelle", und genau so steht es in `JR-12-02`.
 
 **Geht zu weit:** „nicht rechtskonform" als Pauschalurteil über die Importwege. Journaling erfasst
 erst ab Einschaltdatum; für den Altbestand ist ein Erstimport (PST/Mbox/IMAP) zulässig und praktisch
@@ -1598,20 +1598,94 @@ nicht gemessen und ist als **R-19** aufgenommen.
 
 Nach ADR-021 bleibt `03-backlog.md` unverändert, bis das Epic ansteht; die Taskzahl in `06-status.md`
 wird gemeinsam mit ihnen fortgeschrieben. Beide Nummern sind beim Anlegen gegen den Bestand zu
-prüfen — **`JR-1206` ist bereits vergeben** (RFC-§13-Nicht-Behauptung im README) und darf dafür
+prüfen — **`JR-12-06` ist bereits vergeben** (RFC-§13-Nicht-Behauptung im README) und darf dafür
 nicht wiederverwendet werden:
 
-1. **In E11** (nächste freie Nummer, derzeit `JR-1111`): Herkunft `journaled` vs. `imported` im
+1. **In E11** (nächste freie Nummer, derzeit `JR-11-11`): Herkunft `journaled` vs. `imported` im
    **Prüfbericht und im Export-Manifest** ausweisen, damit die Vollständigkeitszusage genau auf den
-   journalisierten Zeitraum bezogen werden kann. Baut auf `JR-1104` (Manifest) auf. **Zuerst zu
+   journalisierten Zeitraum bezogen werden kann. Baut auf `JR-11-04` (Manifest) auf. **Zuerst zu
    prüfen, ob eine neue Spalte nötig ist oder ein Join genügt** — die Herkunft hängt bereits an
    `ingestion_sources` bzw. `journaling_sources`.
-2. **In E12** (nächste freie Nummer, derzeit `JR-1210`): Quelltext-Angebot nach AGPL §13 in der UI —
+2. **In E12** (nächste freie Nummer, derzeit `JR-12-10`): Quelltext-Angebot nach AGPL §13 in der UI —
    Version, Commit und Link auf das Repository oder einen Tarball-Endpoint —, plus ein Absatz im
    Betreiberleitfaden. Neue Strings fallen unter den Skill `oa-i18n` (11 Sprachen × 2 Systeme).
-   Berührt `JR-1108` (Build-Identität zeigt Commit und Image-Digest bereits an drei Stellen) und ist
+   Berührt `JR-11-08` (Build-Identität zeigt Commit und Image-Digest bereits an drei Stellen) und ist
    die operative Einlösung des in ADR-024 festgehaltenen §13-Punktes, **soweit der Auftraggeber
    selbst betreibt**. Wer betreibt, entscheidet ADR-024 — dort weiterhin **offen**.
+
+## ADR-026 — Task-IDs schreiben sich `JR-<Epic>-<NN>`
+
+**Status:** **entschieden** (2026-08-01) · **Entscheider:** Auftraggeber · **Betrifft:**
+`03-backlog.md` und jedes Dokument, jeden Kommentar und jeden Suite-Namen, der eine Task-ID nennt
+
+Task-IDs tragen ab sofort einen Bindestrich zwischen Epic und laufender Nummer:
+**`JR-<Epic>-<NN>`**. Die laufende Nummer bleibt zweistellig, ein Nacharbeits-Suffix hängt als
+Kleinbuchstabe direkt an. `JR-101` → `JR-1-01`, `JR-1309b` → `JR-13-09b`.
+
+### Warum
+
+Ohne Trennzeichen war die alte Schreibweise nicht eindeutig lesbar: `JR-1101` konnte „Epic 1,
+Task 101" oder „Epic 11, Task 01" heißen. Aufgelöst wurde das bisher nur dadurch, dass **niemand**
+Epic 1 über Task 06 hinaus nummeriert hat — eine Konvention, die nirgends stand und beim ersten
+zweistelligen Task in E1…E9 gebrochen wäre. Mit E10 bis E13 im Backlog war die Kollision keine
+theoretische mehr.
+
+**Es ist ausdrücklich keine Neuvergabe.** Epic, laufende Nummer und Suffix bleiben je Task
+unverändert; nur die Schreibweise ändert sich. Der Satz „Task-IDs werden nie neu vergeben" in
+`03-backlog.md` gilt weiter.
+
+### Umsetzung, am 2026-08-01
+
+Mechanisch über alle nachverfolgten Dateien mit den Endungen `.md`, `.ts`, `.json`, `.mjs`, `.yml`,
+`.svelte`. Abbildung deterministisch: **dreistellig ⇒ die erste Ziffer ist das Epic** (E1…E9),
+**vierstellig ⇒ die ersten beiden** (E10…E13). Eine Mapping-Tabelle ist nicht nötig, weil die Regel
+die Abbildung vollständig bestimmt und umkehrbar ist.
+
+- **1778 Vorkommen in 75 Dateien** umgestellt, **130 verschiedene IDs**.
+- Auch die abgeschlossenen Protokoll- und Abnahmeeinträge, einschließlich `11-archiv-e1.md` —
+  Entscheidung des Auftraggebers. Zwei Schreibweisen nebeneinander hätten genau die
+  Verwechslungsgefahr erhalten, die diese ADR abstellt. Wer die alte Schreibweise sucht, findet sie
+  in der Git-Historie vor diesem Commit.
+- Führungsnullen am Epic (`JR-01-01`) wurden erwogen und **verworfen** — der Auftraggeber hat die
+  kürzere Form gewählt.
+
+### Die eine Stelle, die nicht mitgezogen wurde
+
+`packages/backend/src/database/migrations/0042_journal_ledger_append_only.sql:28` erzeugt die
+Fehlermeldung des Append-Only-Triggers im Wortlaut
+`… the journal ledger is append-only (JR-205, ADR-009).`, und
+`tests/integration/journal-ledger-append-only.int.test.ts:171` prüft sie mit
+`toMatch(/JR-205, ADR-009/)`. Beide bleiben in der **alten** Schreibweise stehen, ebenso der
+Kopfkommentar von `0041_even_scream.sql` (`JR-204`).
+
+**Grund:** Das sind **angewandte Migrationen**. `CLAUDE.md` §5.2 verbietet, sie zu ändern; eine
+Textänderung an der Trigger-Meldung wäre eine neue Migration, die die `plpgsql`-Funktion neu
+definiert — also ein Eingriff in die Manipulationssicherung für einen kosmetischen Gewinn. Der
+Aufwand-Risiko-Schnitt geht klar dagegen aus.
+
+Alle **anderen** Vorkommen in derselben Testdatei (Dateikopf, Suite-Name, Abdeckungshinweis) sind
+umgestellt; nur die Zeile, die den Laufzeittext der Datenbank spiegelt, ist eingefroren. Wer den
+Trigger irgendwann aus einem anderen Grund neu schreibt, zieht die Schreibweise dabei mit.
+
+### Ebenfalls bewusst unverändert
+
+Zwei historische Abnahmezeilen in `06-status.md` nennen die **Suchmuster**, mit denen damals geprüft
+wurde (`kein JR-1xxx`, `grep -nE "JR-[0-9]{3,4}|…"`). Sie protokollieren einen ausgeführten Befehl
+und wären umgeschrieben schlicht falsch. Für künftige Prüfungen — etwa „keine internen IDs in der
+öffentlichen Doku" in `JR-12-09` — lautet das Muster jetzt:
+
+```
+grep -nE "JR-[0-9]{1,2}-[0-9]{2}[a-z]?|ADR-[0-9]{3}|\bF[0-9]{1,2}\b"
+```
+
+### Belegt
+
+Voller Lauf nach der Umstellung unverändert: **398 passed | 2 skipped** bei 30 Dateien,
+`unit 288/288 · integration 92/92 · adversarial 18/18`. Suite-Namen enthalten IDs (etwa
+`[ci] ledger appends under concurrency (JR-2-08)`), das Inventar aus `JR-1-05c` zählt aber Tests je
+Suite und Klasse und nicht deren Namen — die Umbenennung geht daran vorbei. Dazu `tsc` und
+`tsc -p tsconfig.test.json` je Exit 0, `svelte-check` 0 Fehler / 0 Warnungen, Prettier sauber über
+alle 75 Dateien.
 
 ## Nicht verhandelbar (keine ADR nötig)
 

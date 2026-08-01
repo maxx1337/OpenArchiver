@@ -11,7 +11,7 @@ import { archivedEmails } from '../../src/database/schema';
 
 /**
  * FINDING F8 regression -- a `cannot` rule whose condition value is an operator object must
- * actually exclude (JR-1301, epic E13). Classification: `ci`.
+ * actually exclude (JR-13-01, epic E13). Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * The defect
@@ -28,7 +28,7 @@ import { archivedEmails } from '../../src/database/schema';
  * `mongoToMeli` interpolates it as the string `[object Object]`. The exclusion the policy author
  * wrote does not happen. Every expressive `cannot` condition is affected -- `$in`, `$nin`, `$gte`, ...
  *
- * Required behaviour (`JR-1305`): "`cannot ... { $in: [...] }` schließt tatsächlich aus, in Drizzle
+ * Required behaviour (`JR-13-05`): "`cannot ... { $in: [...] }` schließt tatsächlich aus, in Drizzle
  * **und** im Meili-Filter."
  *
  * ---------------------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ import { archivedEmails } from '../../src/database/schema';
  * `expect(searchFilter).toContain('[object Object]')` and
  * `expect(exclusionWorked).toBe(false)` -- it demanded that the defect still be present. Here the
  * assertions are inverted: the blocked row must be gone and the allowed row must remain. RED until
- * `JR-1305`.
+ * `JR-13-05`.
  *
  * The assertion is on rows, plus one on the emitted Meilisearch filter string. The Meili half has
  * no engine in this environment, so it is checked structurally: the filter must not contain
@@ -60,7 +60,7 @@ const FilterBuilder = harness
 
 suiteRequiring(
 	'ci',
-	'FilterBuilder `cannot` exclusion -- FINDING F8 (JR-1301)',
+	'FilterBuilder `cannot` exclusion -- FINDING F8 (JR-13-01)',
 	postgresProbe,
 	() => {
 		const db = () => harness!.db;
@@ -131,7 +131,7 @@ suiteRequiring(
 		}
 
 		it('a scalar `cannot` condition already excludes correctly -- the counter-check', async () => {
-			// Green before and after JR-1305. The `$ne`-wrapping is only wrong for operator objects; a
+			// Green before and after JR-13-05. The `$ne`-wrapping is only wrong for operator objects; a
 			// plain value works, and the fix must keep it working.
 			const scenario = await seedScenario('cannot-scalar', (blockedSourceId) => ({
 				ingestionSourceId: blockedSourceId,
@@ -145,12 +145,12 @@ suiteRequiring(
 			expect(searchFilter).not.toContain('[object Object]');
 		});
 
-		it(redUntil('JR-1305', 'cannot + $in actually excludes the blocked rows'), async () => {
+		it(redUntil('JR-13-05', 'cannot + $in actually excludes the blocked rows'), async () => {
 			coverageNotice(
-				'FINDING F8 regression (JR-1301): FilterBuilder wraps `cannot` condition values in ' +
+				'FINDING F8 regression (JR-13-01): FilterBuilder wraps `cannot` condition values in ' +
 					'{ $ne: value } regardless of the value being an operator object, so ' +
 					'`cannot ... { $in: [...] }` becomes { $ne: { $in: [...] } }. Expected RED until ' +
-					'JR-1305. The Meilisearch half is checked structurally -- no Meilisearch in this ' +
+					'JR-13-05. The Meilisearch half is checked structurally -- no Meilisearch in this ' +
 					'environment.'
 			);
 			const scenario = await seedScenario('cannot-in', (blockedSourceId) => ({
@@ -181,7 +181,7 @@ suiteRequiring(
 		});
 
 		it(
-			redUntil('JR-1305', 'cannot + $nin excludes everything outside the listed ids'),
+			redUntil('JR-13-05', 'cannot + $nin excludes everything outside the listed ids'),
 			async () => {
 				// `cannot read archive where ingestionSourceId $nin [allowed]` = "deny everything except the
 				// allowed source". The complement form, so a fix that special-cases `$in` alone is caught.
@@ -223,7 +223,7 @@ suiteRequiring(
 		);
 
 		it(
-			redUntil('JR-1305', 'cannot + $gte on a numeric column excludes the matching rows'),
+			redUntil('JR-13-05', 'cannot + $gte on a numeric column excludes the matching rows'),
 			async () => {
 				// A non-uuid column, so the finding is not read as a uuid-casting quirk: `size_bytes` is an
 				// integer and `{ $ne: { $gte: n } }` is just as wrong there.

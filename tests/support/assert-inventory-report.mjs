@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 
 /**
- * CI glue for JR-105b and JR-105c: assert that the test run reported the suites we expect, and that
+ * CI glue for JR-1-05b and JR-1-05c: assert that the test run reported the suites we expect, and that
  * the tests in them actually ran.
  *
  * Usage: `node tests/support/assert-inventory-report.mjs <inventory.json> <executed-tests.json>`

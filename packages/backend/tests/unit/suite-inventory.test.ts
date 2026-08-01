@@ -13,7 +13,7 @@ import {
 } from '@oa-test/suite-inventory';
 
 /**
- * Units for the suite-inventory guard (JR-105b).
+ * Units for the suite-inventory guard (JR-1-05b).
  *
  * The guard is the thing that decides whether a *missing* suite or an *uncollected* test file makes
  * the run red. If it is wrong, it is wrong silently -- the same failure class it exists to prevent.
@@ -51,7 +51,7 @@ function unitFiles(): string[] {
  * Derived rather than written out, for the same reason `unitFiles()` is: a fixture that hard-codes
  * one `.adv.test.ts` file silently assumes `expectedFiles: 1`, and then fails the day the suite
  * grows -- with a message about violation counts that says nothing about the real cause. That
- * happened when `JR-208`/`JR-209` took the suite from one file to three.
+ * happened when `JR-2-08`/`JR-2-09` took the suite from one file to three.
  */
 function adversarialFiles(): string[] {
 	return Array.from(
@@ -73,7 +73,7 @@ function suiteExpected(name: 'unit' | 'integration' | 'adversarial'): number {
 	return SUITES.find((spec) => spec.name === name)!.expectedFiles;
 }
 
-suite('ci', 'suite-inventory: glob matching (JR-105b)', () => {
+suite('ci', 'suite-inventory: glob matching (JR-1-05b)', () => {
 	it('matches a single segment with * and any depth with **', () => {
 		const regex = globToRegExp('packages/*/tests/integration/**/*.int.test.ts');
 		expect(regex.test('packages/backend/tests/integration/a.int.test.ts')).toBe(true);
@@ -114,7 +114,7 @@ suite('ci', 'suite-inventory: glob matching (JR-105b)', () => {
 	});
 });
 
-suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
+suite('ci', 'suite-inventory: the two positive expectations (JR-1-05b)', () => {
 	it('accepts a tree that matches every declared count exactly', () => {
 		const root = healthyTree();
 		try {
@@ -133,13 +133,13 @@ suite('ci', 'suite-inventory: the two positive expectations (JR-105b)', () => {
 	});
 
 	it('gap (a): an ABSENT integration directory is a violation, not a green run', () => {
-		// This is the exact state that was green before JR-105b: the directory renamed away, so no
+		// This is the exact state that was green before JR-1-05b: the directory renamed away, so no
 		// integration file exists, no skip notice is printed, and vitest reports success.
 		const root = tree([...unitFiles(), ...adversarialFiles()]);
 		try {
 			const report = collectSuiteInventory(root);
 			expect(report.counts.integration).toBe(0);
-			// The expected count is read from SUITES rather than written out: JR-1301 raised it
+			// The expected count is read from SUITES rather than written out: JR-13-01 raised it
 			// from 4 to 8 and a literal here turned a deliberate inventory change into an
 			// unrelated red test.
 			expect(report.violations.join('\n')).toContain(

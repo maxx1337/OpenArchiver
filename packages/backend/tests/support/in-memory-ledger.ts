@@ -8,12 +8,12 @@ import {
 import type { CanonicalJsonValue, JournalLedgerRecord } from '@open-archiver/types';
 
 /**
- * A second `LedgerBackend` that is not Postgres (`JR-207`).
+ * A second `LedgerBackend` that is not Postgres (`JR-2-07`).
  *
  * ---------------------------------------------------------------------------------------------
  * What this is for, and what it is not
  * ---------------------------------------------------------------------------------------------
- * `JR-207`'s acceptance criterion is that variant (b) of RFC section 5.4 — an append-only local WAL —
+ * `JR-2-07`'s acceptance criterion is that variant (b) of RFC section 5.4 — an append-only local WAL —
  * is retrofittable **without a signature change**. That is a claim about the `LedgerBackend` port, and
  * a claim of that shape is worth exactly as much as the evidence behind it. A comment asserting
  * "the interface is general enough" is not evidence; a second implementation that satisfies the same

@@ -19,7 +19,7 @@ import {
 } from '../../src/database/schema';
 
 /**
- * The three shipped `predefined_*` roles against real Postgres (JR-1301, epic E13).
+ * The three shipped `predefined_*` roles against real Postgres (JR-13-01, epic E13).
  * Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
@@ -28,12 +28,12 @@ import {
  * ADR-017 (2026-07-29) and the F7 entry in `09-befunde-bestandscode.md` both assert:
  *
  *   > Keine dieser drei Rollen erreicht den `null`-Zweig in `FilterBuilder.ts:49` -- weder vor noch
- *   > nach der Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-1301`, nicht diese
+ *   > nach der Änderung. Der Nachweis dafür ist der Integrationstest aus `JR-13-01`, nicht diese
  *   > Tabelle.
  *
  * This is that test. The assertion was derived by reading `createDefaultRoles` and
  * `UserService.createAdminRole()`; a derivation is not a proof, and the whole release note in
- * `JR-1307` ("no shipped role is affected") rests on it.
+ * `JR-13-07` ("no shipped role is affected") rests on it.
  *
  * ---------------------------------------------------------------------------------------------
  * Two independent halves
@@ -45,10 +45,10 @@ import {
  *     `rulesFor` / `rulesToQuery` calls `FilterBuilder` uses, and reports which branch each role
  *     lands in. The duplication of the branch logic is deliberate and is what makes it an
  *     independent measurement rather than a tautology; it describes `rulesToQuery`'s output, which
- *     `JR-1302` does not change, so it stays valid after the fix.
+ *     `JR-13-02` does not change, so it stays valid after the fix.
  *
  *  2. **The behavioural snapshot.** The exact filter and the exact rows for each role, for both
- *     `read` and `search`. Green today; it must stay green after `JR-1302` and `JR-1303`. This is
+ *     `read` and `search`. Green today; it must stay green after `JR-13-02` and `JR-13-03`. This is
  *     the regression net for "a standard installation behaves identically before and after".
  *     The strongest form of ADR-017's impact claim is asserted directly: for every predefined role,
  *     the result for `('archive','read')` and for `('archive','search')` is **the same**. If that
@@ -100,7 +100,7 @@ type PredefinedSlug = (typeof PREDEFINED_SLUGS)[number];
 const CALL_SITE_PAIRS: ReadonlyArray<{ subject: AppSubjects; action: AppActions; where: string }> =
 	[
 		{ subject: 'archive', action: 'read', where: 'ArchivedEmailService.ts:62' },
-		{ subject: 'archive', action: 'search', where: 'SearchService.ts:311/:423 after JR-1303' },
+		{ subject: 'archive', action: 'search', where: 'SearchService.ts:311/:423 after JR-13-03' },
 		{ subject: 'ingestion', action: 'read', where: 'IngestionService.ts:137' },
 	];
 
@@ -138,7 +138,7 @@ const stubResponse = () =>
 
 suiteRequiring(
 	'ci',
-	'The three shipped predefined_* roles (ADR-017 impact, JR-1301)',
+	'The three shipped predefined_* roles (ADR-017 impact, JR-13-01)',
 	postgresProbe,
 	() => {
 		const db = () => harness!.db;
@@ -251,9 +251,9 @@ suiteRequiring(
 		 * therefore unreachable in any installation that went through the normal setup flow.
 		 *
 		 * **This test asserts the observed behaviour, not the desired one, and that is a deliberate
-		 * exception to `JR-1301`'s rule.** F17 is not one of E13's four findings; there is no task to
+		 * exception to `JR-13-01`'s rule.** F17 is not one of E13's four findings; there is no task to
 		 * fix it, so a red test here would leave the epic branch red for something nobody is
-		 * assigned, and it would block the `JR-1309` acceptance for the wrong reason. The finding is
+		 * assigned, and it would block the `JR-13-09` acceptance for the wrong reason. The finding is
 		 * filed in `09-befunde-bestandscode.md` for the PO to schedule. What the assertion does buy:
 		 * the moment someone fixes the guard, this test goes red and points at the finding.
 		 */
@@ -271,7 +271,7 @@ suiteRequiring(
 
 			const slugs = (await db().select().from(roles)).map((role) => role.slug).sort();
 			coverageNotice(
-				`FINDING F17 (JR-1301): after the production setup order (createAdminRole() then ` +
+				`FINDING F17 (JR-13-01): after the production setup order (createAdminRole() then ` +
 					`GET /roles) the roles table contains only [${slugs.join(', ')}]. ` +
 					`predefined_end_user and predefined_read_only_user are never created, because ` +
 					`createAdminRole() already satisfies the "any predefined_ slug exists" guard at ` +
@@ -337,14 +337,14 @@ suiteRequiring(
 						branch,
 						`${slug} reaches the F7 null branch for (${pair.action}, ${pair.subject}), used ` +
 							`at ${pair.where}. ADR-017 and 09-befunde-bestandscode.md both state that no ` +
-							`shipped role does, and JR-1307's release note is written on that basis. If ` +
-							`this assertion fails, ADR-017's impact analysis is wrong and JR-1307 must go ` +
+							`shipped role does, and JR-13-07's release note is written on that basis. If ` +
+							`this assertion fails, ADR-017's impact analysis is wrong and JR-13-07 must go ` +
 							`back to the unqualified warning.`
 					).not.toBe('null-branch');
 				}
 			}
 			coverageNotice(
-				`ADR-017 branch probe (JR-1301), FilterBuilder call sites only:\n  ` +
+				`ADR-017 branch probe (JR-13-01), FilterBuilder call sites only:\n  ` +
 					table.join('\n  ')
 			);
 		});
@@ -372,7 +372,7 @@ suiteRequiring(
 				}
 			}
 			coverageNotice(
-				`ADR-017 scope (JR-1301, finding F18): over the full ${ALL_ACTIONS.length}x` +
+				`ADR-017 scope (JR-13-01, finding F18): over the full ${ALL_ACTIONS.length}x` +
 					`${ALL_SUBJECTS.length} action/subject vocabulary the predefined roles DO reach the ` +
 					`FilterBuilder null branch for: ` +
 					PREDEFINED_SLUGS.map(
@@ -486,9 +486,9 @@ suiteRequiring(
 
 		it("ADR-017's impact claim: read and search give byte-identical results for all three roles", async () => {
 			// This is the assertion that settles "eine Standardinstallation verhält sich vor und nach
-			// dem F7-Fix identisch" for the ADR-017 change specifically. `JR-1303` swaps `'read'` for
+			// dem F7-Fix identisch" for the ADR-017 change specifically. `JR-13-03` swaps `'read'` for
 			// `'search'` at two call sites; if the two produce the same filter for every shipped
-			// role, that swap is a no-op for a standard installation, whatever JR-1302 does to the
+			// role, that swap is a no-op for a standard installation, whatever JR-13-02 does to the
 			// null branch.
 			const userIdBySlug = await seedShippedRoles();
 			const differences: string[] = [];
@@ -515,7 +515,7 @@ suiteRequiring(
 				differences,
 				`ADR-017 claims switching SearchService from ('archive','read') to ` +
 					`('archive','search') changes nothing for the shipped roles. These roles differ, so ` +
-					`the claim is wrong and the release note in JR-1307 has to say so.`
+					`the claim is wrong and the release note in JR-13-07 has to say so.`
 			).toEqual([]);
 		});
 	}

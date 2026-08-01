@@ -8,7 +8,7 @@
 		"composite": true
 	},
 	"include": ["src/**/*.ts"],
-	// Tests are excluded from the production build (JR-101): `*.test.ts` files live next to the
+	// Tests are excluded from the production build (JR-1-01): `*.test.ts` files live next to the
 	// code they test, and they must not end up in `dist`. `tsconfig.test.json` type-checks them.
 	"exclude": ["node_modules", "dist", "src/**/*.test.ts", "tests"],
 	"references": [

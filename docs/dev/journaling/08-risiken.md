@@ -14,8 +14,8 @@ möglicherweise verloren — und zwar unbemerkt. Rückwirkend lässt sich das ni
 quittierte Nachrichten werden nicht nachträglich durabel, und der Sender hat sie längst verworfen.
 
 **Gegenmaßnahme:** Der Acceptance-Contract steht als Skill (`journal-ledger`) verbindlich fest und
-wird nicht aus dem Gedächtnis reproduziert. `JR-304` fordert, dass der Codepfad nach erfolgreichem
-Ledger-Append **strukturell** nicht mehr scheitern kann. `JR-410` prüft die zentrale Invariante aus
+wird nicht aus dem Gedächtnis reproduziert. `JR-3-04` fordert, dass der Codepfad nach erfolgreichem
+Ledger-Append **strukturell** nicht mehr scheitern kann. `JR-4-10` prüft die zentrale Invariante aus
 Client-Sicht über 500 randomisierte Kill-Punkte. Diese Tests sind die Abnahmebedingung für E3/E4, kein
 optionales Extra.
 
@@ -27,8 +27,8 @@ Im COMPLIANCE-Modus ist vorzeitige Löschung technisch unmöglich — auch für 
 uns, auch bei einem Fehler. Eine zu lang gewählte Aufbewahrungsfrist oder ein versehentlich
 gesperrter Test-Bucket bleibt gesperrt. Das ist der Zweck des Modus, nicht ein Defekt.
 
-**Gegenmaßnahme:** `JR-704` verlangt, dass der Deployment-Guide den Konflikt **vor** der Wahl der
-Aufbewahrungsfrist erklärt, nicht danach. `JR-705` testet ausschließlich gegen MinIO, niemals gegen
+**Gegenmaßnahme:** `JR-7-04` verlangt, dass der Deployment-Guide den Konflikt **vor** der Wahl der
+Aufbewahrungsfrist erklärt, nicht danach. `JR-7-05` testet ausschließlich gegen MinIO, niemals gegen
 einen produktiven Bucket. Der Auftraggeber entscheidet die Frist bewusst (siehe `07-session-handover.md`).
 
 ## R-03 — Falsche Dedupe-Semantik zerstört die Vollständigkeitsargumentation
@@ -39,7 +39,7 @@ Werden Empfangsereignisse zu „eindeutigen Nachrichten" zusammengefasst, stimmt
 mehr mit einem Exchange-Message-Trace überein — und man kann die Differenz nicht erklären. Genau diese
 Frage stellt ein Prüfer.
 
-**Gegenmaßnahme:** Die Regel „Empfangsereignis ≠ Nachricht" steht im Skill und wird in `JR-603`
+**Gegenmaßnahme:** Die Regel „Empfangsereignis ≠ Nachricht" steht im Skill und wird in `JR-6-03`
 getestet: zweifache Zustellung ⇒ ein Objekt, **zwei** Ledger-Einträge, zweiter mit `duplicate_of`.
 ADR-010 verhindert, dass durch Wiederverwendung von `processEmail` eine zweite, abweichende
 Dedupe-Semantik entsteht.
@@ -54,7 +54,7 @@ Re-Export prüfen — und der Wert des Nachweises wäre null. Der Fehler ist lei
 Verschlüsselung unsichtbar ist.
 
 **Gegenmaßnahme:** Der Bestand hasht bereits über Plaintext; diese Reihenfolge ist in `CLAUDE.md` §5.5
-und im Skill festgehalten. `JR-605` testet sie explizit: exportieren, entschlüsseln, neu hashen ⇒
+und im Skill festgehalten. `JR-6-05` testet sie explizit: exportieren, entschlüsseln, neu hashen ⇒
 identisch zum Ledger-Wert.
 
 ## R-05 — Gelöschte Ledger-Zeile bei DSGVO-Löschung bricht die Kette
@@ -66,9 +66,9 @@ naheliegend die Ledger-Zeile entfernt, macht die gesamte Kette ab diesem Punkt u
 zerstört den Nachweis für alle anderen Nachrichten mit.
 
 **Gegenmaßnahme:** Ledger-Einträge werden nie gelöscht (Skill, ADR-Bereich „nicht verhandelbar").
-`JR-1106` implementiert stattdessen ein `object_erased`-Event mit erhaltenem `content_sha256` und
-benannter Rechtsgrundlage; `JR-905` stellt sicher, dass `verify` das als absichtliche Löschung
-ausweist statt als Kettenbruch. `JR-205` erzwingt Append-Only in der Datenbank, damit der Fehler
+`JR-11-06` implementiert stattdessen ein `object_erased`-Event mit erhaltenem `content_sha256` und
+benannter Rechtsgrundlage; `JR-9-05` stellt sicher, dass `verify` das als absichtliche Löschung
+ausweist statt als Kettenbruch. `JR-2-05` erzwingt Append-Only in der Datenbank, damit der Fehler
 technisch nicht möglich ist.
 
 ## R-06 — Fehlende Testinfrastruktur macht alle Aussagen unbelegt
@@ -80,7 +80,7 @@ Tamper-Evidence-Aussagen Behauptungen. RFC §12 ist nicht optional, sondern der 
 
 **Gegenmaßnahme:** E1 steht vor allem anderen. Zusatzrisiko: `pnpm lint` (Prettier über das ganze
 Repository) könnte auf dem Bestand rot sein — dann blockiert Altlast jeden künftigen Pull Request.
-Deshalb Vorprüfung vor `JR-105` und, falls nötig, ein separater Formatierungs-Commit.
+Deshalb Vorprüfung vor `JR-1-05` und, falls nötig, ein separater Formatierungs-Commit.
 
 ## R-07 — Port 25 ist in vielen Umgebungen nicht erreichbar
 
@@ -90,7 +90,7 @@ Cloud-Anbieter blockieren ausgehenden **und** teils eingehenden SMTP-Verkehr auf
 korrekten MX-Record und Firewall-Freigabe erreicht kein Journal-Report den Receiver. Das ist kein
 Codefehler, kostet aber im Rollout viel Zeit.
 
-**Gegenmaßnahme:** `JR-1204` (Deployment-Guide) behandelt DNS/MX, Firewall und Ports explizit;
+**Gegenmaßnahme:** `JR-12-04` (Deployment-Guide) behandelt DNS/MX, Firewall und Ports explizit;
 `.env.example` und `docker-compose.yml` dokumentieren die Port-Zuordnung bereits. Zusätzlich sind
 587/2525 hinter einem Proxy vorgesehen (RFC §4.1).
 
@@ -101,9 +101,9 @@ Codefehler, kostet aber im Rollout viel Zeit.
 Exchange Online nutzt standardmäßig opportunistisches TLS. Mit einem selbstsignierten Zertifikat
 liefert es **im Klartext** aus — still, ohne Fehlermeldung. Der Betreiber glaubt, TLS sei aktiv.
 
-**Gegenmaßnahme:** `JR-404` implementiert `require_tls` mit Abweisung per `530` und protokolliert
+**Gegenmaßnahme:** `JR-4-04` implementiert `require_tls` mit Abweisung per `530` und protokolliert
 ausgehandelte TLS-Version und Cipher im Ledger, sodass ein Prüfer nachvollziehen kann, wie die Daten
-angekommen sind. `JR-1204` verlangt ein öffentlich vertrauenswürdiges Zertifikat und einen
+angekommen sind. `JR-12-04` verlangt ein öffentlich vertrauenswürdiges Zertifikat und einen
 Exchange-Outbound-Connector mit TLS-Erzwingung.
 
 ## R-09 — Stiller Ausfall bleibt unbemerkt
@@ -113,9 +113,9 @@ Exchange-Outbound-Connector mit TLS-Erzwingung.
 Ein Receiver, der eine Woche unbemerkt nichts empfängt, produziert genau die Lücke, die das Feature
 verhindern soll — mit dem Zusatzschaden, dass alle glauben, es funktioniere.
 
-**Gegenmaßnahme:** `JR-1001` (Heartbeat), `JR-1002` (Gap-Detection, kritische Schwere),
-`JR-1004` (Ausweichpostfach-Reconciliation, im Deployment-Guide als **verpflichtend**),
-`JR-1005` (Message-Trace-Abgleich). Das Ausweichpostfach schließt Ausfalllücken automatisch statt
+**Gegenmaßnahme:** `JR-10-01` (Heartbeat), `JR-10-02` (Gap-Detection, kritische Schwere),
+`JR-10-04` (Ausweichpostfach-Reconciliation, im Deployment-Guide als **verpflichtend**),
+`JR-10-05` (Message-Trace-Abgleich). Das Ausweichpostfach schließt Ausfalllücken automatisch statt
 darauf zu hoffen, dass jemand es merkt.
 
 ## R-10 — Offener Journal-Endpunkt
@@ -126,8 +126,8 @@ Ein Catch-all-Empfänger nimmt unbegrenzt fremde Inhalte in einen unveränderlic
 dem sie nicht mehr entfernt werden können. In Kombination mit Object Lock COMPLIANCE ist der Schaden
 permanent.
 
-**Gegenmaßnahme:** `JR-405` verlangt explizite `journal_recipients` und stellt sicher, dass **kein**
-Konfigurationspfad einen Catch-all erlaubt. `JR-409` liefert den M365-IP-Refresh nur als Diff zur
+**Gegenmaßnahme:** `JR-4-05` verlangt explizite `journal_recipients` und stellt sicher, dass **kein**
+Konfigurationspfad einen Catch-all erlaubt. `JR-4-09` liefert den M365-IP-Refresh nur als Diff zur
 Operator-Freigabe — eine still erweiterte ACL wäre eine Sicherheitsregression.
 
 ## R-11 — Unzulässige Compliance-Behauptung
@@ -138,9 +138,9 @@ Formulierungen wie „GoBD-konform" oder „revisionssicher" behaupten etwas, da
 einlösen kann — Compliance hängt an Konfiguration, Aufbewahrung, Zugriffskontrollen, Monitoring und
 schriftlicher Verfahrensdokumentation des Betreibers.
 
-**Gegenmaßnahme:** `JR-1206` übernimmt die Nicht-Behauptung aus RFC §13 wortgetreu ins README. Der
+**Gegenmaßnahme:** `JR-12-06` übernimmt die Nicht-Behauptung aus RFC §13 wortgetreu ins README. Der
 Skill `journal-ledger` §11 verbietet solche Formulierungen in Code, UI, README und Doku. Abnahme
-`JR-1209` prüft das Repository darauf.
+`JR-12-09` prüft das Repository darauf.
 
 ## R-12 — Doku, die abwesenden Code beschreibt
 
@@ -150,7 +150,7 @@ Skill `journal-ledger` §11 verbietet solche Formulierungen in Code, UI, README 
 Betreiber richten sich danach ein und scheitern; Agenten nehmen an, das Feature sei implementiert, und
 suchen nach Code, der nicht da ist.
 
-**Gegenmaßnahme:** In `CLAUDE.md` §2 und `01-gap-analyse.md` §0 dokumentiert; `JR-1205` schreibt die
+**Gegenmaßnahme:** In `CLAUDE.md` §2 und `01-gap-analyse.md` §0 dokumentiert; `JR-12-05` schreibt die
 Datei auf die tatsächliche Implementierung um. Bis dahin gilt die Regel „grep vor jeder Annahme".
 
 ## R-13 — i18n-Aufwand wird unterschätzt
@@ -168,12 +168,12 @@ Bei der Aufwandsschätzung für UI-Tasks mitrechnen.
 
 **Auswirkung:** hoch · **Wahrscheinlichkeit:** mittel · **Epic:** E12
 
-`JR-1208` ist nicht durch Mocks ersetzbar: die tatsächliche Journal-Report-Struktur echter Tenants,
+`JR-12-08` ist nicht durch Mocks ersetzbar: die tatsächliche Journal-Report-Struktur echter Tenants,
 das Verhalten des Ausweichpostfachs und die DL-Expansion sind genau der Punkt. Ohne Tenant ist E12
 nicht abnehmbar.
 
 **Gegenmaßnahme:** Früh klären (steht in `07-session-handover.md` unter den offenen Fragen). Vorarbeit
-ist der Parser-Korpus `JR-508`, der die bekannten Varianten als Fixtures abdeckt — er reduziert das
+ist der Parser-Korpus `JR-5-08`, der die bekannten Varianten als Fixtures abdeckt — er reduziert das
 Risiko, beseitigt es aber nicht.
 
 ## R-15 — TSA-Auswahl und -Kosten
@@ -202,10 +202,10 @@ Installationen ohne GoBD-Anspruch zulässt** (am 2026-07-31 gemessen):
    Signing-Cert lebt **2 Jahre** bei einer Aufbewahrungsfrist von **10**. Das Token ist ohne seine
    Zertifikatskette später nicht mehr prüfbar — die Kette gehört **mit** archiviert.
 
-**Gegenmaßnahme:** `JR-801` liefert **keinen** Standard-TSA-URL aus, meldet bei leerer Konfiguration einen
+**Gegenmaßnahme:** `JR-8-01` liefert **keinen** Standard-TSA-URL aus, meldet bei leerer Konfiguration einen
 klaren Fehler, akzeptiert eine **Liste** von URLs (zweiter unabhängiger Zeitstempel möglich) und archiviert
 die Zertifikatskette mit dem Token. `ci` bleibt hermetisch, `nightly` geht gegen `open-tsa.eu`, `manual`
-gegen die qualifizierte TSA. `JR-804` und ADR-008 stellen sicher, dass eine nicht erreichbare TSA die
+gegen die qualifizierte TSA. `JR-8-04` und ADR-008 stellen sicher, dass eine nicht erreichbare TSA die
 Ingestion niemals stoppt.
 
 ## R-16 — Geteilte Infrastruktur mischt Kundendaten, ohne einen Fehler zu erzeugen
@@ -245,7 +245,7 @@ fsync-Spool mit eigenem Ledger führen, also E3 verdoppeln, inklusive einer zwei
 Verhältnis zur ersten begründet werden müsste.
 
 **Gegenmaßnahme:** ADR-024 Begründung 2 legt **eine eigene IP je Instanz** fest und begründet sie
-nicht mit Komfort, sondern mit diesem Konflikt. `JR-1204` nimmt das in den Deployment-Guide auf
+nicht mit Komfort, sondern mit diesem Konflikt. `JR-12-04` nimmt das in den Deployment-Guide auf
 (Konsequenz 5 der ADR): eine IP je Instanz, MX je Kunde, und ausdrücklich kein gemeinsamer
 Port-25-Proxy. Der Skill `journal-ledger` hält den Contract fest, damit er nicht aus dem Gedächtnis
 reproduziert wird.
@@ -269,8 +269,8 @@ womöglich erst Monate später, bei der ersten Prüfung.
 entschieden ist: die Migration läuft je Instanz frisch, und ein Post-Migrations-Volume oder -Image
 wird nie geklont. `docker/docker-entrypoint.sh` fährt `pnpm db:migrate` beim Start, der saubere Weg
 ist also der Standardweg, solange kein Datenverzeichnis mitkopiert wird. Erkennungsseitig ist der Fall
-bereits abgedeckt: `JR-209` prüft ihn als Fall (h) mit eigener Befundart, ADR-006 §4.3 sowie
-`JR-802`/`JR-803` behandeln die Erkennung im Betrieb.
+bereits abgedeckt: `JR-2-09` prüft ihn als Fall (h) mit eigener Befundart, ADR-006 §4.3 sowie
+`JR-8-02`/`JR-8-03` behandeln die Erkennung im Betrieb.
 
 ## R-19 — Fork-Divergenz macht Upstream-Merges schleichend teurer
 

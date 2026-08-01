@@ -10,9 +10,9 @@ import { seedIngestionSource, seedPrincipal } from '../support/iam-seed';
 import { ingestionSources } from '../../src/database/schema';
 
 /**
- * JR-104 -- `FilterBuilder.create()` against real roles and real rows.
+ * JR-1-04 -- `FilterBuilder.create()` against real roles and real rows.
  *
- * JR-103 could not test this. `FilterBuilder` resolves its ability through
+ * JR-1-03 could not test this. `FilterBuilder` resolves its ability through
  * `IamService.getAbilityForUser()`, which reads `users` / `user_roles` / `roles.policies`, and
  * `IamService` is bound to the `db` singleton that throws at import time without `DATABASE_URL`.
  * Two behaviours are only observable here:
@@ -24,7 +24,7 @@ import { ingestionSources } from '../../src/database/schema';
  * The tests below assert *rows returned*, not just SQL text. For a row-level access-control
  * primitive, "which records come back" is the contract; the SQL is an implementation detail.
  *
- * **Scope after JR-1301:** this file holds only the behaviour that is correct today and must stay
+ * **Scope after JR-13-01:** this file holds only the behaviour that is correct today and must stay
  * correct through E13's fixes -- it is green before and after. The F1/F3/F7/F8 blocks moved to
  * `filter-builder-f1-f3.int.test.ts`, `filter-builder-f7.int.test.ts` and
  * `filter-builder-f8.int.test.ts`, where they now demand the fixed behaviour and are red until it
@@ -49,7 +49,7 @@ const FilterBuilder = harness
 	? (await import('../../src/services/FilterBuilder')).FilterBuilder
 	: undefined;
 
-suiteRequiring('ci', 'FilterBuilder.create() over real roles (JR-104)', postgresProbe, () => {
+suiteRequiring('ci', 'FilterBuilder.create() over real roles (JR-1-04)', postgresProbe, () => {
 	const db = () => harness!.db;
 	const build = (userId: string, subject: 'archive' | 'ingestion', action: 'read' | 'search') =>
 		FilterBuilder!.create(userId, subject, action);
@@ -137,7 +137,7 @@ suiteRequiring('ci', 'FilterBuilder.create() over real roles (JR-104)', postgres
 
 	/**
 	 * The F1 / F3 / F7 / F8 blocks that used to live here have been rewritten into standalone
-	 * regression suites in `JR-1301` (epic E13), because they asserted the defect as if it were the
+	 * regression suites in `JR-13-01` (epic E13), because they asserted the defect as if it were the
 	 * contract:
 	 *
 	 *   - F7 (fail-open `null` branch, plus ADR-017's action offset)

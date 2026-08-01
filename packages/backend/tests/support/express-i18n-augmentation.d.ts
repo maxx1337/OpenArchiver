@@ -1,6 +1,6 @@
 /**
  * Pulls `i18next-http-middleware`'s global Express augmentation into the `tsconfig.test.json`
- * program (JR-1301).
+ * program (JR-13-01).
  *
  * The augmentation is a `declare global { namespace Express { interface Request extends
  * I18NextRequest {} } }` inside the package's own `index.d.ts`, so it only applies to a program in

@@ -83,9 +83,9 @@ Auditor-Artefakte ab E9/E11.
 
 ## Aktueller Stand (Kurzfassung)
 
-Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenommen** (`JR-106a`,
+Epic 0 (Planung, Doku, Agent-Infrastruktur) ist abgeschlossen. **E1 ist abgenommen** (`JR-1-06a`,
 2026-07-28) und in den Integrationsbranch gemergt: vitest mit drei Projects, CI gegen PostgreSQL 17,
-`pnpm lint` repo-weit sauber. **Die letzte Nacharbeit `JR-105c` ist am 2026-07-30 erledigt** (`b5b2190`)
+`pnpm lint` repo-weit sauber. **Die letzte Nacharbeit `JR-1-05c` ist am 2026-07-30 erledigt** (`b5b2190`)
 — der Inventar-Wächter zählt jetzt **ausgeführte Tests je Suite und Klasse** statt Dateien, und der
 Hauptprozess besitzt den Datenbank-Rückstand des Laufs (F14, F15, F16, F24 behoben). Damit belegt ein
 grüner Lauf, dass die `integration`-Suite gelaufen ist — die Voraussetzung dafür, dass die
@@ -93,44 +93,44 @@ Durabilitäts- und Kettenaussagen ab E2 überhaupt auf etwas ruhen. **E1 ist dam
 abgeschlossen: 10 / 10.**
 
 **E13 (IAM-Autorisierung härten) ist abgenommen und zurückgemergt** — der Weg dorthin, weil er vier
-Runden gebraucht hat: gearbeitet wurde auf `claude/journaling-e13-iam-hardening`. `JR-1301` hat die
+Runden gebraucht hat: gearbeitet wurde auf `claude/journaling-e13-iam-hardening`. `JR-13-01` hat die
 Regressionstests für F1/F3/F7/F8 auf den gewünschten Zustand umgestellt (21 rot), die fünf Fix-Tasks
-`JR-1303`, `JR-1302`, `JR-1304`, `JR-1305`, `JR-1306` sind erledigt, und der letzte rote Test war ein
-Widerspruch **innerhalb** von `JR-1301` — entschieden in ADR-018 und aufgelöst. Die Suite ist grün:
-`224 passed | 2 skipped`, Exit 0, F1/F3/F7/F8/F19/F20/F22 behoben. `JR-1307` (ADR-016 plus
-Betreiberdoku) und `JR-1308` (Upstream-Entwurf in `10-upstream-meldung.md`, **nicht versendet**) sind
+`JR-13-03`, `JR-13-02`, `JR-13-04`, `JR-13-05`, `JR-13-06` sind erledigt, und der letzte rote Test war ein
+Widerspruch **innerhalb** von `JR-13-01` — entschieden in ADR-018 und aufgelöst. Die Suite ist grün:
+`224 passed | 2 skipped`, Exit 0, F1/F3/F7/F8/F19/F20/F22 behoben. `JR-13-07` (ADR-016 plus
+Betreiberdoku) und `JR-13-08` (Upstream-Entwurf in `10-upstream-meldung.md`, **nicht versendet**) sind
 geschrieben.
 
-**Die Abnahme `JR-1309` ist durchgeführt — Ergebnis: E13 ist _nicht_ abgenommen** (2026-07-29). Die
+**Die Abnahme `JR-13-09` ist durchgeführt — Ergebnis: E13 ist _nicht_ abgenommen** (2026-07-29). Die
 **Codekorrekturen sind unabhängig belegt**: der Injektionsweg ist an beiden Gates zu (12 Nutzlasten
 inklusive Umgehungsversuchen, 0 fremde Zeilen), `FilterBuilder` ist zeilenscharf fail-closed, alle
 Regressionstests sind ohne den jeweiligen Fix rot, und die Suite läuft auch in der CI auf PostgreSQL
-17.10 grün. Gebrochen ist die **betreibersichtbare Hälfte**: die Prüf-SQL aus `JR-1307` findet eine
+17.10 grün. Gebrochen ist die **betreibersichtbare Hälfte**: die Prüf-SQL aus `JR-13-07` findet eine
 Policy-Form nicht, die von „sieht alles" auf „sieht nichts" umschlägt (**F27**), und die
 veröffentlichte Doku behauptet eine Ablehnung beim Speichern, die nicht stattfindet (**F29**, zugleich
-`JR-1306`s letztes Kriterium). Fünf neue Befunde **F25–F29**.
+`JR-13-06`s letztes Kriterium). Fünf neue Befunde **F25–F29**.
 
-**Die Nacharbeit ist erledigt** (`JR-1313` F29 und F26s Schreibseite, `JR-1314` F27/F28, `JR-1315`
+**Die Nacharbeit ist erledigt** (`JR-13-13` F29 und F26s Schreibseite, `JR-13-14` F27/F28, `JR-13-15`
 F25): Suite `250 passed | 2 skipped`, Exit 0.
 
-**Die erneute Abnahme `JR-1309a` ist durchgeführt — Ergebnis: E13 ist _wieder nicht_ abgenommen**
+**Die erneute Abnahme `JR-13-09a` ist durchgeführt — Ergebnis: E13 ist _wieder nicht_ abgenommen**
 (2026-07-29). 23 Kriterien, **22 erfüllt**. Erfüllt und diesmal unabhängig gemessen sind unter anderem:
 beide Gates urteilen deckungsgleich **und** richtig (26 Keys gegen eine eigene Erwartungstabelle), der
 **HTTP-400-Pfad** über `IamController.createRole` (11 × 400, 5 × 201), und die Betreiber-SQL liefert auf
-PostgreSQL **17.10** eine zeichenweise identische Ausgabe wie auf 16.13 — zwei Lücken, die `JR-1309`
+PostgreSQL **17.10** eine zeichenweise identische Ausgabe wie auf 16.13 — zwei Lücken, die `JR-13-09`
 offenlassen musste, sind damit zu. Gebrochen ist erneut ein Kriterium der betreibersichtbaren Hälfte:
 **F30** — die Formprüfung wirkt im Übersetzer **rekursiv**, in Query 2 nur an der **Wurzel**, also
 schweigt die Anleitung zu acht verschachtelten Formen, von denen vier von „sieht alles" auf „jede
 Anfrage scheitert" kippen; zwei positive Sätze der Seite sind damit widerlegt.
 
-**F30 ist behoben (`JR-1317`, 2026-07-29).** Die zwei Formbefunde von Query 2 speisen aus der rekursiven
+**F30 ist behoben (`JR-13-17`, 2026-07-29).** Die zwei Formbefunde von Query 2 speisen aus der rekursiven
 CTE `cond` statt aus `pair` und melden jede der acht Formen mit Positionsangabe; wichtiger noch: **die
 Seite behauptet keine Abdeckung mehr, sondern sagt, was sie meldet** (**ADR-020**) und stellt eine
 verhaltensbasierte Gegenprobe daneben, die keine Aufzählung von JSON-Formen braucht. Keine
 Falsch-positiven, beide Nachweise wörtlich aus der `.md` gegen echtes Postgres.
 
-**Die dritte Abnahme `JR-1309b` ist durchgeführt — Ergebnis: E13 ist zum _dritten_ Mal nicht abgenommen**
-(2026-07-29). 18 Kriterien, **17 erfüllt**; die Abfrageseite von `JR-1317` (a) ist unabhängig belegt (alle
+**Die dritte Abnahme `JR-13-09b` ist durchgeführt — Ergebnis: E13 ist zum _dritten_ Mal nicht abgenommen**
+(2026-07-29). 18 Kriterien, **17 erfüllt**; die Abfrageseite von `JR-13-17` (a) ist unabhängig belegt (alle
 acht Formen mit Position gemeldet, **keine** Falsch-positiven, 42 Werte gegen den Übersetzer gekreuzt,
 **0** falsch-negative). Gebrochen ist erneut die Textseite: **F31** — der Abdeckungsanspruch war nicht
 verschwunden, sondern von der Abfrage auf den **Verhaltenscheck** gewandert, der zwei Zahlen vorschreibt,
@@ -138,18 +138,18 @@ während die Anwendung **drei** Oberflächen filtert. **Die Ursache lag in ADR-0
 Verhaltenscheck „vollständig" nannte; sie ist berichtigt (**kein Element der Seite bürgt für ein
 anderes**). Drei niedrige Befunde dazu: F32, F33, F34.
 
-**`JR-1318` ist committet (`939df10`)** — die dritte Zahl ist aufgenommen, der Absolutsatz durch sein
+**`JR-13-18` ist committet (`939df10`)** — die dritte Zahl ist aufgenommen, der Absolutsatz durch sein
 Gegenteil ersetzt, die Bürgschaft in beiden Richtungen negiert. **Ein DEV-Bericht liegt nicht vor**
 (Agent endete ohne Bericht), die Statusnotiz ist die Lesart des PO aus dem Diff.
 
-**Die vierte Abnahme `JR-1309c` hat E13 abgenommen** (2026-07-30). Der **Rückmerge** ist vollzogen
-(`89d701f`, `--no-ff`, kein Squash), **`JR-1312`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
+**Die vierte Abnahme `JR-13-09c` hat E13 abgenommen** (2026-07-30). Der **Rückmerge** ist vollzogen
+(`89d701f`, `--no-ff`, kein Squash), **`JR-13-12`** ist erledigt (`dca1f1a`), und der einzige Vorbehalt des
 Prüfberichts ist nachgemessen und **widerlegt** (F36 — reines F35). Kein PR.
 
-**E2 ist abgenommen** (`JR-201`…`JR-210a`, 2026-07-31 bis 2026-08-01). Die erste Abnahme `JR-210` fand
+**E2 ist abgenommen** (`JR-2-01`…`JR-2-10a`, 2026-07-31 bis 2026-08-01). Die erste Abnahme `JR-2-10` fand
 23 von 23 Kriterien erfüllt, **zählte aber nicht**: sie lief in derselben Sitzung wie
-`JR-208`/`JR-209` und war damit nicht unabhängig im Sinne von ADR-014/ADR-021. Der Auftraggeber hat
-deshalb eine **zweite Runde `JR-210a`** angeordnet — sie ist durchgeführt, hat in einer frischen
+`JR-2-08`/`JR-2-09` und war damit nicht unabhängig im Sinne von ADR-014/ADR-021. Der Auftraggeber hat
+deshalb eine **zweite Runde `JR-2-10a`** angeordnet — sie ist durchgeführt, hat in einer frischen
 Sitzung **24 von 24** Kriterien erfüllt gefunden und dabei die sechs dünnen Stellen der ersten Runde
 mit eigener Evidenz geschlossen (Mutationsproben am Encoder, sabotierte Backends gegen die
 Vertragssuite, Nebenläufigkeit direkt über `pg_stat_activity`, eine eigene Befundart-Matrix,
@@ -193,14 +193,14 @@ Betriebsmodell darüber — eine Instanz je Endkunde, empfohlen — steht in **`
 > dieselbe `deployment_id` — ein Split Brain, den `verify` als Manipulationsbefund meldet (R-18).
 
 **Und die Ankerfrage gleich mit, obwohl sie zu E7/E8 gehört** — sie musste vorgezogen werden, weil die
-Baumkodierung Teil der kanonischen Kodierung ist und damit in `JR-203` fällt. **`ADR-022`:** ein
+Baumkodierung Teil der kanonischen Kodierung ist und damit in `JR-2-03` fällt. **`ADR-022`:** ein
 RFC-3161-Token über die **Merkle-Wurzel** aller Kettenköpfe, `anchor`-Event mit Inklusionspfad in jeder
 Kette, sodass ein Mandantenexport ohne Fremddaten prüfbar ist. Die in `ADR-007` zunächst als gleichwertig
 genannte sortierte Liste ist **verworfen** und dort als Fehler markiert. **`ADR-023`:** TSA-Auswahl —
 `open-tsa.eu` ist gemessen (Token geholt, gegen gepinnte CA verifiziert) und eingeordnet: gut für
 `nightly` und für Installationen ohne GoBD-Anspruch, **kein** qualifizierter Zeitstempel, **nicht** in `ci`.
 
-**`ADR-006` ist am 2026-07-31 entschieden (`JR-203`) — damit ist keine Entscheidung mehr offen, die
+**`ADR-006` ist am 2026-07-31 entschieden (`JR-2-03`) — damit ist keine Entscheidung mehr offen, die
 Kettencode blockiert.** Festgelegt sind die 16 gehashten Felder samt Bytes, der Genesis-String, die
 Herkunft der `deployment_id` und die Merkle-Kodierung des Ankers. Drei Punkte daraus sind auch für wen
 relevant, der die ADR nicht liest:
@@ -215,11 +215,11 @@ relevant, der die ADR nicht liest:
   liefern `[A,B,C]` und `[A,B,C,C]` dieselbe Wurzel — gemessen, und es hätte ADR-022 Festlegung 1
   aufgehoben.
 
-Die ADR enthält reproduzierbare **Testvektoren**; `JR-202` muss sie treffen.
+Die ADR enthält reproduzierbare **Testvektoren**; `JR-2-02` muss sie treffen.
 
 **Zur Umgebung:** seit dem 2026-07-31 laufen **Postgres, Valkey, Meilisearch und Tika über Docker
 Desktop** aus `docker-compose.yml`, alle vier vom Host aus belegt, und der Volllauf dagegen ist grün. Der
-Wegwerf-Cluster wird nicht mehr gebraucht. `JR-1316`, `JR-1311` und `JR-1310` stehen weiter bei den
+Wegwerf-Cluster wird nicht mehr gebraucht. `JR-13-16`, `JR-13-11` und `JR-13-10` stehen weiter bei den
 Folge-Tasks und blockieren E2 nicht.
 
 **Am 2026-07-30 hat der Auftraggeber drei Prozessentscheidungen getroffen:**

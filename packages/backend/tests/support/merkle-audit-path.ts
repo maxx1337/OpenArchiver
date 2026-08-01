@@ -3,13 +3,13 @@ import type { JournalChainHead } from '@open-archiver/types';
 
 /**
  * Inclusion proofs over the anchor tree, and the comparison of two consecutive anchors
- * (`JR-209` cases (d) and (e), Testplan section 12.5).
+ * (`JR-2-09` cases (d) and (e), Testplan section 12.5).
  *
  * ---------------------------------------------------------------------------------------------
  * Why the path is computed here and not in `packages/journaling`
  * ---------------------------------------------------------------------------------------------
- * `merkleRoot()` exists in production (`JR-202`); the **audit path** does not, because it belongs to
- * E8's anchoring job (`JR-802`/`JR-803`). Rather than reach forward into E8, this file computes the
+ * `merkleRoot()` exists in production (`JR-2-02`); the **audit path** does not, because it belongs to
+ * E8's anchoring job (`JR-8-02`/`JR-8-03`). Rather than reach forward into E8, this file computes the
  * path independently — from RFC 6962 section 2.1.1 directly — and checks it against the production
  * root.
  *

@@ -1,7 +1,7 @@
 import net from 'node:net';
 
 /**
- * Infrastructure probes (JR-101).
+ * Infrastructure probes (JR-1-01).
  *
  * This container has no Docker, no Postgres, no Valkey and no `.env`. The `integration` suite must
  * therefore be able to establish, before declaring its suites, whether its infrastructure exists,

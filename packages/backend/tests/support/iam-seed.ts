@@ -11,7 +11,7 @@ import {
 } from '../../src/database/schema';
 
 /**
- * Seed helper for the integration suite (JR-104).
+ * Seed helper for the integration suite (JR-1-04).
  *
  * `FilterBuilder.create()` resolves its ability through `IamService.getAbilityForUser()`, which
  * reads `users`, `user_roles` and `roles.policies` from the database. There is no seam to inject an

@@ -1,5 +1,5 @@
 {
-	// Type-checks the test files that tsconfig.json deliberately excludes from the build (JR-101).
+	// Type-checks the test files that tsconfig.json deliberately excludes from the build (JR-1-01).
 	// `pnpm --filter @open-archiver/backend test:types`. noEmit + composite:false, so this never
 	// interferes with the incremental build outputs of tsconfig.json.
 	"extends": "../../tsconfig.base.json",

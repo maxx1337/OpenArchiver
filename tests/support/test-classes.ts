@@ -1,5 +1,5 @@
 /**
- * The three test classes and the suite label they produce (JR-105c).
+ * The three test classes and the suite label they produce (JR-1-05c).
  *
  * ---------------------------------------------------------------------------------------------
  * Why this is its own module

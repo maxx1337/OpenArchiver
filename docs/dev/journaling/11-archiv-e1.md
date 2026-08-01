@@ -1,9 +1,9 @@
 # Archiv — E1: Test- und CI-Fundament (abgeschlossen)
 
-**E1 ist am 2026-07-28 mit `JR-106a` abgenommen und in den Integrationsbranch gemergt.** Dieses Archiv
+**E1 ist am 2026-07-28 mit `JR-1-06a` abgenommen und in den Integrationsbranch gemergt.** Dieses Archiv
 enthält das vollständige Protokoll dieses Epics, wie es bis zum 2026-07-30 in `06-status.md` stand:
-`JR-101`–`JR-105`, die Nacharbeit `JR-104a`/`JR-105b`, die **abgelehnte** Abnahme `JR-106`, die
-bestandene Abnahme `JR-106a`, die Befunde F1–F16 in ihrem E1-Kontext und die CI-Einrichtung.
+`JR-1-01`–`JR-1-05`, die Nacharbeit `JR-1-04a`/`JR-1-05b`, die **abgelehnte** Abnahme `JR-1-06`, die
+bestandene Abnahme `JR-1-06a`, die Befunde F1–F16 in ihrem E1-Kontext und die CI-Einrichtung.
 
 **Warum ausgegliedert:** `06-status.md` war auf 2029 Zeilen gewachsen, davon 681 für ein abgenommenes und
 gemergtes Epic. Ein Statusdokument, in dem der aktuelle Stand hinter siebenhundert Zeilen Historie liegt,
@@ -14,45 +14,45 @@ wird nicht gelesen — und `06-status.md` ist laut `README.md` das verbindliche 
 
 - Die Befunde selbst — sie stehen mit ihrer Nummer in `09-befunde-bestandscode.md`, das die
   **alleinige** Quelle der `F`-Nummerierung ist.
-- Die offene Nacharbeit **`JR-105c`** (F14–F16, F24), fällig **vor E2** — sie steht in `03-backlog.md`
+- Die offene Nacharbeit **`JR-1-05c`** (F14–F16, F24), fällig **vor E2** — sie steht in `03-backlog.md`
   und in der Gesamtübersicht von `06-status.md`.
 - Die Fallstricke aus E1 — sie stehen in `07-session-handover.md` und werden projektweit als
   „Fallstrick N" referenziert.
 
 ---
 
-## E1 — Test- und CI-Fundament (**fertig**, abgenommen 2026-07-28 mit `JR-106a`)
+## E1 — Test- und CI-Fundament (**fertig**, abgenommen 2026-07-28 mit `JR-1-06a`)
 
-|     | Task                                                                                                | Rolle |
-| --- | --------------------------------------------------------------------------------------------------- | ----- |
-| [x] | JR-101 vitest im Monorepo einrichten — **abgenommen 2026-07-28**, in `JR-106a` erneut bestätigt     | TEST  |
-| [x] | JR-102 Testkonventionen festlegen und dokumentieren — **abgenommen 2026-07-28**, erneut bestätigt   | TEST  |
-| [x] | JR-103 Unit-Tests auf `PolicyValidator` / `createAbilityFor` — **abgenommen**, erneut bestätigt     | TEST  |
-| [x] | JR-104 Integrationstest-Basis — **abgenommen 2026-07-28 in `JR-106a`**, F12 behoben bestätigt       | TEST  |
-| [x] | JR-105a Formatierungs-Commit (`pnpm format`) — **abgenommen 2026-07-28**, erneut bestätigt          | DEV   |
-| [x] | JR-105 CI-Workflow: Lint, Build, `svelte-check`, Tests — **abgenommen**, CI-Lauf auf HEAD grün      | DEV   |
-| [x] | JR-106 Abnahme E1 — **durchgeführt 2026-07-28; Ergebnis: E1 nicht abgenommen**, F12 nachzuarbeiten  | PO    |
-| [x] | JR-104a F12 beheben — **abgenommen 2026-07-28 in `JR-106a`** (10 nebenläufige Runden, 0 Rückstände) | TEST  |
-| [x] | JR-105b Lücken der CI-Nachlaufprüfung schließen — **abgenommen 2026-07-28 in `JR-106a`**            | TEST  |
-| [x] | JR-106a Erneute Abnahme E1 — **durchgeführt 2026-07-28; Ergebnis: E1 abgenommen**                   | TEST  |
-| [ ] | JR-105c Wächter auf **ausgeführte Tests** statt Dateien umstellen (F14–F16) — **fällig vor E2**     | TEST  |
+|     | Task                                                                                                  | Rolle |
+| --- | ----------------------------------------------------------------------------------------------------- | ----- |
+| [x] | JR-1-01 vitest im Monorepo einrichten — **abgenommen 2026-07-28**, in `JR-1-06a` erneut bestätigt     | TEST  |
+| [x] | JR-1-02 Testkonventionen festlegen und dokumentieren — **abgenommen 2026-07-28**, erneut bestätigt    | TEST  |
+| [x] | JR-1-03 Unit-Tests auf `PolicyValidator` / `createAbilityFor` — **abgenommen**, erneut bestätigt      | TEST  |
+| [x] | JR-1-04 Integrationstest-Basis — **abgenommen 2026-07-28 in `JR-1-06a`**, F12 behoben bestätigt       | TEST  |
+| [x] | JR-1-05a Formatierungs-Commit (`pnpm format`) — **abgenommen 2026-07-28**, erneut bestätigt           | DEV   |
+| [x] | JR-1-05 CI-Workflow: Lint, Build, `svelte-check`, Tests — **abgenommen**, CI-Lauf auf HEAD grün       | DEV   |
+| [x] | JR-1-06 Abnahme E1 — **durchgeführt 2026-07-28; Ergebnis: E1 nicht abgenommen**, F12 nachzuarbeiten   | PO    |
+| [x] | JR-1-04a F12 beheben — **abgenommen 2026-07-28 in `JR-1-06a`** (10 nebenläufige Runden, 0 Rückstände) | TEST  |
+| [x] | JR-1-05b Lücken der CI-Nachlaufprüfung schließen — **abgenommen 2026-07-28 in `JR-1-06a`**            | TEST  |
+| [x] | JR-1-06a Erneute Abnahme E1 — **durchgeführt 2026-07-28; Ergebnis: E1 abgenommen**                    | TEST  |
+| [ ] | JR-1-05c Wächter auf **ausgeführte Tests** statt Dateien umstellen (F14–F16) — **fällig vor E2**      | TEST  |
 
 **Nach der Abnahme in den Integrationsbranch gemergt** (`efb769c`, `--no-ff`, gepusht). ADR-014 gibt
 den Rückmerge nach unabhängiger Abnahme frei; `main` bleibt bis E12 unangetastet. Die aufgeräumte
 Sicht liefert `git log --first-parent origin/main..HEAD` — ein Merge-Commit je Epic, die granulare
-Historie darunter erhalten. **Kein Squash:** er würde `cab0e38` („five tasks accepted, JR-104
-rejected") tilgen und `JR-105a` seine mechanisch beweisbare Formatierungs-Reinheit nehmen.
+Historie darunter erhalten. **Kein Squash:** er würde `cab0e38` („five tasks accepted, JR-1-04
+rejected") tilgen und `JR-1-05a` seine mechanisch beweisbare Formatierungs-Reinheit nehmen.
 
-**`JR-105c` bleibt offen und ist vor E2 fällig** — Begründung im Kasten oben. Er gehört formal zu E1,
+**`JR-1-05c` bleibt offen und ist vor E2 fällig** — Begründung im Kasten oben. Er gehört formal zu E1,
 wurde aber erst durch die Abnahme sichtbar; E1 ist trotzdem abgenommen, weil F14–F16 kein
 Akzeptanzkriterium brechen.
 
 **F13-Zwischenregel jetzt am Ort der Benutzung.** Sie stand nur in Testplan §2.6, im Befund und in
 einem Quelldatei-Header — an keiner Stelle, die jemand liest, der einen 100k-Soak schreibt. Sie steht
-jetzt in den **Akzeptanzkriterien von `JR-208` und `JR-607`**: `OA_TEST_PG_STALE_MS` über die erwartete
+jetzt in den **Akzeptanzkriterien von `JR-2-08` und `JR-6-07`**: `OA_TEST_PG_STALE_MS` über die erwartete
 Laufzeit heben, sichtbar begründet.
 
-**`JR-105a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
+**`JR-1-05a` erledigt (2026-07-27).** `pnpm lint` ist repo-weit grün, inklusive `.svelte`. Von den 13
 beanstandeten Dateien wurden die **7 handgeschriebenen** formatiert (1 `.md`, 3 `.ts`, 3 `.svelte`);
 die **6 generierten** gingen laut **ADR-015** in `.prettierignore` statt in den Commit, weil beide
 Generatoren empirisch belegt mit `JSON.stringify(…, null, 2)` zurückschreiben und jede Formatierung
@@ -68,15 +68,15 @@ Einschränkung: `pnpm db:generate` ist im Container nicht lauffähig (kein `DATA
 kein Postgres). Der drizzle-Nachweis lief über einen direkten `drizzle-kit generate`-Aufruf mit
 Dummy-`DATABASE_URL`; Details und Bewertung in ADR-015.
 
-> **Nachtrag aus `JR-106` (2026-07-28): diese Einschränkung ist aufgehoben.** Mit gesetztem
+> **Nachtrag aus `JR-1-06` (2026-07-28): diese Einschränkung ist aufgehoben.** Mit gesetztem
 > `DATABASE_URL` und laufendem Cluster läuft `pnpm db:generate` durch. Die Abnahme hat einen echten
 > Generatorlauf gefahren (erzwungene Schemaänderung ⇒ `0041_easy_invisible_woman.sql`,
 > `meta/0041_snapshot.json`, geändertes `_journal.json`) und `pnpm lint` danach grün gemessen. Die
 > Restlücke aus ADR-015 ist damit geschlossen; die Probe wurde vollständig zurückgebaut.
 
-Formal offen: die Abnahme von `JR-105a` gehört zu `JR-106` (Rolle PO).
+Formal offen: die Abnahme von `JR-1-05a` gehört zu `JR-1-06` (Rolle PO).
 
-### JR-101 erledigt (2026-07-27) — vitest im Monorepo
+### JR-1-01 erledigt (2026-07-27) — vitest im Monorepo
 
 `vitest@3.2.7` als Root-devDependency, dazu `vite@^5.4.19` **explizit** deklariert. Grund: das
 zunächst installierte `vitest@4` verlangt `vite >= 6` und band sich still an die aus `vitepress`
@@ -110,7 +110,7 @@ in this environment)`. Übersprungen mit sichtbarem Grund, nicht als grün getar
 - Typprüfung der Tests über das neue `packages/backend/tsconfig.test.json`
   (`pnpm --filter @open-archiver/backend test:types`, grün).
 
-### JR-102 erledigt (2026-07-27) — Konventionen
+### JR-1-02 erledigt (2026-07-27) — Konventionen
 
 `04-testplan.md` §2 ist von einer Tabelle auf fünf Unterabschnitte erweitert (§2.1 Orte,
 §2.2 Suites, §2.3 Klassifizierung, §2.4 Seeds, §2.5 Coverage-Hinweise), jede Zeile mit einem
@@ -139,7 +139,7 @@ Nachweise je Kategorie — alle drei Klassen **ausgeführt**, nicht nur konfigur
 - Stichprobe wird benannt: `ran 300 of 25000 iterations (sampled). The full run is the separate
 variant "[nightly] …"` — Grundregel 6 maschinell umgesetzt.
 
-### JR-103 erledigt (2026-07-27) — erste Unit-Tests
+### JR-1-03 erledigt (2026-07-27) — erste Unit-Tests
 
 Drei Dateien, alle Klasse `ci`: `packages/backend/src/iam-policy/policy-validator.test.ts` (53
 Fälle), `…/ability.test.ts` (38 Fälle), `packages/backend/src/helpers/mongoToDrizzle.test.ts` (55
@@ -152,29 +152,29 @@ beiden Fixture-Suites, zur Laufzeit durch `it.each` mehr.
 danach zurückbenannt, wieder grün. Der Loader wirft absichtlich hart statt zu überspringen.
 
 Inhaltlich abgedeckt: `export` wird als Action **akzeptiert** (Ist-Zustand eingefroren, stützt
-`JR-1103`); `manage` ist ein echtes Wildcard und deckt `export` mit; `admin.json` erlaubt alles;
+`JR-11-03`); `manage` ist ein echtes Wildcard und deckt `export` mit; `admin.json` erlaubt alles;
 `read-only-all.json` verweigert `create`/`update`/`delete`/`export`/`sync`/`manage` auf allen fünf
 Subjects **und** auf konkreten Objekten; beide `auditor-*.json` greifen nur im Scope, jede
 Schreibaktion abgewiesen; `mongoToDrizzle` mit Golden File über 26 Fälle plus Operator-, Logik- und
 Spaltennamen-Suites.
 
-**Nicht Teil von JR-103:** `FilterBuilder` und `mongoToMeli`. Beide hängen über `IamService` am
-`db`-Singleton, das beim Import wirft — sie gehören zu `JR-104`. Der Task-Text von JR-103 nennt
-`FilterBuilder`; das ist hier bewusst nicht erfüllt und in `JR-104` zu erledigen.
+**Nicht Teil von JR-1-03:** `FilterBuilder` und `mongoToMeli`. Beide hängen über `IamService` am
+`db`-Singleton, das beim Import wirft — sie gehören zu `JR-1-04`. Der Task-Text von JR-1-03 nennt
+`FilterBuilder`; das ist hier bewusst nicht erfüllt und in `JR-1-04` zu erledigen.
 
-### JR-104 geschrieben (2026-07-28) — Integrationstest-Basis · F12 in `JR-104a` behoben, Abnahme offen
+### JR-1-04 geschrieben (2026-07-28) — Integrationstest-Basis · F12 in `JR-1-04a` behoben, Abnahme offen
 
 **Nicht abgehakt.** Der Harness ist geschrieben und lokal gegen ein **echtes** Postgres grün. Die
 ursprünglich offene Bedingung (CI-Lauf gegen `postgres:17-alpine`) **ist erfüllt**. Die Abnahme
-`JR-106` hat den Task trotzdem **abgelehnt**: das Kriterium „zwei Integrationstests parallel, ohne
+`JR-1-06` hat den Task trotzdem **abgelehnt**: das Kriterium „zwei Integrationstests parallel, ohne
 sich zu beeinflussen" brach prozessübergreifend reproduzierbar (**F12**), und der unten in diesem
 Abschnitt geführte Nachweis „zwei vollständige Läufe gleichzeitig ⇒ beide `exit=0`, 30/30 bzw. 30/30"
 ist für den damaligen Code **widerlegt**. Er bleibt hier als historischer Eintrag stehen, ist aber
 **nicht** gültig.
 
-> **Stand 2026-07-28 nach `JR-104a`:** F12 ist behoben, der prozessübergreifende Doppellauf ist
-> fünffach belegt (plus Tripel- und versetzte Läufe) — siehe „Nacharbeit `JR-104a` / `JR-105b`" weiter
-> unten. Der Task bleibt `[~]`, weil die Abnahme (`JR-106a`) aussteht.
+> **Stand 2026-07-28 nach `JR-1-04a`:** F12 ist behoben, der prozessübergreifende Doppellauf ist
+> fünffach belegt (plus Tripel- und versetzte Läufe) — siehe „Nacharbeit `JR-1-04a` / `JR-1-05b`" weiter
+> unten. Der Task bleibt `[~]`, weil die Abnahme (`JR-1-06a`) aussteht.
 
 Neue Dateien:
 
@@ -208,7 +208,7 @@ keinen laufenden Postgres, aber die Server-Binaries von PostgreSQL 16 liegen unt
 
 **Weiterhin nicht verifiziert:** PostgreSQL **17** (CI-Ziel ist `postgres:17-alpine`, geprüft wurde
 16.13), der GitHub-Actions-Lauf selbst, und Teardown nach `SIGKILL` des Workers. Letzteres deckt nur
-der Sweeper ab; der Kill-Pfad braucht einen Kindprozess-Treiber und ist nicht Teil von JR-104.
+der Sweeper ab; der Kill-Pfad braucht einen Kindprozess-Treiber und ist nicht Teil von JR-1-04.
 
 **Ein eigener Defekt im Harness gefunden und behoben:** der Sweeper löschte mit niedrigem
 `OA_TEST_PG_STALE_MS` die **eigenen, lebenden** Datenbanken. Er prüft jetzt zusätzlich die im Namen
@@ -219,12 +219,12 @@ kodierte PID und offene Verbindungen; zwei Tests halten das fest.
 „unbeschränkt", wenn keine `can`-Regel greift, und die Suchroute prüft `search` während
 `SearchService` den Filter für `read` baut.
 
-### JR-105 erledigt (2026-07-28) — CI-Workflow
+### JR-1-05 erledigt (2026-07-28) — CI-Workflow
 
 Das Akzeptanzkriterium „Workflow läuft auf dem Branch grün" ist **eingelöst**: Lauf 3 auf
 `1bad10c` ist grün, alle 14 Schritte `success`, Belege unten. Zwei Läufe waren nötig — Lauf 1 hat
 einen echten Defekt der vorgegebenen Schrittfolge aufgedeckt (F11, siehe unten). Die formale Abnahme
-gehört wie bei `JR-105a` zu `JR-106` (Rolle PO).
+gehört wie bei `JR-1-05a` zu `JR-1-06` (Rolle PO).
 
 Eine neue Datei: `.github/workflows/ci.yml`, Job `verify` auf `ubuntu-latest`, Trigger
 `pull_request` **und** `push`. Die vier bestehenden Workflows (`cla`, `deploy-docs`,
@@ -259,7 +259,7 @@ Jobs löschen.
 2. _Rückstände?_ `select datname from pg_database where datname like 'oa\_test\_%'` muss leer sein.
    Ein Rest ist ein Harness-Defekt und soll auffallen, nicht sich ansammeln.
 
-> **Prüfung 1 ist seit `JR-105b` (2026-07-28) ersetzt.** Die Abnahme `JR-106` hat zwei Löcher darin
+> **Prüfung 1 ist seit `JR-1-05b` (2026-07-28) ersetzt.** Die Abnahme `JR-1-06` hat zwei Löcher darin
 > gefunden: sie erkannte eine **übersprungene**, nicht eine **abwesende** Suite, und eine Datei in
 > `tests/integration/` mit falschem Suffix fiel ihr gar nicht auf. Beides ist die Folge davon, auf das
 > **Fehlen** einer Logzeile zu prüfen. An ihre Stelle treten `OA_TEST_REQUIRE_INFRA=1` (fehlende
@@ -267,7 +267,7 @@ Jobs löschen.
 > and ran" über die Inventur-Report-Datei. Prüfung 2 ist unverändert. Die Belege unten beziehen sich
 > auf den damaligen Stand und bleiben als Historie stehen.
 
-**Nachweise — alle fünf Schritte lokal ausgeführt, nicht nur konfiguriert.** Wie in `JR-104` wurde
+**Nachweise — alle fünf Schritte lokal ausgeführt, nicht nur konfiguriert.** Wie in `JR-1-04` wurde
 aus den vorinstallierten PostgreSQL-16-Binaries ein eigener Cluster gestartet
 (`initdb` + `pg_ctl`, `127.0.0.1:5432`, Rolle `postgres` mit `CREATEDB`, `max_connections` 100) und
 die Schrittfolge des Workflows verbatim durchgespielt; danach wurde der Cluster restlos entfernt
@@ -343,17 +343,17 @@ hält.
   `Cache hit for: node-cache-Linux-x64-pnpm-d4b263d4…` · `Cache restored successfully` ·
   `Cache Size: ~143 MB`. `pnpm install` fiel von 8 s auf 5 s. Auch Lauf 5: 181 grün, beide
   Nachlaufprüfungen positiv — der grüne Lauf ist also reproduzierbar und nicht einmalig.
-- **Teardown nach `SIGKILL`** des vitest-Workers — unverändert offen aus `JR-104`, deckt nur der
+- **Teardown nach `SIGKILL`** des vitest-Workers — unverändert offen aus `JR-1-04`, deckt nur der
   Sweeper ab.
 - **`pull_request`-Trigger**: er feuert (Lauf 2 auf demselben SHA, wegen des offenen PR #2 nach
   `main`), wurde aber nicht bis zum Ende beobachtet. Der Job ist identisch zum Push-Lauf.
 
-### Nacharbeit `JR-104a` / `JR-105b` erledigt (2026-07-28) — Abnahme `JR-106a` offen
+### Nacharbeit `JR-1-04a` / `JR-1-05b` erledigt (2026-07-28) — Abnahme `JR-1-06a` offen
 
 Beide Tasks aus der Ablehnung von E1. Rolle `tester`, kein Produktionscode berührt, keiner der
 Befunde F1–F11 behoben (das ist E13).
 
-#### `JR-104a` — F12 behoben
+#### `JR-1-04a` — F12 behoben
 
 **Reproduktion zuerst, gegen den unveränderten Stand `d2441fb`.** Drei Doppelläufe
 (`vitest run --project integration` zweifach gleichzeitig, PostgreSQL 16.13 lokal): **3 von 3 Runden
@@ -402,11 +402,11 @@ danach restlos entfernt.
 
 **Neuer Befund `F13`** dabei eingeordnet: der unbeschränkte Sweep mit der Standardfrist kann weiterhin
 die Datenbanken eines fremden Laufs treffen, der **länger als 2 h** läuft. Für die heutige Suite (5 s)
-unerreichbar, für die Soaks in E2/E3 nicht. Bewusst **nicht** in `JR-104a` mitbehoben: das ist eine
+unerreichbar, für die Soaks in E2/E3 nicht. Bewusst **nicht** in `JR-1-04a` mitbehoben: das ist eine
 Verhaltensänderung des Sweepers mit drei plausiblen Varianten und gehört dem PO. Zwischenregel steht
 in `04-testplan.md` §2.6.
 
-#### `JR-105b` — die zwei Lücken geschlossen, positiv statt per Negativsuche
+#### `JR-1-05b` — die zwei Lücken geschlossen, positiv statt per Negativsuche
 
 Neu `tests/support/suite-inventory.ts` plus `tests/support/global-setup.ts`, eingehängt als
 `test.globalSetup` in `vitest.config.ts`. Die Include-Globs der drei Projects stehen **nur noch dort**;
@@ -464,9 +464,9 @@ auflösen und eine neue Dependency dafür ein schlechter Tausch wäre; deshalb h
 
 **Nicht geprüft:** der GitHub-Actions-Lauf selbst. Die Workflow-Änderung ist lokal Schritt für Schritt
 nachgefahren (`pnpm lint`, `types`- und `backend`-Build, `test:types`, `pnpm test` mit den beiden neuen
-Variablen, danach das Prüfskript), aber ein echter Lauf auf GitHub gehört zu `JR-106a`.
+Variablen, danach das Prüfskript), aber ein echter Lauf auf GitHub gehört zu `JR-1-06a`.
 
-### Abnahme `JR-106` (2026-07-28) — Ergebnis: **E1 nicht abgenommen**
+### Abnahme `JR-1-06` (2026-07-28) — Ergebnis: **E1 nicht abgenommen**
 
 Rolle `tester`, unabhängig gegen die Akzeptanzkriterien aus `03-backlog.md` geprüft, nicht gegen den
 geschriebenen Code. Abnahmeregel: `04-testplan.md` §6. Umgebung: kein Docker, aber ein aus den
@@ -475,23 +475,23 @@ vorinstallierten Binaries gestarteter **PostgreSQL-16.13**-Cluster (`initdb` + `
 entfernt (`pg_ctl stop`, `rm -rf`, `pg_isready` ⇒ „no response"). Nichts davon ist committet;
 `git status` ist nach jeder Sonde geprüft und war jedes Mal leer.
 
-| Task    | Kriterium                                                       | Urteil                                                                        | Nachweis                                                                                                                                                                                                                             |
-| ------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| JR-101  | `pnpm test` läuft von der Wurzel                                | **erfüllt**                                                                   | `pnpm test` ⇒ `Test Files 8 passed (8)`, `Tests 181 passed \| 2 skipped (183)`, Exit `0`                                                                                                                                             |
-| JR-101  | findet Tests in **allen** Paketen                               | **erfüllt**                                                                   | je eine Sonde in `packages/types/src/` und `packages/frontend/tests/unit/` ohne Config-Änderung gefunden und grün, danach entfernt                                                                                                   |
-| JR-101  | Exit `0` bei Erfolg, `≠ 0` bei Fehlschlag                       | **erfüllt**                                                                   | Fixture umbenannt ⇒ `3 failed \| 105 passed`, Exit `1`; F12-Doppellauf ⇒ Exit `1`                                                                                                                                                    |
-| JR-101  | keine Änderung an bestehendem Produktionscode                   | **erfüllt**                                                                   | Pre-E1-Worktree (`cea852f`) gebaut und `dist` verglichen: von **111** emittierten `.js` unterscheidet sich **eine** Datei (`config/search.js`) und nur im Zeilenumbruch — md5 gleich nach `tr -d`                                    |
-| JR-102  | Konventionen in `04-testplan.md`, ein Beispiel je Kategorie     | **erfüllt**                                                                   | alle 6 in §2.1 genannten Pfade existieren; `[ci]`/`[nightly]`/`[manual]` im Suite-Namen; alle drei Klassen ausgeführt; `OA_TEST_CLASSES=nightlyy` bricht mit Exit `1` ab                                                             |
-| JR-103  | ≥ 20 Assertions über die Fixtures, alle grün                    | **erfüllt**                                                                   | 108 `expect()`-Stellen in den beiden Fixture-Suites (30 + 78), zur Laufzeit mehr; grün                                                                                                                                               |
-| JR-103  | die Fixtures werden erstmals **tatsächlich** geladen            | **erfüllt**                                                                   | **alle acht** einzeln umbenannt ⇒ jedes Mal Exit `1` mit `IAM policy fixture "<name>" could not be read from …`                                                                                                                      |
-| JR-104  | zwei Integrationstests parallel, ohne sich zu beeinflussen      | **nicht erfüllt (F12)** — in `JR-104a` behoben, erneut zu prüfen in `JR-106a` | prozessübergreifend 4/4 rot: `duplicate key value violates unique constraint "pg_database_datname_index"`. Innerhalb **eines** Laufs erfüllt (4 Dateien parallel, 32 Tests grün). Nach `JR-104a`: 5/5 Doppelläufe grün, 0 Rückstände |
-| JR-104  | kein Rückstand in der DB nach dem Lauf                          | **erfüllt**                                                                   | nach jedem Lauf, auch nach dem kollidierten: `select … like 'oa\_test\_%'` ⇒ 0 Zeilen; am Ende nur `postgres`, `template0`, `template1`                                                                                              |
-| JR-105a | `pnpm lint` repo-weit grün, inklusive `.svelte`                 | **erfüllt**                                                                   | „All matched files use Prettier code style!", Exit `0`                                                                                                                                                                               |
-| JR-105a | Commit enthält **ausschließlich** Formatierung                  | **erfüllt**                                                                   | für alle 7 handgeschriebenen Dateien gilt mechanisch `prettier(Stand vor 1c46f7e) == Stand nach 1c46f7e`; Token-Streams der 3 `.ts`-Dateien md5-identisch                                                                            |
-| JR-105a | `pnpm db:generate` erzeugt danach keine erneute Lint-Verletzung | **erfüllt**                                                                   | erzwungenes `pnpm db:generate` schrieb `0041_*.sql` + `meta/0041_snapshot.json` + `_journal.json` ⇒ `pnpm lint` weiter grün; Probe vollständig zurückgebaut                                                                          |
-| JR-105  | Workflow läuft auf dem Branch grün                              | **erfüllt**                                                                   | Lauf 7 auf `36cf6bd` (= HEAD), alle 14 Schritte `success`, PostgreSQL **17.10**, `Tests 181 passed \| 2 skipped`                                                                                                                     |
-| JR-105  | bestehende vier Workflows unverändert                           | **erfüllt**                                                                   | Blob-Hashes `cla`/`deploy-docs`/`docker-deployment`/`release-tag` in Merge-Base, HEAD und Worktree identisch; `git log main..HEAD --` auf die vier ⇒ leer                                                                            |
-| JR-105  | kein Schritt schreibt Dateien ins Repository zurück             | **erfüllt**                                                                   | kein `format`/`commit`/`push` außer dem Trigger `push:`; `permissions: contents: read` ohne Job-Override; nach der lokalen Schrittfolge `git status --porcelain` leer; Log liegt in `$RUNNER_TEMP`                                   |
+| Task     | Kriterium                                                       | Urteil                                                                          | Nachweis                                                                                                                                                                                                                              |
+| -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JR-1-01  | `pnpm test` läuft von der Wurzel                                | **erfüllt**                                                                     | `pnpm test` ⇒ `Test Files 8 passed (8)`, `Tests 181 passed \| 2 skipped (183)`, Exit `0`                                                                                                                                              |
+| JR-1-01  | findet Tests in **allen** Paketen                               | **erfüllt**                                                                     | je eine Sonde in `packages/types/src/` und `packages/frontend/tests/unit/` ohne Config-Änderung gefunden und grün, danach entfernt                                                                                                    |
+| JR-1-01  | Exit `0` bei Erfolg, `≠ 0` bei Fehlschlag                       | **erfüllt**                                                                     | Fixture umbenannt ⇒ `3 failed \| 105 passed`, Exit `1`; F12-Doppellauf ⇒ Exit `1`                                                                                                                                                     |
+| JR-1-01  | keine Änderung an bestehendem Produktionscode                   | **erfüllt**                                                                     | Pre-E1-Worktree (`cea852f`) gebaut und `dist` verglichen: von **111** emittierten `.js` unterscheidet sich **eine** Datei (`config/search.js`) und nur im Zeilenumbruch — md5 gleich nach `tr -d`                                     |
+| JR-1-02  | Konventionen in `04-testplan.md`, ein Beispiel je Kategorie     | **erfüllt**                                                                     | alle 6 in §2.1 genannten Pfade existieren; `[ci]`/`[nightly]`/`[manual]` im Suite-Namen; alle drei Klassen ausgeführt; `OA_TEST_CLASSES=nightlyy` bricht mit Exit `1` ab                                                              |
+| JR-1-03  | ≥ 20 Assertions über die Fixtures, alle grün                    | **erfüllt**                                                                     | 108 `expect()`-Stellen in den beiden Fixture-Suites (30 + 78), zur Laufzeit mehr; grün                                                                                                                                                |
+| JR-1-03  | die Fixtures werden erstmals **tatsächlich** geladen            | **erfüllt**                                                                     | **alle acht** einzeln umbenannt ⇒ jedes Mal Exit `1` mit `IAM policy fixture "<name>" could not be read from …`                                                                                                                       |
+| JR-1-04  | zwei Integrationstests parallel, ohne sich zu beeinflussen      | **nicht erfüllt (F12)** — in `JR-1-04a` behoben, erneut zu prüfen in `JR-1-06a` | prozessübergreifend 4/4 rot: `duplicate key value violates unique constraint "pg_database_datname_index"`. Innerhalb **eines** Laufs erfüllt (4 Dateien parallel, 32 Tests grün). Nach `JR-1-04a`: 5/5 Doppelläufe grün, 0 Rückstände |
+| JR-1-04  | kein Rückstand in der DB nach dem Lauf                          | **erfüllt**                                                                     | nach jedem Lauf, auch nach dem kollidierten: `select … like 'oa\_test\_%'` ⇒ 0 Zeilen; am Ende nur `postgres`, `template0`, `template1`                                                                                               |
+| JR-1-05a | `pnpm lint` repo-weit grün, inklusive `.svelte`                 | **erfüllt**                                                                     | „All matched files use Prettier code style!", Exit `0`                                                                                                                                                                                |
+| JR-1-05a | Commit enthält **ausschließlich** Formatierung                  | **erfüllt**                                                                     | für alle 7 handgeschriebenen Dateien gilt mechanisch `prettier(Stand vor 1c46f7e) == Stand nach 1c46f7e`; Token-Streams der 3 `.ts`-Dateien md5-identisch                                                                             |
+| JR-1-05a | `pnpm db:generate` erzeugt danach keine erneute Lint-Verletzung | **erfüllt**                                                                     | erzwungenes `pnpm db:generate` schrieb `0041_*.sql` + `meta/0041_snapshot.json` + `_journal.json` ⇒ `pnpm lint` weiter grün; Probe vollständig zurückgebaut                                                                           |
+| JR-1-05  | Workflow läuft auf dem Branch grün                              | **erfüllt**                                                                     | Lauf 7 auf `36cf6bd` (= HEAD), alle 14 Schritte `success`, PostgreSQL **17.10**, `Tests 181 passed \| 2 skipped`                                                                                                                      |
+| JR-1-05  | bestehende vier Workflows unverändert                           | **erfüllt**                                                                     | Blob-Hashes `cla`/`deploy-docs`/`docker-deployment`/`release-tag` in Merge-Base, HEAD und Worktree identisch; `git log main..HEAD --` auf die vier ⇒ leer                                                                             |
+| JR-1-05  | kein Schritt schreibt Dateien ins Repository zurück             | **erfüllt**                                                                     | kein `format`/`commit`/`push` außer dem Trigger `push:`; `permissions: contents: read` ohne Job-Override; nach der lokalen Schrittfolge `git status --porcelain` leer; Log liegt in `$RUNNER_TEMP`                                    |
 
 **Zusätzlich ausdrücklich geprüft: die grün aussehende Fehlerform.** Ohne `DATABASE_URL` endet
 `pnpm test` mit Exit **0** bei „149 passed | 34 skipped" — bestätigt. Die Nachlaufprüfung 1 aus
@@ -503,7 +503,7 @@ ebenfalls beidseitig: `oa_test_leftover_probe` wird erfasst, die Lookalike `oaxt
 die `\_`-Escapes greifen.
 
 **Zwei Lücken der Nachlaufprüfung 1, gefunden beim Versuch sie zu umgehen** (kein Kriteriumsbruch,
-aber genau die Klasse Fehler, gegen die sie existiert — Ausweg in `JR-1305` einplanen):
+aber genau die Klasse Fehler, gegen die sie existiert — Ausweg in `JR-13-05` einplanen):
 
 1. Sie erkennt eine **übersprungene**, nicht eine **abwesende** Suite. Mit umbenanntem Verzeichnis
    `tests/integration` läuft `pnpm test` grün („149 passed | 2 skipped", Exit `0`) und die Prüfung
@@ -520,10 +520,10 @@ einer Negativsuche im Log.
 
 - `POLICY_FIXTURES` in `tests/support/policy-fixtures.ts` ist eine feste Liste; kein Test vergleicht
   sie mit dem Verzeichnisinhalt. Eine **neu hinzugefügte** Fixture wäre stillschweigend ungetestet.
-- Der `JR-105a`-Commit enthält neben der Formatierung auch Projektgedächtnis-Prosa (ADR-015 in
+- Der `JR-1-05a`-Commit enthält neben der Formatierung auch Projektgedächtnis-Prosa (ADR-015 in
   `05-entscheidungen.md`, Statuspflege in `06-status.md`). Keine Logikänderung, aber „ausschließlich
   Formatierung" gilt streng nur für die 7 Quell- und Doku-Dateien.
-- `pnpm --filter @open-archiver/backend test` meldet heute 183 Tests, nicht die oben unter `JR-101`
+- `pnpm --filter @open-archiver/backend test` meldet heute 183 Tests, nicht die oben unter `JR-1-01`
   protokollierten 154 — alle Tests liegen derzeit in `packages/backend`.
 
 **Nicht prüfbar in dieser Umgebung:**
@@ -533,43 +533,43 @@ einer Negativsuche im Log.
   auffallen. Kein Docker im Container, keine PG-17-Binaries.
 - **Valkey und Meilisearch** — nicht vorhanden, von der `integration`-Suite auch nicht berührt.
 - **Teardown nach `SIGKILL`** des vitest-Workers — braucht einen Kindprozess-Treiber, frühestens mit
-  `JR-410`.
+  `JR-4-10`.
 - **F12 nach einer Behebung** — die Abnahme darf nicht reparieren, was sie prüft. Der erneute
   Nachweis gehört zur Nacharbeit und muss **mehrfach** laufen, nicht einmal.
 
-### Abnahme `JR-106a` (2026-07-28) — Ergebnis: **E1 abgenommen**
+### Abnahme `JR-1-06a` (2026-07-28) — Ergebnis: **E1 abgenommen**
 
 Rolle `tester`, unabhängige Session, HEAD `0a94308` (mit `origin` abgeglichen: `git ls-remote` und
 `git log --oneline -1` stimmen überein — der in `07-session-handover.md` beschriebene
-Container-Rollback lag diesmal **nicht** vor). Geprüft wurden **alle** Kriterien aus `JR-106` erneut,
-nicht nur die Nacharbeit, weil `JR-104a`/`JR-105b` `vitest.config.ts`, `tests/support/classification.ts`,
+Container-Rollback lag diesmal **nicht** vor). Geprüft wurden **alle** Kriterien aus `JR-1-06` erneut,
+nicht nur die Nacharbeit, weil `JR-1-04a`/`JR-1-05b` `vitest.config.ts`, `tests/support/classification.ts`,
 `pg-harness.ts` und `ci.yml` angefasst haben. Umgebung: kein Docker, eigener **PostgreSQL-16.13**-Cluster
 aus `/usr/lib/postgresql/16/bin` (`initdb` + `pg_ctl` als Rolle `postgres`, `127.0.0.1:5432`), nach der
 Abnahme restlos entfernt (`pg_ctl -m fast stop`, `rm -rf`, `pg_isready` ⇒ „no response", Exit 2).
 `git status --porcelain` war nach **jeder** Sonde leer.
 
-| Task    | Kriterium                                                     | Urteil      | Nachweis                                                                                                                                                                                                   |
-| ------- | ------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JR-101  | `pnpm test` läuft von der Wurzel                              | **erfüllt** | `Test Files 10 passed (10)`, `Tests 197 passed \| 2 skipped (199)`, Exit `0`                                                                                                                               |
-| JR-101  | findet Tests in **allen** Paketen                             | **erfüllt** | Sonden `packages/types/src/jr106a-probe.test.ts` und `packages/frontend/tests/unit/jr106a-probe.test.ts` ohne Config-Änderung eingesammelt und grün (`unit: 7 file(s)`), danach entfernt                   |
-| JR-101  | Exit `0` bei Erfolg, `≠ 0` bei Fehlschlag                     | **erfüllt** | dieselbe Sonde auf `expect(1).toBe(2)` umgestellt ⇒ `1 failed \| 198 passed`, Exit `1`                                                                                                                     |
-| JR-101  | keine Änderung an bestehendem Produktionscode                 | **erfüllt** | echter Pre-E1-Build gegen HEAD-Build verglichen: **233** `dist`-Dateien, Dateilisten identisch, **eine** Datei byteverschieden (`config/search.js`, nur Zeilenumbruch) — md5 nach `tr -d ' \t\n\r'` gleich |
-| JR-102  | Konventionen in `04-testplan.md`, ein Beispiel je Kategorie   | **erfüllt** | alle in §2.1 genannten konkreten Pfade existieren; `[ci]` 22 ×, `[nightly]` 2 ×, `[manual]` 1 × im Suite-Namen; `ci`/`nightly`/`manual`/`all` alle lauffähig, `all` ⇒ 199 grün                             |
-| JR-102  | Klassenwahl schlägt bei Tippfehler fehl                       | **erfüllt** | `OA_TEST_CLASSES=nightlyy` ⇒ `unknown test class(es): nightlyy`, Exit `1`                                                                                                                                  |
-| JR-103  | ≥ 20 Assertions über die Fixtures, alle grün                  | **erfüllt** | 133 `expect()`-Stellen in den drei Fixture-Suites (30 + 78 + 25); alle grün                                                                                                                                |
-| JR-103  | die Fixtures werden erstmals **tatsächlich** geladen          | **erfüllt** | **alle acht** einzeln umbenannt ⇒ jedes Mal Exit `1` mit `IAM policy fixture "<name>" could not be read from …`                                                                                            |
-| JR-104  | zwei Integrationstests parallel, ohne sich zu beeinflussen    | **erfüllt** | prozessübergreifend **10 Runden grün**: 5 Doppel-, 3 versetzte (0,4 s), 2 Dreifachläufe — alle Teilläufe Exit `0`, `34 passed` je Lauf. Innerhalb eines Laufs 4 Dateien parallel                           |
-| JR-104  | kein Rückstand in der DB nach dem Lauf                        | **erfüllt** | nach jeder der 10 Runden `select … like 'oa\_test\_%'` ⇒ `0`; am Ende nur `postgres`, `template0`, `template1`                                                                                             |
-| JR-104a | Doppellauf **mehrfach** grün (≥ 5), protokolliert             | **erfüllt** | 5/5 Doppelläufe grün, zusätzlich 3 versetzte und 2 Dreifachrunden grün, alle mit Exit-Codes und Rückstandszählung protokolliert                                                                            |
-| JR-105a | `pnpm lint` repo-weit grün                                    | **erfüllt** | „All matched files use Prettier code style!", Exit `0` — vor und nach allen Sonden                                                                                                                         |
-| JR-105a | `pnpm db:generate` erzeugt keine erneute Lint-Verletzung      | **erfüllt** | erzwungene Schemaänderung ⇒ `0041_whole_sally_floyd.sql` + `meta/0041_snapshot.json` + geändertes `_journal.json`; `pnpm lint` weiter grün; Probe vollständig zurückgebaut                                 |
-| JR-105  | Workflow läuft auf dem **aktuellen HEAD** grün                | **erfüllt** | Run **30368442950** (`0a94308`, Push), alle 14 Schritte `success`, Service-Container `postgres:17-alpine` ⇒ Log `starting PostgreSQL 17.10`, `Tests 197 passed \| 2 skipped`                               |
-| JR-105  | `integration`-Suite nachweislich gelaufen, nicht übersprungen | **erfüllt** | im CI-Log alle vier `integration`-Dateien mit `✓` und Testzahlen (8/10/3/13); die 2 Skips sind Klassen-Skips (`nightly`/`manual`); Schritt 13 ⇒ `Suite inventory verified: … integration 4/4`              |
-| JR-105  | bestehende vier Workflows byteidentisch                       | **erfüllt** | Blob-Hashes `cla`/`deploy-docs`/`docker-deployment`/`release-tag` in Merge-Base, HEAD und Worktree identisch; `git log main..HEAD --` auf die vier ⇒ leer                                                  |
-| JR-105  | kein schreibender Schritt, `permissions: contents: read`      | **erfüllt** | genau **ein** `permissions:`-Block (Workflow-Ebene), kein Job-Override; kein `format`/`commit`/`push`; Log und Inventurreport unter `$RUNNER_TEMP`; „No `oa_test_*` databases left behind."                |
-| JR-105b | Verzeichnis weg ⇒ rot                                         | **erfüllt** | umbenannt: `integration: 0 file(s) (min 4)` + `unclassified: 4`, Exit `1`. **Zusätzlich gelöscht** (der Fall, den die alte Prüfung nicht sah): `integration: 0 (min 4)`, Exit `1`                          |
-| JR-105b | `foo.test.ts` in `tests/integration/` ⇒ rot                   | **erfüllt** | `unclassified: 1`, Dateiname und Namensregeln in der Fehlermeldung, Exit `1`                                                                                                                               |
-| JR-105b | beide Fälle in der **Gegenrichtung** ⇒ grün                   | **erfüllt** | legitimer Zustand ⇒ Exit `0`; korrekt benannte `foo.int.test.ts` ⇒ `integration: 5 (min 4)`, eingesammelt, Exit `0`                                                                                        |
+| Task     | Kriterium                                                     | Urteil      | Nachweis                                                                                                                                                                                                   |
+| -------- | ------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JR-1-01  | `pnpm test` läuft von der Wurzel                              | **erfüllt** | `Test Files 10 passed (10)`, `Tests 197 passed \| 2 skipped (199)`, Exit `0`                                                                                                                               |
+| JR-1-01  | findet Tests in **allen** Paketen                             | **erfüllt** | Sonden `packages/types/src/jr106a-probe.test.ts` und `packages/frontend/tests/unit/jr106a-probe.test.ts` ohne Config-Änderung eingesammelt und grün (`unit: 7 file(s)`), danach entfernt                   |
+| JR-1-01  | Exit `0` bei Erfolg, `≠ 0` bei Fehlschlag                     | **erfüllt** | dieselbe Sonde auf `expect(1).toBe(2)` umgestellt ⇒ `1 failed \| 198 passed`, Exit `1`                                                                                                                     |
+| JR-1-01  | keine Änderung an bestehendem Produktionscode                 | **erfüllt** | echter Pre-E1-Build gegen HEAD-Build verglichen: **233** `dist`-Dateien, Dateilisten identisch, **eine** Datei byteverschieden (`config/search.js`, nur Zeilenumbruch) — md5 nach `tr -d ' \t\n\r'` gleich |
+| JR-1-02  | Konventionen in `04-testplan.md`, ein Beispiel je Kategorie   | **erfüllt** | alle in §2.1 genannten konkreten Pfade existieren; `[ci]` 22 ×, `[nightly]` 2 ×, `[manual]` 1 × im Suite-Namen; `ci`/`nightly`/`manual`/`all` alle lauffähig, `all` ⇒ 199 grün                             |
+| JR-1-02  | Klassenwahl schlägt bei Tippfehler fehl                       | **erfüllt** | `OA_TEST_CLASSES=nightlyy` ⇒ `unknown test class(es): nightlyy`, Exit `1`                                                                                                                                  |
+| JR-1-03  | ≥ 20 Assertions über die Fixtures, alle grün                  | **erfüllt** | 133 `expect()`-Stellen in den drei Fixture-Suites (30 + 78 + 25); alle grün                                                                                                                                |
+| JR-1-03  | die Fixtures werden erstmals **tatsächlich** geladen          | **erfüllt** | **alle acht** einzeln umbenannt ⇒ jedes Mal Exit `1` mit `IAM policy fixture "<name>" could not be read from …`                                                                                            |
+| JR-1-04  | zwei Integrationstests parallel, ohne sich zu beeinflussen    | **erfüllt** | prozessübergreifend **10 Runden grün**: 5 Doppel-, 3 versetzte (0,4 s), 2 Dreifachläufe — alle Teilläufe Exit `0`, `34 passed` je Lauf. Innerhalb eines Laufs 4 Dateien parallel                           |
+| JR-1-04  | kein Rückstand in der DB nach dem Lauf                        | **erfüllt** | nach jeder der 10 Runden `select … like 'oa\_test\_%'` ⇒ `0`; am Ende nur `postgres`, `template0`, `template1`                                                                                             |
+| JR-1-04a | Doppellauf **mehrfach** grün (≥ 5), protokolliert             | **erfüllt** | 5/5 Doppelläufe grün, zusätzlich 3 versetzte und 2 Dreifachrunden grün, alle mit Exit-Codes und Rückstandszählung protokolliert                                                                            |
+| JR-1-05a | `pnpm lint` repo-weit grün                                    | **erfüllt** | „All matched files use Prettier code style!", Exit `0` — vor und nach allen Sonden                                                                                                                         |
+| JR-1-05a | `pnpm db:generate` erzeugt keine erneute Lint-Verletzung      | **erfüllt** | erzwungene Schemaänderung ⇒ `0041_whole_sally_floyd.sql` + `meta/0041_snapshot.json` + geändertes `_journal.json`; `pnpm lint` weiter grün; Probe vollständig zurückgebaut                                 |
+| JR-1-05  | Workflow läuft auf dem **aktuellen HEAD** grün                | **erfüllt** | Run **30368442950** (`0a94308`, Push), alle 14 Schritte `success`, Service-Container `postgres:17-alpine` ⇒ Log `starting PostgreSQL 17.10`, `Tests 197 passed \| 2 skipped`                               |
+| JR-1-05  | `integration`-Suite nachweislich gelaufen, nicht übersprungen | **erfüllt** | im CI-Log alle vier `integration`-Dateien mit `✓` und Testzahlen (8/10/3/13); die 2 Skips sind Klassen-Skips (`nightly`/`manual`); Schritt 13 ⇒ `Suite inventory verified: … integration 4/4`              |
+| JR-1-05  | bestehende vier Workflows byteidentisch                       | **erfüllt** | Blob-Hashes `cla`/`deploy-docs`/`docker-deployment`/`release-tag` in Merge-Base, HEAD und Worktree identisch; `git log main..HEAD --` auf die vier ⇒ leer                                                  |
+| JR-1-05  | kein schreibender Schritt, `permissions: contents: read`      | **erfüllt** | genau **ein** `permissions:`-Block (Workflow-Ebene), kein Job-Override; kein `format`/`commit`/`push`; Log und Inventurreport unter `$RUNNER_TEMP`; „No `oa_test_*` databases left behind."                |
+| JR-1-05b | Verzeichnis weg ⇒ rot                                         | **erfüllt** | umbenannt: `integration: 0 file(s) (min 4)` + `unclassified: 4`, Exit `1`. **Zusätzlich gelöscht** (der Fall, den die alte Prüfung nicht sah): `integration: 0 (min 4)`, Exit `1`                          |
+| JR-1-05b | `foo.test.ts` in `tests/integration/` ⇒ rot                   | **erfüllt** | `unclassified: 1`, Dateiname und Namensregeln in der Fehlermeldung, Exit `1`                                                                                                                               |
+| JR-1-05b | beide Fälle in der **Gegenrichtung** ⇒ grün                   | **erfüllt** | legitimer Zustand ⇒ Exit `0`; korrekt benannte `foo.int.test.ts` ⇒ `integration: 5 (min 4)`, eingesammelt, Exit `0`                                                                                        |
 
 **Zusätzlich geprüft (nicht als Kriterium gefordert):** der Wächter `OA_TEST_REQUIRE_INFRA` in allen
 vier Richtungen. Ohne `DATABASE_URL` und ohne die Variable endet `pnpm test` grün mit
@@ -595,9 +595,9 @@ Messinstrument, also wurde sie angegriffen:
 | Datei gelöscht, während die Suite über `minimumFiles` liegt           | **hält nicht** ⇒ **F15**                                                   |
 | Namen außerhalb der Konvention (`probe-test.ts`, `probe.tests.ts`)    | unsichtbar für Wächter **und** vitest — Restlücke, in **F14** mit vermerkt |
 
-Kein einziger dieser Angriffe bricht ein formuliertes Akzeptanzkriterium — `JR-105b` verlangt genau
+Kein einziger dieser Angriffe bricht ein formuliertes Akzeptanzkriterium — `JR-1-05b` verlangt genau
 die zwei Fälle, die es schließt, und die schließt es beidseitig. Sie sind als **F14** und **F15** in
-`09-befunde-bestandscode.md` eröffnet und gehören inhaltlich in `JR-1305`, wo die Abnahme `JR-106`
+`09-befunde-bestandscode.md` eröffnet und gehören inhaltlich in `JR-13-05`, wo die Abnahme `JR-1-06`
 den „Ausweg" schon eingeplant hat.
 
 **Ein dritter neuer Befund, `F16`, beim Aufräumen gefunden.** Nach den Sonden lagen sechs
@@ -613,12 +613,12 @@ lautlos in die 2-h-Frist des Sweepers. Das widerspricht der eigenen Zusage des M
 **F13 — die Zwischenregel greift nicht am Ort der Benutzung.** Ausdrücklich nachgeprüft und
 **bestätigt schwach**: die Regel „jeder Lauf, der länger als `OA_TEST_PG_STALE_MS` dauern kann, hebt
 die Variable" steht in `04-testplan.md` §2.6, in F13 und im Kopfkommentar von `pg-harness.ts`. Sie
-steht **nicht** in den Backlog-Zeilen `JR-208`, `JR-607` und `JR-410` und **nicht** in §12.6 des
+steht **nicht** in den Backlog-Zeilen `JR-2-08`, `JR-6-07` und `JR-4-10` und **nicht** in §12.6 des
 Testplans — also nirgends dort, wo jemand nachschlägt, der einen Soak schreibt. Der Docstring warnt
 ausschließlich davor, die Frist zu **senken**; vor dem Versäumnis, sie zu **heben**, warnt nichts,
 und es gibt keine Laufzeitprüfung („Prozess läuft länger als die Frist"). Empfehlung an den PO:
 unabhängig davon, welcher der drei F13-Entwürfe gewählt wird, die Regel in die Akzeptanzkriterien von
-`JR-208` und `JR-607` aufnehmen — eine Regel, die nur in einem Dokumentabschnitt steht, ist keine.
+`JR-2-08` und `JR-6-07` aufnehmen — eine Regel, die nur in einem Dokumentabschnitt steht, ist keine.
 
 **Nicht prüfbar in dieser Umgebung:**
 
@@ -627,15 +627,15 @@ unabhängig davon, welcher der drei F13-Entwürfe gewählt wird, die Regel in di
   Sweeper-Verhalten würde hier nicht auffallen. Kein Docker, keine PG-17-Binaries im Container.
 - **Valkey und Meilisearch** — nicht vorhanden, von der `integration`-Suite nicht berührt.
 - **Teardown nach `SIGKILL`** des vitest-Workers — braucht einen Kindprozess-Treiber, frühestens
-  `JR-410`. F16 ist der benachbarte, hier reproduzierbare Fall.
+  `JR-4-10`. F16 ist der benachbarte, hier reproduzierbare Fall.
 
 ### Befunde aus E1 (an DEV, nicht im Test-Epic behoben)
 
 > **Verbindliches Register ist `09-befunde-bestandscode.md`.** Die Tabelle unten ist eine Kurzfassung
 > von F1–F10 (Bestandscode). **F11** (vorgegebene CI-Schrittfolge), **F12** (Testharness, aus der
-> Abnahme `JR-106`, in `JR-104a` **behoben**), **F13** (Testharness, aus `JR-104a`, **offen**) und
-> **F14**–**F16** (Testharness, aus der Abnahme `JR-106a`, **offen**) stehen nur dort. Keiner von
-> F1–F11 ist behoben — das ist E13; F13–F16 gehören nach `JR-1305`.
+> Abnahme `JR-1-06`, in `JR-1-04a` **behoben**), **F13** (Testharness, aus `JR-1-04a`, **offen**) und
+> **F14**–**F16** (Testharness, aus der Abnahme `JR-1-06a`, **offen**) stehen nur dort. Keiner von
+> F1–F11 ist behoben — das ist E13; F13–F16 gehören nach `JR-13-05`.
 
 | Nr. | Ort                                              | Befund                                                                                                                                                                                                                                                                   | Schwere  |
 | --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
@@ -659,26 +659,26 @@ in ein Test-Epic.
 
 ### Was in E1 bisher nicht prüfbar war
 
-- ~~**Alles, was Postgres braucht.**~~ Teilweise aufgelöst: `JR-104` hat mit den vorinstallierten
+- ~~**Alles, was Postgres braucht.**~~ Teilweise aufgelöst: `JR-1-04` hat mit den vorinstallierten
   PostgreSQL-16-Binaries einen eigenen Cluster gestartet und die `integration`-Suite echt ausgeführt.
   **Offen bleibt PostgreSQL 17** (CI-Ziel) sowie **Valkey und Meilisearch** — beide fehlen weiterhin.
-- ~~**`FilterBuilder` und `mongoToMeli`**~~ — in `JR-104` abgedeckt.
-- ~~**Der CI-Workflow** (`JR-105`)~~ — aufgelöst. Der Lauf gegen `postgres:17-alpine` ist grün
+- ~~**`FilterBuilder` und `mongoToMeli`**~~ — in `JR-1-04` abgedeckt.
+- ~~**Der CI-Workflow** (`JR-1-05`)~~ — aufgelöst. Der Lauf gegen `postgres:17-alpine` ist grün
   (Run 30341370697, und derselbe Job erneut grün auf HEAD `36cf6bd`: Run 30341858370). Damit ist die
-  **ehemals letzte Bedingung von `JR-104` erfüllt**: die `integration`-Suite läuft in CI gegen
-  PostgreSQL 17.10 durch, sichtbar nicht übersprungen und ohne Rückstände. In der Abnahme `JR-106`
-  nachgeprüft und bestätigt. `JR-104` bleibt trotzdem offen — **aus einem anderen Grund**, F12.
+  **ehemals letzte Bedingung von `JR-1-04` erfüllt**: die `integration`-Suite läuft in CI gegen
+  PostgreSQL 17.10 durch, sichtbar nicht übersprungen und ohne Rückstände. In der Abnahme `JR-1-06`
+  nachgeprüft und bestätigt. `JR-1-04` bleibt trotzdem offen — **aus einem anderen Grund**, F12.
 - ~~**Der `pull_request`-Trigger**~~ — aufgelöst. Die Läufe 4, 6 und 8 (`event=pull_request`) sind
   alle `conclusion=success`, zuletzt auf HEAD. Der Job ist identisch zum Push-Lauf.
 - ~~**`pnpm db:generate` im Container**~~ — aufgelöst. Mit gesetztem `DATABASE_URL` und laufendem
   Cluster läuft es durch; die Abnahme hat damit einen echten Generatorlauf gegen `pnpm lint` gefahren,
   statt wie ADR-015 nur einen direkten `drizzle-kit`-Aufruf mit Dummy-URL.
 - **Teardown nach `SIGKILL`** des vitest-Workers. Nur der Sweeper deckt das ab; ein echter Nachweis
-  braucht einen Kindprozess-Treiber (frühestens mit `JR-410`, das ohnehin Prozess-Kills fährt).
+  braucht einen Kindprozess-Treiber (frühestens mit `JR-4-10`, das ohnehin Prozess-Kills fährt).
 - **PostgreSQL 17 lokal** bleibt offen: geprüft wurde lokal 16.13, in CI 17.10. Es gab noch keinen
   Lauf, in dem beide Umgebungen dieselbe Hauptversion gefahren haben.
 
-### Was `JR-105` in der CI einrichten muss
+### Was `JR-1-05` in der CI einrichten muss
 
 > Umgesetzt in `.github/workflows/ci.yml` (2026-07-28), **im CI-Lauf 30341370697 vollständig
 > bestätigt** — jede Zeile dieser Tabelle ist inzwischen ein Log-Beleg, keine Annahme mehr. Zwei
@@ -688,16 +688,16 @@ in ein Test-Epic.
 > Ergänzung, die die Tabelle nicht vorhersehen konnte: vor den drei TypeScript-Schritten muss
 > `pnpm --filter @open-archiver/types build` laufen (F11).
 
-| Punkt                | Anforderung                                                                                                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Service-Container    | `postgres:17-alpine`, Healthcheck `pg_isready`, Port 5432                                                                                                                                        |
-| Env                  | `DATABASE_URL=postgresql://<user>:<pw>@localhost:5432/postgres` für Lint-, Build- **und** Testschritt                                                                                            |
-| Rechte               | die Rolle braucht **`CREATEDB`** plus DDL in der neuen Datenbank (`postgres`-Superuser des Service-Containers genügt)                                                                            |
-| Datenbanken          | **eine** vorhandene reicht (`postgres` als Maintenance-DB); der Harness legt seine eigenen an und löscht sie wieder                                                                              |
-| `max_connections`    | Default 100 genügt: 4 parallele Dateien × `max: 4` plus kurzlebige Admin-Verbindungen                                                                                                            |
-| Optional             | `OA_TEST_PG_MAINTENANCE_DB`, `OA_TEST_PG_STALE_MS` — nur setzen, wenn ein anderer Name bzw. eine andere Frist nötig ist                                                                          |
-| Pflicht ab `JR-105b` | `OA_TEST_REQUIRE_INFRA=1` (Skip wegen fehlender Infrastruktur ⇒ Fehlschlag) und `OA_TEST_INVENTORY_REPORT` (Inventur-Report, den die Nachlaufprüfung verlangt)                                   |
-| Nachlaufprüfung      | nach `pnpm test`: `select datname from pg_database where datname like 'oa\_test\_%'` muss **leer** sein, und der Inventur-Report muss existieren und die Mindestdateizahlen erfüllen (`JR-105b`) |
-| Nicht setzen         | keine der `STORAGE_*`-Variablen nötig — die `integration`-Suite berührt `config/storage.ts` nicht                                                                                                |
+| Punkt                 | Anforderung                                                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service-Container     | `postgres:17-alpine`, Healthcheck `pg_isready`, Port 5432                                                                                                                                         |
+| Env                   | `DATABASE_URL=postgresql://<user>:<pw>@localhost:5432/postgres` für Lint-, Build- **und** Testschritt                                                                                             |
+| Rechte                | die Rolle braucht **`CREATEDB`** plus DDL in der neuen Datenbank (`postgres`-Superuser des Service-Containers genügt)                                                                             |
+| Datenbanken           | **eine** vorhandene reicht (`postgres` als Maintenance-DB); der Harness legt seine eigenen an und löscht sie wieder                                                                               |
+| `max_connections`     | Default 100 genügt: 4 parallele Dateien × `max: 4` plus kurzlebige Admin-Verbindungen                                                                                                             |
+| Optional              | `OA_TEST_PG_MAINTENANCE_DB`, `OA_TEST_PG_STALE_MS` — nur setzen, wenn ein anderer Name bzw. eine andere Frist nötig ist                                                                           |
+| Pflicht ab `JR-1-05b` | `OA_TEST_REQUIRE_INFRA=1` (Skip wegen fehlender Infrastruktur ⇒ Fehlschlag) und `OA_TEST_INVENTORY_REPORT` (Inventur-Report, den die Nachlaufprüfung verlangt)                                    |
+| Nachlaufprüfung       | nach `pnpm test`: `select datname from pg_database where datname like 'oa\_test\_%'` muss **leer** sein, und der Inventur-Report muss existieren und die Mindestdateizahlen erfüllen (`JR-1-05b`) |
+| Nicht setzen          | keine der `STORAGE_*`-Variablen nötig — die `integration`-Suite berührt `config/storage.ts` nicht                                                                                                 |
 
 ---

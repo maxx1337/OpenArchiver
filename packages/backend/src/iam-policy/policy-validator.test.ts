@@ -12,14 +12,14 @@ import {
 } from '../../tests/support/policy-fixtures';
 
 /**
- * JR-103 -- unit tests for `PolicyValidator.isValid()`.
+ * JR-1-03 -- unit tests for `PolicyValidator.isValid()`.
  *
  * Classification: `ci`. Pure function, no I/O beyond reading fixture files, milliseconds.
  *
  * This suite freezes the *actual* behaviour of the validator, not the documented one. CLAUDE.md
  * section 5.4 records that `docs/services/iam-service/iam-policy.md` is stale: it omits `export`
  * from the action list. The code is correct and accepts `export`; the assertion below is what will
- * keep JR-1103 (documentation fix) honest.
+ * keep JR-11-03 (documentation fix) honest.
  */
 
 const vocabularyPath = path.resolve(
@@ -73,7 +73,7 @@ suite('ci', 'PolicyValidator.isValid() -- repository policy fixtures', () => {
 	});
 
 	it('refuses a condition key that is not a column reference, accepts an unknown operator', () => {
-		// Superseded pin. Until JR-1313 this case asserted that `isValid()` accepts *both* halves of
+		// Superseded pin. Until JR-13-13 this case asserted that `isValid()` accepts *both* halves of
 		// `{ id: { $totallyNotAnOperator: 1 }, 'a.b.c': null }`, because step 3 of `isValid()` was a
 		// TODO comment. The two halves are now judged differently, and on purpose:
 		//
@@ -108,7 +108,7 @@ suite('ci', 'PolicyValidator.isValid() -- vocabulary', () => {
 		});
 	});
 
-	it('accepts "export" -- the code is right and iam-policy.md is stale (JR-1103)', () => {
+	it('accepts "export" -- the code is right and iam-policy.md is stale (JR-11-03)', () => {
 		expect(vocabulary.actions).toContain('export');
 		expect(PolicyValidator.isValid({ action: 'export', subject: 'archive' }).valid).toBe(true);
 		expect(PolicyValidator.isValid({ action: ['read', 'export'], subject: 'all' }).valid).toBe(

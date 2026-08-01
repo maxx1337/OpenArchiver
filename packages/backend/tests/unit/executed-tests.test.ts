@@ -10,7 +10,7 @@ import { SUITES, type SuiteName } from '@oa-test/suite-inventory';
 import { TEST_CLASSES, classOfSuiteName, suiteLabel } from '@oa-test/test-classes';
 
 /**
- * Units for the executed-test guard (JR-105c, findings F14 and F15).
+ * Units for the executed-test guard (JR-1-05c, findings F14 and F15).
  *
  * The guard decides whether coverage that disappeared **without the filesystem changing** makes the
  * run red. Its predecessor, the file inventory, was green in all three of those states, and that is
@@ -88,7 +88,7 @@ function withExecuted(
 	};
 }
 
-suite('ci', 'executed-test guard: the label both sides share (JR-105c)', () => {
+suite('ci', 'executed-test guard: the label both sides share (JR-1-05c)', () => {
 	it('round-trips every class through the suite label', () => {
 		for (const cls of TEST_CLASSES) {
 			expect(classOfSuiteName(suiteLabel(cls, 'FilterBuilder against Postgres'))).toBe(cls);
@@ -110,7 +110,7 @@ suite('ci', 'executed-test guard: the label both sides share (JR-105c)', () => {
 	});
 });
 
-suite('ci', 'executed-test guard: the four acceptance scenarios (JR-105c)', () => {
+suite('ci', 'executed-test guard: the four acceptance scenarios (JR-1-05c)', () => {
 	it('the legitimate state is green', () => {
 		const verdict = judgeExecutedTests(healthy());
 		expect(verdict.violations, verdict.summary).toEqual([]);
@@ -122,7 +122,7 @@ suite('ci', 'executed-test guard: the four acceptance scenarios (JR-105c)', () =
 
 	it('F14 (a): relabelling every integration suite to `nightly` is red', () => {
 		// One token per file, no file touched: the `ci` tests move into a class the default selection
-		// does not run. Measured before JR-105c as `163 passed | 36 skipped`, exit 0.
+		// does not run. Measured before JR-1-05c as `163 passed | 36 skipped`, exit 0.
 		const relabelled = withExecuted(healthy(), 'integration', 'ci', 0);
 		const verdict = judgeExecutedTests(relabelled);
 		expect(verdict.applicable).toBe(true);
@@ -172,7 +172,7 @@ suite('ci', 'executed-test guard: the four acceptance scenarios (JR-105c)', () =
 	});
 });
 
-suite('ci', 'executed-test guard: classes, selection and applicability (JR-105c)', () => {
+suite('ci', 'executed-test guard: classes, selection and applicability (JR-1-05c)', () => {
 	it('expects a non-selected class to run nothing, and flags it when it does', () => {
 		// The inverse of F14: a suite that runs although its class was not selected means the class
 		// selector is not reaching it, which makes `pnpm test` and `pnpm test:nightly` mean nothing.
@@ -240,7 +240,7 @@ suite('ci', 'executed-test guard: classes, selection and applicability (JR-105c)
 	});
 });
 
-suite('ci', 'executed-test guard: the declaration itself (JR-105c)', () => {
+suite('ci', 'executed-test guard: the declaration itself (JR-1-05c)', () => {
 	it('declares a count for every suite and every class', () => {
 		for (const spec of SUITES) {
 			for (const cls of TEST_CLASSES) {

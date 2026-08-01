@@ -1,5 +1,5 @@
 /**
- * Journal ledger types (epic E2, `JR-201`/`JR-202`).
+ * Journal ledger types (epic E2, `JR-2-01`/`JR-2-02`).
  *
  * These describe the hash-chained receipt ledger of the SMTP journaling receiver. They live here
  * rather than in `packages/journaling` because that package is only allowed to depend on

@@ -17,7 +17,7 @@ import { seedIngestionSource } from '../support/iam-seed';
 import { readLedgerChain, verifyChain } from '../support/ledger-verifier';
 
 /**
- * Ledger concurrency under load — `JR-208`, Testplan section 12.6. Classification: `ci`.
+ * Ledger concurrency under load — `JR-2-08`, Testplan section 12.6. Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * What this file is for
@@ -95,7 +95,7 @@ function raiseStaleThresholdForThisRun(): void {
 	}
 	process.env.OA_TEST_PG_STALE_MS = String(REQUIRED_STALE_MS);
 	coverageNotice(
-		`JR-208: raised OA_TEST_PG_STALE_MS from ${configured ?? `${HARNESS_DEFAULT_STALE_MS} (default)`} ` +
+		`JR-2-08: raised OA_TEST_PG_STALE_MS from ${configured ?? `${HARNESS_DEFAULT_STALE_MS} (default)`} ` +
 			`to ${REQUIRED_STALE_MS} ms for this process. This soak runs for minutes, and a threshold ` +
 			`below its runtime lets our own sweep drop a concurrently running foreign harness database ` +
 			`(F13). Raised only, never lowered.`
@@ -206,7 +206,7 @@ function withoutAdvisoryLock(inner: LedgerTransactor): LedgerTransactor {
 
 suiteRequiring(
 	'ci',
-	`ledger appends under concurrency (JR-208) -- ${WRITERS}x${APPENDS_PER_WRITER}`,
+	`ledger appends under concurrency (JR-2-08) -- ${WRITERS}x${APPENDS_PER_WRITER}`,
 	postgresProbe,
 	() => {
 		it(
@@ -235,7 +235,7 @@ suiteRequiring(
 				);
 				const elapsed = Date.now() - started;
 				coverageNotice(
-					`JR-208: ${TOTAL_APPENDS} appends by ${WRITERS} concurrent writers in ${elapsed} ms ` +
+					`JR-2-08: ${TOTAL_APPENDS} appends by ${WRITERS} concurrent writers in ${elapsed} ms ` +
 						`(${(TOTAL_APPENDS / (elapsed / 1000)).toFixed(0)}/s), seed ${seed}.`
 				);
 
@@ -347,7 +347,7 @@ suiteRequiring(
 			// differently, and the row cannot be verified. Measured: `$16` and `$16::jsonb` both store
 			// a string, `$16::text::jsonb` stores the object.
 			//
-			// Why it survived `JR-206`: the only postgres-js client in this repository that does *not*
+			// Why it survived `JR-2-06`: the only postgres-js client in this repository that does *not*
 			// behave that way is `harness.sql`, because `drizzle()` patches the client it is given —
 			// and that is the client every integration test writes through. The ingress process of
 			// E3/E4 will not have drizzle anywhere near it (`packages/journaling` must not depend on
@@ -409,7 +409,7 @@ suiteRequiring(
 				if (rejected > 0 || findings.length > 0) {
 					broke = true;
 					coverageNotice(
-						`JR-208 counter-check: without the advisory lock, ${rejected} of ${CONCURRENT} ` +
+						`JR-2-08 counter-check: without the advisory lock, ${rejected} of ${CONCURRENT} ` +
 							`appends failed and the chain reported ${findings.length} finding(s) ` +
 							`(${findings[0]?.kind ?? 'none'}). Round ${rounds + 1}.`
 					);

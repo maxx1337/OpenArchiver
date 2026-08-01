@@ -1,5 +1,5 @@
 /**
- * Visible coverage notices (JR-102).
+ * Visible coverage notices (JR-1-02).
  *
  * Testplan rule 6: "Keine stillen Kürzungen." Whenever coverage is reduced — a suite skipped
  * because its class was not selected, infrastructure missing, a sampled iteration count instead

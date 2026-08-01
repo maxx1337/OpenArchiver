@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { isInfraRequired, suite } from '@oa-test/classification';
 
 /**
- * Units for the `OA_TEST_REQUIRE_INFRA` switch (JR-105b).
+ * Units for the `OA_TEST_REQUIRE_INFRA` switch (JR-1-05b).
  *
  * The switch is what stops a CI job that provisions Postgres from reporting green when the
  * provisioning failed and every integration suite skipped. Its parser is therefore the difference
@@ -10,7 +10,7 @@ import { isInfraRequired, suite } from '@oa-test/classification';
  * anything else load-bearing.
  *
  * What is *not* tested here: that `suiteRequiring()` actually emits a failing test. That needs a
- * whole child vitest run with an unreachable database, and it is verified by hand in the JR-105b
+ * whole child vitest run with an unreachable database, and it is verified by hand in the JR-1-05b
  * evidence (`06-status.md`) rather than pretended here.
  *
  * Classification: `ci`. Pure env parsing.
@@ -34,7 +34,7 @@ function withEnv<T>(value: string | undefined, fn: () => T): T {
 	}
 }
 
-suite('ci', 'OA_TEST_REQUIRE_INFRA parsing (JR-105b)', () => {
+suite('ci', 'OA_TEST_REQUIRE_INFRA parsing (JR-1-05b)', () => {
 	it('defaults to "skipping is allowed" when unset or empty', () => {
 		expect(withEnv(undefined, isInfraRequired)).toBe(false);
 		expect(withEnv('', isInfraRequired)).toBe(false);

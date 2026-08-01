@@ -31,7 +31,7 @@ und arbeite den nächsten Schritt ab.
 **Gezielte Tasks:**
 
 ```
-Arbeite JR-101 bis JR-104 aus docs/dev/journaling/03-backlog.md ab.
+Arbeite JR-1-01 bis JR-1-04 aus docs/dev/journaling/03-backlog.md ab.
 ```
 
 **Unabhängige Abnahme:**
@@ -86,10 +86,10 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 ## Aktueller Eintrag
 
 **Stand:** 2026-08-01 (**E2 ist abgenommen und zurückgemergt** — die zweite, **unabhängige** Runde
-`JR-210a` hat 24 von 24 Kriterien erfüllt gefunden und dabei alle sechs dünnen Stellen der ersten Runde
+`JR-2-10a` hat 24 von 24 Kriterien erfüllt gefunden und dabei alle sechs dünnen Stellen der ersten Runde
 mit eigener Evidenz geschlossen; der **Rückmerge ist vollzogen** (`eb340a9`, `--no-ff`, kein Squash).
-Ein neuer Befund **F39**, niedrig, Testharness. **Nächstes Epic: E3** · davor `JR-208`/`JR-209` mit
-**`F38`**, und am 2026-07-31 `JR-201`…`JR-207` sowie die ADRs `006`/`007`/`022`/`023`) · **Branch:**
+Ein neuer Befund **F39**, niedrig, Testharness. **Nächstes Epic: E3** · davor `JR-2-08`/`JR-2-09` mit
+**`F38`**, und am 2026-07-31 `JR-2-01`…`JR-2-07` sowie die ADRs `006`/`007`/`022`/`023`) · **Branch:**
 `claude/enterprise-product-implementation-cxmmqe` (Integrationsbranch — E2s Branch
 `claude/journaling-e2-ledger` ist gemergt und wird nicht weiterverwendet) · Volllauf gegen das
 Docker-Postgres **398 passed | 2 skipped** bei 30 Dateien, Exit 0, `unit 288/288 · integration 92/92 ·
@@ -99,13 +99,13 @@ adversarial 18/18`, `test:types` grün für beide Pakete
 
 **Der Ledger ist gebaut, gemessen, angegriffen und — jetzt unabhängig — abgenommen.** Er hält 10 000
 nebenläufige Appends lückenlos aus, jede der acht Manipulationsarten aus Testplan §12.5 wird mit
-Befundart und `seq` gemeldet, und **`JR-210a`** hat das in einer frischen Sitzung nachgemessen, die
-weder `JR-208` noch `JR-209` noch `JR-210` geschrieben hat. **Der Rückmerge ist vollzogen** (`eb340a9`,
+Befundart und `seq` gemeldet, und **`JR-2-10a`** hat das in einer frischen Sitzung nachgemessen, die
+weder `JR-2-08` noch `JR-2-09` noch `JR-2-10` geschrieben hat. **Der Rückmerge ist vollzogen** (`eb340a9`,
 `--no-ff`, kein Squash, vom Auftraggeber freigegeben). **E2 ist damit abgeschlossen; als Nächstes
 beginnt E3** auf einem eigenen Branch vom Integrationsbranch.
 
 **Eine Sache aus dem Abnahmeverlauf ist wichtiger als das Ergebnis**, weil sie sich wiederholen wird:
-die erste Berichtsfassung von `JR-210a` nannte „22 von 22" — eine Zahl, die sich aus der eigenen
+die erste Berichtsfassung von `JR-2-10a` nannte „22 von 22" — eine Zahl, die sich aus der eigenen
 Kriterientabelle nicht herleiten ließ. Die Rückfrage förderte **zwei echte Lücken** zutage, nicht nur
 einen Zählfehler; eine davon war ein **ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer
 abgeschalteten Suite" — ausgerechnet das, welches alle anderen trägt, weil jede Zahl auf
@@ -123,7 +123,7 @@ durchnummerierte Liste, eine Zeile je Kriterium, Kopfzahl nachzählbar.**
 > **zu früh** committet (`443e083`, „23/23"), obwohl der vollständige Abgleich schon beauftragt war.
 > Berichtigt im Folgecommit — **wer eine Nachforderung stellt, wartet ihr Ergebnis ab.**
 
-**Eine Sache verdient beim Lesen mehr Aufmerksamkeit als jede Testzahl:** `JR-208` hat mit **F38** einen
+**Eine Sache verdient beim Lesen mehr Aufmerksamkeit als jede Testzahl:** `JR-2-08` hat mit **F38** einen
 Fehler gefunden, der jede Ledger-Zeile mit `event_payload` unverifizierbar gemacht hätte — und acht
 Integrationstests waren daran vorbeigelaufen, weil sie **alle** durch denselben Client schreiben, den
 einzigen im Repository, den `drizzle()` gepatcht hat. Wer in E3/E4 weiterbaut, nimmt daraus die Regel
@@ -132,7 +132,7 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 
 > ### Was diese Session gemacht hat
 >
-> 1. **`JR-208` erledigt** (`packages/backend/tests/adversarial/journal-ledger-concurrency.adv.test.ts`,
+> 1. **`JR-2-08` erledigt** (`packages/backend/tests/adversarial/journal-ledger-concurrency.adv.test.ts`,
 >    4 Fälle). 10 000 Appends durch 20 nebenläufige Writer in 84–96 s (≈120/s), `seq` genau 1…10 000, die
 >    Kette **über alle Zeilen** neu gerechnet, 10 000 verschiedene Vorgängerhashes. Zwei Entwurfspunkte,
 >    die den Unterschied machen: der Test bringt seinen **eigenen Pool mit einer Verbindung je Writer**
@@ -157,7 +157,7 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >    Integrationstest schreibt. Der Ingress-Prozess aus E3/E4 wird drizzle per Architekturvorgabe nicht
 >    haben. **Regel für alles Weitere in `packages/journaling`: mindestens ein Test schreibt durch einen
 >    nackten Client.**
-> 5. **`JR-209` erledigt** (`journal-ledger-tamper.adv.test.ts`, 11 Fälle): alle acht Fälle aus Testplan
+> 5. **`JR-2-09` erledigt** (`journal-ledger-tamper.adv.test.ts`, 11 Fälle): alle acht Fälle aus Testplan
 >    §12.5, der Positivfall (Inklusionsnachweis **ohne** Fremddaten) und die Gegenprobe, dass der Trigger
 >    dieselbe Manipulation abweist, solange er an ist. Die Prüflogik meldet **Befundart, `seq` und Feld**
 >    statt pass/fail.
@@ -182,8 +182,8 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >    damit implizit `expectedFiles: 1` angenommen — er wurde rot, als die Suite auf drei Dateien wuchs, mit
 >    einer Meldung über Verletzungszahlen, die die Ursache nicht nennt. Jetzt leitet er die Fixtures ab,
 >    wie es die Unit-Fixtures schon taten.
-> 10. **`JR-210` durchgeführt: E2 abgenommen, 23/23** — und der Vorbehalt steht im Protokoll an erster
->     Stelle, weil er die Aussagekraft betrifft: **dieselbe Sitzung, die `JR-208`/`JR-209` geschrieben
+> 10. **`JR-2-10` durchgeführt: E2 abgenommen, 23/23** — und der Vorbehalt steht im Protokoll an erster
+>     Stelle, weil er die Aussagekraft betrifft: **dieselbe Sitzung, die `JR-2-08`/`JR-2-09` geschrieben
 >     hat, hat sie abgenommen.** Kompensiert wurde durch Messung statt Zitat — die ADR-Vektoren aus dem
 >     Entscheidungsdokument **geparst** und gegen `dist` gerechnet (16/16), die Datenbankseite an einer
 >     eigenen Datenbank mit den echten Migrationen (21/21, bewusst **nicht** über den Harness), und vier
@@ -191,10 +191,10 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >     (f) wirkungslos gemacht ⇒ der Verifier meldet **nichts** und der Test wird rot. Damit ist die
 >     Fehlerklasse ausgeschlossen, an der eine Tamper-Suite lautlos scheitert — ein Verifier, der immer
 >     meckert, macht jeden Tamper-Test grün. **Diese Runde zählt nicht als Abnahme** (nicht unabhängig).
-> 11. **`JR-210a` durchgeführt — E2 ist abgenommen, 24/24, unabhängig.** Frische Sitzung, Rolle TEST.
+> 11. **`JR-2-10a` durchgeführt — E2 ist abgenommen, 24/24, unabhängig.** Frische Sitzung, Rolle TEST.
 >     Alle sechs dünnen Stellen der ersten Runde mit **neuer** Evidenz beantwortet: fünf Mutationsproben
 >     am Encoder (vier exakt gefangen, ohne Übersprechen — die Ausnahme ist **F39**), drei selbst
->     geschriebene **sabotierte Backends** gegen `JR-207`s Vertragssuite (alle gefangen, plus Kalibrierung
+>     geschriebene **sabotierte Backends** gegen `JR-2-07`s Vertragssuite (alle gefangen, plus Kalibrierung
 >     gegen ein ehrliches Backend), die Nebenläufigkeit **direkt über `pg_stat_activity`** gemessen (20
 >     gleichzeitig offene Transaktionen bei 20 Writern), `readChainHeads()` mutiert (`DESC` → `ASC`) ⇒
 >     Fall (c) korrekt rot, eine **eigene 10-Fall-Matrix „Manipulation → Befundart"** gegen
@@ -206,7 +206,7 @@ durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Trei
 >     **Erste Rückfrage:** ein **ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer
 >     abgeschalteten Suite") und **zwei nur zitierte statt gemessene Aussagen** (F38-Regression,
 >     Datenbankseite). **Zweite Rückfrage**, weil die erste nur abdeckte, was der PO selbst
->     durchgesehen hatte: der vollständige Abgleich gegen `JR-210`s 16 Vektor- und 21
+>     durchgesehen hatte: der vollständige Abgleich gegen `JR-2-10`s 16 Vektor- und 21
 >     Datenbankprüfungen brachte **elf weitere** Punkte, die gelesen statt gemessen waren — drei
 >     Vektorprüfungen, acht Datenbankprüfungen. **Alle dreizehn nachgemessen, alle bestätigt**,
 >     Endstand 24/24. Möglich war das Durchrutschen, weil die **erste** Runde ihre 23 nie als
@@ -237,7 +237,7 @@ voraus. Was hier tatsächlich gilt — jeder Punkt gemessen, nicht vermutet:
 | `pnpm lint`               | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                                                                                  |
 
 **Wegwerf-Cluster ohne Systeminstallation** — so ist er in dieser Session entstanden, PostgreSQL
-**17.10**, dieselbe Version wie die CI und wie `JR-1309a`:
+**17.10**, dieselbe Version wie die CI und wie `JR-13-09a`:
 
 ```powershell
 # in einem Verzeichnis ausserhalb des Repositorys (Scratchpad):
@@ -354,9 +354,9 @@ git ls-remote origin refs/heads/<branch>
 gespart, und `postgres.exe --version` hat 17.10 bestätigt, bevor `initdb` lief. **Erst prüfen, dann neu
 installieren.** Die Scratchpads der Vorsessions liegen unter
 `C:\Users\Maxim\AppData\Local\Temp\claude\X--NEW-DEVELOP-GIT-OpenArchiver\<session-id>\scratchpad`;
-`Get-ChildItem <basis> -Directory` zeigt sie mit Datum. Dort liegen auch die Prüfwerkzeuge von `JR-1309b`
-und `JR-1309c` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `fixtures.cjs`, `run.cjs`,
-`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`, `vocab.cjs`, `manage.cjs`) und aus `JR-105c`
+`Get-ChildItem <basis> -Directory` zeigt sie mit Datum. Dort liegen auch die Prüfwerkzeuge von `JR-13-09b`
+und `JR-13-09c` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `fixtures.cjs`, `run.cjs`,
+`cross.cjs`, `overreport.cjs`, `sql/query1..3.sql`, `vocab.cjs`, `manage.cjs`) und aus `JR-1-05c`
 `pg-up.ps1`, `lintcheck.cjs`, `lintfix.cjs`, `leftovers.cjs` (`--drop` räumt auf), `counts.cjs`
 (Testzahlen je Suite und Klasse aus einem `--reporter=json`-Lauf) — **nicht** im Repository.
 
@@ -365,7 +365,7 @@ und `JR-1309c` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `f
 > Werkzeuge oben sind gegen **diesen** Host kalibriert und funktionieren unverändert.
 
 > **Werkzeuge einer Vorsession sind gegen deren Stand kalibriert.** Ein grüner Lauf belegt nichts, wenn
-> der Anker, an dem das Werkzeug hing, inzwischen entfernt wurde. `JR-1309c` hat das richtig gemacht: den
+> der Anker, an dem das Werkzeug hing, inzwischen entfernt wurde. `JR-13-09c` hat das richtig gemacht: den
 > gesuchten Satz in einer Wegwerf-Kopie **absichtlich wieder einsetzen**, zeigen dass das Werkzeug ihn
 > findet, und erst dann dem sauberen Lauf glauben.
 
@@ -374,7 +374,7 @@ und `JR-1309c` (`adr020.cjs`, `thirdnumber.cjs`, `claims.cjs`, `extract.cjs`, `f
 formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind der praktische Ausweg aus
 „`pnpm lint` ist auf diesem Host immer rot".
 
-> **Zwei Lücken, die `JR-1309` offenlassen musste, sind in `JR-1309a` geschlossen:** der **HTTP-400-Pfad**
+> **Zwei Lücken, die `JR-13-09` offenlassen musste, sind in `JR-13-09a` geschlossen:** der **HTTP-400-Pfad**
 > ist end-to-end gemessen (`IamController.createRole` direkt aufgerufen, 11 × `400` mit dem Key bzw. Wert
 > im Text, 5 × `201`), und die **Betreiber-SQL ist auf PostgreSQL 17.10** gefahren — zeichenweise
 > identische Ausgabe wie auf 16.13 in allen drei Blöcken. Wie: `postgresql-17` (17.10-1, dieselbe
@@ -382,16 +382,16 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > eigener Cluster auf Port **5433**, alle 41 Migrationen per `psql -f`, danach Paketquelle und Cluster
 > restlos entfernt.
 
-> **`JR-1316` ist am 2026-07-29 aus E13 herausgenommen worden — Entscheidung des Auftraggebers.** Sie
+> **`JR-13-16` ist am 2026-07-29 aus E13 herausgenommen worden — Entscheidung des Auftraggebers.** Sie
 > sichert kein Autorisierungsverhalten, sondern ein **Doku-Artefakt** ab, und sie war **kein** Kriterium
-> von `JR-1309a`. **F30 ist allerdings genau der Fall, gegen den sie schützen würde** — die Betreiber-SQL
+> von `JR-13-09a`. **F30 ist allerdings genau der Fall, gegen den sie schützen würde** — die Betreiber-SQL
 > ist weiterhin das einzige sicherheitsrelevante Artefakt in E13 ohne Test, und sie ist jetzt zum
 > zweiten Mal die Stelle, an der die Abnahme scheitert. Das ist ein Argument für ein Vorziehen, keine
 > Entscheidung des Testers.
 >
-> > **Nachtrag `JR-1317` (DEV):** die Abfrage hat nach diesem Fix **drei** neue Befundtypen und eine neue
+> > **Nachtrag `JR-13-17` (DEV):** die Abfrage hat nach diesem Fix **drei** neue Befundtypen und eine neue
 > > CTE-Spalte und ist weiterhin ohne Test. ADR-020 nimmt ihr die Beweislast — sie **meldet** nur noch —,
-> > aber die Regression, gegen die `JR-1316` schützt, bleibt möglich: ein späterer Eingriff kann sie
+> > aber die Regression, gegen die `JR-13-16` schützt, bleibt möglich: ein späterer Eingriff kann sie
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
@@ -412,29 +412,29 @@ an E2s Tasks ändern, steht als zwei Blöcke im Backlog („Was `ADR-007` an die
   Advisory-Lock-Key wird aus der Kettenkennung abgeleitet (ADR-007).
 - **Drei Kodierfallstricke**, jeder macht `verify` unbrauchbar und fällt vorher nicht auf: µs-vs-ms beim
   Zeitstempel, `::ffff:`-IPv4 auf Dual-Stack-Sockets, JCS mit Fließkommazahlen (ADR-006 §3).
-- **`ADR-006` §6 enthält Testvektoren.** `JR-202` muss sie treffen — das ist billiger und härter als ein
+- **`ADR-006` §6 enthält Testvektoren.** `JR-2-02` muss sie treffen — das ist billiger und härter als ein
   selbst erfundenes Golden-File.
 
 Offen bleibt in E2 allein **`ADR-009`** (Append-Only: Rechteentzug oder Trigger), und die ist Teil von
-`JR-205`, blockiert also nichts davor. Ihr Umfang ist seit ADR-006 §4.2 **`journal_ledger` und
+`JR-2-05`, blockiert also nichts davor. Ihr Umfang ist seit ADR-006 §4.2 **`journal_ledger` und
 `deployment_identity`**.
 
-**`JR-201` und `JR-202` sind erledigt** (2026-07-31, Branch `claude/journaling-e2-ledger`):
+**`JR-2-01` und `JR-2-02` sind erledigt** (2026-07-31, Branch `claude/journaling-e2-ledger`):
 `packages/journaling` existiert, und `src/ledger/` trifft die Vektoren aus ADR-006 §6 byteidentisch. Was
 davon für die nächsten Tasks gilt:
 
-- **`encodeLedgerRecord()` ist die einzige Stelle, die Kettenbytes erzeugt.** `JR-206` (`append()`) ruft
+- **`encodeLedgerRecord()` ist die einzige Stelle, die Kettenbytes erzeugt.** `JR-2-06` (`append()`) ruft
   sie **innerhalb** der Sperre auf und baut den Record nicht selbst zusammen.
 - **Drei Regeln der ADR sind als Verweigerung implementiert**, nicht als Kommentar: ein Zeitstempel ohne
-  ms-Vielfaches, eine UUID in Großschreibung und ein nicht parsbares `remoteIp` werfen. `JR-204` muss den
+  ms-Vielfaches, eine UUID in Großschreibung und ein nicht parsbares `remoteIp` werfen. `JR-2-04` muss den
   `CHECK` für die erste davon nachziehen, sonst hängt die Invariante allein am Anwendungscode.
 - **Die Ledger-Typen liegen in `packages/types`** (`journal-ledger.types.ts`), nicht im Paket — sonst
   hätte die Abhängigkeitsregel keinen Sinn und `verify` (E9) bekäme eigene Formen.
 
-**`JR-204` ist ebenfalls erledigt** (Migration `0041_even_scream.sql`). Was davon für die nächsten Tasks
+**`JR-2-04` ist ebenfalls erledigt** (Migration `0041_even_scream.sql`). Was davon für die nächsten Tasks
 zählt:
 
-- **`JR-205` (Append-Only) hat zwei Tabellen im Umfang**, nicht eine: `journal_ledger` **und**
+- **`JR-2-05` (Append-Only) hat zwei Tabellen im Umfang**, nicht eine: `journal_ledger` **und**
   `deployment_identity`. Die `deployment_id` steckt im Genesis jeder Kette.
 - **Das Löschen einer `ingestion_source` mit Ledger-Zeilen ist blockiert** (`ON DELETE restrict`). Das
   ist gewollt, aber es heißt, dass E12 ein Verfahren für „Archiv nach Fristablauf entfernen" braucht —
@@ -445,18 +445,18 @@ zählt:
 - Die Migration enthält **eine handgeschriebene Zeile** — das `INSERT` der Identität. Sie ist im SQL als
   solche markiert und begründet; `db:generate` erzeugt keine Daten.
 
-**`JR-205` ist erledigt, ADR-009 ist entschieden** (Trigger in E2, Rechteentzug in E11). Zwei Dinge
+**`JR-2-05` ist erledigt, ADR-009 ist entschieden** (Trigger in E2, Rechteentzug in E11). Zwei Dinge
 daraus, die die nächsten Tasks betreffen:
 
 - **`UPDATE`, `DELETE` und `TRUNCATE` auf `journal_ledger` und `deployment_identity` sind ab jetzt
   abgewiesen.** Ein Test, der eine Ledger-Zeile aufräumen will, kann das nicht — Teardown droppt die
-  Datenbank. `JR-209` (Tamper-Tests) muss den Trigger für seine Manipulationen **gezielt** umgehen
+  Datenbank. `JR-2-09` (Tamper-Tests) muss den Trigger für seine Manipulationen **gezielt** umgehen
   (`ALTER TABLE … DISABLE TRIGGER` mit der Eigentümerrolle) und ihn danach wieder aktivieren.
 - **`F37` ist offen und E11 zugeordnet:** die Anwendung verbindet als Superuser und Tabelleneigentümer,
   kann den Trigger also selbst abschalten. Gemessen, nicht vermutet. Was der Trigger heute leistet, ist
   das Schließen von **F1** als Manipulationsweg.
 
-**`JR-206` ist erledigt.** `PostgresLedgerWriter.append()` in `packages/journaling/src/ledger/`. Vier
+**`JR-2-06` ist erledigt.** `PostgresLedgerWriter.append()` in `packages/journaling/src/ledger/`. Vier
 Dinge daraus, die die nächsten Tasks betreffen:
 
 - **Die Hash-Vorberechnung ist strukturell ausgeschlossen, nicht per Kommentar:** `LedgerAppendRequest`
@@ -473,7 +473,7 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
   einen Kettenbruch, der nicht existierte — und kann in der Gegenrichtung einen echten verdecken.
   `ORDER BY` immer qualifizieren, und die Leseordnung selbst prüfen.
 
-**`JR-207` ist erledigt.** Die Steckbarkeit ist **gemessen**: eine Vertragssuite
+**`JR-2-07` ist erledigt.** Die Steckbarkeit ist **gemessen**: eine Vertragssuite
 (`packages/backend/tests/support/ledger-backend-contract.ts`, fünf Fälle) läuft gegen
 `PostgresLedgerWriter` **und** gegen ein Backend ohne Datenbank. Drei Dinge daraus für die nächsten Tasks:
 
@@ -486,7 +486,7 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
   prozessübergreifende Serialisierung, kein `seq` bei Fehlschlag, Crash-Recovery, `verify`-Lesbarkeit.
   Der Vertrag prüft die Signatur, nicht die Durability; wer (b) baut, fängt bei dieser Liste an.
 
-**`JR-208` und `JR-209` sind erledigt** (2026-08-01, Rolle TEST). Was davon für `JR-210` und für E3 gilt:
+**`JR-2-08` und `JR-2-09` sind erledigt** (2026-08-01, Rolle TEST). Was davon für `JR-2-10` und für E3 gilt:
 
 - **`F38` ist der Befund dieser Tasks**, und er ist behoben: `event_payload` wurde doppelt JSON-kodiert
   gespeichert, sobald der postgres-js-Client nicht durch `drizzle()` gelaufen war. Der Fix ist
@@ -501,17 +501,17 @@ seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte üb
 - **Der Audit-Path (`tests/support/merkle-audit-path.ts`) ist eine unabhängige Zweitimplementierung.**
   E8 baut die produktive Variante; wenn sie da ist, hat sie hier eine Gegenprobe, die nur `merkleLeaf`
   und `merkleNode` mit ihr teilt. Nicht zusammenlegen — der Wert liegt in der Unabhängigkeit.
-- **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-208` zehntausend Zeilen schreibt. Das ist
+- **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-2-08` zehntausend Zeilen schreibt. Das ist
   die im Backlog vorgegebene Menge und wird **nicht** stillschweigend reduziert (Testplan-Regel 6).
 
-**E2 ist abgeschlossen: abgenommen durch `JR-210a` (24/24, unabhängig) und am 2026-08-01
+**E2 ist abgeschlossen: abgenommen durch `JR-2-10a` (24/24, unabhängig) und am 2026-08-01
 zurückgemergt** — `eb340a9`, `--no-ff`, kein Squash, wie bei E13 (`89d701f`). Vor dem Merge waren beide
 Branches deckungsgleich mit `origin` und der Integrationsbranch hatte **0** Commits, die E2 nicht hatte;
 der Merge-Commit wurde trotzdem erzwungen, weil er die Epic-Grenze markiert. Nach dem Merge nachgeprüft:
 zwei Eltern, Baum **byteidentisch** mit `b4eda03`, und seit dem zitierten Volllauf war außerhalb von
 `docs/` nichts geändert. `main` unangetastet, kein Pull Request.
 
-**Der nächste Schritt ist E3** — Spool und Acceptance-Contract, 8 Tasks, `JR-301`…`JR-308` in
+**Der nächste Schritt ist E3** — Spool und Acceptance-Contract, 8 Tasks, `JR-3-01`…`JR-3-08` in
 `03-backlog.md`. Vorgehen nach ADR-014:
 
 ```bash
@@ -524,7 +524,7 @@ git checkout -b claude/journaling-e3-spool \
 
 ```
 Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
-und arbeite E3 ab — Spool und Acceptance-Contract, JR-301 ff. aus 03-backlog.md.
+und arbeite E3 ab — Spool und Acceptance-Contract, JR-3-01 ff. aus 03-backlog.md.
 ```
 
 **Was aus E2 nach E3 mitgeht**, und zwar so, dass man es nicht erst suchen muss:
@@ -533,22 +533,22 @@ und arbeite E3 ab — Spool und Acceptance-Contract, JR-301 ff. aus 03-backlog.m
   injiziert; der Ingress-Prozess wird drizzle per Architekturvorgabe **nicht** haben. Mindestens ein
   Test muss deshalb durch einen **ungepatchten** `postgres()`-Client schreiben — `harness.sql` ist der
   einzige gepatchte im Repository und deshalb kein Maßstab.
-- **`ADR-021` gilt weiter:** Abnahmeeinheit ist die Scheibe, nicht das Epic. Und aus `JR-210a` neu
+- **`ADR-021` gilt weiter:** Abnahmeeinheit ist die Scheibe, nicht das Epic. Und aus `JR-2-10a` neu
   dazu: **ein Abnahmeprotokoll führt eine durchnummerierte Kriterienliste**, eine Zeile je Kriterium.
 - **Der Acceptance-Contract ist erst in E3/E4 erfüllbar.** E2 hat den Ledger, aber keinen Spool und
   niemanden, der `250` sendet — das ist genau der Gegenstand von E3.
 
 > **Die Liste „Was die erste Runde nicht geprüft hat" ist abgearbeitet** und deshalb hier entfernt. Alle
-> sechs Punkte sind in `JR-210a` mit eigener Evidenz beantwortet; die Tabelle dazu steht in
-> `06-status.md` unter „Abnahme `JR-210a`". Was dabei **ungeprüft geblieben** ist, steht dort ebenfalls
-> ausdrücklich — insbesondere: `JR-201`s Baufähigkeit nur per `tsc` statt isoliertem Checkout, die 16
-> Feldmutationen als Stichprobe, und `JR-210`s Mutationsprobe M3 durch einen ständigen Regressionstest
+> sechs Punkte sind in `JR-2-10a` mit eigener Evidenz beantwortet; die Tabelle dazu steht in
+> `06-status.md` unter „Abnahme `JR-2-10a`". Was dabei **ungeprüft geblieben** ist, steht dort ebenfalls
+> ausdrücklich — insbesondere: `JR-2-01`s Baufähigkeit nur per `tsc` statt isoliertem Checkout, die 16
+> Feldmutationen als Stichprobe, und `JR-2-10`s Mutationsprobe M3 durch einen ständigen Regressionstest
 > statt derselben Quellcode-Mutation belegt (**andere Evidenz, nicht dieselbe**).
 
 **Eine Verfahrensregel aus dieser Abnahme, die für jede weitere gilt:** ein Abnahmeprotokoll führt eine
 **durchnummerierte Kriterienliste, eine Zeile je Kriterium**, sodass die Kopfzahl nachzählbar ist.
-`JR-210` hat seine „23" auf vier Prosablöcke mit je eigener Zählung verteilt — und genau deshalb konnte
-`JR-210a` ein Kriterium verlieren, ohne dass es im Bericht auffiel. Gefunden hat es der PO beim
+`JR-2-10` hat seine „23" auf vier Prosablöcke mit je eigener Zählung verteilt — und genau deshalb konnte
+`JR-2-10a` ein Kriterium verlieren, ohne dass es im Bericht auffiel. Gefunden hat es der PO beim
 Abgleich, nicht der Prüfer.
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
@@ -557,7 +557,7 @@ vom Host aus belegt, und der Volllauf gegen dieses Postgres ist **grün** (`274 
 0 Rückstände). Anleitung samt der zwei PATH-Fallen im Abschnitt „Infrastruktur über Docker Desktop" oben.
 
 **Was das Messinstrument jetzt hergibt, und was ab E2 daran hängt:** ein grüner Lauf belegt seit
-`JR-105c`, dass **die deklarierten Tests je Suite und Klasse ausgeführt wurden** — nicht nur, dass die
+`JR-1-05c`, dass **die deklarierten Tests je Suite und Klasse ausgeführt wurden** — nicht nur, dass die
 Dateien existieren. Ab E2 ruhen die Aussagen über Durabilität und Hash-Kette genau darauf. Zwei
 Konsequenzen für jede E2-Task:
 
@@ -568,18 +568,18 @@ Konsequenzen für jede E2-Task:
   **398 passed | 2 skipped** bei 30 Dateien (274 bei 19 vor E2).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
-können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin
-das einzige sicherheitsrelevante Artefakt aus E13 ohne Test), dann `JR-1311` (spaltengenaue Key-Prüfung,
-schließt den Restspalt aus ADR-019 und die **Laufzeitseite von F26**), dann `JR-1310` (ADR-017 Variante C).
+können auch parallel oder später laufen): `JR-13-16` (Regressionstest für die Betreiber-SQL — weiterhin
+das einzige sicherheitsrelevante Artefakt aus E13 ohne Test), dann `JR-13-11` (spaltengenaue Key-Prüfung,
+schließt den Restspalt aus ADR-019 und die **Laufzeitseite von F26**), dann `JR-13-10` (ADR-017 Variante C).
 
 > **`main` bleibt bis E12 unangetastet.** Der Integrationsbranch ist jetzt der Arbeitsbranch für
 > Grundlagenarbeit; das nächste Epic bekommt wieder einen eigenen Branch nach ADR-014.
 
 **Unverändert offen und richtig so:** die **Laufzeitseite von F26** — ein bereits gespeichertes
 `conditions: null` / `""` / `0` / `false` liefert weiter Vollzugriff, weil `FilterBuilder.ts:51–53`
-unverändert `!rule.conditions` liest. In `JR-1309a` nachgemessen (`UNRESTRICTED` vor **und** nach E13)
-und als erfülltes Kriterium verbucht; die Datei ist blob-identisch zu `13a7114`. Gehört zu `JR-1311`.
-`JR-1310`, `JR-1311`, `JR-1312`, `JR-1316` waren und bleiben **nicht** Teil von E13s Abnahme.
+unverändert `!rule.conditions` liest. In `JR-13-09a` nachgemessen (`UNRESTRICTED` vor **und** nach E13)
+und als erfülltes Kriterium verbucht; die Datei ist blob-identisch zu `13a7114`. Gehört zu `JR-13-11`.
+`JR-13-10`, `JR-13-11`, `JR-13-12`, `JR-13-16` waren und bleiben **nicht** Teil von E13s Abnahme.
 
 ### Was davor passiert ist — die Historie steht in `06-status.md`
 
@@ -591,9 +591,9 @@ statt angehängt; die Regel war verletzt, und eine doppelt geführte Historie is
 Quelle für Widersprüche (am 2026-07-28 genau so passiert).
 
 Wer die Vorgeschichte braucht, liest `06-status.md` — dort in dieser Reihenfolge (neueste zuerst):
-`JR-1318`, Abnahme `JR-1309b`, `JR-1317`, Abnahme `JR-1309a`, Nacharbeit `JR-1313`–`JR-1315`, Abnahme
-`JR-1309`, `JR-1307`, Grün-Lauf der Fixes `JR-1302`–`JR-1306`, der Testwiderspruch (ADR-018), Rot-Läufe
-`JR-1301`, dazu E1 in `11-archiv-e1.md`. `JR-1308` steht ebenfalls in `06-status.md`.
+`JR-13-18`, Abnahme `JR-13-09b`, `JR-13-17`, Abnahme `JR-13-09a`, Nacharbeit `JR-13-13`–`JR-13-15`, Abnahme
+`JR-13-09`, `JR-13-07`, Grün-Lauf der Fixes `JR-13-02`–`JR-13-06`, der Testwiderspruch (ADR-018), Rot-Läufe
+`JR-13-01`, dazu E1 in `11-archiv-e1.md`. `JR-13-08` steht ebenfalls in `06-status.md`.
 
 **Was hier bleibt** und nicht nach `06-status.md` gehört, weil es kein Protokoll ist: der aktuelle Stand
 und der nächste Schritt (oben), die Umgebungsbeschreibung, die **Fallstricke** (unten — sie werden
@@ -610,7 +610,7 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 ### Offene Fragen an den Auftraggeber
 
 > **~~Der Rückmerge von E2~~ — freigegeben und am 2026-08-01 vollzogen** (`eb340a9`, `--no-ff`, kein
-> Squash). Die Bedingung aus ADR-014 war mit `JR-210a` erfüllt (24/24, frische Sitzung). Kein
+> Squash). Die Bedingung aus ADR-014 war mit `JR-2-10a` erfüllt (24/24, frische Sitzung). Kein
 > Entscheidungsbedarf mehr; der nächste Schritt ist **E3**.
 >
 > **Offen und wirklich beim Auftraggeber: `F39`** (niedrig, Testharness) — beheben oder bewusst
@@ -619,9 +619,9 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 > Mutation nur vom Golden-File. Kein Produktdefekt, blockiert nichts. Ein Vorschlag steht im Befund.
 > Sinnvoller Ort wäre die nächste Arbeit an `packages/journaling`.
 >
-> **~~Genügt die Abnahme `JR-210`, obwohl sie nicht unabhängig ist?~~ — entschieden am 2026-08-01:
-> nein, es gibt eine zweite Runde (`JR-210a`); sie ist durchgeführt und hat E2 abgenommen.** Die erste
-> Runde lief in derselben Sitzung wie `JR-208`/`JR-209`; ADR-014 und ADR-021 verlangen Unabhängigkeit,
+> **~~Genügt die Abnahme `JR-2-10`, obwohl sie nicht unabhängig ist?~~ — entschieden am 2026-08-01:
+> nein, es gibt eine zweite Runde (`JR-2-10a`); sie ist durchgeführt und hat E2 abgenommen.** Die erste
+> Runde lief in derselben Sitzung wie `JR-2-08`/`JR-2-09`; ADR-014 und ADR-021 verlangen Unabhängigkeit,
 > und der Auftraggeber hat auf der Regel bestanden. **Das hat sich gelohnt:** die zweite Runde hat die
 > sechs dünnen Stellen der ersten geschlossen und dabei einen weiteren Befund (**F39**) gefunden — und
 > der PO hat im Bericht der zweiten Runde ein **ganz fehlendes Kriterium** entdeckt, das erst auf
@@ -629,8 +629,8 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 > hätte belegen können.
 
 Ansonsten keine. `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
-`JR-203`, Rolle PO) sind entschieden. Was in E2 noch offen ist — `ADR-009`, Append-Only per Rechteentzug
-oder Trigger — ist Teil von `JR-205` und braucht keine Entscheidung des Auftraggebers vorab. Alles andere
+`JR-2-03`, Rolle PO) sind entschieden. Was in E2 noch offen ist — `ADR-009`, Append-Only per Rechteentzug
+oder Trigger — ist Teil von `JR-2-05` und braucht keine Entscheidung des Auftraggebers vorab. Alles andere
 ist Arbeit ohne Entscheidungsbedarf.
 
 > **Eine Festlegung aus `ADR-006` verdient trotzdem den Blick des Auftraggebers**, weil sie eine
@@ -638,15 +638,15 @@ ist Arbeit ohne Entscheidungsbedarf.
 > Testsystem **muss** mit abgeschaltetem SMTP-Ingress und abgeschaltetem Anchor-Job laufen. Ein Klon ist
 > von einem Restore technisch nicht unterscheidbar, und wer hier eine Sperre einbaut, sperrt zuerst das
 > Disaster Recovery (ADR-006 §4.3). Die Auflage gehört in den Deployment-Guide (E11); die technische
-> Erkennung ist in `JR-802`/`JR-803`/`JR-209` verankert.
+> Erkennung ist in `JR-8-02`/`JR-8-03`/`JR-2-09` verankert.
 
 Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und umgesetzt in
-`JR-1317`/`JR-1318`.
+`JR-13-17`/`JR-13-18`.
 
-**Zwei Punkte aus `JR-1317`, beide nicht blockierend, beide Entscheidung des Auftraggebers:**
+**Zwei Punkte aus `JR-13-17`, beide nicht blockierend, beide Entscheidung des Auftraggebers:**
 
-1. **`JR-1316` vorziehen?** Unverändert vorgelegt, jetzt mit einem Argument mehr: die Abfrage hat nach
-   `JR-1317` drei neue Befundtypen und eine neue CTE-Spalte, und sie ist weiterhin das einzige
+1. **`JR-13-16` vorziehen?** Unverändert vorgelegt, jetzt mit einem Argument mehr: die Abfrage hat nach
+   `JR-13-17` drei neue Befundtypen und eine neue CTE-Spalte, und sie ist weiterhin das einzige
    sicherheitsrelevante Artefakt in E13 ohne Test. ADR-020 nimmt ihr die Beweislast, nicht die
    Regressionsgefahr.
 2. **Zwei bewusst hingenommene Abweichungen** in der neuen Fassung, beide in `06-status.md` und in F30
@@ -659,25 +659,25 @@ Die zuletzt blockierende Frage war **F30**, entschieden mit **ADR-020** und umge
 
 **Zur Kenntnis, kein Entscheidungsbedarf für die Abnahme:** **F26** (ein `can` mit falsy `conditions`
 liefert weiter Vollzugriff) ist **kein** Regress und bricht kein Kriterium. Er gehört inhaltlich zu
-`JR-1311`. Vorziehen ja/nein ist eine Produktentscheidung, nicht E13s Abnahme.
+`JR-13-11`. Vorziehen ja/nein ist eine Produktentscheidung, nicht E13s Abnahme.
 
-**~~Doku-Nacharbeit am Permission-Vokabular~~ — erledigt am 2026-07-30 als `JR-1312`** (`dca1f1a`),
+**~~Doku-Nacharbeit am Permission-Vokabular~~ — erledigt am 2026-07-30 als `JR-13-12`** (`dca1f1a`),
 Grundlagenarbeit direkt auf dem Integrationsbranch, wie im Backlog vorgesehen. Kein Entscheidungsbedarf
 mehr.
 
-**Zur Kenntnis, kein Entscheidungsbedarf: eine benannte Abweichung in `JR-1306`.** Die Allowlist prüft
+**Zur Kenntnis, kein Entscheidungsbedarf: eine benannte Abweichung in `JR-13-06`.** Die Allowlist prüft
 Form des Keys plus Relation, nicht die Existenz der Spalte; ein einzelner unbekannter Key (`foo`) wird
-weiter übersetzt. Begründung und Vorschlag (spaltengenaue Prüfung bei `JR-1310`) stehen unter „Was
+weiter übersetzt. Begründung und Vorschlag (spaltengenaue Prüfung bei `JR-13-10`) stehen unter „Was
 zuletzt passiert ist" und in F21.
 
-**F12 ist erledigt und braucht keine Entscheidung mehr.** Behoben in `JR-104a` (`653dd1c`), in
-`JR-106a` unabhängig als behoben bestätigt (10 nebenläufige Runden, 0 Rückstände).
+**F12 ist erledigt und braucht keine Entscheidung mehr.** Behoben in `JR-1-04a` (`653dd1c`), in
+`JR-1-06a` unabhängig als behoben bestätigt (10 nebenläufige Runden, 0 Rückstände).
 
 **Vom PO am 2026-07-29 abgearbeitet — kein Vorlagebedarf mehr:** **F18** (ADR-017 und F7 um „für die
 Paare der heutigen Aufrufstellen" ergänzt, plus der F17-Nachtrag), **F21** (strenge Variante
-entschieden und in `JR-1306` festgeschrieben, die drei Pins im selben Commit invertiert),
-**F22** (`JR-1304`s Kriterium auf „kein Zweig wird stillschweigend weggelassen" umformuliert, mit der
-richtigen Gefahrenrichtung), **F17(a)** (in `JR-1307` erledigt: die Betreiberdoku sagt, dass
+entschieden und in `JR-13-06` festgeschrieben, die drei Pins im selben Commit invertiert),
+**F22** (`JR-13-04`s Kriterium auf „kein Zweig wird stillschweigend weggelassen" umformuliert, mit der
+richtigen Gefahrenrichtung), **F17(a)** (in `JR-13-07` erledigt: die Betreiberdoku sagt, dass
 ausgeliefert nur die Super-Admin-Rolle existiert und eine fehlende Read-Only-Rolle kein Fehler der
 Installation ist). **F19/F20** brauchten ohnehin keine Entscheidung und sind über die roten Tests Teil
 der Abnahme.
@@ -686,40 +686,40 @@ der Abnahme.
 Das ist eine Produktentscheidung (welche Rollen liefert Open Archiver aus?), keine Härtung, und sie
 gehört nicht in E13. **Blockiert nichts.**
 
-**Restliche Punkte aus `JR-1301`, zur Kenntnis:**
+**Restliche Punkte aus `JR-13-01`, zur Kenntnis:**
 
-| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F17**     | (a) **Erledigt:** die Betreiberdoku aus `JR-1307` nimmt auf, dass ausgeliefert keine Read-Only-Rolle existiert, und ADR-017 hat den Nachtrag. (b) **Offen beim Auftraggeber:** soll der Bootstrap repariert werden? Produktänderung, keine Härtung, nicht in E13. PO-Nachprüfung am Code bestätigt: `createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`, der Bootstrap kann danach nie mehr feuern. |
-| **F18**     | **Erledigt (PO).** ADR-017 hat einen Nachtrag: die Aussage gilt für die Paare der heutigen vier Aufrufstellen, nicht für jede (Action, Subject) je Rolle. Das Aufrufstellen-Inventar wacht darüber.                                                                                                                                                                                                                                                              |
-| **F21**     | **Umgesetzt in `JR-1306` (`dcec017`).** Die drei Pins sind im Fix-Commit invertiert. Eine benannte Abweichung: die Allowlist prüft die Form des Keys plus die Relation, nicht die Existenz der Spalte — ein einzelner unbekannter Key (`foo`) wird weiter übersetzt, weil `mongoToDrizzle` keinen Tabellenkontext hat. Vorschlag: spaltengenau bei `JR-1310`.                                                                                                    |
-| **F22**     | **Erledigt (PO).** `JR-1304`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit dem Hinweis, dass die fail-open-Richtung im `$and` und bei leerer Zweigliste liegt, nicht im `$or`.                                                                                                                                                                                                                                                      |
-| **F19/F20** | **Behoben** in `JR-1302` (`a309fd1`) bzw. mit `JR-1304` (`45ac0e9`): ein unbedingtes `cannot` verweigert, und ein `can` mit leerem `conditions` gilt nicht mehr als unbedingt. Beide Tests sind grün.                                                                                                                                                                                                                                                            |
-| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-1301` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                                                             |
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F17**     | (a) **Erledigt:** die Betreiberdoku aus `JR-13-07` nimmt auf, dass ausgeliefert keine Read-Only-Rolle existiert, und ADR-017 hat den Nachtrag. (b) **Offen beim Auftraggeber:** soll der Bootstrap repariert werden? Produktänderung, keine Härtung, nicht in E13. PO-Nachprüfung am Code bestätigt: `createFirstAdmin` → `createAdminRole()` legt `predefined_super_admin` an, `getRoles` liegt hinter `requireAuth`, der Bootstrap kann danach nie mehr feuern. |
+| **F18**     | **Erledigt (PO).** ADR-017 hat einen Nachtrag: die Aussage gilt für die Paare der heutigen vier Aufrufstellen, nicht für jede (Action, Subject) je Rolle. Das Aufrufstellen-Inventar wacht darüber.                                                                                                                                                                                                                                                               |
+| **F21**     | **Umgesetzt in `JR-13-06` (`dcec017`).** Die drei Pins sind im Fix-Commit invertiert. Eine benannte Abweichung: die Allowlist prüft die Form des Keys plus die Relation, nicht die Existenz der Spalte — ein einzelner unbekannter Key (`foo`) wird weiter übersetzt, weil `mongoToDrizzle` keinen Tabellenkontext hat. Vorschlag: spaltengenau bei `JR-13-10`.                                                                                                   |
+| **F22**     | **Erledigt (PO).** `JR-13-04`s Kriterium lautet jetzt „kein Zweig wird stillschweigend weggelassen", mit dem Hinweis, dass die fail-open-Richtung im `$and` und bei leerer Zweigliste liegt, nicht im `$or`.                                                                                                                                                                                                                                                      |
+| **F19/F20** | **Behoben** in `JR-13-02` (`a309fd1`) bzw. mit `JR-13-04` (`45ac0e9`): ein unbedingtes `cannot` verweigert, und ein `can` mit leerem `conditions` gilt nicht mehr als unbedingt. Beide Tests sind grün.                                                                                                                                                                                                                                                           |
+| **F23**     | Testharness: `tsconfig.test.json` sieht globale Augmentierungen nicht, die nur über Produktionsdateien ins Programm kommen. In `JR-13-01` umgangen (`tests/support/express-i18n-augmentation.d.ts`), Ursache offen. Für E2 relevant, weil der Receiver eigene Express-Routen bekommt.                                                                                                                                                                             |
 
 **Nicht blockierend, aber entscheidungsbedürftig:**
 
-| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-208`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-208` zu entscheiden.** |
-| **ADR-017** | **Erledigt am 2026-07-29: Variante B, umgesetzt in `JR-1303` (`bcac6bd`).** Braucht keine Entscheidung mehr. Folgearbeit als `JR-1310` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                   |
-| **F14–F16** | **Alle drei behoben in `JR-105c`** (`b5b2190`, 2026-07-30), zusammen mit **F24**. Kein Entscheidungsbedarf mehr. Der Wächter zählt jetzt ausgeführte Tests je Suite **und je Klasse**, die Dateizahl ist eine Gleichheit, und der Hauptprozess besitzt den Rückstand dieses Laufs über ein Ledger-Verzeichnis. Jeder Angriff zuerst am Elternstand wiederholt (Umetikettierung dort Exit 0, jetzt Exit 1). Protokoll in `06-status.md`.                                                                                                       |
+| Punkt       | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F13**     | Der unbeschränkte Sweep in `acquireTestDatabase()` kann einen fremden Lauf treffen, der **länger als die Frist** (Default 2 h) läuft; offene Verbindungen schützen ihn nicht, weil `postgres-js` untätige schließt. Heute unerreichbar (5-s-Suite), **erreichbar ab E2/E3** — konkret beim 100k-Soak aus `JR-2-08`. Drei plausible Entwürfe: Lauf-Register, PID-Lebendigkeitsprüfung (`process.kill(pid, 0)`), einmaliger Sweep pro Lauf. Vorerst gilt die Zwischenregel in `04-testplan.md` §2.6. **Spätestens vor `JR-2-08` zu entscheiden.** |
+| **ADR-017** | **Erledigt am 2026-07-29: Variante B, umgesetzt in `JR-13-03` (`bcac6bd`).** Braucht keine Entscheidung mehr. Folgearbeit als `JR-13-10` nach E13 vorgemerkt.                                                                                                                                                                                                                                                                                                                                                                                   |
+| **F14–F16** | **Alle drei behoben in `JR-1-05c`** (`b5b2190`, 2026-07-30), zusammen mit **F24**. Kein Entscheidungsbedarf mehr. Der Wächter zählt jetzt ausgeführte Tests je Suite **und je Klasse**, die Dateizahl ist eine Gleichheit, und der Hauptprozess besitzt den Rückstand dieses Laufs über ein Ledger-Verzeichnis. Jeder Angriff zuerst am Elternstand wiederholt (Umetikettierung dort Exit 0, jetzt Exit 1). Protokoll in `06-status.md`.                                                                                                        |
 
-| Punkt                                                    | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **~~Zwei offene Pull Requests nach `main`~~ — erledigt** | **In `JR-1309` nachgeprüft (2026-07-29): beide sind geschlossen und _nicht_ gemergt.** `PR #1` (`claude/enterprise-product-implementation-cxmmqe` → `main`) und `PR #2` (`claude/journaling-e1-test-foundation` → `main`) stehen auf `state: closed`, `merged: false`, geschlossen am 2026-07-28. Es gibt **keinen** weiteren PR im Repository, insbesondere keinen aus E13. Damit ist auch die Nebenwirkung weg: ein Push löst wieder **einen** CI-Lauf aus (nur `push`), was an den E13-Läufen sichtbar ist. Kein Entscheidungsbedarf mehr. |
-| **~~`JR-105c`~~ (F14–F16, F24) — erledigt**              | **Erledigt am 2026-07-30 (`b5b2190`).** Ein grüner CI-Lauf belegt jetzt, dass die deklarierten Tests je Suite und Klasse **ausgeführt** wurden. Zwei Folgen für jede weitere Task: eine neue Testdatei ändert `expectedFiles` **und** `expectedTests` im selben Commit, und ein `-t`-Lauf taugt nicht als Beleg (er meldet „verified NOTHING"). Details in `03-backlog.md` und `06-status.md`.                                                                                                                                                |
+| Punkt                                                    | Sachstand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **~~Zwei offene Pull Requests nach `main`~~ — erledigt** | **In `JR-13-09` nachgeprüft (2026-07-29): beide sind geschlossen und _nicht_ gemergt.** `PR #1` (`claude/enterprise-product-implementation-cxmmqe` → `main`) und `PR #2` (`claude/journaling-e1-test-foundation` → `main`) stehen auf `state: closed`, `merged: false`, geschlossen am 2026-07-28. Es gibt **keinen** weiteren PR im Repository, insbesondere keinen aus E13. Damit ist auch die Nebenwirkung weg: ein Push löst wieder **einen** CI-Lauf aus (nur `push`), was an den E13-Läufen sichtbar ist. Kein Entscheidungsbedarf mehr. |
+| **~~`JR-1-05c`~~ (F14–F16, F24) — erledigt**             | **Erledigt am 2026-07-30 (`b5b2190`).** Ein grüner CI-Lauf belegt jetzt, dass die deklarierten Tests je Suite und Klasse **ausgeführt** wurden. Zwei Folgen für jede weitere Task: eine neue Testdatei ändert `expectedFiles` **und** `expectedTests` im selben Commit, und ein `-t`-Lauf taugt nicht als Beleg (er meldet „verified NOTHING"). Details in `03-backlog.md` und `06-status.md`.                                                                                                                                                 |
 
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
 
 | Wann      | Frage                                                                                                                                                                                                                                                                                                                      |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~E2~~    | ~~Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006)~~ — **entschieden 2026-07-31 (`JR-203`):** 16 gehashte Felder statt der acht aus RFC §5.2, Genesis mit `deployment_id` und `chain_scope_id` als UUID-Textform, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962, mit Testvektoren         |
+| ~~E2~~    | ~~Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006)~~ — **entschieden 2026-07-31 (`JR-2-03`):** 16 gehashte Felder statt der acht aus RFC §5.2, Genesis mit `deployment_id` und `chain_scope_id` als UUID-Textform, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962, mit Testvektoren        |
 | ~~E2~~    | ~~Eine Kette global oder eine pro Mandant (ADR-007)~~ — **entschieden 2026-07-31: je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                                                                                                                                  |
 | ~~E7/E8~~ | ~~Welche TSA?~~ **Entschieden 2026-07-31, ADR-023:** kein Standard-URL; qualifizierte eIDAS-TSA in der Produktion mit GoBD-Anspruch, `open-tsa.eu` als kostenlose Option ohne diesen Anspruch und als echte TSA in `nightly`, `ci` hermetisch. **Ankerform: ADR-022** — ein Token über die Merkle-Wurzel aller Kettenköpfe |
 | E7        | Aufbewahrungsfrist für Object Lock COMPLIANCE. **Vorher lesen:** unter COMPLIANCE ist vorzeitige Löschung technisch unmöglich, auch für uns                                                                                                                                                                                |
-| E12       | Steht ein echter Exchange-Online-Tenant für `JR-1208` zur Verfügung? Ohne ihn ist E12 nicht abnehmbar; Mocks sind kein Ersatz                                                                                                                                                                                              |
+| E12       | Steht ein echter Exchange-Online-Tenant für `JR-12-08` zur Verfügung? Ohne ihn ist E12 nicht abnehmbar; Mocks sind kein Ersatz                                                                                                                                                                                             |
 
 ### Fallstricke, die schon Zeit gekostet haben
 
@@ -732,7 +732,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 2. **`apps/open-archiver-enterprise` und `packages/enterprise` fehlen**, werden aber von Root-Scripts
    referenziert. `pnpm build:enterprise` und `dev:enterprise` funktionieren hier nicht — die
    `:oss`-Varianten nehmen.
-3. **~~Die IAM-Doku ist stale, nicht der Code.~~ Erledigt am 2026-07-30 durch `JR-1312`.** Alle drei
+3. **~~Die IAM-Doku ist stale, nicht der Code.~~ Erledigt am 2026-07-30 durch `JR-13-12`.** Alle drei
    Stellen des Berechtigungsvokabulars stimmen jetzt überein (8 Actions, 7 Subjects, maschinell
    verglichen). Der Fallstrick bleibt als **Muster** stehen, weil er sich wiederholen wird: eine
    Vokabelliste, die an drei Stellen geführt wird, läuft auseinander, und die **Doku** ist die Stelle,
@@ -747,7 +747,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 6. **Eine grüne Testsuite kann eine abgeschaltete Testsuite sein.** Ohne `DATABASE_URL` endet
    `pnpm test` mit Exit **0** bei „163 passed | 36 skipped". Dagegen gibt es drei Wächter:
    `OA_TEST_REQUIRE_INFRA=1` (in `ci.yml` gesetzt) macht fehlende Infrastruktur zum Fehlschlag, die
-   Suite-Inventur im `globalSetup` verlangt **exakte** Dateizahlen je Suite, und seit `JR-105c`
+   Suite-Inventur im `globalSetup` verlangt **exakte** Dateizahlen je Suite, und seit `JR-1-05c`
    verlangt ein dritter die **exakten Zahlen ausgeführter Tests je Suite und Klasse** (das ist die
    Behebung von F14/F15 — die ersten zwei zählten keine Tests). Vollständig ist heute
    **274 passed | 2 skipped** bei 19 Dateien; die 2 Skips sind die `nightly`- und `manual`-Suite in
@@ -766,7 +766,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
    Achtung: lokal ist es 16.13, die CI fährt 17.10.
 9. **`and()` in drizzle klammert seine Operanden nicht.** `and(a, b)` rendert `(a and b)`, nicht
    `((a) and (b))`. Enthält `a` ein `or`, verschiebt sich die Präzedenz: `x or y and b` ist
-   `x or (y and b)`. Das hat in `JR-1301` einen Test **grün** gemacht, der einen Angriff belegen sollte —
+   `x or (y and b)`. Das hat in `JR-13-01` einen Test **grün** gemacht, der einen Angriff belegen sollte —
    die Injection war so wirksam, dass sie auch die Einschränkung des Testfalls aufhob und damit _mehr_
    Zeilen lieferte als die erwartete Menge. Wer Zugriffs-Assertions schreibt: auf die konkrete fremde
    Zeile prüfen („`theirs` darf nicht vorkommen"), nicht auf Gleichheit mit einer Erwartungsmenge.
@@ -778,7 +778,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     sobald eine Testdatei einen Express-Controller importiert: `req.t` existiert im Test-Programm nicht
     (F23). Der Build ist davon nicht betroffen, die Ursache liegt in `tsconfig.test.json`.
 12. **~~Ein gefilterter Lauf (`pnpm test -t "…"`) lässt `oa_test_*`-Datenbanken liegen.~~ Behoben in
-    `JR-105c` (F24).** Die Ursache bleibt richtig zu wissen, weil sie jede Task betrifft, die einen
+    `JR-1-05c` (F24).** Die Ursache bleibt richtig zu wissen, weil sie jede Task betrifft, die einen
     Harness im Modul-Scope holt: `acquireTestDatabase()` läuft beim **Laden** der Datei, also bevor
     vitest die Fälle nach `-t` filtert; wird danach jeder Fall übersprungen, läuft das `afterAll` nie.
     Neu meldet der Hauptprozess diese Datenbanken namentlich und **droppt** sie; ein unverengter Lauf
@@ -789,13 +789,13 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     select datname from pg_database where datname like 'oa\_test\_%'
     ```
 13. **Ein in einem Zug geschriebener `RED UNTIL`-Satz kann sich selbst widersprechen — und keiner der
-    beiden Tests sieht für sich falsch aus.** In `JR-1301` forderten zwei Erwartungen mit demselben
-    `RED UNTIL JR-1304`-Tag für strukturell gleiche Eingaben Unvereinbares; aufgefallen ist es erst,
+    beiden Tests sieht für sich falsch aus.** In `JR-13-01` forderten zwei Erwartungen mit demselben
+    `RED UNTIL JR-13-04`-Tag für strukturell gleiche Eingaben Unvereinbares; aufgefallen ist es erst,
     als vier Fixes gelandet waren und einer nicht grün werden konnte. **Der Tell war, dass beide
     dieselbe Task nannten.** Wer rote Tests vorab schreibt, prüft die Erwartungen eines Tags
     **gegeneinander**, bevor der Fix beginnt — nicht erst gegen den Code. Aufgelöst in ADR-018.
 14. **Ein Kommentar, der einen Befund „bewusst offen" markiert, muss nachgezählt werden — nicht je
-    Aussage, sondern je Befundnummer.** In `JR-1306` behaupteten beide Statusdateien, F4 **und** F5
+    Aussage, sondern je Befundnummer.** In `JR-13-06` behaupteten beide Statusdateien, F4 **und** F5
     seien im Code als bewusst offen kommentiert. F4 ist es, F5 nicht (**F25**). Der Satz war in einem
     Zug geschrieben, und weil F4 und F5 dieselbe Datei betreffen, liest er sich richtig. Prüfung ist
     ein Einzeiler:
@@ -805,7 +805,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     ```
 
 15. **Eine Abfrage in einer Betreiberanleitung braucht konstruierte falsch-negative, nicht nur
-    Positiv- und Negativfälle.** `JR-1307`s Prüf-SQL fand 13 von 13 absichtlich betroffenen Rollen und
+    Positiv- und Negativfälle.** `JR-13-07`s Prüf-SQL fand 13 von 13 absichtlich betroffenen Rollen und
     keine der Gegenproben — und war trotzdem falsch, weil beide `cond`-CTEs auf
     `jsonb_typeof(… ) = 'object'` filtern und damit jede Policy mit skalarem oder Array-`conditions`
     unsichtbar machen (**F27**). Genau diese Form war vor E13 **unbeschränkter Zugriff**. Die Methode,
@@ -815,12 +815,12 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     gemeldet" ist der Befund.
 
 16. **Zwei Gates, die dieselbe Regel prüfen sollen, prüfen sie nicht automatisch gleich.**
-    `PolicyValidator` und `mongoToDrizzle` sollten nach `JR-1306` dieselbe Key-Form akzeptieren; sie tun
+    `PolicyValidator` und `mongoToDrizzle` sollten nach `JR-13-06` dieselbe Key-Form akzeptieren; sie tun
     es für SQL-Syntax, aber nicht für Relation und Segmentzahl (**F29**). Gefunden mit einer Tabelle,
     die **jeden** Key durch **beide** Gates schickt und die Urteile nebeneinander ausgibt — nicht mit
     zwei getrennten Testdateien, in denen jedes Gate für sich richtig aussieht.
 
-17. **SQL in der Doku wird aus der Doku ausgeführt, nicht aus dem Entwurf.** In `JR-1307` wich die
+17. **SQL in der Doku wird aus der Doku ausgeführt, nicht aus dem Entwurf.** In `JR-13-07` wich die
     veröffentlichte Fassung der Prüfabfrage an einer Stelle vom getesteten Entwurf ab (eine
     CTE-Referenz musste beim Einfügen qualifiziert werden). Der Beleg ist deshalb ein Skript, das die
     ` ```sql `-Blöcke aus der Markdown-Datei extrahiert und **wörtlich** gegen Postgres laufen lässt —
@@ -829,7 +829,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     Ausgabe erscheinen, trägt die Aussage „keine Pauschalwarnung".
 
 18. **Ein Prädikat, das zwei Module teilen sollen, hat oft in keinem der beiden ein Zuhause.** Bei
-    `JR-1313` war der naheliegende Griff, `PolicyValidator` aus `mongoToDrizzle` importieren zu lassen —
+    `JR-13-13` war der naheliegende Griff, `PolicyValidator` aus `mongoToDrizzle` importieren zu lassen —
     das zieht `drizzle-orm` in eine Klasse, die heute nur Typen importiert, und damit in jeden Unit-Test,
     der eine Policy validiert. Die Gegenrichtung ist genauso falsch: ein SQL-Übersetzer, der das
     IAM-Policy-Modul importiert. Richtig war ein **drittes Modul, das nichts importiert**
@@ -838,7 +838,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
 
 19. **Ein Restspalt, den man als Kommentar festhält, ist nicht festgehalten.** F29 stand genau deshalb
     still: der Validator trug einen ausführlichen Kommentar darüber, was er bewusst **nicht** prüft, und
-    die Divergenz war trotzdem da. In `JR-1313` sind die drei Restspalte deshalb **grüne Assertions**
+    die Divergenz war trotzdem da. In `JR-13-13` sind die drei Restspalte deshalb **grüne Assertions**
     (`tests/unit/condition-key-gates.test.ts`, Suite „deliberate gaps"): wer einen davon schließt, macht
     die Datei rot und muss die Begründung lesen. Ein Kommentar wird beim Ändern überlesen, ein roter Test
     nicht.
@@ -857,7 +857,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     JSONB-Spalte behauptet, was eine Abfrage tut oder nicht tut, sät die Form vorher ein.
 
 22. **Eine Prüfung, die rekursiv wirkt, braucht eine Abfrage, die rekursiv prüft — und der Beleg dafür ist
-    ein verschachtelter Fall, nicht ein Wurzelfall.** `JR-1314` hat F27 an der **Wurzel** von `conditions`
+    ein verschachtelter Fall, nicht ein Wurzelfall.** `JR-13-14` hat F27 an der **Wurzel** von `conditions`
     geschlossen und dort vollständig; `checkConditionsShape()` läuft in `mongoToDrizzle` aber in **jedem**
     `$or`/`$and`/`$not`-Zweig erneut. Ergebnis: `conditions: 5` wird gemeldet, `conditions: {"$not": 5}`
     nicht (**F30**). Beim Lesen des Diffs ist das unsichtbar, weil beide Befundtypen richtig aussehen — die
@@ -865,7 +865,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     nächste solche Abfrage: **jede** Form, die im Code an mehr als einer Stelle geprüft wird, mit einem
     Fall auf **jeder** dieser Stellen einsäen, nicht nur mit einem.
 
-23. **Der HTTP-`400`-Pfad ist prüfbar, ohne den Server zu starten.** `JR-1309` hat ihn als „nicht prüfbar"
+23. **Der HTTP-`400`-Pfad ist prüfbar, ohne den Server zu starten.** `JR-13-09` hat ihn als „nicht prüfbar"
     verbucht, weil ein Servertest an der Importkette scheitert (Fallstrick 10). `IamController` importiert
     aber nur `IamService`, `PolicyValidator` und `logger`, also nur `db` — mit gesetztem `DATABASE_URL`
     lässt sich `controller.createRole(req, res)` mit einem synthetischen `res` (`status()`/`json()` als
@@ -899,21 +899,21 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     `covers`), von denen keiner im Befund stand.
 
 26. **Ein Prädikat, das im Code an mehreren Stellen wirkt, wird aus dem Code abgelesen — und die
-    Positionen mit.** Für `JR-1317` war die Referenz `checkConditionsShape()` **plus** die drei Stellen, an
+    Positionen mit.** Für `JR-13-17` war die Referenz `checkConditionsShape()` **plus** die drei Stellen, an
     denen `mongoToDrizzle` sich selbst aufruft (Wurzel, `$or`/`$and`-Element, `$not`-Rumpf). Genau diese
     Liste ist das Prädikat der Abfrage geworden. Wer stattdessen „Knoten ist kein Objekt" schreibt, meldet
     jedes Blatt jeder normalen Bedingung (Fallstrick 20); wer nur die Wurzel prüft, ist bei F30. Der
     Gegentest dazu ist billig und hat beide Fehler ausgeschlossen: dieselben Bedingungswerte durch den
     **gebauten** Übersetzer (`dist/helpers/mongoToDrizzle.js`, ein `node`-Einzeiler, kein Test im Repo)
     schicken und „verweigert" gegen „gemeldet" stellen. Jede Abweichung muss man dann benennen können — bei
-    `JR-1317` waren es zwei, beide erklärbar.
+    `JR-13-17` waren es zwei, beide erklärbar.
 
 27. **Auf Windows zerstört eine Shell-Umleitung die Kodierung — und der anschließende Vergleich lügt.**
     Wer eine Datei mit `>` oder `Out-File` in PowerShell 5.1 umleitet, um sie zu normalisieren oder gegen
     ein Soll zu diffen, schreibt sie in einer anderen Kodierung zurück: die Em-Dashes und Anführungszeichen
     der englischen Betreiberdoku kommen zerstört an, und `Compare-Object` meldet danach Dutzende
     „inhaltlicher" Abweichungen, die keine sind. **Das hat am 2026-07-30 zweimal an einem Tag zugeschlagen**
-    — beim Prüfer von `JR-1309c`, der daraus einen Befund gemacht hat (**F36**, widerlegt), und beim PO
+    — beim Prüfer von `JR-13-09c`, der daraus einen Befund gemacht hat (**F36**, widerlegt), und beim PO
     beim ersten Nachmessen. Regel: **jede Aussage über Zeilenenden, Einrückung oder Formatierung wird in
     Node gefahren**, nicht in der Shell — `fs.readFileSync(f, 'utf8')`, selbst normalisieren, Prettier über
     die API oder mit explizitem `--config` gegen eine selbst geschriebene Kopie. Die Gegenprobe, die den
@@ -927,7 +927,7 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     lieber über `-F <datei>` als über einen PowerShell-Here-String übergeben.
 
 29. **Wer behaupten will, ein Befund sei behoben, misst den Zustand _vorher_ — mit `git stash`, nicht mit
-    dem Befundtext.** In `JR-105c` war der grüne Ausgangszustand für F14 und F24 im Befund dokumentiert;
+    dem Befundtext.** In `JR-1-05c` war der grüne Ausgangszustand für F14 und F24 im Befund dokumentiert;
     ihn am Elternstand trotzdem selbst zu reproduzieren hat 5 Minuten gekostet und zwei Aussagen belastbar
     gemacht, die sonst zitiert statt belegt gewesen wären (Umetikettierung ⇒ Exit 0 **mit** „verified" von
     beiden Wächtern; `-t`-Lauf ⇒ 6 liegengebliebene Datenbanken). Der Ablauf, der dabei sicher war:
@@ -940,10 +940,10 @@ Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und s
     werfender Teardown endet mit **Exit 1**. Also: Reporter misst und schreibt, Teardown liest und urteilt.
     Ebenfalls gemessen statt geglaubt: eine in `globalSetup` gesetzte Env-Variable **erreicht** die
     geforkten Worker (`pool: 'forks'`, `ppid` des Workers = pid des Hauptprozesses). Beides mit einer
-    Wegwerf-Config in 2 Minuten prüfbar — und beides trug in `JR-105c` je eine tragende Konstruktion.
+    Wegwerf-Config in 2 Minuten prüfbar — und beides trug in `JR-1-05c` je eine tragende Konstruktion.
 
 31. **Ein Wächter, der die normalen Entwicklungskommandos rot macht, ist ein Wächter, den man abschaltet.**
-    Die Testzahl-Prüfung aus `JR-105c` müsste `pnpm test -t "…"`, `pnpm test:unit` und jeden Dateifilter
+    Die Testzahl-Prüfung aus `JR-1-05c` müsste `pnpm test -t "…"`, `pnpm test:unit` und jeden Dateifilter
     rot machen, weil dort weniger läuft. Sie tut es nicht: solche Läufe melden `verified NOTHING` und
     prüfen keine Zahl. Damit das Zugeständnis nicht die Zusicherung frisst, verlangt die CI-Klebeschicht,
     dass die Prüfung **anwendbar** war — in der Umgebung, um die es geht, gibt es die Ausnahme also nicht.

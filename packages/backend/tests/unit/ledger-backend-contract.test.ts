@@ -12,7 +12,7 @@ import {
 } from '../support/ledger-backend-contract';
 
 /**
- * `JR-207`: the evidence that variant (b) of RFC section 5.4 is retrofittable.
+ * `JR-2-07`: the evidence that variant (b) of RFC section 5.4 is retrofittable.
  *
  * Classification: `ci`. No database, no socket — that is the point of the file.
  *
@@ -39,7 +39,7 @@ const makeFixture = async (): Promise<LedgerBackendFixture> => ({
 	chainB: randomUUID(),
 });
 
-suite('ci', 'LedgerBackend contract: in-memory backend (JR-207)', () => {
+suite('ci', 'LedgerBackend contract: in-memory backend (JR-2-07)', () => {
 	ledgerBackendContractCases(makeFixture);
 });
 

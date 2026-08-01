@@ -8,7 +8,7 @@ import { seedIngestionSource } from '../support/iam-seed';
 import { deploymentIdentity, ingestionSources, journalLedger } from '../../src/database/schema';
 
 /**
- * The `journal_ledger` and `deployment_identity` schema against real Postgres (`JR-204`, epic E2).
+ * The `journal_ledger` and `deployment_identity` schema against real Postgres (`JR-2-04`, epic E2).
  * Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ import { deploymentIdentity, ingestionSources, journalLedger } from '../../src/d
  * was judged insufficient — the ledger is the evidence, and the code that writes it is exactly the
  * code that could be wrong.
  *
- * The `CHECK` on `received_at` is the explicit acceptance criterion of `JR-204`: ADR-006 section 3.1
+ * The `CHECK` on `received_at` is the explicit acceptance criterion of `JR-2-04`: ADR-006 section 3.1
  * fixes the encoding at microseconds but allows only whole milliseconds to be written, because
  * `timestamptz` resolves to microseconds while JavaScript's `Date` resolves to milliseconds. Without
  * the constraint the invariant would live only in `packages/journaling`, and anything writing to the
@@ -31,11 +31,11 @@ import { deploymentIdentity, ingestionSources, journalLedger } from '../../src/d
  * What this file deliberately does not do
  * ---------------------------------------------------------------------------------------------
  * It does not import `@open-archiver/journaling`. Proving that the canonical encoding's output
- * survives a round trip through these columns belongs with the writer (`JR-206`), which is where the
+ * survives a round trip through these columns belongs with the writer (`JR-2-06`), which is where the
  * two halves actually meet; pulling the dependency in here to assert `bytea` is lossless would be a
  * wider claim than the test makes. The 32-byte round trip below uses a plain digest instead.
  *
- * Append-only enforcement is `JR-205`/ADR-009 and lives in
+ * Append-only enforcement is `JR-2-05`/ADR-009 and lives in
  * `journal-ledger-append-only.int.test.ts`. Since that migration exists, `UPDATE`, `DELETE` and
  * `TRUNCATE` on `journal_ledger` are refused — which is why nothing here mutates a ledger row. The
  * one `DELETE` below targets `ingestion_sources` and asserts the `ON DELETE restrict` on the chain
@@ -105,7 +105,7 @@ function receiptRow(chainScopeId: string, seq: bigint) {
 	};
 }
 
-suiteRequiring('ci', 'journal_ledger schema (JR-204)', postgresProbe, () => {
+suiteRequiring('ci', 'journal_ledger schema (JR-2-04)', postgresProbe, () => {
 	it('created both tables through the migration', async () => {
 		const rows = await harness!.sql<{ table_name: string }[]>`
 			select table_name from information_schema.tables
@@ -149,7 +149,7 @@ suiteRequiring('ci', 'journal_ledger schema (JR-204)', postgresProbe, () => {
 		expect(rows[0]!.seq).toBe(1n);
 	});
 
-	it('refuses a sub-millisecond received_at — the JR-204 acceptance criterion', async () => {
+	it('refuses a sub-millisecond received_at — the JR-2-04 acceptance criterion', async () => {
 		// The invariant of ADR-006 section 3.1, in the database rather than only in the encoder. A
 		// row like this would carry a chain hash that no later verification could reproduce.
 		const source = await seedIngestionSource(harness!.db);

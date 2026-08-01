@@ -6,7 +6,7 @@ import { PolicyValidator } from '../../src/iam-policy/policy-validator';
 import { mongoToDrizzle } from '../../src/helpers/mongoToDrizzle';
 
 /**
- * The two gates that judge a policy condition, held against each other (JR-1313, epic E13).
+ * The two gates that judge a policy condition, held against each other (JR-13-13, epic E13).
  *
  * Classification: `ci`. Both modules under test are pure -- `PolicyValidator` imports types and
  * `helpers/conditionKey`, `mongoToDrizzle` imports `drizzle-orm` and the same helper. Neither opens
@@ -135,7 +135,7 @@ const keyCases: readonly KeyCase[] = [
 	{ key: '$$', verdict: 'refuse', why: 'a "$" prefix that is not a well-formed operator either' },
 ];
 
-suite('ci', 'condition keys -- both gates reach the same verdict (JR-1313)', () => {
+suite('ci', 'condition keys -- both gates reach the same verdict (JR-13-13)', () => {
 	it('every key is judged the same way before storage and at query time', () => {
 		coverageNotice(
 			'This is the check that finding F29 was missed for: the verdicts of PolicyValidator ' +
@@ -223,7 +223,7 @@ suite('ci', 'condition keys -- both gates reach the same verdict (JR-1313)', () 
 	});
 });
 
-suite('ci', 'the shape of `conditions` itself is judged before storage (JR-1313)', () => {
+suite('ci', 'the shape of `conditions` itself is judged before storage (JR-13-13)', () => {
 	/**
 	 * A `conditions` that is not an object states no condition, and the two readings it invited were
 	 * both wrong. A falsy value (`null`, `""`, `0`, `false`) was read at request time as "this rule
@@ -302,7 +302,7 @@ suite('ci', 'the shape of `conditions` itself is judged before storage (JR-1313)
  * describe block red, so it cannot happen by accident and cannot happen without someone reading the
  * reason. The alternative -- a comment -- is what let F29 stand.
  */
-suite('ci', 'deliberate gaps in the shared predicate (JR-1313)', () => {
+suite('ci', 'deliberate gaps in the shared predicate (JR-13-13)', () => {
 	it('an identifier-shaped key that names no column passes both gates', () => {
 		// Closing this needs the subject the filter is applied to, which neither gate has. It is
 		// tracked separately; until then a typo in a column name surfaces as a database error and

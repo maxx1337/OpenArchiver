@@ -10,7 +10,7 @@ import {
 } from './harness-ledger';
 
 /**
- * Announce and clean up the test databases this run failed to release (JR-105c, F16 and F24).
+ * Announce and clean up the test databases this run failed to release (JR-1-05c, F16 and F24).
  *
  * Runs in the **main** vitest process, from the `globalSetup` teardown -- the one process that
  * outlives every worker and whose output reaches the summary. The worker-side

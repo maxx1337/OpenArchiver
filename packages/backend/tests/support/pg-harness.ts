@@ -15,7 +15,7 @@ import {
 import * as schema from '../../src/database/schema';
 
 /**
- * Integration-test database harness (JR-104).
+ * Integration-test database harness (JR-1-04).
  *
  * Contract, in the words of the acceptance criteria:
  *   1. Isolation per test run -- two runs must be able to proceed in parallel without touching
@@ -97,7 +97,7 @@ const DB_NAME_PATTERN = /^oa_test_(\d{13})_(\d+)_/;
 const MAX_IDENTIFIER_BYTES = 63;
 
 /**
- * The pid field the sweeper's own fixtures carry (F12/JR-104a).
+ * The pid field the sweeper's own fixtures carry (F12/JR-1-04a).
  *
  * It must not be this process's pid: guard 1 of the sweeper skips databases created by the running
  * process, so a fixture named with our own pid could never be observed being swept, and the test
@@ -168,7 +168,7 @@ function buildDatabaseName(label: string): string {
  * Build a database name that looks like residue left behind by a **different**, already-dead run.
  * Used only by the sweeper's own tests, which need a database the sweeper is willing to consider.
  *
- * Two properties pull in opposite directions and both have to hold (F12, JR-104a):
+ * Two properties pull in opposite directions and both have to hold (F12, JR-1-04a):
  *
  *   - the pid field must **not** be this process's pid, or guard 1 skips the fixture and the test
  *     could never observe a sweep at all;
@@ -306,7 +306,7 @@ export interface SweepOptions {
 	/**
 	 * Threshold for this call only, in milliseconds. Explicit argument rather than a temporary
 	 * `process.env.OA_TEST_PG_STALE_MS` mutation: the env var is process-global, so a test lowering
-	 * it also lowered it for every other sweep running concurrently in the same process (JR-104a).
+	 * it also lowered it for every other sweep running concurrently in the same process (JR-1-04a).
 	 */
 	readonly staleMs?: number;
 	/**
@@ -427,7 +427,7 @@ let exitWarningInstalled = false;
 /**
  * Announce a leak from inside the worker.
  *
- * This handler is **not** the guarantee, and JR-105c is the reason it says so here. Its message never
+ * This handler is **not** the guarantee, and JR-1-05c is the reason it says so here. Its message never
  * arrived in the case it was written for: a module-scope throw after the acquire happens in a forked
  * worker (`pool: 'forks'`), and the worker's `exit` output does not reach the main process's summary
  * (F16). What does arrive is the ledger the main process reads after the run --

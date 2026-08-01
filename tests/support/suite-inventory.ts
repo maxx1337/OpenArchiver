@@ -4,13 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { TEST_CLASSES, type TestClass } from './test-classes';
 
 /**
- * Suite inventory (JR-105b).
+ * Suite inventory (JR-1-05b).
  *
  * ---------------------------------------------------------------------------------------------
  * Why this exists
  * ---------------------------------------------------------------------------------------------
- * The CI job introduced by `JR-105` asserted that the `integration` suite had run by grepping the
- * test log for the *absence* of a skip notice. The `JR-106` acceptance broke that check twice:
+ * The CI job introduced by `JR-1-05` asserted that the `integration` suite had run by grepping the
+ * test log for the *absence* of a skip notice. The `JR-1-06` acceptance broke that check twice:
  *
  *   (a) Renaming `packages/backend/tests/integration` made the suite **absent** rather than
  *       skipped. No skip notice is printed for a suite that does not exist, so the check reported
@@ -46,10 +46,10 @@ import { TEST_CLASSES, type TestClass } from './test-classes';
  * than assumed.
  *
  * ---------------------------------------------------------------------------------------------
- * What this file cannot see, and who does (JR-105c)
+ * What this file cannot see, and who does (JR-1-05c)
  * ---------------------------------------------------------------------------------------------
  * Everything here is decided before a single test runs, by looking at the filesystem. Three ways of
- * removing coverage leave the filesystem intact and were therefore green until JR-105c: relabelling a
+ * removing coverage leave the filesystem intact and were therefore green until JR-1-05c: relabelling a
  * suite's class, filling a file with `it.skip`, and deleting one file while adding another. Those are
  * findings F14 and F15, and they are watched by `./executed-tests.ts`, which counts tests that
  * actually **executed**, per suite and per class, and asserts the counts declared in
@@ -69,9 +69,9 @@ export interface SuiteSpec {
 	/**
 	 * How many files must match -- **exactly**, not at minimum.
 	 *
-	 * It was a lower bound until JR-105c. A lower bound is slack, and a deletion the size of the
+	 * It was a lower bound until JR-1-05c. A lower bound is slack, and a deletion the size of the
 	 * slack goes through unnoticed: that is finding F15, reproduced by adding one integration file
-	 * and deleting `pg-harness.int.test.ts`, which carries the entire JR-104 isolation contract.
+	 * and deleting `pg-harness.int.test.ts`, which carries the entire JR-1-04 isolation contract.
 	 * Equality costs one number per commit that adds or removes a test file, and the failure message
 	 * says which number to write.
 	 */
@@ -93,20 +93,20 @@ export const SUITES: readonly SuiteSpec[] = [
 		// Units live next to the code they test; `tests/unit/` is for units of the harness itself,
 		// which has no `src`.
 		include: ['packages/*/src/**/*.test.ts', 'packages/*/tests/unit/**/*.test.ts'],
-		// 5 after JR-105b; 7 after JR-1301 added the F1 regression at the validator boundary
+		// 5 after JR-1-05b; 7 after JR-13-01 added the F1 regression at the validator boundary
 		// (src/iam-policy/policy-validator.f1-conditions.test.ts) and the ADR-017 call-site
-		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-1313 added the
-		// cross-gate check (tests/unit/condition-key-gates.test.ts); 10 after JR-105c added
-		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts; 13 after JR-202
+		// inventory (tests/unit/filter-builder-call-sites.test.ts); 8 after JR-13-13 added the
+		// cross-gate check (tests/unit/condition-key-gates.test.ts); 10 after JR-1-05c added
+		// tests/unit/executed-tests.test.ts and tests/unit/harness-ledger.test.ts; 13 after JR-2-02
 		// added the canonical encoding of packages/journaling (canonical-encoding, merkle and the
-		// ADR-006 golden vectors, all under src/ledger/); 14 after JR-206 added ledger-writer.test.ts;
-		// 15 after JR-207 added tests/unit/ledger-backend-contract.test.ts -- the shared LedgerBackend
+		// ADR-006 golden vectors, all under src/ledger/); 14 after JR-2-06 added ledger-writer.test.ts;
+		// 15 after JR-2-07 added tests/unit/ledger-backend-contract.test.ts -- the shared LedgerBackend
 		// contract against a backend with no database, plus the counter-check that its concurrency case
 		// fails without a lock.
 		expectedFiles: 15,
-		// 216 before JR-202; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
-		// 280 with the 14 statement-order tests of the ledger writer (JR-206).
-		// 288 after JR-207: the 5 shared contract cases, plus 3 that show the contract's concurrency
+		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
+		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
+		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
 		// case has teeth (unlocked backend forks, locked one does not, a failed append does not wedge
 		// the chain).
 		expectedTests: { ci: 288, nightly: 0, manual: 0 },
@@ -114,30 +114,30 @@ export const SUITES: readonly SuiteSpec[] = [
 	{
 		name: 'integration',
 		include: ['packages/*/tests/integration/**/*.int.test.ts'],
-		// 4 after JR-104; 8 after JR-1301 split the F1/F3/F7/F8 regressions out of
-		// filter-builder.int.test.ts and added predefined-roles.int.test.ts; 9 after JR-204 added
+		// 4 after JR-1-04; 8 after JR-13-01 split the F1/F3/F7/F8 regressions out of
+		// filter-builder.int.test.ts and added predefined-roles.int.test.ts; 9 after JR-2-04 added
 		// journal-ledger-schema.int.test.ts (the CHECK constraints and keys of the ledger table);
-		// 10 after JR-205 added journal-ledger-append-only.int.test.ts (the trigger); 11 after JR-206
-		// added journal-ledger-writer.int.test.ts (append() against a real database); 12 after JR-207
+		// 10 after JR-2-05 added journal-ledger-append-only.int.test.ts (the trigger); 11 after JR-2-06
+		// added journal-ledger-writer.int.test.ts (append() against a real database); 12 after JR-2-07
 		// added ledger-backend-contract.int.test.ts -- the same contract against PostgresLedgerWriter.
 		// One suite, two implementations: that pair is what makes "the backend is pluggable" a
 		// measurement rather than a claim.
 		expectedFiles: 12,
-		// 55 before JR-204; 71 with the 16 schema tests of journal_ledger/deployment_identity;
-		// 79 with the 8 append-only tests of JR-205; 87 with the 8 writer tests of JR-206.
-		// 92 after JR-207: the same 5 contract cases, against PostgresLedgerWriter this time.
+		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
+		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
+		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time.
 		expectedTests: { ci: 92, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
 		include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
-		// 1 until JR-208/JR-209; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
+		// 1 until JR-2-08/JR-2-09; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
 		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)).
 		expectedFiles: 3,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
-		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-208 (load, rollback-under-load,
-		// the no-lock counter-check, and the F38 regression); 18 with the 11 tamper cases of JR-209.
+		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
+		// the no-lock counter-check, and the F38 regression); 18 with the 11 tamper cases of JR-2-09.
 		expectedTests: { ci: 18, nightly: 1, manual: 1 },
 	},
 ];
@@ -362,7 +362,7 @@ export function assertSuiteInventory(root: string = REPO_ROOT): void {
 		return;
 	}
 	throw new Error(
-		`Test suite inventory check failed (JR-105b).\n\n` +
+		`Test suite inventory check failed (JR-1-05b).\n\n` +
 			report.violations.map((violation) => `  - ${violation}`).join('\n\n') +
 			`\n\n${report.summary}`
 	);

@@ -1,5 +1,5 @@
 /**
- * The database port of the ledger (`JR-206`, prepares `JR-207`).
+ * The database port of the ledger (`JR-2-06`, prepares `JR-2-07`).
  *
  * `packages/journaling` must not depend on `packages/backend` (see
  * `docs/dev/journaling/02-architektur.md` section 2): several `config/*` modules there throw at import
@@ -39,7 +39,7 @@ export interface LedgerTransactor {
  * What the caller of `append()` knows about the event.
  *
  * **Look at what is absent: `seq`, `prevChainHash` and `chainHash`.** That absence is the structural
- * half of `JR-206`'s acceptance criterion ("computing the hash outside the lock must be impossible by
+ * half of `JR-2-06`'s acceptance criterion ("computing the hash outside the lock must be impossible by
  * construction, not by comment"). Those three values are *outputs*: `seq` and `prevChainHash` are only
  * knowable while the chain's lock is held, and `chainHash` is derived from them. A caller cannot
  * pre-compute the chain hash because it cannot obtain two of its inputs, and it cannot pass a
@@ -82,7 +82,7 @@ export interface LedgerAppendResult {
 }
 
 /**
- * The pluggable ledger backend (RFC section 5.4, ADR-011, `JR-207`).
+ * The pluggable ledger backend (RFC section 5.4, ADR-011, `JR-2-07`).
  *
  * Variant (a), Postgres with `synchronous_commit = on`, is `PostgresLedgerWriter`. Variant (b), a local
  * WAL, is **not** implemented and is not needed for v1 — but it has to be retrofittable without a
@@ -90,7 +90,7 @@ export interface LedgerAppendResult {
  * already here: the request, the returned head, and nothing that names Postgres.
  *
  * ---------------------------------------------------------------------------------------------
- * That retrofittability is measured, not asserted (`JR-207`)
+ * That retrofittability is measured, not asserted (`JR-2-07`)
  * ---------------------------------------------------------------------------------------------
  * `packages/backend/tests/support/ledger-backend-contract.ts` states the contract below as an
  * executable suite, and it runs twice: against `PostgresLedgerWriter`

@@ -11,14 +11,14 @@ import {
 } from './test-classes';
 
 /**
- * Executed-test inventory (JR-105c, findings F14 and F15).
+ * Executed-test inventory (JR-1-05c, findings F14 and F15).
  *
  * ---------------------------------------------------------------------------------------------
  * What was wrong with counting files
  * ---------------------------------------------------------------------------------------------
- * `suite-inventory.ts` (JR-105b) counts **files**. The damage it exists to prevent -- "the
+ * `suite-inventory.ts` (JR-1-05b) counts **files**. The damage it exists to prevent -- "the
  * `integration` coverage disappears while CI stays green" -- is reachable without changing a single
- * file. Three ways, all measured during the `JR-106a` acceptance and recorded as F14/F15:
+ * file. Three ways, all measured during the `JR-1-06a` acceptance and recorded as F14/F15:
  *
  *   (a) change `suiteRequiring('ci', …)` to `suiteRequiring('nightly', …)` in the four (today eight)
  *       integration files. One token per file. The whole suite stops running, `OA_TEST_REQUIRE_INFRA`
@@ -29,7 +29,7 @@ import {
  *       minimum. Measured: `197 passed | 3 skipped | 1 todo`, exit 0;
  *
  *   (c) `minimumFiles` is a lower bound, so once a suite grows past it, a deletion the size of the
- *       slack passes unnoticed -- delete `pg-harness.int.test.ts` (13 tests, the entire JR-104
+ *       slack passes unnoticed -- delete `pg-harness.int.test.ts` (13 tests, the entire JR-1-04
  *       isolation contract) while adding any other file and the count is unchanged.
  *
  * All three are invisible to a guard that looks at the filesystem, because in all three the
@@ -321,7 +321,7 @@ export function assertExecutedTests(): void {
 	const measurement = readExecutedMeasurement();
 	if (!measurement) {
 		throw new Error(
-			`Executed-test inventory check failed (JR-105c): no measurement at ` +
+			`Executed-test inventory check failed (JR-1-05c): no measurement at ` +
 				`${executedMeasurementPath()}.\n` +
 				`  The reporter that writes it is registered in vitest.config.ts as \`reporters\`. ` +
 				`Without it, nothing knows how many tests actually ran, and F14 is open again: the ` +
@@ -342,7 +342,7 @@ export function assertExecutedTests(): void {
 		return;
 	}
 	throw new Error(
-		`Executed-test inventory check failed (JR-105c).\n\n` +
+		`Executed-test inventory check failed (JR-1-05c).\n\n` +
 			verdict.violations.map((violation) => `  - ${violation}`).join('\n\n') +
 			`\n\n${verdict.summary}`
 	);

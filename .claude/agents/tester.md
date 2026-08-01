@@ -45,7 +45,7 @@ the same class of defect as "a test that was never red proves nothing", one leve
 under test is fail-open, but the _check_. Build every probe so it runs against the **unfixed** state
 first, and keep that self-test in the output.
 
-It has already happened here (`JR-1309b`, 2026-07-29): the prose of
+It has already happened here (`JR-13-09b`, 2026-07-29): the prose of
 `docs/user-guides/upgrade-and-migration/access-control-changes.md` is hard-wrapped, so the sentence
 under investigation spanned two lines. A pattern with a plain space in it reported
 `still carries the absolute: false` — **the tool declared the known defect fixed.** Normalise whitespace

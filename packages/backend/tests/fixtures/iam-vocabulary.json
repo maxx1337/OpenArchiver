@@ -6,7 +6,7 @@
 		"CLAUDE.md section 5.4 documents that these two agree and that",
 		"docs/services/iam-service/iam-policy.md is stale -- it omits 'export'.",
 		"This fixture exists so a change to the vocabulary makes a test fail loudly instead of",
-		"silently drifting from the docs. JR-1103 is the task that fixes the documentation;",
+		"silently drifting from the docs. JR-11-03 is the task that fixes the documentation;",
 		"until then this file records the actual behaviour, not the documented one."
 	],
 	"actions": ["manage", "create", "read", "update", "delete", "search", "export", "sync"],

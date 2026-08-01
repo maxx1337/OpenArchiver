@@ -11,7 +11,7 @@ import {
 
 /**
  * The same `LedgerBackend` contract as `ledger-backend-contract.test.ts`, against variant (a)
- * (`JR-207`). Classification: `ci`.
+ * (`JR-2-07`). Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * Why the same suite twice
@@ -21,7 +21,7 @@ import {
  * *contract* is satisfiable and nothing about the real writer. Run only against Postgres, it would be
  * indistinguishable from an ordinary integration test and could quietly acquire Postgres-specific
  * expectations, at which point variant (b) would need a signature change after all — the exact outcome
- * `JR-207` exists to rule out.
+ * `JR-2-07` exists to rule out.
  *
  * The Postgres-specific half of the writer's behaviour is not here: the round trip through the columns,
  * microsecond preservation, array order, the `CHECK` constraints and the rollback path all live in
@@ -62,10 +62,15 @@ async function makeFixture(): Promise<LedgerBackendFixture> {
 	};
 }
 
-suiteRequiring('ci', 'LedgerBackend contract: PostgresLedgerWriter (JR-207)', postgresProbe, () => {
-	// No extra cases here on purpose. Anything this file added would be a case the in-memory backend
-	// is not held to, and the two suites would stop being the same contract -- which is the one thing
-	// this construction exists to guarantee. Variant (a)'s own properties are in
-	// `journal-ledger-writer.int.test.ts`.
-	ledgerBackendContractCases(makeFixture);
-});
+suiteRequiring(
+	'ci',
+	'LedgerBackend contract: PostgresLedgerWriter (JR-2-07)',
+	postgresProbe,
+	() => {
+		// No extra cases here on purpose. Anything this file added would be a case the in-memory backend
+		// is not held to, and the two suites would stop being the same contract -- which is the one thing
+		// this construction exists to guarantee. Variant (a)'s own properties are in
+		// `journal-ledger-writer.int.test.ts`.
+		ledgerBackendContractCases(makeFixture);
+	}
+);

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { CaslPolicy } from '@open-archiver/types';
 
 /**
- * Loader for the IAM policy fixtures that shipped with the repository but were, until JR-103,
+ * Loader for the IAM policy fixtures that shipped with the repository but were, until JR-1-03,
  * referenced by no code at all: `packages/backend/src/iam-policy/test-policies/*.json`.
  *
  * They stay where they are instead of moving to `tests/fixtures/` -- they are pre-existing repo

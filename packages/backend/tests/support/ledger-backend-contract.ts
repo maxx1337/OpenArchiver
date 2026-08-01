@@ -8,14 +8,14 @@ import {
 import type { JournalLedgerRecord } from '@open-archiver/types';
 
 /**
- * The contract every `LedgerBackend` owes, whichever variant of RFC section 5.4 it is (`JR-207`).
+ * The contract every `LedgerBackend` owes, whichever variant of RFC section 5.4 it is (`JR-2-07`).
  *
  * ---------------------------------------------------------------------------------------------
  * Why the assertions only look at return values
  * ---------------------------------------------------------------------------------------------
  * Deliberately, and it is the whole design of this file: nothing below reads a table, opens a file or
  * knows what storage looks like. A contract that inspected rows would be a Postgres contract wearing a
- * general name, and it could not be run against variant (b) — which is precisely the claim `JR-207` has
+ * general name, and it could not be run against variant (b) — which is precisely the claim `JR-2-07` has
  * to substantiate.
  *
  * What `append()` returns is enough, because `seq`, `prevChainHash` and `chainHash` are the chain. If

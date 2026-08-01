@@ -7,13 +7,13 @@ import { acquireTestDatabase, loadBackendDatabaseSingleton } from '../support/pg
 import { seedIngestionSource, seedUserWithoutRole } from '../support/iam-seed';
 
 /**
- * JR-104 -- `helpers/mongoToMeli.ts` against a real database.
+ * JR-1-04 -- `helpers/mongoToMeli.ts` against a real database.
  *
  * `mongoToMeli` is not a pure translator. One branch queries `ingestion_sources`:
  *
  *     if (column === 'ingestionSource.userId') { ... select id from ingestion_sources where ... }
  *
- * That branch is the reason this helper could not be covered in JR-103 -- it imports
+ * That branch is the reason this helper could not be covered in JR-1-03 -- it imports
  * `../database` at module load, so it cannot even be collected without `DATABASE_URL`. Everything
  * below is about the boundary between the translator and that query.
  *
@@ -44,7 +44,7 @@ function parseInList(filter: string): string[] {
 		.filter((part) => part.length > 0);
 }
 
-suiteRequiring('ci', 'mongoToMeli() against a real database (JR-104)', postgresProbe, () => {
+suiteRequiring('ci', 'mongoToMeli() against a real database (JR-1-04)', postgresProbe, () => {
 	const translate = (query: Record<string, unknown>) => mongoToMeli!(query);
 	const db = () => harness!.db;
 
@@ -72,7 +72,7 @@ suiteRequiring('ci', 'mongoToMeli() against a real database (JR-104)', postgresP
 	});
 
 	/**
-	 * FINDING F9 (JR-104) -- the placeholder expansion depends on the *syntactic form* of the
+	 * FINDING F9 (JR-1-04) -- the placeholder expansion depends on the *syntactic form* of the
 	 * policy condition.
 	 *
 	 * The `ingestionSource.userId` special case sits in the `else` branch, i.e. it is only reached
@@ -89,7 +89,7 @@ suiteRequiring('ci', 'mongoToMeli() against a real database (JR-104)', postgresP
 	 */
 	it('FINDING F9: the $eq form skips the expansion and names a non-filterable attribute', async () => {
 		coverageNotice(
-			'FINDING F9 (JR-104): mongoToMeli() only expands the ingestionSource.userId placeholder ' +
+			'FINDING F9 (JR-1-04): mongoToMeli() only expands the ingestionSource.userId placeholder ' +
 				'for a scalar condition value. { $eq: id } skips it and emits the attribute ' +
 				'"ingestionSource.userId", which is not among the Meilisearch filterableAttributes ' +
 				'(SearchService.ts:476). Whether the engine errors or silently matches nothing is NOT ' +
@@ -106,18 +106,18 @@ suiteRequiring('ci', 'mongoToMeli() against a real database (JR-104)', postgresP
 	});
 
 	/**
-	 * FINDING F10 (JR-104) -- the expanded IN list has no deterministic order.
+	 * FINDING F10 (JR-1-04) -- the expanded IN list has no deterministic order.
 	 *
 	 * The lookup is `select id from ingestion_sources where user_id = ...` with no `order by`, so
 	 * Postgres may return the ids in any order. The produced filter string is therefore not stable
 	 * for the same inputs. Low severity today (Meilisearch does not care about the order inside
 	 * `IN [...]`), but it makes the function unusable as a cache key and breaks any golden-file
 	 * comparison of a filter string -- which is exactly what this project's canonical-encoding
-	 * tests (JR-202) rely on elsewhere.
+	 * tests (JR-2-02) rely on elsewhere.
 	 */
 	it('FINDING F10: the expanded IN list is not ordered', async () => {
 		coverageNotice(
-			'FINDING F10 (JR-104): mongoToMeli() builds the ingestionSourceId IN [...] list from a ' +
+			'FINDING F10 (JR-1-04): mongoToMeli() builds the ingestionSourceId IN [...] list from a ' +
 				'query without ORDER BY, so the emitted filter string is not deterministic. Asserted ' +
 				'as a set, not a sequence.'
 		);

@@ -20,14 +20,14 @@ License: **AGPL-3.0**. Contributions must stay compatible with it.
 pnpm workspaces (`pnpm-workspace.yaml`: `packages/*`, `apps/*`). **No turbo/nx** — orchestration is
 plain `pnpm --filter` + `concurrently` + `dotenv-cli`. Node >= 22, pnpm 10.13.1 (pinned).
 
-| Path                  | Package name                | Role                                                                                                                                                                      |
-| --------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/types`      | `@open-archiver/types`      | Shared contract package. Types-only, MIT. **Changes here ripple everywhere.**                                                                                             |
-| `packages/backend`    | `@open-archiver/backend`    | Express 5 API, services, Drizzle schema, BullMQ workers                                                                                                                   |
-| `packages/frontend`   | `@open-archiver/frontend`   | SvelteKit 2 / Svelte 5 (runes), Tailwind 4, bits-ui                                                                                                                       |
-| `packages/journaling` | `@open-archiver/journaling` | **Since `JR-201` (E2).** Ledger, canonical encoding, chain and Merkle hashing. AGPL, pure logic. Depends on `types` **only** — config and DB are injected, never imported |
-| `apps/open-archiver`  | `open-archiver-app`         | Thin entrypoint: `createServer([])` + `listen`                                                                                                                            |
-| `docs/`               | —                           | VitePress site. Sidebar is **explicit** in `docs/.vitepress/config.mts`                                                                                                   |
+| Path                  | Package name                | Role                                                                                                                                                                       |
+| --------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/types`      | `@open-archiver/types`      | Shared contract package. Types-only, MIT. **Changes here ripple everywhere.**                                                                                              |
+| `packages/backend`    | `@open-archiver/backend`    | Express 5 API, services, Drizzle schema, BullMQ workers                                                                                                                    |
+| `packages/frontend`   | `@open-archiver/frontend`   | SvelteKit 2 / Svelte 5 (runes), Tailwind 4, bits-ui                                                                                                                        |
+| `packages/journaling` | `@open-archiver/journaling` | **Since `JR-2-01` (E2).** Ledger, canonical encoding, chain and Merkle hashing. AGPL, pure logic. Depends on `types` **only** — config and DB are injected, never imported |
+| `apps/open-archiver`  | `open-archiver-app`         | Thin entrypoint: `createServer([])` + `listen`                                                                                                                             |
+| `docs/`               | —                           | VitePress site. Sidebar is **explicit** in `docs/.vitepress/config.mts`                                                                                                    |
 
 ### The dual OSS / Enterprise build — read this carefully
 
@@ -125,12 +125,12 @@ Four things about it are easy to trip over:
 - **The counts in `tests/support/suite-inventory.ts` are exact, not minima.** Adding or removing a test
   file _or a test_ means updating `expectedFiles` / `expectedTests` in the same commit. The failure
   message states the number to write. `globalSetup` checks the files before the run; a reporter plus the
-  `globalSetup` teardown check the **executed** test counts after it (JR-105c, findings F14/F15).
+  `globalSetup` teardown check the **executed** test counts after it (JR-1-05c, findings F14/F15).
 - **A green run can be a disabled run** — the reason all of the above exists. Quote test counts, not
   just "green": a full local run is `398 passed | 2 skipped` at 30 files (274 before E2 started; the
   ledger encoding, schema, trigger, writer and the two adversarial ledger suites added the rest). A run
   narrowed with `-t`, a file filter, `--project` or `--shard` prints `verified NOTHING` and checks no
-  counts. **A full run now takes around two minutes** — `JR-208` writes ten thousand ledger entries
+  counts. **A full run now takes around two minutes** — `JR-2-08` writes ten thousand ledger entries
   against a real database, and that is deliberate rather than reducible (Testplan §12.6).
 - **Integration tests acquire a real database** via `acquireTestDatabase()` in the **module scope**, and
   the harness records it in a per-run ledger so the main process can announce and drop anything a
@@ -176,7 +176,7 @@ not an enum. The vocabulary lives in three places:
 3. `docs/services/iam-service/iam-policy.md` — the human-facing reference
 
 **All three now agree** — 8 actions (including `export`) and 7 subjects, verified by comparing the
-three lists mechanically. `JR-1312` fixed (3) on 2026-07-30; until then it omitted `export` and
+three lists mechanically. `JR-13-12` fixed (3) on 2026-07-30; until then it omitted `export` and
 wrongly described `manage` as expanding to `create/read/update/delete/search/sync`. CASL's `manage`
 is a **true wildcard**: it matches any action on the subject, including `export` and any action added
 later (measured against the built code, not inferred). If you touch the vocabulary, update all three.
@@ -264,7 +264,7 @@ project — not a working branch. Each epic gets its own branch off it. Full rul
 > genuinely diverged instead of silently discarding work.
 
 - `git push -u origin <branch>`; retry network failures with backoff.
-- Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. `JR-105a`
+- Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. `JR-1-05a`
   made the repository lint-clean on 2026-07-28.
     > **On Windows it is red anyway, and that is not your doing.** With no `.gitattributes` in the
     > repository and Git-for-Windows' default `core.autocrlf=true`, every text file is checked out with

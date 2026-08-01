@@ -9,7 +9,7 @@ import { seedIngestionSource } from '../support/iam-seed';
 import { deploymentIdentity, journalLedger } from '../../src/database/schema';
 
 /**
- * Append-only enforcement on the ledger (`JR-205`, **ADR-009**). Classification: `ci`.
+ * Append-only enforcement on the ledger (`JR-2-05`, **ADR-009**). Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * What is enforced, and by what
@@ -86,12 +86,12 @@ function receiptRow(chainScopeId: string, seq: bigint) {
 	};
 }
 
-suiteRequiring('ci', 'journal_ledger append-only (JR-205)', postgresProbe, () => {
+suiteRequiring('ci', 'journal_ledger append-only (JR-2-05)', postgresProbe, () => {
 	// Testplan rule 6: no silent caps. Emitted from the suite body rather than from an `it` with a
 	// `expect(true)` in it -- a test without an assertion is a violation of rule 2, and a notice does
 	// not need to pretend to be one.
 	coverageNotice(
-		'JR-205: the append-only triggers are verified against UPDATE, DELETE and TRUNCATE for every ' +
+		'JR-2-05: the append-only triggers are verified against UPDATE, DELETE and TRUNCATE for every ' +
 			'role. They are NOT verified against `SET session_replication_role = replica` or ' +
 			'`ALTER TABLE ... DISABLE TRIGGER`, both of which succeed for the owning role and are ' +
 			'measured in F37. Closing that is a deployment change queued for E11 (ADR-009).'

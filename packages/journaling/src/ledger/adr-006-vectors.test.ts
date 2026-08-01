@@ -30,7 +30,7 @@ import {
 } from './merkle';
 
 /**
- * The golden-file half of `JR-202`: the implementation against the test vectors of **ADR-006**.
+ * The golden-file half of `JR-2-02`: the implementation against the test vectors of **ADR-006**.
  *
  * Classification: `ci`. Pure computation over `node:crypto`, no socket, no database.
  *
@@ -96,7 +96,7 @@ suite('ci', 'ADR-006 test vectors', () => {
 	it('encodes an anchor event, whose transaction fields are all null (V2)', () => {
 		// Not a vector with a published hash, but the shape check that belongs with it: an event
 		// without an SMTP transaction must be encodable at all. `sizeBytes: 0` would assert a
-		// message that never existed, which is why JR-204 makes the column nullable.
+		// message that never existed, which is why JR-2-04 makes the column nullable.
 		const record = encodeLedgerRecord(ANCHOR_V2);
 		expect(record.readUInt32BE(1)).toBe(LEDGER_FIELD_COUNT);
 		expect(record.length).toBeLessThan(EXPECTED.receiptRecordLength);

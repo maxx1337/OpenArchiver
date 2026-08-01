@@ -9,10 +9,10 @@
 		"",
 		"`mustFailClosed: true` marks an input for which the translator must NOT produce a filter that",
 		"leaves rows visible. Accepted outcomes: a thrown error, or a never-true predicate (1=0 /",
-		"false). Rewritten in JR-1301 (epic E13): until 2026-07-28 these three entries carried",
+		"false). Rewritten in JR-13-01 (epic E13): until 2026-07-28 these three entries carried",
 		"`failOpen: true` plus `sql: null` and thereby asserted the defect (F3) as if it were the",
 		"contract. `observedBeforeE13` records what the helper did then, so the change of expectation",
-		"is legible. These cases are RED until JR-1304 lands."
+		"is legible. These cases are RED until JR-13-04 lands."
 	],
 	"cases": [
 		{
@@ -46,7 +46,7 @@
 			},
 			"mustRefuseKey": true,
 			"observedBeforeE13": "\"foo.bar\" = $1 (one quoted identifier containing a dot)",
-			"note": "INVERTED in JR-1306 (finding F21, decided by the PO 2026-07-29: strict allowlist). This case used to pin the emitted identifier. There is no column literally named foo.bar, so the old behaviour made every FilterBuilder-scoped query fail at runtime instead of denying access; an unresolvable relation is a policy error and is refused. Marked `mustRefuseKey` and not `mustFailClosed` so that the count of F3 cases stays what JR-1301 set it to."
+			"note": "INVERTED in JR-13-06 (finding F21, decided by the PO 2026-07-29: strict allowlist). This case used to pin the emitted identifier. There is no column literally named foo.bar, so the old behaviour made every FilterBuilder-scoped query fail at runtime instead of denying access; an unresolvable relation is a policy error and is refused. Marked `mustRefuseKey` and not `mustFailClosed` so that the count of F3 cases stays what JR-13-01 set it to."
 		},
 		{
 			"name": "$eq",
@@ -258,7 +258,7 @@
 			"query": {},
 			"mustFailClosed": true,
 			"observedBeforeE13": "undefined (no filter => unrestricted query)",
-			"note": "JR-1301/F3: an empty condition object carries no restriction, so translating it to \"no filter\" hands the caller an unscoped query. FilterBuilder already special-cases the empty query to 1=0; the translator must not be the one place where it means \"everything\"."
+			"note": "JR-13-01/F3: an empty condition object carries no restriction, so translating it to \"no filter\" hands the caller an unscoped query. FilterBuilder already special-cases the empty query to 1=0; the translator must not be the one place where it means \"everything\"."
 		},
 		{
 			"name": "unsupported operator must fail closed",
@@ -269,7 +269,7 @@
 			},
 			"mustFailClosed": true,
 			"observedBeforeE13": "undefined (no filter => unrestricted query)",
-			"note": "JR-1301/F3: the switch has no default branch, so an unknown operator is dropped and the condition disappears entirely. Required behaviour (JR-1304): reject, or emit a never-true predicate."
+			"note": "JR-13-01/F3: the switch has no default branch, so an unknown operator is dropped and the condition disappears entirely. Required behaviour (JR-13-04): reject, or emit a never-true predicate."
 		},
 		{
 			"name": "empty $or must fail closed",
@@ -278,7 +278,7 @@
 			},
 			"mustFailClosed": true,
 			"observedBeforeE13": "undefined (no filter => unrestricted query)",
-			"note": "JR-1301/F3: an empty disjunction satisfies nothing, so it must not translate to \"no filter\"."
+			"note": "JR-13-01/F3: an empty disjunction satisfies nothing, so it must not translate to \"no filter\"."
 		},
 		{
 			"name": "second operator in the same object is dropped",

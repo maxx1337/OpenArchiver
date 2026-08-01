@@ -7,8 +7,8 @@ import { coverageNotice } from '@oa-test/notice';
 import { redUntil } from '../support/fail-closed';
 
 /**
- * ADR-017 / `JR-1303` regression -- which (action, subject) each `FilterBuilder.create()` call site
- * uses (JR-1301, epic E13).
+ * ADR-017 / `JR-13-03` regression -- which (action, subject) each `FilterBuilder.create()` call site
+ * uses (JR-13-01, epic E13).
  *
  * Classification: `ci`. Reads source text; imports nothing from `src/`.
  *
@@ -36,7 +36,7 @@ import { redUntil } from '../support/fail-closed';
  *
  * A regex over source text is a weak instrument, so this file also asserts that the *inventory* of
  * call sites is exactly the four ADR-017 enumerates. A fifth call site appearing anywhere under
- * `src/` fails this test rather than sliding past it -- which is also `JR-1303`'s own acceptance
+ * `src/` fails this test rather than sliding past it -- which is also `JR-13-03`'s own acceptance
  * criterion ("kein weiterer `FilterBuilder`-Aufruf und kein Route-Gate angefasst").
  */
 
@@ -107,7 +107,7 @@ function collectCallSites(): CallSite[] {
 }
 
 /**
- * The four call sites ADR-017 enumerates, with the action each must use *after* `JR-1303`.
+ * The four call sites ADR-017 enumerates, with the action each must use *after* `JR-13-03`.
  * `SearchService` is the only one that changes.
  */
 const EXPECTED_CALL_SITES: ReadonlyArray<{
@@ -142,12 +142,12 @@ const EXPECTED_CALL_SITES: ReadonlyArray<{
 	},
 ];
 
-suite('ci', 'FilterBuilder.create() call-site inventory (ADR-017, JR-1303)', () => {
+suite('ci', 'FilterBuilder.create() call-site inventory (ADR-017, JR-13-03)', () => {
 	const sites = collectCallSites();
 
 	it('finds exactly the four call sites ADR-017 enumerates', () => {
 		coverageNotice(
-			'ADR-017 wiring (JR-1301) is asserted on the SOURCE TEXT of SearchService.ts, not on a ' +
+			'ADR-017 wiring (JR-13-01) is asserted on the SOURCE TEXT of SearchService.ts, not on a ' +
 				'live search: there is no Meilisearch in this environment, and importing ' +
 				'SearchService constructs three BullMQ queues against a Redis that is not there. ' +
 				'The behavioural half -- a conditional `search archive` rule producing a scoped ' +
@@ -167,7 +167,7 @@ suite('ci', 'FilterBuilder.create() call-site inventory (ADR-017, JR-1303)', () 
 	});
 
 	it('leaves ArchivedEmailService and IngestionService on their current actions', () => {
-		// Green before and after JR-1303. This is the "nothing else moved" half of its criteria.
+		// Green before and after JR-13-03. This is the "nothing else moved" half of its criteria.
 		const unchanged = EXPECTED_CALL_SITES.filter(
 			(expected) => expected.file !== 'services/SearchService.ts'
 		);
@@ -183,7 +183,7 @@ suite('ci', 'FilterBuilder.create() call-site inventory (ADR-017, JR-1303)', () 
 
 	it(
 		redUntil(
-			'JR-1303',
+			'JR-13-03',
 			"both SearchService call sites build their filter for ('archive','search')"
 		),
 		() => {
@@ -207,7 +207,7 @@ suite('ci', 'FilterBuilder.create() call-site inventory (ADR-017, JR-1303)', () 
 
 	it('the two search route gates are untouched', () => {
 		// ADR-017 explicitly rejected variant A (gating the search routes on `read` as well), so
-		// this test protects the *absence* of a change. Green before and after JR-1303.
+		// this test protects the *absence* of a change. Green before and after JR-13-03.
 		const routes = readFileSync(path.join(BACKEND_SRC, 'api/routes/search.routes.ts'), 'utf8');
 		const gates = routes
 			.split('\n')

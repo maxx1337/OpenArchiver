@@ -3,7 +3,7 @@ import { chainHash, genesisChainHash } from '@open-archiver/journaling';
 import type { JournalLedgerRecord } from '@open-archiver/types';
 
 /**
- * Reading a ledger chain back and judging it (`JR-208`, `JR-209`).
+ * Reading a ledger chain back and judging it (`JR-2-08`, `JR-2-09`).
  *
  * ---------------------------------------------------------------------------------------------
  * What this is, and what it deliberately is not
@@ -11,7 +11,7 @@ import type { JournalLedgerRecord } from '@open-archiver/types';
  * This is the smallest thing that can be called a verifier: read the rows, recompute every hash
  * from the values that were stored, and report the **first** divergence with its `seq` and — where
  * a second source of truth exists — the field. Testplan section 12.5 asks for exactly that, and
- * `JR-209` cannot make a statement about tamper evidence without something that judges.
+ * `JR-2-09` cannot make a statement about tamper evidence without something that judges.
  *
  * It is **not** E9's `verify`. E9 owns the CLI, the exit codes, the object store and the anchor
  * table; this walks a chain that a test just wrote. Two consequences worth stating rather than
@@ -35,7 +35,7 @@ import type { JournalLedgerRecord } from '@open-archiver/types';
  * So field-level attribution takes a second, independent record of what was written, passed in as
  * `expectedRecords`. In these tests that is what the test itself appended; in E9 it is the export
  * manifest and the stored object (RFC section 8: `content_sha256` over the plaintext wire bytes is
- * verifiable against a re-export). The distinction matters for what `JR-209` may claim: the ledger
+ * verifiable against a re-export). The distinction matters for what `JR-2-09` may claim: the ledger
  * proves *that* and *where*, the second source proves *what*.
  */
 
@@ -167,7 +167,7 @@ export interface VerifyChainOptions {
 	/**
 	 * How far the chain must reach. Without it a chain truncated at the **end** verifies happily:
 	 * every remaining row is consistent, and nothing in the rows themselves says one is missing.
-	 * `JR-209` case (b) deletes a middle row, which is caught regardless — but the truncation case is
+	 * `JR-2-09` case (b) deletes a middle row, which is caught regardless — but the truncation case is
 	 * the one that needs an external expectation, and an anchor is what supplies it in production.
 	 */
 	readonly expectedLength?: number;
@@ -334,9 +334,9 @@ export function detectSplitBrain(
  *
  * Note `ORDER BY journal_ledger.seq` — qualified, and that is not decoration. The projection aliases
  * `seq::text AS seq`, and an unqualified `ORDER BY seq` binds to that **text** alias, sorting
- * 1, 10, 2, 3… That happened during `JR-206` and reported a chain break at seq 10 that did not
+ * 1, 10, 2, 3… That happened during `JR-2-06` and reported a chain break at seq 10 that did not
  * exist. The dangerous direction is the mirror image: read in the wrong order, a real break can be
- * hidden. `JR-208` writes ten thousand rows into one chain, so it is the first place where a
+ * hidden. `JR-2-08` writes ten thousand rows into one chain, so it is the first place where a
  * lexicographic sort would be catastrophic rather than merely wrong.
  */
 export async function readLedgerChain(sql: Sql, chainScopeId: string): Promise<LedgerEntry[]> {

@@ -33,7 +33,7 @@ import {
 } from '../support/rfc-formula-encoding';
 
 /**
- * Ledger tamper evidence — `JR-209`, Testplan section 12.5 cases (a) to (h). Classification: `ci`.
+ * Ledger tamper evidence — `JR-2-09`, Testplan section 12.5 cases (a) to (h). Classification: `ci`.
  *
  * ---------------------------------------------------------------------------------------------
  * The one thing that makes this suite worth running
@@ -60,7 +60,7 @@ import {
  * ---------------------------------------------------------------------------------------------
  * Why the append-only trigger has to be switched off, and what that costs
  * ---------------------------------------------------------------------------------------------
- * Since `JR-205` (`0042_journal_ledger_append_only.sql`) `UPDATE`, `DELETE` and `TRUNCATE` on
+ * Since `JR-2-05` (`0042_journal_ledger_append_only.sql`) `UPDATE`, `DELETE` and `TRUNCATE` on
  * `journal_ledger` are rejected by a trigger. Without disabling it no manipulation in this file is
  * possible at all — and the suite would be **green having tested nothing**, which is the single most
  * expensive way for this file to fail.
@@ -194,7 +194,7 @@ async function withAppendOnlyDisabled<T>(fn: () => Promise<T>): Promise<T> {
 	}
 }
 
-suiteRequiring('ci', 'ledger tamper evidence (JR-209, Testplan 12.5)', postgresProbe, () => {
+suiteRequiring('ci', 'ledger tamper evidence (JR-2-09, Testplan 12.5)', postgresProbe, () => {
 	it('rejects the manipulation outright while the append-only trigger is on', async () => {
 		// The premise of every other case in this file. If an UPDATE were possible with the trigger
 		// enabled, `withAppendOnlyDisabled()` would be theatre; if it were impossible even with the

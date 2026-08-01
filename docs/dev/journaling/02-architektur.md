@@ -54,7 +54,7 @@ Punkt als _offen_ markiert ist, entscheidet ihn das jeweilige Epic und trägt da
 Die Trennung wird über getrennte Umgebungsvariablen und getrennte Postgres-Rollen realisiert, nicht
 über Code-Konventionen.
 
-**Append-Only ist seit dem 2026-07-31 in der Datenbank erzwungen — durch einen Trigger (`JR-205`,
+**Append-Only ist seit dem 2026-07-31 in der Datenbank erzwungen — durch einen Trigger (`JR-2-05`,
 ADR-009), Migration `0042_journal_ledger_append_only.sql`.** Eine `plpgsql`-Funktion wirft mit
 `ERRCODE = restrict_violation`, und **vier** Trigger hängen daran: je Tabelle einer für
 `UPDATE OR DELETE` (row level) und einer für `TRUNCATE` (statement level). Umfang ist `journal_ledger`
@@ -104,7 +104,7 @@ Die Regel oben verbietet eine Richtung. Seit ADR-025 ist die **andere** Richtung
 
 **Grund, und er ist kein ästhetischer.** Der Auftraggeber hat am 2026-08-01 geprüft, ob statt dieses
 Forks eine eigenständige Anwendung gebaut werden sollte. Die Antwort war nein, unter anderem weil der
-Empfangspfad bereits getrennt ist (`JR-401`: kein Import aus `backend/src/config/*`, keiner aus
+Empfangspfad bereits getrennt ist (`JR-4-01`: kein Import aus `backend/src/config/*`, keiner aus
 `src/database/index.ts`; `packages/journaling` importiert heute nur `node:crypto`,
 `@open-archiver/types` und relative Pfade). Solange das so bleibt, ist eine spätere Herauslösung eine
 **Verpackungsentscheidung** und keine Neuentwicklung — und die Frage kann jederzeit neu gestellt
@@ -158,7 +158,7 @@ Stilvorgaben: `timestamp(..., { withTimezone: true })`, typisiertes JSONB, `pgEn
 `legal_hold_set`. Enum-Werte lassen sich in Postgres nicht entfernen — Erweiterungen sind später
 möglich, Umbenennungen nicht.
 
-**Umgesetzt am 2026-07-31 (`JR-204`, Migration `0041_even_scream.sql`).** Vier Festlegungen darin
+**Umgesetzt am 2026-07-31 (`JR-2-04`, Migration `0041_even_scream.sql`).** Vier Festlegungen darin
 weichen von der naheliegenden Lösung ab und sind es wert, hier zu stehen — die vollständige Begründung
 steht als Doc-Kommentar an der jeweiligen Spalte:
 
@@ -240,7 +240,7 @@ also **eine** Kette, und ein neu angelegter Endpunkt setzt keine neue Kette auf.
 Anforderung: deterministisch, längenpräfixiert, plattform- und versionsunabhängig — **nie**
 JSON-Schlüsselreihenfolge, nie lokalisierte Zeitformatierung.
 
-**Festgelegt am 2026-07-31 in ADR-006 (`JR-203`), mit Testvektoren.** Dieses Kapitel gibt den Rahmen;
+**Festgelegt am 2026-07-31 in ADR-006 (`JR-2-03`), mit Testvektoren.** Dieses Kapitel gibt den Rahmen;
 die verbindliche Fassung mit Feldreihenfolge, Typ-Tags und Vektoren steht in `05-entscheidungen.md`.
 
 - Führendes Versionsbyte (`0x01`), dann `uint32be(field_count)` — die Feldzahl ist mitgehasht, damit
@@ -420,7 +420,7 @@ offene ADRs geführt:
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------- |
 | ~~Lock-Key-Strategie und ob eine Kette pro Mandant~~ — **entschieden 2026-07-31: eine Kette je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                    | E2     | ADR-007, RFC §15                      |
 | ~~Genaue Bytes der kanonischen Kodierung, Genesis-String, `deployment_id`~~ — **entschieden 2026-07-31: 16 gehashte Felder, Genesis mit `chain_scope_id`, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962** | E2     | ADR-006                               |
-| ~~Append-Only-Erzwingung: Rechteentzug oder Trigger~~ — **entschieden 2026-07-31: beides. Trigger in E2 (`JR-205`), Rechteentzug als Deployment-Anforderung in E11 (F37)**                                             | E2     | ADR-009                               |
+| ~~Append-Only-Erzwingung: Rechteentzug oder Trigger~~ — **entschieden 2026-07-31: beides. Trigger in E2 (`JR-2-05`), Rechteentzug als Deployment-Anforderung in E11 (F37)**                                            | E2     | ADR-009                               |
 | Ledger-Backend: Postgres `synchronous_commit` (a) vs. lokales WAL (b)                                                                                                                                                  | E2     | RFC §5.4 — (a) zuerst, steckbar bauen |
 | `processEmail` erweitern oder journaling-spezifischen Pfad daneben                                                                                                                                                     | E6     | ADR-010                               |
 | Migrationspfad für Bestandsinstallationen (neue Kette ab Genesis vs. Altdaten außerhalb der Kette)                                                                                                                     | E12    | RFC §15                               |

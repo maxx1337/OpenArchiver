@@ -6,14 +6,14 @@ import { PolicyValidator } from './policy-validator';
 import { redUntil } from '../../tests/support/fail-closed';
 
 /**
- * FINDING F1 regression at the validation boundary (JR-1301, epic E13).
+ * FINDING F1 regression at the validation boundary (JR-13-01, epic E13).
  *
  * Classification: `ci`. Pure -- `PolicyValidator` imports only types.
  *
  * ---------------------------------------------------------------------------------------------
  * The claim under test
  * ---------------------------------------------------------------------------------------------
- * `JR-1306`'s acceptance criteria end with: "`PolicyValidator` weist solche Policies beim Anlegen
+ * `JR-13-06`'s acceptance criteria end with: "`PolicyValidator` weist solche Policies beim Anlegen
  * ab." That is the second half of F1 and it is the half that matters operationally: the injection
  * in `mongoToDrizzle` is only reachable because a hostile `conditions` object can be *stored*.
  * `iam.controller.ts` runs `PolicyValidator.isValid()` on every statement before
@@ -31,7 +31,7 @@ import { redUntil } from '../../tests/support/fail-closed';
  * `src/iam-policy/test-policies/` keep validating. They deliberately say nothing about *unknown
  * but harmless* keys -- see finding F17 and the note in `mongoToDrizzle.test.ts`.
  *
- * `policy-validator.test.ts` (JR-103, 53 cases) stays as it is: it covers actions and subjects and
+ * `policy-validator.test.ts` (JR-1-03, 53 cases) stays as it is: it covers actions and subjects and
  * none of its assertions contradict this file. The one existing test that documents the gap --
  * "does not inspect conditions at all" -- is the reason this file exists rather than an edit there;
  * it is a statement about today's surface, and F6 (also open, not in E13) lives next to it.
@@ -45,11 +45,11 @@ const hostileConditionKeys = [
 ];
 
 suite('ci', 'PolicyValidator.isValid() -- FINDING F1: hostile condition keys', () => {
-	it(redUntil('JR-1306', 'a condition key containing SQL syntax is refused'), () => {
+	it(redUntil('JR-13-06', 'a condition key containing SQL syntax is refused'), () => {
 		coverageNotice(
-			'FINDING F1 regression (JR-1301): PolicyValidator.isValid() does not inspect ' +
+			'FINDING F1 regression (JR-13-01): PolicyValidator.isValid() does not inspect ' +
 				'`conditions`, so a role carrying an injecting condition key can be created through ' +
-				'POST /roles. Expected RED until JR-1306.'
+				'POST /roles. Expected RED until JR-13-06.'
 		);
 		for (const key of hostileConditionKeys) {
 			const policy = {
@@ -64,7 +64,7 @@ suite('ci', 'PolicyValidator.isValid() -- FINDING F1: hostile condition keys', (
 					`${JSON.stringify(key)} (reason field: ${JSON.stringify(reason)}). ` +
 					`iam.controller.ts only refuses a policy when isValid() says so, so this policy ` +
 					`reaches roles.policies and from there the WHERE clause of every ` +
-					`FilterBuilder-scoped query. See 09-befunde-bestandscode.md F1 and JR-1306.`
+					`FilterBuilder-scoped query. See 09-befunde-bestandscode.md F1 and JR-13-06.`
 			).toBe(false);
 			expect(reason, 'a refusal must name why, the message is shown to the operator').toEqual(
 				expect.stringMatching(/.+/)
@@ -72,7 +72,7 @@ suite('ci', 'PolicyValidator.isValid() -- FINDING F1: hostile condition keys', (
 		}
 	});
 
-	it(redUntil('JR-1306', 'a hostile key nested inside $or / $and / $not is refused too'), () => {
+	it(redUntil('JR-13-06', 'a hostile key nested inside $or / $and / $not is refused too'), () => {
 		// Rejecting only top-level keys would be a fix that the exploit walks around: CASL
 		// conditions nest, and `mongoToDrizzle` recurses into $or/$and/$not before it builds the
 		// column reference.
@@ -96,7 +96,7 @@ suite('ci', 'PolicyValidator.isValid() -- FINDING F1: hostile condition keys', (
 	});
 
 	it('the policies shipped by createDefaultRoles still validate', () => {
-		// Counter-check, green before and after JR-1306. Copied from
+		// Counter-check, green before and after JR-13-06. Copied from
 		// api/controllers/iam.controller.ts createDefaultRoles and services/UserService.ts:270.
 		// The integration test `predefined-roles.int.test.ts` drives the *real* code path; here the
 		// point is only that a condition validator must not reject the shapes we ship.
