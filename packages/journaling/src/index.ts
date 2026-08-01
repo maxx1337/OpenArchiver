@@ -80,3 +80,16 @@ export {
 	type DurableWriteResult,
 	type DurableWriteStage,
 } from './spool/durable-write';
+
+export {
+	JournalAcceptance,
+	isAccepted,
+	type AcceptedJournalTransaction,
+	type HighWaterMarkExceeded,
+	type JournalAcceptanceOptions,
+	type JournalAcceptanceResult,
+	type JournalTransactionInput,
+	type LedgerAppendFailed,
+	type SpoolCapacityExceeded,
+	type SpoolWriteFailed,
+} from './spool/acceptance';
