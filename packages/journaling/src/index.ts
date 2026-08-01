@@ -1,0 +1,50 @@
+/**
+ * `@open-archiver/journaling` — the logic of the compliance-grade SMTP journaling receiver.
+ *
+ * Pure logic: spool, ledger, canonical encoding, chain computation, journal-report parser, crash
+ * recovery. No HTTP layer, no SMTP server (that is `apps/smtp-ingress`), and **no imports from
+ * `@open-archiver/backend`**.
+ *
+ * That last rule is not stylistic. Several `packages/backend/src/config/*` modules `throw` at import
+ * time (`config/storage.ts` validates `STORAGE_ENCRYPTION_KEY`), and `src/database/index.ts` is a
+ * module singleton over `DATABASE_URL`. An ingress process importing those inherits both the
+ * credentials and the crashes of subsystems it does not use. Configuration and database connections
+ * are therefore **injected** into this package, never imported by it.
+ *
+ * See `docs/dev/journaling/02-architektur.md` section 2.
+ */
+
+export {
+	FORMAT_VERSION,
+	GENESIS_PREFIX,
+	LEDGER_FIELD_COUNT,
+	TAG,
+	canonicalJson,
+	chainHash,
+	encodeLedgerRecord,
+	genesisChainHash,
+	normalizeRemoteIp,
+} from './ledger/canonical-encoding';
+
+export {
+	MERKLE_LEAF_FIELD_COUNT,
+	MERKLE_LEAF_PREFIX,
+	MERKLE_NODE_PREFIX,
+	merkleLeaf,
+	merkleNode,
+	merkleRoot,
+} from './ledger/merkle';
+
+export type {
+	LedgerAppendRequest,
+	LedgerAppendResult,
+	LedgerBackend,
+	LedgerQuery,
+	LedgerTransactor,
+} from './ledger/ledger-port';
+
+export {
+	PostgresLedgerWriter,
+	advisoryLockKey,
+	type PostgresLedgerWriterOptions,
+} from './ledger/ledger-writer';

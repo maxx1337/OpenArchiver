@@ -85,90 +85,136 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-07-31 (**`ADR-006` entschieden, `JR-203` erledigt** — 16 gehashte Felder statt der acht
-aus RFC §5.2, Genesis, `deployment_identity`, Merkle nach RFC 6962, mit Testvektoren; **damit blockiert
-keine Entscheidung mehr den Kettencode** · **`ADR-007`**: eine Kette je Mandant, `chain_scope_id` =
-`ingestion_sources.id` · **`ADR-022`**: ein Token über die Merkle-Wurzel aller Kettenköpfe ·
-**`ADR-023`**: TSA-Auswahl, `open-tsa.eu` gemessen und eingeordnet · **Infrastruktur steht** über Docker
-Desktop · davor am 2026-07-30 **`JR-105c` erledigt**, E1 damit ohne offene Nacharbeit, F14/F15/F16/F24
-behoben; **E13 abgenommen** mit `JR-1309c`, **Rückmerge** `89d701f`, **`JR-1312`** `dca1f1a`) · **Branch:**
-`claude/enterprise-product-implementation-cxmmqe` · Arbeitsbaum **sauber** · Volllauf gegen das
-Docker-Postgres **274 passed | 2 skipped** bei 19 Dateien, Exit 0, 0 `oa_test_*`-Rückstände
+**Stand:** 2026-08-01 (**E2 ist abgenommen** — die zweite, **unabhängige** Runde `JR-210a` hat 24 von 24
+Kriterien erfüllt gefunden und dabei alle sechs dünnen Stellen der ersten Runde mit eigener Evidenz
+geschlossen. Ein neuer Befund **F39**, niedrig, Testharness. **Der Rückmerge ist der nächste Schritt und
+liegt beim Auftraggeber** · davor `JR-208`/`JR-209` mit **`F38`**, und am 2026-07-31 `JR-201`…`JR-207`
+sowie die ADRs `006`/`007`/`022`/`023`) · **Branch:** `claude/journaling-e2-ledger` (E2, abgezweigt vom
+Integrationsbranch) · Volllauf gegen das Docker-Postgres **398 passed | 2 skipped** bei 30 Dateien,
+Exit 0, `unit 288/288 · integration 92/92 · adversarial 18/18`, `test:types` grün für beide Pakete
 
 ### Der Stand in einem Satz
 
-**E1 und E13 sind fertig, das Messinstrument trägt jetzt, was ab E2 daran hängt, die Infrastruktur läuft,
-und seit `JR-203` ist keine Entscheidung mehr offen, die Kettencode blockiert.** Der Inventar-Wächter
-zählte Dateien; seit `JR-105c` zählt er **ausgeführte Tests je Suite und je Klasse**, also belegt ein
-grüner Lauf endlich, dass die `integration`-Suite gelaufen ist. **Der nächste Schritt ist `JR-201`** —
-`packages/journaling` anlegen, Rolle DEV, auf einem eigenen Branch `claude/journaling-e2-ledger`. Der
-erste Code danach ist `JR-202`, und der hat mit den Testvektoren aus ADR-006 §6 konkrete Zielwerte.
+**Der Ledger ist gebaut, gemessen, angegriffen und — jetzt unabhängig — abgenommen.** Er hält 10 000
+nebenläufige Appends lückenlos aus, jede der acht Manipulationsarten aus Testplan §12.5 wird mit
+Befundart und `seq` gemeldet, und **`JR-210a`** hat das in einer frischen Sitzung nachgemessen, die
+weder `JR-208` noch `JR-209` noch `JR-210` geschrieben hat. **Das Einzige, was noch offen ist, ist der
+Rückmerge** in den Integrationsbranch nach ADR-014 — er liegt beim Auftraggeber. Danach beginnt **E3**.
+
+**Eine Sache aus dem Abnahmeverlauf ist wichtiger als das Ergebnis**, weil sie sich wiederholen wird:
+die erste Berichtsfassung von `JR-210a` nannte „22 von 22" — eine Zahl, die sich aus der eigenen
+Kriterientabelle nicht herleiten ließ. Die Rückfrage förderte **zwei echte Lücken** zutage, nicht nur
+einen Zählfehler; eine davon war ein **ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer
+abgeschalteten Suite" — ausgerechnet das, welches alle anderen trägt, weil jede Zahl auf
+`integration 92/92` ruht). **Der daraufhin verlangte _vollständige_ Abgleich gegen alle drei Blöcke
+der ersten Runde brachte elf weitere Punkte** ans Licht, die nur gelesen statt gemessen waren: drei
+der 16 Vektorprüfungen und acht der 21 Datenbankprüfungen. Alle nachgeholt, alle grün — Endstand
+**24 von 24**. Möglich war das, weil die **erste** Runde ihre 23 nie als nummerierte Liste geführt
+hat, sondern als vier Prosablöcke mit je eigener Zählung. **Regel für jede weitere Abnahme: eine
+durchnummerierte Liste, eine Zeile je Kriterium, Kopfzahl nachzählbar.**
+
+> **Zwei Lehren für den PO, nicht für den Prüfer.** Erstens: es hat **zwei** Rückfragen gebraucht —
+> die erste deckte nur ab, was der PO selbst durchgesehen hatte (die 8-Zeilen-Tabelle), die zweite
+> erst die 16 Vektor- und 21 Datenbankprüfungen. **Wer einen Bericht gegenliest, liest ihn gegen die
+> _ganze_ Vorlage, nicht gegen den Teil, den er im Kopf hat.** Zweitens: die Statuspflege wurde einmal
+> **zu früh** committet (`443e083`, „23/23"), obwohl der vollständige Abgleich schon beauftragt war.
+> Berichtigt im Folgecommit — **wer eine Nachforderung stellt, wartet ihr Ergebnis ab.**
+
+**Eine Sache verdient beim Lesen mehr Aufmerksamkeit als jede Testzahl:** `JR-208` hat mit **F38** einen
+Fehler gefunden, der jede Ledger-Zeile mit `event_payload` unverifizierbar gemacht hätte — und acht
+Integrationstests waren daran vorbeigelaufen, weil sie **alle** durch denselben Client schreiben, den
+einzigen im Repository, den `drizzle()` gepatcht hat. Wer in E3/E4 weiterbaut, nimmt daraus die Regel
+mit: alles in `packages/journaling` bekommt seine Verbindung injiziert, also muss mindestens ein Test
+durch einen **nackten** `postgres()`-Client schreiben. Sonst prüft man den Treiber der Tests.
 
 > ### Was diese Session gemacht hat
 >
-> 1. **`JR-105c` erledigt** (`b5b2190`, Grundlagenarbeit direkt auf dem Integrationsbranch). Umfang war
->    F14, F15, F16 und F24 — alle vier behoben. Volles Protokoll in `06-status.md` unter „`JR-105c`
->    erledigt", Behebung je Befund in `09-befunde-bestandscode.md`, Verfahren im Testplan §2.2/§2.6.
->    Kurzform der Konstruktion: ein Reporter misst die **ausgeführten** Tests je (Suite, Klasse), der
->    `globalSetup`-Teardown urteilt und wirft; Dateizahl **und** Testzahlen sind **Gleichheiten**; ein
->    absichtlich verengter Lauf prüft nichts und sagt das; die CI verlangt, dass die Prüfung anwendbar
->    war. F16/F24 lösen ein **Ledger-Verzeichnis je Lauf**, in das der Worker jede geholte Datenbank
->    einträgt — der Hauptprozess meldet den Rest namentlich, droppt ihn und macht einen unverengten Lauf
->    davon rot.
-> 2. **Jeder Angriff wurde zuerst am Elternstand `e09b981` wiederholt**, statt den grünen
->    Ausgangszustand aus dem Befundtext zu übernehmen. Beides bestätigt: die Umetikettierung aller acht
->    Integrationsdateien war dort **Exit 0** mit „verified" von **beiden** Wächtern, und
->    `pnpm test -t "idempotent"` hinterließ **6** Datenbanken. Danach: Exit 1 bei unveränderten `8/8`
->    Dateien, und 0 Rückstände. Das ist der Grund, `git stash` einmal zu benutzen — die Messung „vorher"
->    ist billiger als die Diskussion darüber, ob der Befund noch stimmt.
-> 3. **`CLAUDE.md` §5.1 war falsch und ist berichtigt.** Sie behauptete „zero test files, no test runner,
->    no test script anywhere in this repo" und eine CI ohne Test-Job — seit E1 unwahr. Das ist die
->    gefährlichste Sorte veralteter Doku: eine Folge-Session hätte einen **zweiten** Harness gebaut. §4
->    hat jetzt die Testkommandos, und die Lint-Notiz („CI does NOT run this") ist ebenfalls korrigiert.
->    Über den Umfang von `JR-105c` hinaus, deshalb hier ausdrücklich genannt.
-> 4. **Eine Lücke im Sessionprotokoll geschlossen:** die Sessions zwischen `JR-1317` und dem Rückmerge
->    hatten ihre `###`-Abschnitte in `06-status.md`, aber keine Zeile in der Protokolltabelle. Nachgetragen
->    als eine Sammelzeile, gekennzeichnet als Nachtrag des PO.
-> 5. **`ADR-007` entschieden** (2026-07-31, Auftraggeber): eine Kette **je Mandant**, `chain_scope_id` =
->    `ingestion_sources.id`. Sieben Konsequenzen festgehalten, `02-architektur.md` §4, ADR-006 und fünf
->    E2-Tasks nachgezogen. Die frühere Entwurfsrichtung („für v1 eine einzelne Kette") war ein Denkfehler
->    — sie berief sich auf RFC §5.2, das über **Shard**-Ketten spricht, nicht über Mandanten — und ist
->    berichtigt.
-> 6. **Die Infrastrukturfrage für E2 ist geklärt.** Der Auftraggeber hat erst **Docker Sandboxes**, dann
->    **Docker Desktop** installiert. Beides ist gemessen: über Sandboxes lief die Infrastruktur, aber der
->    Portforwarder überlebte die parallele Integrationslast nicht (16 × `ECONNRESET`). Mit Docker Desktop
->    ist derselbe Volllauf **grün**. Alle vier Dienste laufen, alle vier vom Host aus belegt. Der
->    Embedded-Cluster wird nicht mehr gebraucht und bleibt als Rückfalloption dokumentiert.
-> 7. **`ADR-022` und `ADR-023` entschieden** — die Ankerfrage, die `ADR-007` nach E7/E8 verschoben hatte,
->    ist vorgezogen, weil die Baumkodierung zur **kanonischen Kodierung** gehört und damit in `JR-203`
->    fällt. **`ADR-022`:** ein Token über die **Merkle-Wurzel** aller Kettenköpfe. Dabei ist ein Fehler in
->    meinem eigenen `ADR-007` aufgefallen und markiert: die dort als gleichwertig genannte „kanonisch
->    sortierte Liste" ist **verworfen** — sie zwingt den Inklusionsnachweis dazu, alle fremden Kettenköpfe
->    samt `seq` offenzulegen, also genau die Offenlegung, deren Vermeidung der einzige Grund für `ADR-007`
->    war. **`ADR-023`:** TSA-Auswahl je Umgebung. `open-tsa.eu` ist **gemessen**, nicht von der Seite
->    übernommen — ein Token geholt, gegen die gepinnte CA verifiziert (`Verification: OK`), plus zwei
->    Gegenproben. Ergebnis: brauchbar für `nightly` und für Installationen ohne GoBD-Anspruch, **kein**
->    qualifizierter Zeitstempel (private Policy-OID, kein Trusted-List-Eintrag), und **nicht** in `ci`.
-> 8. **`JR-203` erledigt: `ADR-006` entschieden** (Rolle PO, reine Doku, direkt auf dem
->    Integrationsbranch). Fünf Teile festgelegt — Feldkodierung, Genesis-String, `deployment_id`,
->    Klonverhalten, Merkle-Kodierung — und **jede Zahl mit einer Referenzimplementierung gemessen**, deren
->    Ausgabe als Testvektoren in der ADR steht. Drei Dinge daran sind mehr als Formalie und stehen deshalb
->    hier: **(a)** die Feldliste in **RFC §5.2 war unvollständig** — sie hasht acht von 14 Spalten und
->    lässt `remote_ip`, `ehlo_name`, `tls_version`, `tls_cipher` und `duplicate_of` draußen, die damit
->    nachträglich änderbar wären, **ohne die Kette zu brechen**; wer `JR-202` nach der RFC-Formel baut,
->    baut ein Ledger, das seine eigenen TLS-Angaben nicht bezeugt. Jetzt sind es **16** Felder. **(b)**
->    `system_settings` als Ort der `deployment_id` ist **verworfen** — am Bestandscode geprüft, es ist die
->    über die Einstellungs-API schreibbare `jsonb`-Konfiguration, ein `PUT` darauf hätte jede Kette
->    entwertet; stattdessen eine eigene Tabelle `deployment_identity`. **(c)** der ungerade Merkle-Knoten
->    wird **hochgezogen (RFC 6962)**: unter der Duplizier-Regel liefern `[A,B,C]` und `[A,B,C,C]` dieselbe
->    Wurzel — gemessen —, womit sich eine zusätzliche Kette in einen bestehenden Anker hineinbehaupten
->    ließe und ADR-022 Festlegung 1 aufgehoben wäre. Der **geklonte Server** ist als nicht verhinderbar
->    dokumentiert, nicht als gelöst: Restore und Klon sind byteidentisch, also ist er ein
->    **Split-Brain-Befund** plus eine Verweigerung im Anchor-Job, keine Sperre. Nachgezogen: `02-architektur.md`
->    §4 und §8, `README.md`, `03-backlog.md` (acht Task-Zeilen), `04-testplan.md` §12.5 (drei neue Fälle),
->    `06-status.md`.
+> 1. **`JR-208` erledigt** (`packages/backend/tests/adversarial/journal-ledger-concurrency.adv.test.ts`,
+>    4 Fälle). 10 000 Appends durch 20 nebenläufige Writer in 84–96 s (≈120/s), `seq` genau 1…10 000, die
+>    Kette **über alle Zeilen** neu gerechnet, 10 000 verschiedene Vorgängerhashes. Zwei Entwurfspunkte,
+>    die den Unterschied machen: der Test bringt seinen **eigenen Pool mit einer Verbindung je Writer**
+>    mit (mit dem `max: 4` des Harness wäre die Konkurrenz im Treiber ausgetragen worden, nicht in
+>    Postgres), und der Rollback-Fall läuft **unter Last** — 8 Writer × 100 Commits gegen 4 × 25
+>    Rollbacks in dieselbe Kette, 800 Zeilen, keine Lücke.
+> 2. **Die Gegenprobe ist Teil der Task, nicht eine Zugabe.** Derselbe Lastfall gegen einen Transactor,
+>    der das `pg_advisory_xact_lock`-Statement verschluckt, muss brechen — er tut es (19 von 20 Appends
+>    scheitern). Ohne diesen Fall könnte der Lasttest grün sein, **weil sich die Appends nie überlappt
+>    haben**, und niemand würde es merken.
+> 3. **`F38` gefunden und behoben — der eigentliche Ertrag dieser Session.** Der Writer band
+>    `event_payload` als `JSON.stringify(...)` an `$16`; postgres-js entnimmt den Parametertyp der
+>    Parameterbeschreibung des Servers, sieht `jsonb` und kodiert den String ein **zweites** Mal. In der
+>    Spalte stand danach ein JSON-_String_. Beim Schreiben schlägt nichts fehl — unverifizierbar wird
+>    jede Zeile mit Nutzlast, und bemerkt hätte man es mit `verify` in E9. Vier Parameterformen gemessen:
+>    `$2` ⇒ string, **`$2::jsonb` ⇒ string** (der naheliegende Fix hilft nicht), `$2::text::jsonb` ⇒
+>    object, rohes Objekt ⇒ object.
+> 4. **Warum acht Integrationstests das nicht gesehen haben, ist die Lehre daraus.** Fünf Client-Varianten
+>    gegen dieselbe Datenbank: `harness.sql` ⇒ object, `postgres(url, {gleiche Optionen})` ⇒ string,
+>    `postgres(url)` ⇒ string, `postgres(url, {max: 20})` ⇒ string. Es liegt an keiner Option, sondern
+>    daran, dass `drizzle(client, …)` den Client **patcht** — und das ist der Client, durch den jeder
+>    Integrationstest schreibt. Der Ingress-Prozess aus E3/E4 wird drizzle per Architekturvorgabe nicht
+>    haben. **Regel für alles Weitere in `packages/journaling`: mindestens ein Test schreibt durch einen
+>    nackten Client.**
+> 5. **`JR-209` erledigt** (`journal-ledger-tamper.adv.test.ts`, 11 Fälle): alle acht Fälle aus Testplan
+>    §12.5, der Positivfall (Inklusionsnachweis **ohne** Fremddaten) und die Gegenprobe, dass der Trigger
+>    dieselbe Manipulation abweist, solange er an ist. Die Prüflogik meldet **Befundart, `seq` und Feld**
+>    statt pass/fail.
+> 6. **Drei der acht Fälle lassen die Kette absichtlich heil**, und das ist die Aussage, nicht eine
+>    Schwäche: die ab `seq` N vorwärts neu geschriebene Kette ist in sich makellos (nur der vorher
+>    genommene Anker sieht sie — das ist die Begründung für Anchoring, hier als Assertion), die vollständig
+>    gelöschte Mandantenkette hinterlässt nichts, was brechen könnte (nur der Vergleich zweier
+>    Merkle-Anker meldet sie, mit einer **ruhenden** Kette daneben als Unterscheidungsprobe), und der Klon
+>    erzeugt zwei gültige Ketten aus demselben Genesis (**Split-Brain**, eigene Befundart).
+> 7. **(f) und (g) stehen gegen eine mitgelieferte Implementierung der RFC-Formel.** Der Testplan verlangt,
+>    diese beiden Fälle „zuerst gegen eine Implementierung nach der RFC-Formel rot gesehen" zu haben —
+>    statt das einmal von Hand zu tun, liegt die verworfene Acht-Felder-Formel in
+>    `tests/support/rfc-formula-encoding.ts` und der Nachweis läuft auf **jedem** CI-Lauf. Formuliert ist
+>    er über die **ganze** Liste der acht ungehashten Felder, nicht über zwei Feldnamen: wer die Kodierung
+>    in irgendeiner dieser Richtungen zurückschneidet, macht ihn rot.
+> 8. **Eine Grenze ist ausgeschrieben statt überspielt.** Ein Kettenhash bindet alle 16 Felder
+>    gleichzeitig — aus ihm allein ist **nicht** ableitbar, welches Feld sich bewegt hat. Der Verifier
+>    nennt das Feld deshalb nur, wenn ihm eine **zweite Quelle** übergeben wird (hier: was der Test
+>    geschrieben hat; in E9: Exportmanifest und gespeichertes Objekt). Der Ledger belegt _dass_ und _wo_,
+>    die zweite Quelle belegt _was_.
+> 9. **Mitrepariert:** `suite-inventory.test.ts` hatte eine adversariale Fixture-Datei hart verdrahtet und
+>    damit implizit `expectedFiles: 1` angenommen — er wurde rot, als die Suite auf drei Dateien wuchs, mit
+>    einer Meldung über Verletzungszahlen, die die Ursache nicht nennt. Jetzt leitet er die Fixtures ab,
+>    wie es die Unit-Fixtures schon taten.
+> 10. **`JR-210` durchgeführt: E2 abgenommen, 23/23** — und der Vorbehalt steht im Protokoll an erster
+>     Stelle, weil er die Aussagekraft betrifft: **dieselbe Sitzung, die `JR-208`/`JR-209` geschrieben
+>     hat, hat sie abgenommen.** Kompensiert wurde durch Messung statt Zitat — die ADR-Vektoren aus dem
+>     Entscheidungsdokument **geparst** und gegen `dist` gerechnet (16/16), die Datenbankseite an einer
+>     eigenen Datenbank mit den echten Migrationen (21/21, bewusst **nicht** über den Harness), und vier
+>     **Mutationsproben**, die alle rot wurden. Die aufschlussreichste war M4: die Manipulation in Fall
+>     (f) wirkungslos gemacht ⇒ der Verifier meldet **nichts** und der Test wird rot. Damit ist die
+>     Fehlerklasse ausgeschlossen, an der eine Tamper-Suite lautlos scheitert — ein Verifier, der immer
+>     meckert, macht jeden Tamper-Test grün. **Diese Runde zählt nicht als Abnahme** (nicht unabhängig).
+> 11. **`JR-210a` durchgeführt — E2 ist abgenommen, 24/24, unabhängig.** Frische Sitzung, Rolle TEST.
+>     Alle sechs dünnen Stellen der ersten Runde mit **neuer** Evidenz beantwortet: fünf Mutationsproben
+>     am Encoder (vier exakt gefangen, ohne Übersprechen — die Ausnahme ist **F39**), drei selbst
+>     geschriebene **sabotierte Backends** gegen `JR-207`s Vertragssuite (alle gefangen, plus Kalibrierung
+>     gegen ein ehrliches Backend), die Nebenläufigkeit **direkt über `pg_stat_activity`** gemessen (20
+>     gleichzeitig offene Transaktionen bei 20 Writern), `readChainHeads()` mutiert (`DESC` → `ASC`) ⇒
+>     Fall (c) korrekt rot, eine **eigene 10-Fall-Matrix „Manipulation → Befundart"** gegen
+>     `verifyChain()`, und die Migrationen gegen eine Datenbank **mit Bestandsdaten**. Die ADR-Vektoren
+>     ein zweites Mal nachgerechnet, diesmal **frisch aus der ADR-Markdown transkribiert** statt aus der
+>     Repo-Fixture: 12/12. **Der Rückmerge ist weiterhin nicht vollzogen** und liegt beim Auftraggeber.
+> 12. **Dreizehn Lücken im Abnahmebericht, in zwei Rückfragen gefunden — das ist die eigentliche
+>     Lehre.** Die erste Fassung nannte „22 von 22", nicht herleitbar aus der eigenen Tabelle.
+>     **Erste Rückfrage:** ein **ganz fehlendes Kriterium** („die Aussagen ruhen nicht auf einer
+>     abgeschalteten Suite") und **zwei nur zitierte statt gemessene Aussagen** (F38-Regression,
+>     Datenbankseite). **Zweite Rückfrage**, weil die erste nur abdeckte, was der PO selbst
+>     durchgesehen hatte: der vollständige Abgleich gegen `JR-210`s 16 Vektor- und 21
+>     Datenbankprüfungen brachte **elf weitere** Punkte, die gelesen statt gemessen waren — drei
+>     Vektorprüfungen, acht Datenbankprüfungen. **Alle dreizehn nachgemessen, alle bestätigt**,
+>     Endstand 24/24. Möglich war das Durchrutschen, weil die **erste** Runde ihre 23 nie als
+>     nummerierte Liste geführt hat. **Ab jetzt: durchnummerierte Kriterienliste, eine Zeile je
+>     Kriterium** — und wer gegenliest, liest gegen die **ganze** Vorlage.
 >
-> **Nichts steht offen aus dieser Session.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt.
+> **Nichts steht offen aus diesen Sessions.** Kein Auftrag ist abgebrochen, kein Ergebnis fehlt. Was
+> bewusst **nicht** getan wurde: der **Rückmerge** (Entscheidung des Auftraggebers), die Rechtetrennung
+> aus **F37** (gehört zu E11), die Behebung von **F39** (niedrig, Vorschlag steht im Befund) und ein
+> produktiver `verify`-Kern — die Prüflogik liegt absichtlich unter `tests/support/`, weil `verify` E9s
+> Gegenstand ist und ein vorgezogener Kern dort die Entwurfsfreiheit nähme.
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -346,7 +392,7 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **E2**, und es blockiert nichts mehr
+### Nächster konkreter Schritt — **der Rückmerge von E2**, dann **E3**
 
 **Alle drei Entscheidungen, die E2 blockierten, sind am 2026-07-31 gefallen: `ADR-007`, `ADR-022`,
 `ADR-023` und zuletzt `ADR-006`.** Begründungen und Konsequenzen stehen in `05-entscheidungen.md`; was sie
@@ -370,12 +416,122 @@ Offen bleibt in E2 allein **`ADR-009`** (Append-Only: Rechteentzug oder Trigger)
 `JR-205`, blockiert also nichts davor. Ihr Umfang ist seit ADR-006 §4.2 **`journal_ledger` und
 `deployment_identity`**.
 
+**`JR-201` und `JR-202` sind erledigt** (2026-07-31, Branch `claude/journaling-e2-ledger`):
+`packages/journaling` existiert, und `src/ledger/` trifft die Vektoren aus ADR-006 §6 byteidentisch. Was
+davon für die nächsten Tasks gilt:
+
+- **`encodeLedgerRecord()` ist die einzige Stelle, die Kettenbytes erzeugt.** `JR-206` (`append()`) ruft
+  sie **innerhalb** der Sperre auf und baut den Record nicht selbst zusammen.
+- **Drei Regeln der ADR sind als Verweigerung implementiert**, nicht als Kommentar: ein Zeitstempel ohne
+  ms-Vielfaches, eine UUID in Großschreibung und ein nicht parsbares `remoteIp` werfen. `JR-204` muss den
+  `CHECK` für die erste davon nachziehen, sonst hängt die Invariante allein am Anwendungscode.
+- **Die Ledger-Typen liegen in `packages/types`** (`journal-ledger.types.ts`), nicht im Paket — sonst
+  hätte die Abhängigkeitsregel keinen Sinn und `verify` (E9) bekäme eigene Formen.
+
+**`JR-204` ist ebenfalls erledigt** (Migration `0041_even_scream.sql`). Was davon für die nächsten Tasks
+zählt:
+
+- **`JR-205` (Append-Only) hat zwei Tabellen im Umfang**, nicht eine: `journal_ledger` **und**
+  `deployment_identity`. Die `deployment_id` steckt im Genesis jeder Kette.
+- **Das Löschen einer `ingestion_source` mit Ledger-Zeilen ist blockiert** (`ON DELETE restrict`). Das
+  ist gewollt, aber es heißt, dass E12 ein Verfahren für „Archiv nach Fristablauf entfernen" braucht —
+  ein `DELETE` ist es nicht.
+- **`duplicate_of < seq`** ist ein eigener CHECK, weil der zusammengesetzte Fremdschlüssel den
+  Selbstverweis **nicht** verhindert: Postgres prüft Referenzintegrität am Statement-Ende, und dann ist
+  das referenzierte Paar die gerade eingefügte Zeile.
+- Die Migration enthält **eine handgeschriebene Zeile** — das `INSERT` der Identität. Sie ist im SQL als
+  solche markiert und begründet; `db:generate` erzeugt keine Daten.
+
+**`JR-205` ist erledigt, ADR-009 ist entschieden** (Trigger in E2, Rechteentzug in E11). Zwei Dinge
+daraus, die die nächsten Tasks betreffen:
+
+- **`UPDATE`, `DELETE` und `TRUNCATE` auf `journal_ledger` und `deployment_identity` sind ab jetzt
+  abgewiesen.** Ein Test, der eine Ledger-Zeile aufräumen will, kann das nicht — Teardown droppt die
+  Datenbank. `JR-209` (Tamper-Tests) muss den Trigger für seine Manipulationen **gezielt** umgehen
+  (`ALTER TABLE … DISABLE TRIGGER` mit der Eigentümerrolle) und ihn danach wieder aktivieren.
+- **`F37` ist offen und E11 zugeordnet:** die Anwendung verbindet als Superuser und Tabelleneigentümer,
+  kann den Trigger also selbst abschalten. Gemessen, nicht vermutet. Was der Trigger heute leistet, ist
+  das Schließen von **F1** als Manipulationsweg.
+
+**`JR-206` ist erledigt.** `PostgresLedgerWriter.append()` in `packages/journaling/src/ledger/`. Vier
+Dinge daraus, die die nächsten Tasks betreffen:
+
+- **Die Hash-Vorberechnung ist strukturell ausgeschlossen, nicht per Kommentar:** `LedgerAppendRequest`
+  hat kein `seq`, kein `prevChainHash`, kein `chainHash`. Wer den Writer erweitert, darf diese Felder
+  **nicht** in die Anfrage aufnehmen — damit fiele die Garantie.
+- **Der Lock-Key kommt aus `advisoryLockKey(chainScopeId)`**: SHA-256, erste 8 Bytes, als signed int64.
+  Bewusst nicht Postgres' `hashtext()`, das nicht versionsstabil ist. Eine Kollision ist harmlos (zwei
+  Ketten serialisieren sich), das Gegenteil wäre gefährlich und ist ausgeschlossen.
+- **Der Adapter liegt noch unter `tests/support/postgres-transactor.ts`**, nicht in `src/`. Er zieht
+  nach `src/`, sobald ein Prozess ihn besitzt (E3/E4) — wer ihn früher verschiebt, muss die
+  Rechtetrennung aus ADR-002 mitentscheiden.
+- **Ein Fallstrick für `verify` (E9), hier schon einmal getreten:** `select seq::text as seq … order by
+seq` sortiert **lexikographisch** (1, 10, 2, …), weil das Alias die Spalte überschattet. Das meldete
+  einen Kettenbruch, der nicht existierte — und kann in der Gegenrichtung einen echten verdecken.
+  `ORDER BY` immer qualifizieren, und die Leseordnung selbst prüfen.
+
+**`JR-207` ist erledigt.** Die Steckbarkeit ist **gemessen**: eine Vertragssuite
+(`packages/backend/tests/support/ledger-backend-contract.ts`, fünf Fälle) läuft gegen
+`PostgresLedgerWriter` **und** gegen ein Backend ohne Datenbank. Drei Dinge daraus für die nächsten Tasks:
+
+- **Die Suite prüft nur die Rückgabewerte von `append()`.** Wer ihr einen Fall hinzufügt, der eine
+  Tabelle liest, macht sie zu einem Postgres-Vertrag und entwertet den Beleg. Speicherseitige
+  Zusicherungen gehören in `journal-ledger-writer.int.test.ts`.
+- **`InMemoryLedgerBackend` bleibt im Testbaum.** Ein konfigurierbares Ledger, das vergessen kann, macht
+  die Zusage hinter `250 OK` zur Lüge. Es ist ein Beweismittel, kein Backend.
+- **Die Pflichtenliste für Variante (b) steht in `ledger-port.ts`** — fsync auf Datei und Verzeichnis,
+  prozessübergreifende Serialisierung, kein `seq` bei Fehlschlag, Crash-Recovery, `verify`-Lesbarkeit.
+  Der Vertrag prüft die Signatur, nicht die Durability; wer (b) baut, fängt bei dieser Liste an.
+
+**`JR-208` und `JR-209` sind erledigt** (2026-08-01, Rolle TEST). Was davon für `JR-210` und für E3 gilt:
+
+- **`F38` ist der Befund dieser Tasks**, und er ist behoben: `event_payload` wurde doppelt JSON-kodiert
+  gespeichert, sobald der postgres-js-Client nicht durch `drizzle()` gelaufen war. Der Fix ist
+  `$16::text::jsonb` im Writer — **ein einfaches `::jsonb` genügt nicht**, das ist gemessen. Wer in E3/E4
+  weiteren SQL-Code in `packages/journaling` schreibt, prüft ihn gegen einen **nackten** Client; der
+  Harness-Client ist der einzige gepatchte im Repository und deshalb kein Maßstab.
+- **Die Prüflogik liegt unter `tests/support/ledger-verifier.ts` und gehört dorthin.** Sie ist bewusst
+  **nicht** der Kern von E9s `verify`: sie kennt weder Objektspeicher noch Ankertabelle noch Exit-Codes.
+  Wer in E9 anfängt, fängt bei den Befundarten an, die hier schon benannt sind — `missing_entry`,
+  `chain_break`, `row_hash_mismatch`, `object_hash_mismatch`, `split_brain` — und bei der Grenze, dass
+  das **Feld** eine zweite Quelle braucht.
+- **Der Audit-Path (`tests/support/merkle-audit-path.ts`) ist eine unabhängige Zweitimplementierung.**
+  E8 baut die produktive Variante; wenn sie da ist, hat sie hier eine Gegenprobe, die nur `merkleLeaf`
+  und `merkleNode` mit ihr teilt. Nicht zusammenlegen — der Wert liegt in der Unabhängigkeit.
+- **Ein voller Lauf dauert jetzt rund zwei Minuten**, weil `JR-208` zehntausend Zeilen schreibt. Das ist
+  die im Backlog vorgegebene Menge und wird **nicht** stillschweigend reduziert (Testplan-Regel 6).
+
+**Beide Abnahmerunden sind durchgeführt, und `JR-210a` hat E2 abgenommen** (2026-08-01, 24/24,
+unabhängig; Protokoll in `06-status.md`). **Damit ist E2 fertig bis auf den Rückmerge**, und der ist
+eine Entscheidung des Auftraggebers, keine Task.
+
+**Der Rückmerge nach ADR-014**, wenn der Auftraggeber ihn freigibt:
+
+```bash
+git checkout claude/enterprise-product-implementation-cxmmqe
+git merge --no-ff claude/journaling-e2-ledger
 ```
-Arbeite JR-201 ff. aus docs/dev/journaling/03-backlog.md ab — Rolle senior-dev,
-Branch claude/journaling-e2-ledger vom Integrationsbranch. Lies vorher ADR-006
-und ADR-007 in docs/dev/journaling/05-entscheidungen.md; JR-202 muss die
-Testvektoren aus ADR-006 §6 reproduzieren.
-```
+
+**`--no-ff`, kein Squash** — wie bei E13 (`89d701f`). Ein Squash tilgt die Zwischenschritte, und bei E2
+wären das die beiden Abnahmerunden und `F38`: der Beleg, dass das Verfahren funktioniert hat, liegt
+gerade in den Commits, die eine Ablehnung und eine Nachmessung dokumentieren.
+
+**Danach beginnt E3** (Spool und Acceptance-Contract, 8 Tasks) auf einem eigenen Branch
+`claude/journaling-e3-<kurzname>` vom Integrationsbranch. Was aus E2 dorthin mitgeht, steht unten unter
+„`JR-208` und `JR-209` sind erledigt" — vor allem die **Regel mit dem nackten Client** (F38).
+
+> **Die Liste „Was die erste Runde nicht geprüft hat" ist abgearbeitet** und deshalb hier entfernt. Alle
+> sechs Punkte sind in `JR-210a` mit eigener Evidenz beantwortet; die Tabelle dazu steht in
+> `06-status.md` unter „Abnahme `JR-210a`". Was dabei **ungeprüft geblieben** ist, steht dort ebenfalls
+> ausdrücklich — insbesondere: `JR-201`s Baufähigkeit nur per `tsc` statt isoliertem Checkout, die 16
+> Feldmutationen als Stichprobe, und `JR-210`s Mutationsprobe M3 durch einen ständigen Regressionstest
+> statt derselben Quellcode-Mutation belegt (**andere Evidenz, nicht dieselbe**).
+
+**Eine Verfahrensregel aus dieser Abnahme, die für jede weitere gilt:** ein Abnahmeprotokoll führt eine
+**durchnummerierte Kriterienliste, eine Zeile je Kriterium**, sodass die Kopfzahl nachzählbar ist.
+`JR-210` hat seine „23" auf vier Prosablöcke mit je eigener Zählung verteilt — und genau deshalb konnte
+`JR-210a` ein Kriterium verlieren, ohne dass es im Bericht auffiel. Gefunden hat es der PO beim
+Abgleich, nicht der Prüfer.
 
 **Was für E2 an dieser Umgebung gilt:** **die Infrastrukturfrage ist erledigt.** Postgres, Valkey,
 Meilisearch und Tika laufen seit dem 2026-07-31 über **Docker Desktop** aus `docker-compose.yml`, alle vier
@@ -391,7 +547,7 @@ Konsequenzen für jede E2-Task:
   `expectedTests`), und zwar im **selben** Commit. Die Fehlermeldung nennt die einzutragende Zahl.
 - **Ein Beleg aus einem `-t`-Lauf ist kein Beleg.** Ein verengter Lauf gibt „verified NOTHING" aus und
   prüft keine Zahl. Wer einen grünen Lauf zitiert, zitiert die Testzahl mit: vollständig ist heute
-  **274 passed | 2 skipped** bei 19 Dateien.
+  **398 passed | 2 skipped** bei 30 Dateien (274 bei 19 vor E2).
 
 **Die übrigen Folge-Tasks aus E13, in dieser Reihenfolge und alle unblockiert** (keine blockiert E2, alle
 können auch parallel oder später laufen): `JR-1316` (Regressionstest für die Betreiber-SQL — weiterhin
@@ -435,7 +591,25 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Keine.** `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
+> **Offen und wirklich beim Auftraggeber: der Rückmerge von E2** in den Integrationsbranch. Die
+> Bedingung aus ADR-014 — unabhängige Abnahme — ist mit `JR-210a` erfüllt (24/24, frische Sitzung).
+> Das Kommando steht oben unter „Nächster konkreter Schritt"; `--no-ff`, kein Squash. Danach **E3**.
+>
+> **Zweite, kleinere Frage: `F39`** (niedrig, Testharness) — beheben oder bewusst akzeptieren? Der
+> Test „is length-prefixed…" bleibt grün, wenn man das Längenpräfix entfernt; gefangen wird die
+> Mutation nur vom Golden-File. Kein Produktdefekt, blockiert nichts. Ein Vorschlag steht im Befund.
+> Sinnvoller Ort wäre die nächste Arbeit an `packages/journaling`.
+>
+> **~~Genügt die Abnahme `JR-210`, obwohl sie nicht unabhängig ist?~~ — entschieden am 2026-08-01:
+> nein, es gibt eine zweite Runde (`JR-210a`); sie ist durchgeführt und hat E2 abgenommen.** Die erste
+> Runde lief in derselben Sitzung wie `JR-208`/`JR-209`; ADR-014 und ADR-021 verlangen Unabhängigkeit,
+> und der Auftraggeber hat auf der Regel bestanden. **Das hat sich gelohnt:** die zweite Runde hat die
+> sechs dünnen Stellen der ersten geschlossen und dabei einen weiteren Befund (**F39**) gefunden — und
+> der PO hat im Bericht der zweiten Runde ein **ganz fehlendes Kriterium** entdeckt, das erst auf
+> Nachfrage nachgemessen wurde. Beide Runden zusammen haben mehr belegt als eine doppelt so gründliche
+> hätte belegen können.
+
+Ansonsten keine. `ADR-007`, `ADR-022`, `ADR-023` (alle 2026-07-31, Auftraggeber) und `ADR-006` (2026-07-31,
 `JR-203`, Rolle PO) sind entschieden. Was in E2 noch offen ist — `ADR-009`, Append-Only per Rechteentzug
 oder Trigger — ist Teil von `JR-205` und braucht keine Entscheidung des Auftraggebers vorab. Alles andere
 ist Arbeit ohne Entscheidungsbedarf.

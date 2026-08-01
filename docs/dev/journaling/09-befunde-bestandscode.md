@@ -18,14 +18,17 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------- |
 | **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29 |
 | **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22              |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24               |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39          |
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34     |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35                             |
+| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                             |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38                             |
 
 Herkunft: `JR-103` (F1–F6), `JR-104` (F7–F10), `JR-105` (F11), die Abnahme `JR-106` (F12), die
 Nacharbeit `JR-104a` (F13), die Abnahme `JR-106a` (F14–F16), `JR-1301` (F17–F23), die Abnahme
 `JR-1309` (F24–F29), die Abnahme `JR-1309a` (F30) und die Abnahme `JR-1309b` (F31–F34), Rolle
-`tester`, 2026-07-27 bis 2026-07-29.
+`tester`, 2026-07-27 bis 2026-07-29. Dazu `JR-1309c` (F36), `JR-205` (F37), `JR-208` (F38) und die
+zweite Abnahme `JR-210a` (F39), 2026-07-30 bis 2026-08-01.
 
 > **F31 ist der einzige Befund dieser Liste, dessen Ursache in einer ADR liegt und nicht im Code oder
 > in seiner Umsetzung.** ADR-020 hat den Verhaltenscheck selbst „vollständig" genannt; `JR-1317` hat
@@ -428,6 +431,23 @@ bereits gebaut vor. **Lokal beidseitig belegt**, zuletzt in der Abnahme `JR-106`
 Der `tsbuildinfo`-Hinweis ist keine Nebensache: `packages/types/tsconfig.json` hat
 `composite: true`, ein bloßes Löschen von `dist` lässt `tsc` also wegen der stehengebliebenen
 Build-Info **nichts** emittieren. Wer das nachstellen will, muss beides löschen.
+
+> ### Nachtrag 2026-07-31 (`JR-206`): dieser Befund wiederholt sich mit **jedem** neuen Workspace-Paket
+>
+> Sobald `packages/backend` von `@open-archiver/journaling` abhing, war der CI-Lauf an genau derselben
+> Stelle rot — `test:types` mit `TS2307: Cannot find module '@open-archiver/journaling'` —, während der
+> lokale Lauf grün war, weil ein `dist` aus dem Paketbau herumlag. Dieselbe Ursache, ein Paket weiter.
+>
+> Behoben mit einem zweiten vorgeschalteten Schritt in `.github/workflows/ci.yml`
+> (`pnpm --filter @open-archiver/journaling build`), und **beidseitig belegt** nach dem Löschen von
+> `dist` **und** `tsconfig.tsbuildinfo` aller drei Pakete: ohne den Schritt **25 × `TS2307`**, mit ihm
+> **0** Fehler.
+>
+> **Für die nächsten Epics heißt das:** `apps/smtp-ingress` (E4) und `apps/oa-verify` (E9) brauchen
+> denselben Schritt, sobald etwas anderes von ihnen abhängt — und wer es vergisst, sieht es **nicht**
+> lokal. Beim ersten Nachstellen ist mir genau das passiert: `rm -rf dist` allein ließ auch den
+> _types_-Build nichts emittieren, sodass die Messung 30 Fehler zeigte und den Fix zu widerlegen
+> schien. Die Build-Info gehört mitgelöscht, sonst misst man etwas anderes als einen frischen Checkout.
 
 **Lehre für künftige Epics:** eine im Backlog vorgegebene Kommandofolge ist eine Annahme, kein
 Fakt. Sie gilt erst als lauffähig, wenn sie ohne vorhandene Build-Artefakte durchgelaufen ist.
@@ -1665,3 +1685,139 @@ Bewusst nicht umgesetzt, weil sie über den jeweiligen Task hinausgehen:
 2. **`src/api/server.ts` type-checkt nicht unter `moduleResolution: bundler`** (Default-Import von
    `i18next-http-middleware`). Deshalb schließt `packages/backend/tsconfig.test.json` den
    Produktionscode aus und prüft nur Testdateien. Vorbestehend, kein Testproblem.
+
+## F37 — die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-Schutzmaßnahme selbst abschalten
+
+**Kategorie:** Deployment / Rechtetrennung · **Schwere:** mittel (hoch, sobald ein
+Compliance-Anspruch daran hängt) · **Status:** offen, **Nacharbeit in E11** ·
+**Herkunft:** gemessen am 2026-07-31 bei `JR-205`
+
+`docker-compose.yml` setzt `POSTGRES_USER: ${POSTGRES_USER:-admin}`, `.env.example` setzt
+`POSTGRES_USER=admin`, und `DATABASE_URL` wird aus genau dieser Rolle gebildet. Die
+`POSTGRES_USER`-Rolle eines `postgres`-Images ist **Superuser** und Eigentümer aller Objekte, die die
+Migration anlegt. In einer Standardinstallation verbindet die Anwendung also mit Superuser-Rechten.
+
+**Gemessen gegen die laufende Instanz** (PostgreSQL 17.10, Rolle `admin`):
+
+```
+current_user = admin · rolsuper = true · journal_ledger owner = admin
+UPDATE / DELETE / TRUNCATE auf journal_ledger und deployment_identity  ⇒ refused [23001]
+INSERT                                                                 ⇒ allowed
+SET session_replication_role = replica, dann UPDATE                    ⇒ ALLOWED
+ALTER TABLE journal_ledger DISABLE TRIGGER journal_ledger_append_only  ⇒ ALLOWED
+```
+
+**Was das für den Append-Only-Trigger aus `JR-205` bedeutet.** Er hält gegen den Weg, der praktisch
+zählt — **F1** (SQL-Injection über Policy-Condition-Keys) injiziert in eine `WHERE`-Klausel und kann
+weder ein `SET` noch ein `ALTER TABLE` absetzen, weil `postgres-js` das erweiterte Protokoll benutzt
+und kein Statement-Stacking erlaubt. Ein Akteur, der über diesen Weg eine Ledger-Zeile umschreiben
+wollte, scheitert am Trigger. Er hält **nicht** gegen jemanden, der beliebiges SQL als diese Rolle
+ausführen kann; für den ist der Trigger zwei Anweisungen weit entfernt.
+
+**Das ist der Grund, warum ADR-009 zwei Mechanismen verlangt** und warum die zweite Hälfte eine
+Deployment-Anforderung ist, keine Codeänderung: solange die Anwendung als Eigentümer verbindet, ist
+jede tabellenseitige Maßnahme von ihr aus aufhebbar. Nachzuarbeiten in **E11**:
+
+1. Eine eigene Rolle für die Anwendung, die **nichts besitzt** und auf `journal_ledger` /
+   `deployment_identity` nur `INSERT` und `SELECT` hält.
+2. Die Migration läuft unter einer **anderen** Rolle — sie braucht Eigentümerrechte, die Anwendung
+   nicht.
+3. Ein Startup-Check, der laut wird, wenn die Anwendung als Superuser oder als Eigentümer dieser
+   Tabellen verbindet. Ohne ihn ist eine korrekt konfigurierte Installation von einer
+   Standardinstallation nicht unterscheidbar, und der Betreiber erfährt es nie.
+
+Nicht in E2 behoben, weil eine Rollentrennung `.env`, `docker-compose.yml`, den Migrationspfad und die
+Betreiberdoku berührt — das ist E11s Gegenstand, und eine halb eingebaute Trennung wäre schlechter als
+eine dokumentierte Anforderung.
+
+## F38 — `event_payload` wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle gepatcht ist
+
+**Kategorie:** Neuer Code (E2) · **Schwere:** hoch — jede Ledger-Zeile mit `event_payload` wäre
+unverifizierbar · **Status:** **behoben** im selben Zug (`JR-208`) ·
+**Herkunft:** gemessen am 2026-08-01 bei `JR-208`, Rolle `tester`
+
+`PostgresLedgerWriter.insert()` band `event_payload` als `JSON.stringify(...)` an `$16`. postgres-js
+entnimmt den Parametertyp der **Parameterbeschreibung des Servers**, sieht dort `jsonb` und
+serialisiert den übergebenen String ein **zweites** Mal. In der Spalte steht dann der JSON-_String_
+`"{\"k\":1}"` statt des Objekts `{"k":1}`.
+
+Nichts schlägt beim Schreiben fehl. Was fehlschlägt, ist `verify` — Monate später und für **jede**
+Zeile mit Nutzlast: zurückgelesen wird ein String, dessen kanonische Kodierung nicht die des
+gehashten Objekts ist. Der Kettenhash der Zeile passt nicht mehr zu ihrem Inhalt.
+
+**Gemessen gegen PostgreSQL 17.10, vier Parameterformen auf einem nackten postgres-js-Client:**
+
+```
+$2                  mit JSON.stringify(obj)   ->  jsonb_typeof = string   (falsch)
+$2::jsonb           mit JSON.stringify(obj)   ->  jsonb_typeof = string   (falsch)
+$2::text::jsonb     mit JSON.stringify(obj)   ->  jsonb_typeof = object   (richtig)
+$2                  mit dem Objekt selbst     ->  jsonb_typeof = object   (richtig)
+```
+
+**Der einfache Cast `::jsonb` hilft nicht** — er lässt `jsonb` als abgeleiteten Parametertyp stehen.
+Nur der Umweg über `text` legt den Typ in der Parameterbeschreibung auf `text` fest, sodass kein
+Treiber mehr `jsonb` ableiten und ein zweites Mal kodieren kann. Behoben ist es so.
+
+**Warum `JR-206` das nicht gefunden hat, und das ist der eigentlich lehrreiche Teil.** Der einzige
+postgres-js-Client im Repository, der sich **nicht** so verhält, ist `harness.sql` — weil
+`drizzle(client, …)` den ihm übergebenen Client patcht. Und genau dieser Client ist der, durch den
+jeder Integrationstest schreibt. Gemessen, fünf Varianten, dieselbe Datenbank, derselbe Writer:
+
+```
+harness.sql (durch drizzle gelaufen)              -> object
+postgres(url, {gleiche Optionen wie der Harness}) -> string
+postgres(url)                                     -> string
+postgres(url, {max: 20})                          -> string
+```
+
+Es liegt also nicht an einer Option, sondern daran, **durch welche Bibliothek der Client einmal
+gelaufen ist**. Der Ingress-Prozess aus E3/E4 wird drizzle nicht in seiner Nähe haben — die
+Architektur verbietet es ausdrücklich (`packages/journaling` darf nicht von `packages/backend`
+abhängen) —, also wäre die Produktion die erste Stelle gewesen, an der es auffällt.
+
+**Regel, die daraus folgt und über diesen Befund hinausgeht:** ein Integrationstest, der nur über
+`harness.sql` schreibt, prüft den Treiber der _Tests_, nicht den der Anwendung. Für alles in
+`packages/journaling` — das seine Verbindung per Definition injiziert bekommt — muss mindestens ein
+Test über einen **nackten** Client schreiben. `JR-208` tut das jetzt (`pool`), und der benannte
+Regressionsfall in `journal-ledger-concurrency.adv.test.ts` prüft `jsonb_typeof` direkt statt nur
+über den Kettenhash, damit ein Rückfall sagt, _was_ kaputt ist.
+
+---
+
+## F39 — ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was ihn rot macht
+
+**Schwere:** niedrig · **Kategorie:** Testharness · **Ort:**
+`packages/journaling/src/ledger/canonical-encoding.test.ts:166–180`, Fall „is length-prefixed, so
+field boundaries cannot be shifted" · **Gefunden:** `JR-210a` (zweite Abnahme E2, 2026-08-01, Rolle
+`tester`), Mutationsprobe M4 · **Keine Auswirkung auf das Produkt** — die Kodierung selbst ist
+korrekt und das Längenpräfix vorhanden.
+
+Der Test soll belegen, dass die kanonische Kodierung ihre Felder längenpräfigiert, sodass sich
+Feldgrenzen nicht verschieben lassen. Er stellt zwei Records gegenüber, bei denen zwei benachbarte
+`STRING`-Felder ein Zeichen zwischen sich verschieben (`ehloName:'ab', tlsVersion:'cd'` gegen
+`ehloName:'a', tlsVersion:'bcd'`), und fordert unterschiedliche Bytes.
+
+**Entfernt man das Längenpräfix vollständig** — `field()` liefert `tag ‖ value` statt
+`tag ‖ len ‖ value` —, **bleibt dieser Test grün.** Die beiden Records unterscheiden sich dann
+immer noch, aber aus einem anderen Grund: das Tag-Byte des Folgefelds (`0x03`) landet an einer
+anderen Position, und die Bytefolgen weichen zufällig trotzdem voneinander ab. Die Länge selbst
+trägt in genau diesem Wertepaar nichts zur Unterscheidung bei.
+
+**Gefangen wird die Mutation trotzdem** — vom Golden-File (`adr-006-vectors.test.ts`: Recordlänge
+351 und `SHA256(record)` weichen ab), also von einem Test, der die Eigenschaft nicht im Namen führt.
+Das ist der ganze Befund: die Eigenschaft ist abgesichert, aber nicht dort, wo ein Leser sie
+abgesichert glaubt. Wer das Golden-File einmal anfasst oder ersetzt, verliert die Absicherung, ohne
+dass ein rot werdender Test ihn darauf stößt.
+
+> Die übrigen vier Mutationsproben derselben Runde (M1, M2, M3, M5) wurden **genau** von den
+> zuständigen Tests gefangen, ohne Übersprechen auf unbeteiligte Fälle. F39 ist die eine Ausnahme
+> von fünf.
+
+**Vorschlag (nicht umgesetzt — eine Abnahme ist nicht der Ort für stille Änderungen):** die
+Testwerte so wählen, dass die Länge die einzige Unterscheidung ist — etwa ein Feld variabler Länge
+am **Ende** des Records, wo kein Tag-Byte folgt, das die Verschiebung sichtbar macht. Dann prüft der
+Fall die Länge und nicht die Tag-Position.
+
+**Entscheidung des Auftraggebers offen:** beheben (kleine Teständerung, gehört sinnvollerweise in
+die nächste Arbeit an `packages/journaling`), oder bewusst akzeptieren, weil das Golden-File die
+Eigenschaft trägt. **Blockiert nichts** und war kein Hindernis für die Abnahme von E2.
