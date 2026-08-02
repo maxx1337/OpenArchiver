@@ -1726,6 +1726,90 @@ Suite und Klasse und nicht deren Namen — die Umbenennung geht daran vorbei. Da
 `tsc -p tsconfig.test.json` je Exit 0, `svelte-check` 0 Fehler / 0 Warnungen, Prettier sauber über
 alle 75 Dateien.
 
+## ADR-026 — SMTP-Empfangspfad: Eigenimplementierung statt Bibliothek
+
+**Status:** **entschieden** (2026-08-02) · **Entscheider:** PO, auf der Messung von `JR-4-02` und
+einer **eigenen Gegenprobe** · **Quelle:** Backlog E4 (`JR-4-02`, `JR-4-03`), RFC §4.1/§4.2, Skill
+`journal-ledger` §10 · **Berührt nicht:** ADR-002 (Code-Ablage) — die Aufteilung dünne App /
+Logik im Paket bleibt unverändert
+
+**Entschieden: der SMTP-Server wird selbst implementiert**, auf `node:net` und `node:tls`, in
+`packages/journaling/src/ingress/smtp-server.ts`. Keine SMTP-Server-Bibliothek als Abhängigkeit.
+
+### Warum — das Kriterium ist `BDAT`, und es ist nicht verhandelbar
+
+Der Projektzweck steht und fällt mit Exchange Online (`README.md`, erster Abschnitt: Exchange Online
+kann Journal-Reports nicht an ein Exchange-Online-Postfach ausliefern, das Ziel muss extern und per
+SMTP erreichbar sein). Exchange Online spricht `CHUNKING`/`BDAT`; das Backlog sagt dazu
+ausdrücklich „das ist nicht optional". Damit ist `BDAT`-Fähigkeit kein Auswahlkriterium unter
+mehreren, sondern eine Ausschlussbedingung.
+
+**Gemessen, nicht aus READMEs gelesen** — `JR-4-02` hat die Pakete entpackt und den ausgelieferten
+Quelltext geprüft, der PO hat es unabhängig wiederholt:
+
+| Kandidat                | Ergebnis                                                                                                                                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smtp-server` 3.19.2    | **Kein `BDAT`.** 17 Kommando-Handler (`AUTH`, `DATA`, `EHLO`, `HELO`, `HELP`, `KILL`, `MAIL`, `NOOP`, `QUIT`, `RCPT`, `RSET`, `SHELL`, `STARTTLS`, `VRFY`, `WIZ`, `XCLIENT`, `XFORWARD`), kein `handler_BDAT`. Der eigene Quellkommentar sagt es: „BINARYMIME is not supported as it requires BDAT command (RFC 3030)" |
+| `haraka`                | **Kein `BDAT`** — und ein vollständiges `outbound/`-Modul (Queueing, Relay, Bounces), weil es ein MTA _sein_ will. Scheitert unabhängig davon an Skill §10 („kein ausgehender Mailpfad")                                                                                                                               |
+| `simplesmtp`            | Unmaintained seit 2015, kein `BDAT`                                                                                                                                                                                                                                                                                    |
+| übrige Registry-Treffer | `fake-smtp-server`, `maildev`, `smtp-tester`, `test-smtp-server` u. ä. — Testattrappen, überwiegend auf `smtp-server` aufgebaut, keine Produktionsserver                                                                                                                                                               |
+
+Eine Registry-Suche nach `bdat` liefert zwei Treffer, beide ohne Bezug zu SMTP. **Es gibt in Node
+keinen SMTP-Server mit `BDAT`.**
+
+### Die dritte Option, und warum sie verworfen ist
+
+Neben „Bibliothek nehmen" und „selbst bauen" gab es **`smtp-server` forken und `BDAT` nachrüsten**.
+Diese Option ist **abgewogen, nicht gemessen** — das gehört hier hin, weil der Rest dieser ADR auf
+Messung beruht und der Unterschied nicht verwischt werden soll. Gegen den Fork sprechen drei Punkte:
+
+1. **Das Hauptargument für einen Fork trägt gerade dort nicht, wo er gebraucht würde.** Man forkt,
+   um die gehärtete Substanz zu erben. Der nachgerüstete `BDAT`-Pfad ist aber genau der Teil, den
+   niemand gehärtet hat — die geerbte Härtung deckt den `DATA`-Pfad ab, den wir ohnehin bekommen
+   hätten.
+2. **Der Eingriff läge im fremden Zustandsautomaten an der Stelle, an der die Byte-Treue entsteht.**
+   Randbedingung 3 des Projekts (Bytes werden nie transformiert) ist eine Aussage über genau diesen
+   Codepfad. Sie über einen fremden, umgebauten Automaten zu belegen ist teurer als über 627 Zeilen
+   eigenen Code.
+3. **Ein Fork ist über die Projektlaufzeit Wartung ohne Ertrag** — Upstream-Änderungen müssen
+   nachgezogen werden, ohne dass Upstream je das Feature bekommt, dessentwegen geforkt wurde.
+
+### Was das kostet, und was es einbringt
+
+**Es bringt ein**, dass zwei Zusicherungen strukturell statt argumentativ werden: es gibt in diesem
+Prozess **keinen** ausgehenden Mailpfad, weil kein solcher Code existiert (`JR-4-07` wird damit
+belegbar statt behauptbar), und die empfangenen Bytes durchlaufen keinen fremden Filter.
+
+**Es kostet die geerbte Härtung.** Wer eine etablierte Bibliothek einsetzt, erbt deren Umgang mit
+überlangen Zeilen, unvollständigen Kommandos, Kommandofluten, ungültigen Sequenzen und
+Ressourcenerschöpfung — Verhalten, das dort über Jahre an echtem Verkehr entstanden ist. Dieser
+Erwerb entfällt und **muss deshalb selbst hergestellt werden**. Das ist keine Anmerkung, sondern
+eine Auflage:
+
+> **Auflage 1:** `JR-4-14` (neu, Rolle TEST) — adversariale Protokollrobustheit. Ohne diese Task
+> ist E4 nicht abnehmbar; `JR-4-13` nimmt sie in seine Kriterien auf.
+>
+> **Auflage 2:** `JR-4-15` (neu, Rolle TEST) — Sicherheitsdurchsicht des Empfangspfads, bevor
+> `JR-4-13` läuft. Dieser Prozess terminiert TLS, nimmt Bytes von unauthentifizierten Gegenstellen
+> an und ist der einzige Teil des Systems, der von außen erreichbar ist.
+
+### Was bewusst **nicht** implementiert wird
+
+Der Befehlssatz bleibt auf das beschränkt, was ein Journaling-Empfänger braucht. Insbesondere
+**kein `VRFY`/`EXPN`** (Auskunft über Empfänger ist ein Informationsleck und für dieses Produkt
+ohne Nutzen) und **kein `XCLIENT`/`XFORWARD`** (sie erlauben einer Gegenstelle, die protokollierte
+Herkunft zu setzen — in einem System, dessen Ledger `remote_ip` und `ehlo_name` hasht, wäre das
+eine Manipulationsschnittstelle). Wer einen dieser Befehle später aufnimmt, ändert damit die
+Aussagekraft der Kette und braucht eine eigene Entscheidung.
+
+### Konsequenz für die Abhängigkeitslage
+
+`node:net`/`node:tls` sind Builtins, keine npm-Pakete. `packages/journaling` hängt damit
+unverändert **nur** von `@open-archiver/types` und `zod` ab — die Frage „Bibliothek ins Paket oder
+in die App" hat sich aufgelöst, statt entschieden zu werden. Die Protokollierung (`pino`) liegt in
+der App und wird über den Port `IngressLogger` injiziert, wie `SpoolFileSystem`, `LedgerBackend` und
+`QuarantineAlertSink`.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill
