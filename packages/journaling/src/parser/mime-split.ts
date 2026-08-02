@@ -279,21 +279,29 @@ export interface SplitJournalMime {
 }
 
 /**
- * Splits the outer message into its report (`text/plain`) and inner (`message/rfc822`) parts.
- * Returns `null` for any shape that does not match RFC section 6.1 -- not multipart/mixed, no
- * boundary parameter, or either expected child part missing. The caller (`journal-report.ts`) turns
- * `null` into a `parse_failed` result; this function itself never throws for a shape mismatch (it
- * can still throw on a genuinely unexpected internal error, which the caller also catches).
+ * The same search `splitJournalReportMime()` does, but reporting what it found even when the shape
+ * doesn't fully match RFC section 6.1 -- `JR-5-03`'s "kein Innenteil (fehlerhaft)" case needs to
+ * know that the *report* part was found (so the envelope can still be parsed and surfaced) even
+ * though the *inner* message/rfc822 part was not, which `splitJournalReportMime()`'s all-or-nothing
+ * `null` cannot distinguish from "not multipart/mixed at all".
  */
-export function splitJournalReportMime(raw: Buffer): SplitJournalMime | null {
+export interface LocatedJournalParts {
+	readonly outerIsMultipartMixed: boolean;
+	/** `text/plain` report part (headers + body together), or `null` if none was found. */
+	readonly reportPart: Buffer | null;
+	/** `message/rfc822` part's body only, or `null` if none was found. */
+	readonly innerMessage: Buffer | null;
+}
+
+function locateJournalPartsInternal(raw: Buffer): LocatedJournalParts {
 	const outer = splitHeaderAndBody(raw);
 	const outerContentType = parseContentType(outer.headers.get('content-type'));
 	if (outerContentType.type !== 'multipart/mixed') {
-		return null;
+		return { outerIsMultipartMixed: false, reportPart: null, innerMessage: null };
 	}
 	const boundary = outerContentType.params['boundary'];
 	if (!boundary) {
-		return null;
+		return { outerIsMultipartMixed: true, reportPart: null, innerMessage: null };
 	}
 
 	const rawParts = splitMultipartBody(outer.body, boundary);
@@ -314,8 +322,63 @@ export function splitJournalReportMime(raw: Buffer): SplitJournalMime | null {
 		}
 	}
 
-	if (reportPart === null || innerMessage === null) {
+	return { outerIsMultipartMixed: true, reportPart, innerMessage };
+}
+
+/**
+ * Locates the report and inner-message parts of an outer message, reporting each independently
+ * instead of collapsing every shape mismatch into `null` the way {@link splitJournalReportMime} does.
+ * Used by `journal-report.ts` to distinguish "not a journal report at all" from "report part present,
+ * inner message missing" (`JR-5-03`). Never throws for a shape mismatch, for the same reason
+ * {@link splitJournalReportMime} does not -- it can still throw on a genuinely unexpected internal
+ * error, which the caller catches.
+ */
+export function locateJournalParts(raw: Buffer): LocatedJournalParts {
+	return locateJournalPartsInternal(raw);
+}
+
+/**
+ * Splits the outer message into its report (`text/plain`) and inner (`message/rfc822`) parts.
+ * Returns `null` for any shape that does not match RFC section 6.1 -- not multipart/mixed, no
+ * boundary parameter, or either expected child part missing. The caller (`journal-report.ts`) turns
+ * `null` into a `parse_failed` result; this function itself never throws for a shape mismatch (it
+ * can still throw on a genuinely unexpected internal error, which the caller also catches).
+ *
+ * A thin wrapper over {@link locateJournalParts} kept for its existing all-or-nothing callers and
+ * tests -- `journal-report.ts` calls `locateJournalParts()` directly where the distinction matters.
+ */
+export function splitJournalReportMime(raw: Buffer): SplitJournalMime | null {
+	const located = locateJournalPartsInternal(raw);
+	if (located.reportPart === null || located.innerMessage === null) {
 		return null;
 	}
-	return { reportPart, innerMessage };
+	return { reportPart: located.reportPart, innerMessage: located.innerMessage };
+}
+
+/**
+ * `Content-Type` values (RFC 8551) whose body is S/MIME-wrapped and therefore not readable
+ * plaintext without unwrapping the PKCS#7 structure first -- both the "enveloped-data" (encrypted)
+ * and "signed-data" (opaque-signed) `smime-type`s land here, since both leave the body unreadable
+ * without extra work this parser does not do. `multipart/signed` (clear-signing) is deliberately
+ * **not** included: its body is ordinary readable MIME with a detached signature alongside it, not
+ * wrapped inside anything (`JR-5-03`).
+ */
+const SMIME_WRAPPED_CONTENT_TYPES = new Set(['application/pkcs7-mime', 'application/x-pkcs7-mime']);
+
+/**
+ * `JR-5-03`: true when a MIME part's `Content-Type` marks its body as S/MIME-wrapped (see
+ * {@link SMIME_WRAPPED_CONTENT_TYPES}'s doc comment for exactly which forms and why).
+ */
+export function isSmimeWrappedContentType(contentType: ParsedContentType): boolean {
+	return SMIME_WRAPPED_CONTENT_TYPES.has(contentType.type);
+}
+
+/**
+ * Reads only the top-level `Content-Type` header of `raw` (expected to be a full RFC 5322 message)
+ * to decide whether its body is S/MIME-wrapped. Never decodes, transforms, or even looks at the
+ * body itself -- header-only, so it is safe to call on a body that turns out to be ciphertext.
+ */
+export function isSmimeWrappedMessage(raw: Buffer): boolean {
+	const { headers } = splitHeaderAndBody(raw);
+	return isSmimeWrappedContentType(parseContentType(headers.get('content-type')));
 }

@@ -116,10 +116,14 @@ export {
 
 export { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './parser/envelope';
 export {
+	isSmimeWrappedContentType,
+	isSmimeWrappedMessage,
+	locateJournalParts,
 	parseContentType,
 	splitHeaderAndBody,
 	splitJournalReportMime,
 	splitMultipartBody,
+	type LocatedJournalParts,
 	type ParsedContentType,
 	type SplitHeaderAndBody,
 	type SplitJournalMime,

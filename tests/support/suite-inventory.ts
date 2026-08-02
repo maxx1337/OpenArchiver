@@ -153,7 +153,17 @@ export const SUITES: readonly SuiteSpec[] = [
 		// mailparser-backed To/Cc/Bcc address-list parsing tests, R3's dispatch-table/known-names
 		// equality test, R4's undisclosedRecipientFields granularity tests, and R5's boundary-line
 		// validation tests.
-		expectedTests: { ci: 425, nightly: 1, manual: 0 },
+		// 447 after JR-5-03/JR-5-04: 22 new tests in the same three parser files (no new files) --
+		// 11 in mime-split.test.ts (locateJournalParts() reporting the report part independently of
+		// the inner part, and isSmimeWrappedContentType()/isSmimeWrappedMessage() classifying
+		// application/pkcs7-mime, the deprecated application/x-pkcs7-mime alias, and multipart/signed
+		// as NOT wrapped) and 11 in journal-report.test.ts (the missing-inner-part case now asserting
+		// extractableHeaders sourced from the still-parsed envelope rather than only `reason`; the
+		// not-multipart/empty-buffer fallback-header-extraction cases; the S/MIME-encrypted and
+		// clear-signed inner-part fixtures end to end; and the JR-5-03 "never throws" loop over
+		// seven deliberately broken shapes -- truncated, wrong boundary, nested multipart, 8-bit
+		// garbage, empty buffer, headers-only, unterminated boundary).
+		expectedTests: { ci: 447, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

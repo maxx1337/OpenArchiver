@@ -3,6 +3,9 @@ import { expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import { loadFixture } from '../../tests/support/fixtures';
 import {
+	isSmimeWrappedContentType,
+	isSmimeWrappedMessage,
+	locateJournalParts,
 	parseContentType,
 	splitHeaderAndBody,
 	splitJournalReportMime,
@@ -265,3 +268,113 @@ suite(
 		});
 	}
 );
+
+suite(
+	'ci',
+	'locateJournalParts() -- reports the report part even when the inner part is missing (JR-5-03)',
+	() => {
+		it('splits the basic fixture the same way splitJournalReportMime() does', () => {
+			const raw = loadFixture('basic-journal-report.eml');
+			const located = locateJournalParts(raw);
+			expect(located.outerIsMultipartMixed).toBe(true);
+			expect(located.reportPart).not.toBeNull();
+			expect(located.innerMessage).not.toBeNull();
+		});
+
+		it('still returns the report part when the message/rfc822 inner part is missing', () => {
+			const raw = loadFixture('missing-inner-part.eml');
+			const located = locateJournalParts(raw);
+			expect(located.outerIsMultipartMixed).toBe(true);
+			expect(located.reportPart).not.toBeNull();
+			const { headers } = splitHeaderAndBody(located.reportPart!);
+			expect(headers.get('content-type')).toContain('text/plain');
+			expect(located.innerMessage).toBeNull();
+		});
+
+		it('reports outerIsMultipartMixed=false and no parts for a non-multipart/mixed message', () => {
+			const raw = loadFixture('not-multipart.eml');
+			const located = locateJournalParts(raw);
+			expect(located.outerIsMultipartMixed).toBe(false);
+			expect(located.reportPart).toBeNull();
+			expect(located.innerMessage).toBeNull();
+		});
+
+		it('never mutates the buffer it was given', () => {
+			const raw = loadFixture('missing-inner-part.eml');
+			const copy = Buffer.from(raw);
+			locateJournalParts(raw);
+			expect(Buffer.compare(raw, copy)).toBe(0);
+		});
+	}
+);
+
+suite('ci', 'isSmimeWrappedContentType() / isSmimeWrappedMessage() (JR-5-03)', () => {
+	it('recognises application/pkcs7-mime as S/MIME-wrapped', () => {
+		expect(
+			isSmimeWrappedContentType(
+				parseContentType('application/pkcs7-mime; smime-type=enveloped-data')
+			)
+		).toBe(true);
+	});
+
+	it('recognises the deprecated application/x-pkcs7-mime alias as S/MIME-wrapped', () => {
+		expect(
+			isSmimeWrappedContentType(
+				parseContentType('application/x-pkcs7-mime; smime-type=enveloped-data')
+			)
+		).toBe(true);
+	});
+
+	it('recognises application/pkcs7-mime as wrapped even without a smime-type parameter', () => {
+		expect(isSmimeWrappedContentType(parseContentType('application/pkcs7-mime'))).toBe(true);
+	});
+
+	it('does NOT treat multipart/signed with the pkcs7-signature protocol as wrapped -- clear-signed, readable', () => {
+		expect(
+			isSmimeWrappedContentType(
+				parseContentType(
+					'multipart/signed; protocol="application/pkcs7-signature"; micalg=sha-256'
+				)
+			)
+		).toBe(false);
+	});
+
+	it('does NOT treat an ordinary text/plain message as wrapped', () => {
+		expect(isSmimeWrappedContentType(parseContentType('text/plain; charset="us-ascii"'))).toBe(
+			false
+		);
+	});
+
+	it('isSmimeWrappedMessage() reads only the top-level Content-Type header of a full message', () => {
+		const encryptedLike = Buffer.from(
+			[
+				'From: alice@contoso.com',
+				'To: bob@contoso.com',
+				'Content-Type: application/pkcs7-mime; smime-type=enveloped-data',
+				'',
+				'not-real-base64-ciphertext',
+				'',
+			].join('\r\n'),
+			'utf8'
+		);
+		expect(isSmimeWrappedMessage(encryptedLike)).toBe(true);
+
+		const plainMessage = Buffer.from(
+			[
+				'From: alice@contoso.com',
+				'To: bob@contoso.com',
+				'Content-Type: text/plain',
+				'',
+				'hello',
+				'',
+			].join('\r\n'),
+			'utf8'
+		);
+		expect(isSmimeWrappedMessage(plainMessage)).toBe(false);
+	});
+
+	it('isSmimeWrappedMessage() never throws on an empty buffer', () => {
+		expect(() => isSmimeWrappedMessage(Buffer.alloc(0))).not.toThrow();
+		expect(isSmimeWrappedMessage(Buffer.alloc(0))).toBe(false);
+	});
+});

@@ -19,6 +19,10 @@
  * open here as an extensible union rather than a closed two-case type: a caller that already
  * switches on `kind` gets a compile error at every such switch when a member is added, not a silent
  * fallthrough -- so the extension is additive, not a breaking change to this file.
+ *
+ * `JR-5-03` adds `InnerMessagePresent.contentEncrypted` (S/MIME-encrypted inner message: stored and
+ * flagged, never rejected) and `JR-5-04` adds `JournalParseFailed.extractableHeaders` plus the
+ * `ParseFailedAlert`/`ParseFailedAlertSink` alerting seam below.
  */
 
 /** One field line from the journal report text that the envelope parser does not otherwise model. */
@@ -91,6 +95,26 @@ export interface InnerMessagePresent {
 	readonly subject: string | null;
 	readonly messageId: string | null;
 	readonly from: string | null;
+	/**
+	 * `JR-5-03`: true when the inner message's body is S/MIME-encrypted (`application/pkcs7-mime` --
+	 * RFC 8551 -- or the deprecated `application/x-pkcs7-mime` alias; in practice usually carrying
+	 * `smime-type=enveloped-data`, though this is set for any `pkcs7-mime` body regardless of that
+	 * parameter, including the opaque-signed-data case, which is just as unreadable as ciphertext
+	 * without unwrapping the PKCS#7 structure).
+	 *
+	 * `subject`/`messageId`/`from` above are still the plaintext RFC 5322 headers of the inner
+	 * message -- S/MIME envelope encryption wraps the *body*, not the surrounding message headers --
+	 * but from this flag being `true` onward, `raw`'s body portion is ciphertext, not plaintext
+	 * content. **A caller (the `journal-inbound` worker, `JR-6-02`) must not feed `raw` to text
+	 * extraction/indexing when this is `true`; only the header fields above are safe to index.**
+	 * The bytes themselves are never altered either way -- `raw` is always the unmodified inner
+	 * message, encrypted or not (README constraint 3).
+	 *
+	 * A `multipart/signed; protocol="application/pkcs7-signature"` inner message (clear-signed, not
+	 * encrypted) leaves this `false`: its body is ordinary readable MIME with a detached signature
+	 * alongside it, not wrapped inside anything, so it is fully indexable like any other message.
+	 */
+	readonly contentEncrypted: boolean;
 }
 
 export interface InnerMessageAbsent {
@@ -109,6 +133,23 @@ export interface JournalReportParsed {
 }
 
 /**
+ * Whatever header metadata could still be read off the raw bytes when the message could not be
+ * parsed as a journal report (`JR-5-04`) -- best-effort, absent fields are `null`, never guessed.
+ * This is what makes "index whatever is extractable" (RFC section 5.3, journal-ledger skill
+ * section 6) possible for a `parse_failed` result: without it, `JournalParseFailed` carried only a
+ * machine-readable `reason` string, which gives an indexer nothing to search on. Sourced either from
+ * the journal report's own envelope fields (when the report text parsed but the inner message did
+ * not -- the more accurate source, since these are the *original* message's fields) or, failing
+ * that, from the raw top-level RFC 5322 header block of the bytes the caller was handed at all
+ * (undecoded, so an encoded-word subject stays encoded here -- still better than nothing to index).
+ */
+export interface ExtractableHeaders {
+	readonly subject: string | null;
+	readonly from: string | null;
+	readonly messageId: string | null;
+}
+
+/**
  * The outer message could not be parsed as a journal report. Per RFC section 5.3 this is not a
  * rejection: the caller still stores, hashes and chains the message, sets the `parse_failed`
  * ledger event (`JR-5-04`), indexes whatever is extractable, and alerts an operator.
@@ -119,6 +160,37 @@ export interface JournalParseFailed {
 	readonly reason: string;
 	/** Human-readable detail, e.g. a caught exception's message. Never message body content. */
 	readonly detail: string | null;
+	/** See {@link ExtractableHeaders}. Always present, even when every field in it is `null`. */
+	readonly extractableHeaders: ExtractableHeaders;
 }
 
 export type JournalReportParseResult = JournalReportParsed | JournalParseFailed;
+
+/**
+ * The operator-visible event a caller emits when `parseJournalReport()` returns `kind:
+ * 'parse_failed'` (`JR-5-04`, journal-ledger skill section 6: "alarmieren"). Mirrors
+ * `QuarantineAlert`/`QuarantineAlertSink`'s shape in `packages/journaling/src/spool/quarantine.ts`
+ * deliberately -- the same "typed event through an injected sink" pattern, not a second one invented
+ * for this slice (`docs/dev/journaling/12-parallelbetrieb.md` section on not vergeben-ing a second
+ * mechanism where one already exists).
+ *
+ * **The parser itself never calls this.** `packages/journaling`'s parser is pure -- no I/O, no
+ * ledger, no storage (that is the `journal-inbound` worker's job, `JR-6-01`/`JR-6-02`, which does not
+ * exist yet). `JournalParseFailed` already carries everything an alert needs (`reason`, `detail`,
+ * `extractableHeaders`); the worker is the one call site that also has the ledger `seq` and spool
+ * path to attach, so it constructs the `ParseFailedAlert` and calls whichever `ParseFailedAlertSink`
+ * it is wired to -- a decision this package cannot make for it (architecture doc section 2: config
+ * and I/O are injected, never imported, here).
+ */
+export interface ParseFailedAlert {
+	/** The ledger `seq` of the `parse_failed` event the caller just appended. Same type as `LedgerEntryInput.seq` (`journal-ledger.types.ts`). */
+	readonly seq: bigint;
+	readonly reason: string;
+	readonly detail: string | null;
+	readonly extractableHeaders: ExtractableHeaders;
+}
+
+/** Where a `parse_failed` alert goes. See {@link ParseFailedAlert}'s doc comment for who calls this and why the parser does not. */
+export interface ParseFailedAlertSink {
+	alert(event: ParseFailedAlert): Promise<void> | void;
+}

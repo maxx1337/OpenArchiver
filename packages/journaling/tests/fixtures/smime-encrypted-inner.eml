@@ -1,0 +1,36 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Confidential contract
+Date: Wed, 01 Jul 2026 14:00:00 +0000
+Message-ID: <outer-5@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary5"
+
+--JournalReportBoundary5
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Confidential contract
+Message-Id: <inner-5@contoso.com>
+To: bob@contoso.com
+Recipient: bob@contoso.com
+
+--JournalReportBoundary5
+Content-Type: message/rfc822
+
+From: alice@contoso.com
+To: bob@contoso.com
+Subject: Confidential contract
+Message-ID: <inner-5@contoso.com>
+Date: Wed, 01 Jul 2026 13:59:00 +0000
+MIME-Version: 1.0
+Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7m"
+
+MIIGRwYJKoZIhvcNAQcDoIIGODCCBjQCAQAxggFEMIIBQAIBADB2MGkxCzAJBgNV
+BAYTAlVTMRUwEwYDVQQKEwxDb250b3NvIEluYzEUMBIGA1UECxMLRW5jcnlwdGlv
+bjEmMCQGA1UEAxMdVGhpc0lzTm90UmVhbEV4YW1wbGVDaXBoZXJ0ZXh0AhAtIsFA
+KEXAMPLEBASE64CIPHERTEXTONLYNOTAREALSMIMEMESSAGEXAMPLEBASE64==
+BASE64CIPHERTEXTFILLERDATATHATISNOTREALCRYPTOGRAPHICMATERIALHERE
+--JournalReportBoundary5--
