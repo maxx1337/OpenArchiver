@@ -1271,14 +1271,15 @@ ADR-008 kennen — der Anker fehlt dann, die Annahme läuft weiter.
 
 ## ADR-024 — Betriebsmodell: eine Instanz je Endkunde
 
-**Status:** **offen** — Empfehlung des PO vom 2026-07-31, die Entscheidung trifft der Auftraggeber ·
+**Status:** **entschieden** (2026-08-02) — der Auftraggeber ist der Empfehlung des PO vom 2026-07-31
+gefolgt und hat zugleich die Betriebsverantwortung entschieden (Abschnitt unten) ·
 **Entscheider:** Auftraggeber · **Quelle:** ADR-006/ADR-007 (`deployment_id` im Genesis), RFC §15 ·
 **Ersetzt nicht:** ADR-007 — diese ADR liegt eine Ebene darüber und widerspricht ihr nicht ·
 **Gegen den E2-Stand nachgeprüft am 2026-08-01** (Kopf `79d80f1`): jede Zahl unten neu gemessen, zwei
 korrigiert, ein Abschnitt durch den gemergten Kettencode überholt und neu gefasst, zwei Punkte
 ergänzt (Klon-Split-Brain, F37)
 
-**Empfohlen: ein vollständig getrennter Stack je Endkunde.** Eigene App, Worker, `smtp-ingress`,
+**Entschieden: ein vollständig getrennter Stack je Endkunde.** Eigene App, Worker, `smtp-ingress`,
 Postgres-Datenbank, Valkey, Meilisearch, Tika, Storage-Root, Schlüssel, Lizenz und eigene IP. Als
 dokumentierte Dichteoption zulässig: ein **geteilter Postgres-Server** mit eigener Datenbank und
 eigener Rolle je Kunde. **Nicht empfohlen:** ein geteilter Stack mit nachgerüsteter Tenant-Spalte.
@@ -1437,22 +1438,60 @@ aber nicht der Aufwand, sondern dass dieses Modell die Kundentrennung genau von 
 macht, die in 0.5.2 fail-open war. Bleibt Rückfalloption, falls der Ressourcenbedarf des empfohlenen
 Modells sich als untragbar erweist — dann braucht es eine neue ADR, die diese hier ersetzt.
 
-### Offen und ausdrücklich nicht entschieden: Betriebsverantwortung und AGPL §13
+### Betriebsverantwortung: zwei Phasen — entschieden am 2026-08-02
 
-Die Repo-Lizenz ist AGPL-3.0 (`LICENSE`). Betreibt der Auftraggeber die Instanzen **für** Endkunden
-mit Netzzugriff, greift §13: den Nutzern ist der entsprechende Quellcode anzubieten, einschließlich
-des hier entstehenden Journaling-Codes. Betreibt der Endkunde selbst, entfällt das, und „der
-Betreiber" in der gesamten Doku bleibt der Kunde — so wie sie heute geschrieben ist.
+**Phase 1: der Endkunde betreibt seine Instanz selbst.** **Phase 2, später: der Auftraggeber bietet
+den Betrieb zusätzlich als Dienst an, für Kunden, die das wünschen.** Beide Phasen bestehen dann
+nebeneinander — Phase 2 ersetzt Phase 1 nicht.
 
-Das ist eine Feststellung, keine Rechtsberatung. Sie steht hier, weil sie das Betriebsmodell
-mitbestimmt und nicht danach entdeckt werden sollte. Bis der Auftraggeber entscheidet, bleibt dieser
-Punkt **offen**, wie ADR-008 und ADR-012.
+#### Die AGPL-Folge ist in **beiden** Phasen eine Quelltextpflicht, nur gegenüber verschiedenen Leuten
 
-### Konsequenzen, wenn so entschieden wird
+Das ist der Punkt, an dem man sich am leichtesten verrechnet, deshalb steht er zuerst:
 
-Die folgenden Tasks werden **erst bei der Entscheidung** in E12 angelegt — nach ADR-021 bleibt
-`03-backlog.md` unverändert, bis das Epic ansteht, und die Taskzahl in `06-status.md` §150 wird
-gemeinsam mit ihnen fortgeschrieben:
+| Phase | Vorgang                                                 | Greift     | Wem geschuldet                              |
+| ----- | ------------------------------------------------------- | ---------- | ------------------------------------------- |
+| 1     | Software wird an den Kunden übergeben (_conveying_)     | AGPL §4–§6 | dem Kunden als Empfänger                    |
+| 2     | Der Auftraggeber betreibt, Nutzer greifen übers Netz zu | AGPL §13   | den Nutzern der von ihm betriebenen Instanz |
+
+**Phase 1 befreit also nicht von der Pflicht, sie verschiebt nur den Paragrafen.** Wer die Software
+weitergibt, schuldet dem Empfänger den Corresponding Source — dafür braucht es §13 gar nicht.
+
+**Erfüllt wird beides von genau einem Artefakt:** dem Quelltext-Angebot in der UI (Version, Commit,
+Link auf Repository oder Tarball), das ADR-025 als E12-Task vorsieht. Einmal gebaut, deckt es beide
+Phasen. Phase 2 erzeugt dafür **keinen** zusätzlichen Aufwand — nur einen anderen Adressaten.
+
+> Feststellung, keine Rechtsberatung — wie schon in der ersten Fassung dieses Abschnitts.
+
+#### Was Phase 1 für die Doku heißt
+
+**„Der Betreiber" ist der Kunde.** Aufbewahrungsfristen, Object-Lock-Modus, TSA-Auswahl,
+Schlüsselverwaltung, Monitoring-Ziele und die schriftliche Verfahrensdokumentation entscheidet und
+verantwortet **er**. `JR-12-04` verlangt den Deployment-Guide ohnehin so — „von einem Betreiber ohne
+Codekenntnis befolgbar" —, und das ist damit keine Stilfrage mehr, sondern die Zielgruppe. Der Guide
+muss den Kunden **befähigen**, nicht informieren: R-02 (Object Lock COMPLIANCE ist irreversibel) trifft
+dann ihn, und er muss die Frist bewusst wählen können, bevor sie unumkehrbar wird.
+
+#### Was Phase 2 verschärft, und zwar messbar
+
+**R-18 wird vom Einzelfall zum Systemrisiko.** Betreibt der Auftraggeber N Kundeninstanzen selbst, ist
+ein Golden Image der naheliegende Weg — und ein Image, das **nach** dem Migrationslauf entsteht,
+trägt die von `0041_even_scream.sql` gezogene `deployment_id`, sodass **fremde Kunden dasselbe
+Genesis-Präfix teilen**. `verify` meldet das als Manipulationsbefund, obwohl es ein
+Provisionierungsfehler war, womöglich erst Monate später bei der ersten Prüfung. Solange der Kunde
+selbst installiert, ist das sein Einzelfall; als Dienst ist es ein Fehler, der **alle** Instanzen auf
+einmal trifft. Konsequenz 2 unten wird damit von einer Empfehlung zu einer **Betriebsvorschrift**.
+
+**Offen, und bewusst nicht hier entschieden: das Haftungsprofil.** Als Dienstanbieter betreibt der
+Auftraggeber Compliance-Infrastruktur für Dritte — mit Verfügbarkeitszusagen, Wiederanlaufzeiten,
+Aufbewahrung fremder Daten und der Frage, wer im Prüfungsfall gegenüber der Behörde Auskunft gibt.
+Das ist keine Architekturfrage. Es steht hier, damit es beim Übergang zu Phase 2 nicht zwischen zwei
+Epics verschwindet.
+
+### Konsequenzen der Entscheidung
+
+**Die Entscheidung ist seit dem 2026-08-02 da; die Tasks entstehen trotzdem erst, wenn E12 ansteht** —
+nach ADR-021 bleibt `03-backlog.md` unverändert, bis das Epic dran ist, und die Taskzahl in
+`06-status.md` wird gemeinsam mit ihnen fortgeschrieben. Bis dahin ist diese Liste die Vorlage:
 
 1. `docker-compose.yml` ohne feste `container_name`, damit mehrere Stacks auf einem Host koexistieren
    (berührt `JR-12-03`).

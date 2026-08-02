@@ -177,16 +177,19 @@ Im selben Zug entschieden: **`chain_scope_id` = `ingestion_sources.id`** — ein
 und ADR-022 falsche Schlüsse. Ein **Endkunde** ist eine Installation mit **einer** `deployment_id`,
 ein **Mandant** ein Archiv und damit eine Kette darin, ein **Endpunkt** nur ein Attribut in der
 Ledger-Zeile. „Täglich × 50 Mandanten" in ADR-022 meint 50 Archive **einer** Installation. Das
-Betriebsmodell darüber — eine Instanz je Endkunde, empfohlen — steht in **`ADR-024`** und ist
-**noch nicht entschieden**; offen ist dort die Betriebsverantwortung, also **wer** betreibt.
+Betriebsmodell darüber — eine Instanz je Endkunde — steht in **`ADR-024`** und ist seit dem
+**2026-08-02 entschieden**, einschließlich der Betriebsverantwortung: **Phase 1 betreibt der Endkunde
+selbst, in Phase 2 bietet der Auftraggeber den Betrieb zusätzlich als Dienst an.**
 
-> **Die AGPL-§13-Folge daraus ist seit `ADR-025` (2026-08-01) geklärt, die Betriebsfrage nicht.**
-> §13 ist eine **Angebotspflicht für den Quellcode**, kein Betriebsverbot — die Annahme, die Lizenz
-> untersage Deployments für Endkunden, hielt der Prüfung nicht stand. Betreibt der Auftraggeber die
-> Instanzen, schuldet er deren Nutzern den Quellcode; betreibt der Endkunde selbst, entfällt es.
-> **Was die Lizenz nicht tut, ist das Betriebsmodell verbieten.** `ADR-025` entscheidet im selben
-> Zug die übergeordnete Frage: der Fork wird weitergeführt, es wird keine eigenständige Anwendung
-> gebaut — und die Abhängigkeitsregel gilt dafür ab sofort **beidseitig** (`02-architektur.md` §2).
+> **Die Quelltextpflicht besteht in beiden Phasen — nur der Paragraf wechselt.** In Phase 1 wird die
+> Software an den Kunden **weitergegeben**, also greifen AGPL §4–§6 und er bekommt den Corresponding
+> Source als Empfänger. In Phase 2 betreibt der Auftraggeber, also greift zusätzlich §13 gegenüber
+> den Nutzern seiner Instanz. **Kein Betriebsverbot in beiden Fällen** — die Annahme, die Lizenz
+> untersage Deployments für Endkunden, hielt der Prüfung nicht stand (`ADR-025`). Erfüllt wird
+> beides von **einem** Artefakt, dem Quelltext-Angebot in der UI, das ADR-025 als E12-Task vorsieht.
+> `ADR-025` entscheidet im selben Zug die übergeordnete Frage: der Fork wird weitergeführt, es wird
+> keine eigenständige Anwendung gebaut — und die Abhängigkeitsregel gilt dafür ab sofort
+> **beidseitig** (`02-architektur.md` §2).
 > Seit dem E2-Merge ist die ADR gegen den Code nachgeprüft, und ihr Zeitpunkt ist präziser: **sie steht
 > vor E3/E4**, weil die erste in Produktion angelegte Kette die `deployment_id` in ihren Genesis
 > schreibt. Ebenfalls dort neu: ein Golden Image **nach** dem Migrationslauf gibt allen Kundeninstanzen
