@@ -1821,3 +1821,47 @@ Fall die Länge und nicht die Tag-Position.
 **Entscheidung des Auftraggebers offen:** beheben (kleine Teständerung, gehört sinnvollerweise in
 die nächste Arbeit an `packages/journaling`), oder bewusst akzeptieren, weil das Golden-File die
 Eigenschaft trägt. **Blockiert nichts** und war kein Hindernis für die Abnahme von E2.
+
+## F40 — eine Spool-Datei ohne Ledger-Eintrag belegt **keinen** Absturz, und ihr Müll frisst die Kapazität auf
+
+**Schwere:** mittel · **Kategorie:** Verfügbarkeit und Betriebsaussage · **Ort:**
+`packages/journaling/src/spool/durable-write.ts`, `…/acceptance.ts`,
+`docs/dev/journaling/02-architektur.md` §5 · **Gefunden:** `JR-3-06` (2026-08-02, Rolle `tester`),
+gemeldet und **nicht** behoben · **Status:** **offen**
+
+Drei der fünf Teiloperationen des durablen Schreibens — `write()`, Datei-`fsync` und
+Verzeichnis-`fsync` — hinterlassen bei einem **gewöhnlichen Laufzeitfehler** eine vollständige
+Spool-Datei ohne Ledger-Eintrag. `SpoolFileSystem` hat keine Löschmethode, und
+`writeDurableSpoolFile()` räumt nicht weg, was es angelegt hat.
+
+**Das Nicht-Löschen ist richtig und bleibt.** Skill §3 verbietet ausdrücklich, eine Spool-Datei ohne
+Ledger-Eintrag ohne durable Aufzeichnung zu entfernen. Der Befund richtet sich nicht dagegen,
+sondern gegen zwei Folgen, die bisher niemand ausgesprochen hat.
+
+**Erstens: die Aussage in `02-architektur.md` §5 ist falsch.** Dort stand, die liegengebliebene Datei
+sei „Beleg dafür, dass ein Absturz stattgefunden hat“. Sie ist es nicht — ein einzelner
+fehlgeschlagener `write()` erzeugt dieselbe Spur, ohne dass irgendetwas abgestürzt wäre. Der Test
+`„an ordinary write failure looks exactly like a crash to JR-3-05“` fädelt ein gescheitertes
+`accept()` direkt in `runCrashRecoveryScan()` und zeigt: die Datei wird quarantänisiert und
+alarmiert, **ununterscheidbar von einem echten Absturz**. Der Betreiber sucht dann einen Absturz,
+den es nie gab. Satz korrigiert am 2026-08-02.
+
+**Zweitens, und das ist der eigentliche Schaden: der Müll frisst das Kapazitätsbudget.**
+`checkSpoolHighWaterMark()` zählt `quarantine/` bewusst mit (`JR-3-01`, richtig — sonst bliebe ein
+langsam volllaufender Spool unsichtbar). Nur leert die Quarantäne niemand. Wiederholte
+Schreibfehler — also genau der Fall, in dem das System ohnehin schon leidet — füllen das Budget
+dauerhaft mit Rückständen, bis eine **spätere, unabhängige, völlig gesunde** Transaktion mit `452`
+abgewiesen wird. Ein zweiter Testfall belegt das. Das ist eine schleichende Selbstblockade: die
+Fehlerbehandlung erzeugt den nächsten Ausfall.
+
+**Zwei Richtungen, keine davon hier entschieden:**
+
+1. Der Annahmepfad verschiebt seinen eigenen Rest bei einem Schreibfehler **selbst** nach
+   `quarantine/`, mit eigenem Grund (`'write-failed'` statt `'no-ledger-entry'`). Dann ist der
+   spätere Alarm ehrlich, und der Scan sieht nichts, was er falsch deuten könnte. Löscht nichts,
+   verletzt Skill §3 also nicht. Kostet einen weiteren fehlbaren Aufruf im Fehlerpfad.
+2. Die Quarantäne bekommt ein Verfahren — Aufbewahrungsfrist, Betreiber-Freigabe, Alarm bei
+   Erreichen eines Anteils am Budget. Gehört dann zu E10 (Monitoring) und E12 (Betriebsleitfaden).
+
+Beide schließen einander nicht aus; (1) macht die Meldung ehrlich, (2) macht den Speicher wieder
+frei. **Der Auftraggeber entscheidet, ob das vor der Abnahme von E3 behoben wird oder danach.**

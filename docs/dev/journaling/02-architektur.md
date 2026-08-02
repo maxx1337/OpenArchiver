@@ -334,7 +334,9 @@ Beim Start von `apps/smtp-ingress` **und** des `journal-inbound`-Workers:
     - **Ledger-Eintrag vorhanden** → die Nachricht war quittiert. Phase B ist offen: nachreihen.
     - **Kein Ledger-Eintrag** → Absturz zwischen Schritt 3 und 5. Die Nachricht wurde **nie
       quittiert**; der Sender wiederholt. Datei nach `spool/quarantine/` verschieben und **Alert
-      auslösen**. Nicht löschen — sie ist Beleg dafür, dass ein Absturz stattgefunden hat.
+      auslösen**. Nicht löschen — sie ist Beleg dafür, dass eine Nachricht empfangen, aber nie
+      quittiert wurde. **Nicht** Beleg für einen Absturz: ein gewöhnlicher Schreibfehler hinterlässt
+      dieselbe Spur (**F40**).
 3. Der wiederholte Zustellversuch erzeugt einen neuen Receipt-Eintrag; die Objekt-Deduplizierung auf
    `content_sha256` verhindert ein zweites Archivobjekt, `duplicate_of` verweist auf das Original.
 

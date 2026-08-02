@@ -326,7 +326,12 @@ der leicht zu vergessene — er muss explizit dabei sein.
 
 ### §12.3 Disk full — `JR-3-07`
 
-**Klasse:** `nightly` (braucht ein eigenes Volume).
+**Klasse:** `manual` (braucht ein eigenes Volume). **Korrigiert am 2026-08-02 von `nightly` auf
+`manual`** — Entscheidung des PO bei der Abnahme von `JR-3-07`. `nightly` unterstellt, dass der Fall
+irgendwo automatisch läuft; er läuft nirgends, solange kein Linux-Host mit tmpfs oder Loop-Device
+dafür bereitsteht. `manual` mit einer Env-Variablen als Schalter sagt das laut, statt es als
+„läuft nachts schon irgendwo" zu tarnen. Umgesetzt als `suiteRequiring()` über
+`OA_TEST_SPOOL_DISKFULL_ROOT`; ohne die Variable meldet der Lauf sichtbar den Grund.
 
 Spool auf einem größenbegrenzten Volume (tmpfs mit `size=` oder Loop-Device), Nachricht überschreitet
 die Kapazität.
