@@ -113,3 +113,15 @@ export {
 	type CrashRecoveryScanResult,
 	type RequeueCandidate,
 } from './spool/crash-recovery';
+
+export { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './parser/envelope';
+export {
+	parseContentType,
+	splitHeaderAndBody,
+	splitJournalReportMime,
+	splitMultipartBody,
+	type ParsedContentType,
+	type SplitHeaderAndBody,
+	type SplitJournalMime,
+} from './parser/mime-split';
+export { parseJournalReport } from './parser/journal-report';

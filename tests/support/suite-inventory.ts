@@ -113,7 +113,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ledger/ledger-lookup.test.ts (the batched spool_txid -> ledger read port, against a recording
 		// fake) and spool/crash-recovery.test.ts (the crash-recovery scan: requeue vs. quarantine,
 		// batching, quarantine/ observability, no-delete, and tolerance of a racing second scan).
-		expectedFiles: 23,
+		// 26 after JR-5-01/JR-5-02 added packages/journaling/src/parser/{mime-split,envelope,
+		// journal-report}.test.ts -- the hand-rolled top-level MIME splitter that keeps mailparser
+		// from recursing across the message/rfc822 boundary, the envelope field-line parser
+		// (Sender/Subject/Message-Id/To/Cc/Bcc/Recipient/On-Behalf-Of/undisclosed-recipients/
+		// unknown-field preservation), and the end-to-end parseJournalReport() orchestration
+		// against fixture .eml files.
+		expectedFiles: 26,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -139,8 +145,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// mixed multi-shard batch resolved in exactly one ledger call, pre-existing quarantine/ files
 		// counted but never queried or moved, a fresh/empty spool scans cleanly, content preserved
 		// byte-for-byte across a run that both requeues and quarantines, and a racing second scan's
-		// already-moved source is tolerated rather than thrown).
-		expectedTests: { ci: 371, nightly: 1, manual: 0 },
+		// already-moved source is tolerated rather than thrown). 410 after JR-5-01/JR-5-02: 17
+		// tests for the top-level MIME splitter, 14 for the envelope field-line parser, 8 for the
+		// end-to-end parseJournalReport() orchestration -- 39 new tests.
+		expectedTests: { ci: 410, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

@@ -16,4 +16,5 @@ export * from './license.types';
 export * from './retention.types';
 export * from './journaling.types';
 export * from './journal-ledger.types';
+export * from './journal-parser.types';
 export * from './security.types';

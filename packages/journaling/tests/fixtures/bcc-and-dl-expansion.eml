@@ -1,0 +1,37 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: All-hands announcement
+Date: Wed, 01 Jul 2026 11:00:00 +0000
+Message-ID: <outer-2@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary2"
+
+--JournalReportBoundary2
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: manager@contoso.com
+On-Behalf-Of: assistant@contoso.com
+Subject: All-hands announcement
+Message-Id: <inner-2@contoso.com>
+To: team@contoso.com
+Cc: 
+Bcc: secretwatcher@contoso.com
+Recipient: team@contoso.com
+Recipient: dl-member-one@contoso.com
+    dl-member-two@contoso.com
+    dl-member-three@contoso.com
+Recipient: secretwatcher@contoso.com
+
+--JournalReportBoundary2
+Content-Type: message/rfc822
+
+From: assistant@contoso.com on behalf of manager@contoso.com
+To: team@contoso.com
+Subject: All-hands announcement
+Message-ID: <inner-2@contoso.com>
+Date: Wed, 01 Jul 2026 10:59:00 +0000
+Content-Type: text/plain; charset="us-ascii"
+
+Please join us in the main hall at 3pm.
+
+--JournalReportBoundary2--

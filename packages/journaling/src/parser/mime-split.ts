@@ -1,0 +1,272 @@
+/**
+ * Minimal, top-level-only MIME splitting for Exchange envelope-journaling reports (`JR-5-01`, RFC
+ * section 6.1).
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Why this exists instead of handing the whole outer message to `mailparser`
+ * ---------------------------------------------------------------------------------------------
+ * `mailparser` (permitted in this package by ADR-027) parses a full MIME tree, and it does **not**
+ * stop at a `message/rfc822` boundary: internally (`mail-parser.js`, `processChunk`/`getTextContent`)
+ * it walks straight through the nested message's own MIME tree and merges any `text/plain` content
+ * it finds there into the *same* `ParsedMail.text` as the outer parts, prefixed with a
+ * `From`/`Subject`/`Date`/`To`/`Cc`/`Bcc` meta block when the nested node is the embedded message's
+ * root (`node.showMeta`). For a journal report whose inner message happens to be a simple,
+ * non-multipart `text/plain` message, `parsed.text` would therefore silently interleave the journal
+ * report's own field lines with the inner message's body -- exactly the kind of undetectable
+ * data-mixing the project's rules on preserving both parts distinctly (`JR-5-01`'s acceptance
+ * criterion, RFC section 6.1: "Both must be preserved") are meant to rule out.
+ *
+ * This module does only the one thing `mailparser` cannot be asked not to do: split the *outer*
+ * `multipart/mixed` envelope into its immediate child parts, without looking inside a
+ * `message/rfc822` child at all. Each child part is then handed to `mailparser` independently (in
+ * `journal-report.ts`) -- at that point there is no nested boundary left to cross, so the
+ * recursive-descent behaviour above no longer applies and decoding (charset, quoted-printable,
+ * base64) is delegated to the library exactly as ADR-027 intends.
+ *
+ * Deliberately **not** a general-purpose MIME parser: it understands exactly the shape RFC section
+ * 6.1 describes (one `multipart/mixed` envelope, boundary-delimited child parts, each child with its
+ * own small header block) and nothing more exotic (nested multipart alternatives inside a child,
+ * RFC 2231 continuation parameters, etc.). Anything outside that shape is surfaced as `null` by
+ * {@link splitJournalReportMime}, and the caller turns that into a `parse_failed` result rather than
+ * a thrown error -- never a crash, per the parser's no-throw contract.
+ *
+ * **Never transforms the input bytes.** Every function here only reads `raw`/`body` via
+ * `Buffer.indexOf`/`.subarray()` (a view, not a copy, but never written to) and `.toString()` on
+ * header regions. The bytes handed back as a part's body are exact subranges of the caller's
+ * buffer.
+ */
+
+const CRLF_BLANK_LINE = Buffer.from('\r\n\r\n', 'latin1');
+const LF_BLANK_LINE = Buffer.from('\n\n', 'latin1');
+
+/** A MIME part's header block (decoded as a lowercase-keyed map) and its raw, unmodified body. */
+export interface SplitHeaderAndBody {
+	readonly headers: ReadonlyMap<string, string>;
+	readonly body: Buffer;
+}
+
+/**
+ * Splits a buffer at its first header/body blank-line separator (`\r\n\r\n` or `\n\n`, whichever
+ * occurs first) and parses the header block. If no blank line is found, the whole buffer is treated
+ * as headers with an empty body -- callers reject that shape rather than guessing.
+ */
+export function splitHeaderAndBody(buf: Buffer): SplitHeaderAndBody {
+	const crlfIndex = buf.indexOf(CRLF_BLANK_LINE);
+	const lfIndex = buf.indexOf(LF_BLANK_LINE);
+	let separatorIndex = -1;
+	let separatorLength = 0;
+	if (crlfIndex !== -1 && (lfIndex === -1 || crlfIndex <= lfIndex)) {
+		separatorIndex = crlfIndex;
+		separatorLength = 4;
+	} else if (lfIndex !== -1) {
+		separatorIndex = lfIndex;
+		separatorLength = 2;
+	}
+	if (separatorIndex === -1) {
+		return { headers: parseHeaderBlock(buf.toString('latin1')), body: Buffer.alloc(0) };
+	}
+	return {
+		headers: parseHeaderBlock(buf.subarray(0, separatorIndex).toString('latin1')),
+		body: buf.subarray(separatorIndex + separatorLength),
+	};
+}
+
+/**
+ * Unfolds RFC 5322 continuation lines (leading whitespace continues the previous header) and
+ * returns a lowercase-keyed map of header name to raw value. Header *names* are always ASCII;
+ * decoding RFC 2047 encoded-word values is not this module's job -- it only needs `Content-Type`
+ * (and only the `multipart/mixed`/`text/plain`/`message/rfc822` distinction and the `boundary`
+ * parameter), both of which are themselves ASCII tokens.
+ */
+function parseHeaderBlock(headerText: string): Map<string, string> {
+	const normalized = headerText.replace(/\r\n/g, '\n');
+	const rawLines = normalized.split('\n');
+	const unfolded: string[] = [];
+	for (const line of rawLines) {
+		if (line.length === 0) {
+			continue;
+		}
+		if ((line.startsWith(' ') || line.startsWith('\t')) && unfolded.length > 0) {
+			unfolded[unfolded.length - 1] = `${unfolded[unfolded.length - 1]} ${line.trim()}`;
+			continue;
+		}
+		unfolded.push(line);
+	}
+	const headers = new Map<string, string>();
+	for (const line of unfolded) {
+		const colonIndex = line.indexOf(':');
+		if (colonIndex === -1) {
+			continue;
+		}
+		const name = line.slice(0, colonIndex).trim().toLowerCase();
+		const value = line.slice(colonIndex + 1).trim();
+		headers.set(name, value);
+	}
+	return headers;
+}
+
+export interface ParsedContentType {
+	/** Lowercased `type/subtype`, e.g. `'multipart/mixed'`. Defaults to `'text/plain'` when absent -- the MIME default for a body part with no `Content-Type` header. */
+	readonly type: string;
+	/** Parameter names lowercased; values keep their original case (boundary values are case-sensitive). */
+	readonly params: Readonly<Record<string, string>>;
+}
+
+/** Splits a header value on `;` while respecting double-quoted parameter values. */
+function splitHeaderParams(value: string): string[] {
+	const parts: string[] = [];
+	let current = '';
+	let inQuotes = false;
+	for (const char of value) {
+		if (char === '"') {
+			inQuotes = !inQuotes;
+		}
+		if (char === ';' && !inQuotes) {
+			parts.push(current);
+			current = '';
+			continue;
+		}
+		current += char;
+	}
+	parts.push(current);
+	return parts;
+}
+
+export function parseContentType(value: string | undefined): ParsedContentType {
+	if (!value) {
+		return { type: 'text/plain', params: {} };
+	}
+	const segments = splitHeaderParams(value);
+	const type = (segments[0] ?? '').trim().toLowerCase();
+	const params: Record<string, string> = {};
+	for (const segment of segments.slice(1)) {
+		const eqIndex = segment.indexOf('=');
+		if (eqIndex === -1) {
+			continue;
+		}
+		const key = segment.slice(0, eqIndex).trim().toLowerCase();
+		let paramValue = segment.slice(eqIndex + 1).trim();
+		if (paramValue.length >= 2 && paramValue.startsWith('"') && paramValue.endsWith('"')) {
+			paramValue = paramValue.slice(1, -1);
+		}
+		params[key] = paramValue;
+	}
+	return { type, params };
+}
+
+/** Byte offsets where `needle` occurs at the start of a line (position 0, or right after a `\n`). */
+function findLineStarts(body: Buffer, needle: Buffer): number[] {
+	const starts: number[] = [];
+	let searchFrom = 0;
+	while (searchFrom <= body.length) {
+		const index = body.indexOf(needle, searchFrom);
+		if (index === -1) {
+			break;
+		}
+		const atLineStart = index === 0 || body[index - 1] === 0x0a;
+		if (atLineStart) {
+			starts.push(index);
+		}
+		searchFrom = index + needle.length;
+	}
+	return starts;
+}
+
+/** The index just past the end of the line (including its terminator) starting at `lineStart`. */
+function lineEndAfter(body: Buffer, lineStart: number): number {
+	const newlineIndex = body.indexOf(0x0a, lineStart);
+	return newlineIndex === -1 ? body.length : newlineIndex + 1;
+}
+
+/**
+ * RFC 2046: the CRLF (or bare LF) immediately preceding a boundary delimiter line belongs to the
+ * delimiter, not to the preceding part's body. Returns how many bytes to strip from the end of a
+ * part for that reason.
+ */
+function terminatorLengthBefore(body: Buffer, position: number): number {
+	if (position >= 2 && body[position - 2] === 0x0d && body[position - 1] === 0x0a) {
+		return 2;
+	}
+	if (position >= 1 && body[position - 1] === 0x0a) {
+		return 1;
+	}
+	return 0;
+}
+
+/**
+ * Splits a `multipart/*` body into its child parts (each still headers+body together -- callers
+ * run {@link splitHeaderAndBody} again per part). Returns an empty array if fewer than two boundary
+ * delimiter lines are found (i.e. there cannot be a complete part).
+ *
+ * Preamble (before the first delimiter line) and epilogue (after the last one) are silently
+ * excluded, per RFC 2046 -- they carry no part content by definition.
+ */
+export function splitMultipartBody(body: Buffer, boundary: string): Buffer[] {
+	const delimiter = Buffer.from(`--${boundary}`, 'ascii');
+	const starts = findLineStarts(body, delimiter);
+	if (starts.length < 2) {
+		return [];
+	}
+	const parts: Buffer[] = [];
+	for (let i = 0; i < starts.length - 1; i += 1) {
+		const lineStart = starts[i]!;
+		const contentStart = lineEndAfter(body, lineStart);
+		const nextLineStart = starts[i + 1]!;
+		const contentEnd = nextLineStart - terminatorLengthBefore(body, nextLineStart);
+		if (contentEnd <= contentStart) {
+			continue;
+		}
+		parts.push(body.subarray(contentStart, contentEnd));
+	}
+	return parts;
+}
+
+/** The two parts a `JR-5-01` journal report is made of, already separated at the byte level. */
+export interface SplitJournalMime {
+	/** Headers + body of the `text/plain` report part -- fed to `mailparser` as its own message. */
+	readonly reportPart: Buffer;
+	/** The `message/rfc822` part's body only (its own container headers stripped): the raw inner message, byte for byte. */
+	readonly innerMessage: Buffer;
+}
+
+/**
+ * Splits the outer message into its report (`text/plain`) and inner (`message/rfc822`) parts.
+ * Returns `null` for any shape that does not match RFC section 6.1 -- not multipart/mixed, no
+ * boundary parameter, or either expected child part missing. The caller (`journal-report.ts`) turns
+ * `null` into a `parse_failed` result; this function itself never throws for a shape mismatch (it
+ * can still throw on a genuinely unexpected internal error, which the caller also catches).
+ */
+export function splitJournalReportMime(raw: Buffer): SplitJournalMime | null {
+	const outer = splitHeaderAndBody(raw);
+	const outerContentType = parseContentType(outer.headers.get('content-type'));
+	if (outerContentType.type !== 'multipart/mixed') {
+		return null;
+	}
+	const boundary = outerContentType.params['boundary'];
+	if (!boundary) {
+		return null;
+	}
+
+	const rawParts = splitMultipartBody(outer.body, boundary);
+
+	let reportPart: Buffer | null = null;
+	let innerMessage: Buffer | null = null;
+
+	for (const rawPart of rawParts) {
+		const part = splitHeaderAndBody(rawPart);
+		const partContentType = parseContentType(part.headers.get('content-type'));
+		if (reportPart === null && partContentType.type === 'text/plain') {
+			reportPart = rawPart;
+			continue;
+		}
+		if (innerMessage === null && partContentType.type === 'message/rfc822') {
+			innerMessage = part.body;
+			continue;
+		}
+	}
+
+	if (reportPart === null || innerMessage === null) {
+		return null;
+	}
+	return { reportPart, innerMessage };
+}
