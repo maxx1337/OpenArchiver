@@ -1,0 +1,29 @@
+From: alice@contoso.com
+To: carol@example.org
+Subject: Fwd: Rechnung (Anhang)
+Date: Wed, 01 Jul 2026 09:50:00 +0000
+Message-ID: <plain-bcc-fwd-attachment-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="PlainBccFwdAsAttachmentBoundary"
+
+--PlainBccFwdAsAttachmentBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+Hallo Carol,
+
+siehe angehaengte Mail.
+
+--PlainBccFwdAsAttachmentBoundary
+Content-Type: message/rfc822
+
+From: bob@contoso.com
+To: alice@contoso.com
+Subject: Rechnung
+Date: Mon, 2 Aug 2026 09:00:00 +0200
+Message-ID: <original-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+FORWARDED-AS-ATTACHMENT-BODY-MARKER
+
+--PlainBccFwdAsAttachmentBoundary--

@@ -220,6 +220,16 @@ suite('ci', 'parseJournalReport() -- never throws on malformed input', () => {
 	 * none of them ever throws out of `parseJournalReport()`. `Promise.allSettled` would hide a
 	 * thrown rejection inside a per-item catch; awaiting each call directly, inside the `it`, is what
 	 * lets a thrown exception fail the test instead.
+	 *
+	 * The assertion below accepts all four `kind`s the union now has (`JR-5-05`/`JR-5-06` added
+	 * `'plain_bcc'`/`'ndr'` to the two that existed when this loop was written) -- this loop was never
+	 * about *which* kind comes back, only that *some* well-formed, non-throwing result does. One
+	 * fixture's classification changed with PO review R3's stricter discriminator:
+	 * "truncated mid-inner-part" produces a report part containing only `Sender:` and no `Recipient:`
+	 * line (the truncation happens in the *second* part, not this one) -- `looksLikeGenuineJournalReport()`
+	 * now requires `Recipient:` specifically, so this lands on `plain_bcc` rather than `journal_report`.
+	 * That is the intended, conservative direction (reduced fidelity, not fabricated evidence), not a
+	 * regression; the fixture's actual point -- no throw -- still holds.
 	 */
 	const brokenInputs: ReadonlyArray<{ readonly name: string; readonly raw: () => Buffer }> = [
 		{
@@ -342,10 +352,12 @@ suite('ci', 'parseJournalReport() -- never throws on malformed input', () => {
 		},
 	];
 
+	const VALID_RESULT_KINDS = new Set(['journal_report', 'parse_failed', 'plain_bcc', 'ndr']);
+
 	for (const { name, raw } of brokenInputs) {
 		it(`never throws: ${name}`, async () => {
 			const result = await parseJournalReport(raw());
-			expect(result.kind === 'journal_report' || result.kind === 'parse_failed').toBe(true);
+			expect(VALID_RESULT_KINDS.has(result.kind)).toBe(true);
 		});
 	}
 });
@@ -530,10 +542,10 @@ suite('ci', 'parseJournalReport() -- plain BCC / routing-rule fallback (JR-5-05)
  */
 suite(
 	'ci',
-	'parseJournalReport() -- report-part-found/inner-missing is not proof of a journal report (PO review R1)',
+	'parseJournalReport() -- report-part-found/inner-missing is not proof of a journal report (PO review R1/R3)',
 	() => {
 		it('classifies a plain-BCC copy of an ordinary attachment-bearing email as plain_bcc, not journal_report', async () => {
-			// Measured by the PO against the pre-fix code: this fixture used to come back as
+			// Measured by the PO against the pre-R1 code: this fixture used to come back as
 			// `kind: 'journal_report'`, `innerMessage.present: false`, `envelope.sender: null`, with the
 			// message's own prose body ("Hallo Bob, anbei die Rechnung." / "Viele Gruesse") sitting in
 			// `unknownFields` under the synthetic `_unparsed` name -- free text in an envelope metadata
@@ -556,12 +568,41 @@ suite(
 			expect(result.extractableHeaders.subject).toBe('Rechnung Oktober');
 		});
 
+		it('classifies a FORWARDED message with a quoted header and an attachment as plain_bcc, not journal_report (PO review R3)', async () => {
+			// Measured by the PO against R1's first discriminator version: R1 accepted any of
+			// Sender/Subject/Message-Id/On-Behalf-Of/To/Cc/Bcc as proof of a journal report, and a
+			// forwarded message's quoted "---------- Forwarded message ---------" header block
+			// satisfies exactly To/Cc/Subject -- so R1's version returned `kind: 'journal_report'` with
+			// `envelope.to = ['bob@contoso.com']`/`envelope.cc = ['dave@contoso.com']`, fabricated out of
+			// quoted body text, never out of an actual SMTP transaction. This is the sharper failure R3
+			// fixed: R1 lost evidence, this invented it. There is no `Recipient:` line anywhere in this
+			// fixture (a quoted forward never reproduces it -- it is not a standard RFC 5322 header) and
+			// the report text begins with the separator line, not a field line -- both of
+			// `looksLikeGenuineJournalReport()`'s signals correctly say "no" here.
+			const raw = loadFixture('plain-bcc-forwarded-with-attachment.eml');
+			const result = await parseJournalReport(raw, {
+				envelopeFrom: 'alice@contoso.com',
+				envelopeRcpt: ['journal-archive@example.org'],
+			});
+			expect(result.kind).toBe('plain_bcc');
+			if (result.kind !== 'plain_bcc') {
+				throw new Error('unreachable');
+			}
+			expect(result.reducedEnvelopeFidelity).toBe(true);
+			expect(result.envelope).toEqual({
+				envelopeFrom: 'alice@contoso.com',
+				envelopeRcpt: ['journal-archive@example.org'],
+			});
+			expect(result.extractableHeaders.subject).toBe('Fwd: Rechnung');
+		});
+
 		it('still classifies a genuine journal report missing its inner part as journal_report (JR-5-03 unaffected)', async () => {
-			// Same top-level shape as the fixture above -- multipart/mixed, text/plain report part,
+			// Same top-level shape as the two fixtures above -- multipart/mixed, text/plain report part,
 			// no message/rfc822 child -- but this report part's content is a real (if incomplete)
-			// Exchange journal report: Sender/Subject/Message-Id/To/Recipient all parse out of it,
-			// which is exactly what `hasRecognizedEnvelopeField()` requires to keep JR-5-03's rule in
-			// force. Side by side with the test above, this is the discriminator's full contrast.
+			// Exchange journal report: it begins with a field line (`Sender:`) and carries `Recipient:`
+			// lines, which is exactly what `looksLikeGenuineJournalReport()`'s two signals require to
+			// keep JR-5-03's rule in force. Side by side with the two tests above, this is the
+			// discriminator's full contrast.
 			const raw = loadFixture('missing-inner-part-bcc-and-dl.eml');
 			const result = await parseJournalReport(raw);
 			expect(result.kind).toBe('journal_report');
@@ -578,6 +619,21 @@ suite(
 				'dl-member-two@contoso.com',
 				'secretwatcher@contoso.com',
 			]);
+		});
+
+		it('leaves a complete journal report (inner message present) unaffected by the discriminator', async () => {
+			// The discriminator only ever runs on the `located.innerMessage === null` path -- a complete
+			// journal report never reaches it at all. Asserted directly (not just by construction) so a
+			// future refactor that starts calling `looksLikeGenuineJournalReport()` unconditionally gets
+			// caught here if it changes this outcome.
+			const raw = loadFixture('basic-journal-report.eml');
+			const result = await parseJournalReport(raw);
+			expect(result.kind).toBe('journal_report');
+			if (result.kind !== 'journal_report') {
+				throw new Error('unreachable');
+			}
+			expect(result.innerMessage.present).toBe(true);
+			expect(result.envelope.sender).toBe('alice@contoso.com');
 		});
 	}
 );

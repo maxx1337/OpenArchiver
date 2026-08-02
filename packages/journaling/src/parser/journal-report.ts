@@ -11,7 +11,7 @@ import type {
 	ParsedEnvelope,
 	SmtpTransactionEnvelope,
 } from '@open-archiver/types';
-import { parseEnvelope } from './envelope';
+import { parseEnvelope, reportTextBeginsWithFieldLine } from './envelope';
 import {
 	isSmimeWrappedMessage,
 	locateJournalParts,
@@ -104,23 +104,57 @@ import {
  *  - A `multipart/mixed` message whose boundary/parts do not resolve to a report part at all (wrong
  *    boundary, no `text/plain` child) stays `parse_failed` -- there is no report text to run the
  *    discriminator below against, so there is nothing left to reclassify with.
- *  - A `multipart/mixed` message that **does** resolve to a report part, but has no `message/rfc822`
- *    inner part, is the case PO review R1 (`JR-5-05`/`JR-5-06`, on top of `JR-5-03`'s original rule)
- *    corrected: an ordinary attachment-bearing email delivered via Postfix `always_bcc` or a Google
- *    routing rule is *also* `multipart/mixed` with a `text/plain` body part and no `message/rfc822`
- *    child (the attachment is not one) -- structurally indistinguishable from JR-5-03's "journal
- *    report missing its inner part" until the report part's own *content* is looked at. The
- *    `message/rfc822` part is what actually proves a journal report (RFC section 6.1); where it is
- *    missing, only the report part can still prove it, by having yielded at least one **recognised**
- *    envelope field (`Sender`/`Subject`/`Message-Id`/`On-Behalf-Of`/`To`/`Cc`/`Bcc`/`Recipient`/the
- *    undisclosed-recipients placeholder) rather than only `_unparsed` prose or field-shaped-but-
- *    unrecognised lines (see {@link hasRecognizedEnvelopeField}). Zero recognised fields means the
- *    "report part" was never a report to begin with, and the whole outer message is reclassified via
- *    {@link classifyNonJournalMessage} -- `plain_bcc` or `ndr` -- exactly as if `outerIsMultipartMixed`
- *    had been `false` from the start. A genuine journal report missing its inner part (`JR-5-03`'s
- *    original case, still covered by `missing-inner-part.eml`/`missing-inner-part-bcc-and-dl.eml`)
- *    always has at least `Sender`/`Recipient` recognised, so it is unaffected and still returns
- *    `kind: 'journal_report'` with the full envelope intact.
+ *  - A `multipart/mixed` message that **does** resolve to a report part is where PO reviews R1, R3
+ *    and R4 (`JR-5-05`/`JR-5-06`, on top of `JR-5-03`'s original rule) each corrected the same
+ *    underlying mistake once more, at a different level of the MIME structure each time -- see the
+ *    generalised rule below, which is the point of writing this down rather than leaving it as three
+ *    separate war stories.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * The generalised rule (PO review R4, after R1 and R3 hit the same mistake twice already)
+ * ---------------------------------------------------------------------------------------------
+ * **MIME structure never proves a message is a journal report -- every one of its shapes also occurs
+ * in ordinary mail.** Proof is exclusively the *content* of the report part: a `Recipient:` line and
+ * a field-line beginning (`looksLikeGenuineJournalReport()` below). Structure only decides, after
+ * that, what is *additionally* available -- never *whether* this is a journal report at all. Three
+ * shapes of the same mistake, each measured by the PO against this parser's actual output, not
+ * hypothesised:
+ *
+ *  - **R1**: "`multipart/mixed` with a `text/plain` report part" was treated as enough on its own --
+ *    but a plain-BCC/routing-rule copy of an ordinary attachment-bearing email is *also* exactly that
+ *    shape (the attachment is not a `message/rfc822` part), and the fix (`JR-5-03`'s "report found,
+ *    inner missing ⇒ journal_report" rule) needed a look at the report part's own content.
+ *  - **R3**: "the report part yielded a recognised field" (any of `Sender`/`Subject`/`Message-Id`/
+ *    `On-Behalf-Of`/`To`/`Cc`/`Bcc`) was still too weak -- a **forwarded** message's quoted header
+ *    block (`"---------- Forwarded message ---------"` plus `From`/`Date`/`Subject`/`To`/`Cc`, which
+ *    every mail client inserts) satisfies exactly those fields, and would have read
+ *    `envelope.to`/`envelope.cc` out of *quoted body text* as if they were real SMTP recipients.
+ *  - **R4**: "a `message/rfc822` inner part is present" was assumed to be proof by itself, and the
+ *    two-signal check from R3 was therefore only ever run when the inner part was *missing* -- but
+ *    "Forward as Attachment" (Outlook's own menu item; Thunderbird's default forward style) produces
+ *    `multipart/mixed` + `text/plain` + `message/rfc822` for ordinary mail, at volume, every day. That
+ *    shape is **structurally identical** to a genuine journal report, and the report part's own
+ *    content (empty here: `envelope.sender = null`, `recipients = []`, the message's own greeting
+ *    sitting in `unknownFields` under `_unparsed`) was never consulted because the code path that
+ *    consulted it only ran on the *other* branch. The result was worse than R1's original bug: not
+ *    lost evidence, but a `journal_report` asserting an empty, authoritative envelope for a message
+ *    that had real recipients -- they were just never in the report text, they were in the SMTP
+ *    transaction this path never attaches. The fix: `looksLikeGenuineJournalReport()` now runs
+ *    **before** the inner-part-present/absent branch, not inside only one arm of it -- the branch
+ *    on `located.innerMessage` decides only what `innerMessage` looks like from here on, never
+ *    whether `kind` is `'journal_report'`.
+ *
+ * The PO's principle these three reviews converge on: this parser's classification errors always
+ * point toward "reduced fidelity" (`plain_bcc`, which admits its envelope is incomplete), never
+ * toward "fabricated evidence" (`journal_report`, which asserts its envelope is authoritative).
+ * Zero-signal report text means the "report part" was never a report to begin with, regardless of
+ * what else surrounds it in the MIME tree, and the whole outer message is reclassified via
+ * {@link classifyNonJournalMessage} -- `plain_bcc` or `ndr` -- exactly as if `outerIsMultipartMixed`
+ * had been `false` from the start. A genuine journal report (`JR-5-03`'s original missing-inner-part
+ * case, still covered by `missing-inner-part.eml`/`missing-inner-part-bcc-and-dl.eml`, and a complete
+ * report with its inner part present, `basic-journal-report.eml`) always has `Recipient:` lines from
+ * the first line of the report part onward, so both are unaffected and still return
+ * `kind: 'journal_report'` with the full envelope intact.
  */
 export async function parseJournalReport(
 	rawMessage: Buffer,
@@ -167,16 +201,22 @@ export async function parseJournalReport(
 		);
 	}
 
+	// PO review R1/R3/R4 (JR-5-05/JR-5-06): the report part having parsed is not itself proof this was
+	// a journal report, and -- R4's correction -- neither is the *presence* of a message/rfc822 inner
+	// part. "Forward as attachment" (Outlook's "Forward as Attachment", Thunderbird's default forward
+	// style) produces exactly this shape -- multipart/mixed, a text/plain part, a message/rfc822 part
+	// -- for ordinary mail, at volume, all day. Only a report part that clears the two-signal check
+	// earns `kind: 'journal_report'`, checked here **regardless of whether the inner part is present
+	// or absent**; otherwise the whole message is reclassified as if it had never matched
+	// multipart/mixed at all (see the module doc comment's generalised rule and
+	// {@link looksLikeGenuineJournalReport}). Only past this point does the inner part's
+	// presence/absence still matter -- but now only to decide what `innerMessage` looks like, never
+	// whether this is a journal report at all.
+	if (!looksLikeGenuineJournalReport(envelope, reportText)) {
+		return classifyNonJournalMessage(rawMessage, smtpEnvelope);
+	}
+
 	if (located.innerMessage === null) {
-		// PO review R1 (JR-5-05/JR-5-06): the report part parsing is not itself proof this was a
-		// journal report -- an ordinary attachment-bearing email delivered via plain BCC/routing-rule
-		// matches this exact shape (multipart/mixed, text/plain body, no message/rfc822 child). Only a
-		// report part that yielded at least one recognised envelope field earns `kind:
-		// 'journal_report'`; otherwise this is reclassified as if it had never matched multipart/mixed
-		// at all (see the module doc comment and {@link hasRecognizedEnvelopeField}).
-		if (!hasRecognizedEnvelopeField(envelope)) {
-			return classifyNonJournalMessage(rawMessage, smtpEnvelope);
-		}
 		// JR-5-03 (PO review R1): report part parsed fine, so the envelope -- Bcc, DL expansion,
 		// everything -- is complete and must not be dropped just because the inner message/rfc822
 		// part is missing. `kind` stays 'journal_report'; `innerMessage.present === false` is the
@@ -201,33 +241,44 @@ export async function parseJournalReport(
 }
 
 /**
- * PO review R1 (`JR-5-05`/`JR-5-06`): whether a parsed report-part envelope contains at least one
- * field this parser actually recognises, as opposed to only `unknownFields` -- either the synthetic
- * `_unparsed` entries `envelope.ts` uses for prose lines with no colon at all, or field-shaped lines
- * whose name simply is not one of `FIELD_HANDLERS` (`envelope.ts`). Only used to decide whether a
- * report part with no `message/rfc822` inner part is a genuine (if incomplete) journal report or an
- * ordinary email's own body that merely happened to land in the position a report part would occupy
- * -- see `parseJournalReport()`'s module doc comment for why that distinction matters and where this
- * is called from.
+ * PO review R3, correcting R1's first attempt, and R4, correcting where R3 was *called from*
+ * (`JR-5-05`/`JR-5-06`): whether a report part proves itself to be a genuine (if possibly incomplete)
+ * Exchange journal report, as opposed to an ordinary message (attachment-bearing, forwarded, or
+ * forwarded **as an attachment**) that merely landed in the report-part position. See
+ * `parseJournalReport()`'s module doc comment for the generalised rule this converges on and the
+ * three measured failures that led to it -- in short, **MIME structure never proves this on its own**,
+ * only the report part's own content does, so this function is called unconditionally on every report
+ * part `parseJournalReport()` manages to extract, regardless of whether a `message/rfc822` inner part
+ * is present, absent, or anything else about the surrounding MIME tree.
  *
- * Deliberately checks the **structured** fields (`sender`/`subject`/`messageId`/`onBehalfOf`/
- * `to`/`cc`/`bcc`/`recipients`/`undisclosedRecipientFields`), not the absence of `unknownFields`: a
- * field-shaped-but-unrecognised line (e.g. a body that happens to contain `Note: send by Friday`) is
- * not, by itself, evidence of a journal report either -- the PO's discriminator asks for a field this
- * parser *understands*, not merely a line that looks field-shaped.
+ * The PO's principle for every classification in this parser: **the error direction is always
+ * "reduced fidelity" (`plain_bcc`), never "fabricated evidence" (`journal_report` asserting an
+ * authoritative envelope)**. This check follows it by requiring two independent signals to agree,
+ * combined with a logical AND -- either one failing is reason enough to reclassify as `plain_bcc`/
+ * `ndr`, the conservative direction:
+ *
+ *  - **Content**: `envelope.recipients.length > 0` -- at least one `Recipient:` line parsed.
+ *    `Recipient:` is the field RFC section 6.1's whole feature exists for, Exchange always writes it,
+ *    and -- unlike `Sender`/`Subject`/`Message-Id`/`To`/`Cc`/`Bcc`/`On-Behalf-Of` -- it is not a
+ *    standard RFC 5322 header a mail client's quoted-forward block would ever reproduce. This is
+ *    deliberately the *only* content field checked now; R1 checked the others too, which is exactly
+ *    what let a forwarded message's quoted headers pass as "recognised".
+ *  - **Structure**: {@link reportTextBeginsWithFieldLine} (`envelope.ts`) -- the report text's very
+ *    first non-blank line is itself field-shaped, not prose or a `"---------- Forwarded
+ *    message ---------"`-style separator. A genuine report's field-line block starts immediately; a
+ *    forwarded message's quoted header block does not.
+ *
+ * `From` deliberately never appears in either signal, nor anywhere in `ParsedEnvelope`: the report
+ * format writes `Sender`, not `From` (RFC section 6.1), so a quoted forward's `From:` line cannot
+ * fool this check via that name no matter where it sits in the report text.
+ *
+ * This can, deliberately, let a genuine journal report with a missing inner part fall through to
+ * `plain_bcc`/`ndr` in some pathological shape neither signal happens to catch (e.g. truncation that
+ * cuts off exactly before Exchange would have written `Recipient:`) -- per the PO's principle above,
+ * that direction of error is the accepted one; the reverse is not.
  */
-function hasRecognizedEnvelopeField(envelope: ParsedEnvelope): boolean {
-	return (
-		envelope.sender !== null ||
-		envelope.subject !== null ||
-		envelope.messageId !== null ||
-		envelope.onBehalfOf !== null ||
-		envelope.to.length > 0 ||
-		envelope.cc.length > 0 ||
-		envelope.bcc.length > 0 ||
-		envelope.recipients.length > 0 ||
-		envelope.undisclosedRecipientFields.length > 0
-	);
+function looksLikeGenuineJournalReport(envelope: ParsedEnvelope, reportText: string): boolean {
+	return envelope.recipients.length > 0 && reportTextBeginsWithFieldLine(reportText);
 }
 
 /**

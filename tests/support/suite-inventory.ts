@@ -189,7 +189,25 @@ export const SUITES: readonly SuiteSpec[] = [
 		// unreordered and undeduplicated, alongside `reducedEnvelopeFidelity` -- the earlier
 		// plain-BCC tests only ever used a single-recipient envelope, which could not have caught a
 		// `Set`-based dedup or a sort. Net +3.
-		expectedTests: { ci: 459, nightly: 1, manual: 0 },
+		// 467 after PO review R3 on JR-5-05/JR-5-06 (still no new file): R1's discriminator accepted
+		// Sender/Subject/Message-Id/On-Behalf-Of/To/Cc/Bcc as proof of a journal report, but a quoted
+		// forwarded-message header block satisfies exactly those fields too -- measured by the PO, R1's
+		// version fabricated envelope.to/envelope.cc recipients out of quoted body text for an ordinary
+		// forwarded email with an attachment delivered via plain BCC. The fix requires two independent
+		// signals (a `Recipient:` line -- the one field a quoted forward never reproduces -- and the
+		// report text beginning with a field line, not prose/a separator). journal-report.test.ts
+		// gained 2 tests: the forwarded-with-attachment fixture now classifies `plain_bcc` (the
+		// sharper regression case), and a complete journal report (inner message present) is asserted
+		// unaffected, since the discriminator never runs on that path at all. envelope.test.ts gained
+		// 6 tests for the new exported `reportTextBeginsWithFieldLine()` (recognised field line first,
+		// unrecognised-but-field-shaped first, a quoted-forward separator first, prose first, an empty
+		// report, and leading blank lines not causing a false negative). The "never throws" broken-input
+		// loop's assertion widened from two `kind`s to all four the union now has (that loop was always
+		// about "does it throw", never "which kind"); one of its fixtures ("truncated mid-inner-part")
+		// now correctly lands on `plain_bcc` rather than `journal_report` under the stricter check,
+		// since its report part has no `Recipient:` line -- noted in that test's own comment, not a
+		// silent behaviour change. Net +8.
+		expectedTests: { ci: 467, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

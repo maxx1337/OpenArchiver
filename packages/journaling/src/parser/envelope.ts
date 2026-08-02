@@ -251,6 +251,29 @@ const FIELD_HANDLERS: Readonly<Record<string, FieldHandler>> = {
 /** Exposed for tests that want to assert exactly which field names this parser recognises. */
 export const KNOWN_ENVELOPE_FIELD_NAMES: ReadonlySet<string> = new Set(Object.keys(FIELD_HANDLERS));
 
+/**
+ * PO review R3 (`JR-5-05`/`JR-5-06`): whether the report text's very first non-blank line is itself
+ * field-shaped (`unfold()`'s classification, not `_unparsed`) rather than prose or a quoted-forward
+ * separator line (`"---------- Forwarded message ---------"`, or the message's own free text). A
+ * genuine Exchange journal report's field-line block starts immediately (RFC section 6.1); a
+ * forwarded message's quoted header block -- which can itself contain field-shaped lines like `To:`/
+ * `Cc:`/`Subject:` -- is preceded by exactly that kind of separator or prose in every mail client this
+ * parser has been checked against.
+ *
+ * `false` for an entirely blank/empty report text too (no lines at all) -- there is nothing here to
+ * prove itself a report, and this function only ever answers "did it prove itself", never "was
+ * nothing found to disprove it".
+ *
+ * One of two independent signals `journal-report.ts`'s `looksLikeGenuineJournalReport()` requires
+ * together before treating a report-part-found/inner-missing message as a genuine (if incomplete)
+ * journal report rather than an ordinary message that happened to land in the report-part position --
+ * see that function's doc comment for the other signal and the full reasoning.
+ */
+export function reportTextBeginsWithFieldLine(reportText: string): boolean {
+	const lines = unfold(reportText);
+	return lines.length > 0 && lines[0]!.name !== UNPARSED_FIELD_NAME;
+}
+
 export async function parseEnvelope(reportText: string): Promise<ParsedEnvelope> {
 	const lines = unfold(reportText);
 	const acc = newAccumulator();

@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
-import { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './envelope';
+import {
+	KNOWN_ENVELOPE_FIELD_NAMES,
+	parseEnvelope,
+	reportTextBeginsWithFieldLine,
+} from './envelope';
 
 /**
  * The journal-report envelope field parser (`JR-5-02`, RFC section 6.1). Classification: `ci`.
@@ -238,5 +242,53 @@ suite('ci', 'KNOWN_ENVELOPE_FIELD_NAMES cannot drift from the dispatch table (R3
 			const unknownNames = envelope.unknownFields.map((field) => field.name);
 			expect(unknownNames).not.toContain(name);
 		}
+	});
+});
+
+/**
+ * `reportTextBeginsWithFieldLine()` -- one of the two independent signals `journal-report.ts`'s
+ * `looksLikeGenuineJournalReport()` requires (PO review R3, `JR-5-05`/`JR-5-06`): a genuine journal
+ * report's field-line block starts immediately, a forwarded message's quoted header block is preceded
+ * by prose or a separator line.
+ */
+suite('ci', 'reportTextBeginsWithFieldLine() (PO review R3)', () => {
+	it('is true when the first non-blank line is a recognised field line', () => {
+		expect(reportTextBeginsWithFieldLine('Sender: alice@contoso.com\r\nSubject: hi')).toBe(
+			true
+		);
+	});
+
+	it('is true when the first non-blank line is field-shaped but unrecognised', () => {
+		// Structural, not semantic: a future/unknown Exchange field at the very start still counts --
+		// only entirely un-field-shaped text does not.
+		expect(
+			reportTextBeginsWithFieldLine('X-Future-Field: whatever\r\nSender: alice@contoso.com')
+		).toBe(true);
+	});
+
+	it('is false when the text begins with a quoted-forward separator line', () => {
+		expect(
+			reportTextBeginsWithFieldLine(
+				'---------- Forwarded message ---------\r\nFrom: alice@contoso.com\r\nTo: bob@contoso.com'
+			)
+		).toBe(false);
+	});
+
+	it('is false when the text begins with ordinary prose', () => {
+		expect(
+			reportTextBeginsWithFieldLine(
+				'Hallo Bob, anbei die Rechnung.\r\nSender: alice@contoso.com'
+			)
+		).toBe(false);
+	});
+
+	it('is false for an entirely empty report text', () => {
+		expect(reportTextBeginsWithFieldLine('')).toBe(false);
+	});
+
+	it('skips leading blank lines before judging the first real line', () => {
+		// unfold() drops blank lines entirely (see envelope.ts), so leading blank lines must not by
+		// themselves cause a false negative.
+		expect(reportTextBeginsWithFieldLine('\r\n\r\nSender: alice@contoso.com')).toBe(true);
 	});
 });
