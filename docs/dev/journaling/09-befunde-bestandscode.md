@@ -1873,3 +1873,42 @@ verlangt ein Verfahren — Aufbewahrungsfrist für die Quarantäne, Betreiber-Fr
 Erreichen eines Anteils am Budget — und gehört damit zu **E10** (Monitoring) und **E12**
 (Betriebsleitfaden). Bis dahin gilt: ein Spool, der wiederholt Schreibfehler sieht, läuft langsam
 voll, und **niemand räumt ihn automatisch**.
+
+## F41 — das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher
+
+**Schwere:** niedrig · **Kategorie:** Testharness · **Ort:**
+`packages/journaling/src/spool/acceptance.test.ts:141–143` (`timelineFileSystem()`),
+`packages/journaling/tests/support/fake-spool-fs.ts`, sowie der Dokukommentar in
+`packages/journaling/src/spool/acceptance.ts` · **Gefunden:** `JR-3-08` (Abnahme E3, 2026-08-02,
+Rolle `tester`), gemeldet und **nicht** behoben · **Status:** **offen** ·
+**Kein Produktdefekt** — der Produktionscode ist korrekt, nur unzureichend eingezäunt.
+
+`timelineFileSystem()` instrumentiert `mkdir`, `createFile`/`write`/`fsync`/`close` und
+`fsyncDirectory`. **`readdir`, `stat` und `rename` reicht es ungetrackt durch** (Zeilen 141–143), und
+`FakeSpoolFileSystem` führt für sie auch kein eigenes Protokoll. Eine Regression, die nach dem
+Ledger-Append eine dieser drei Operationen einfügt und die **gelingt**, würde von keinem Test
+bemerkt.
+
+Der Dokukommentar in `acceptance.ts` behauptet mehr, als das Netz hält: „`accept.test.ts` asserts the
+empirical half of this: after `backend.append()` resolves, the fake filesystem's call log is
+unchanged“. Das gilt für vier der sieben Operationen des Ports.
+
+**Die strukturelle Zusage bleibt unberührt** und ist der Grund, warum der Befund niedrig eingestuft
+ist: `buildAcceptedTransaction()` ist synchron, total und bekommt weder `SpoolFileSystem` noch
+`LedgerBackend`, kann also gar keine Operation auslösen; und
+`buildAcceptedTransaction(txid, await this.backend.append(request))` ist **eine** Anweisung, deren
+Zerlegung ein sichtbarer Diff ist. Was fehlt, ist der zweite Zaun hinter dem ersten.
+
+**Ein Nachtrag zur Aufklärungsgeschichte, weil er lehrreich ist.** Drei Mutationsproben wurden gegen
+diese Zusage gefahren — zwei vom PO (ein zweiter `append()`, ein `fs.stat()` danach) und eine vom
+Prüfer. Die beiden des PO wurden **rot** und galten als Bestätigung des Netzes. Sie waren es nicht:
+sie wurden rot, weil die eingefügte Operation **scheiterte** und der umgebende `catch` sie als
+`'ledger-append-failed'` meldete — nicht, weil ein Test sie **bemerkt** hätte. Erst eine Probe mit
+einer **gelingenden** Operation trennt beides. Wer ein Netz per Mutation prüft, muss die Mutation so
+wählen, dass sie **nur** über das Netz auffallen kann.
+
+**Behebung (nicht angewandt):** `timelineFileSystem()` auf alle sieben Operationen erweitern oder
+`FakeSpoolFileSystem` um `renameLog`/`statLog`/`readdirLog` ergänzen und diese nach dem Append leer
+prüfen; dazu den Dokukommentar in `acceptance.ts` auf das zurücknehmen, was das Netz trägt.
+**Blockiert die Abnahme von E3 nicht** — der Prüfer hat es ausdrücklich so eingeordnet, der PO folgt
+ihm.
