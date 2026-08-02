@@ -25,13 +25,13 @@
 		"docs:preview": "vitepress preview docs",
 		"format": "prettier --write .",
 		"lint": "prettier --check .",
-		"test": "vitest run",
-		"test:watch": "vitest",
-		"test:unit": "vitest run --project unit",
-		"test:integration": "vitest run --project integration",
-		"test:adversarial": "vitest run --project adversarial",
-		"test:nightly": "cross-env OA_TEST_CLASSES=ci,nightly vitest run",
-		"test:manual": "cross-env OA_TEST_CLASSES=manual vitest run"
+		"test": "dotenv -- vitest run",
+		"test:watch": "dotenv -- vitest",
+		"test:unit": "dotenv -- vitest run --project unit",
+		"test:integration": "dotenv -- vitest run --project integration",
+		"test:adversarial": "dotenv -- vitest run --project adversarial",
+		"test:nightly": "dotenv -- cross-env OA_TEST_CLASSES=ci,nightly vitest run",
+		"test:manual": "dotenv -- cross-env OA_TEST_CLASSES=manual vitest run"
 	},
 	"dependencies": {
 		"concurrently": "^9.2.0",

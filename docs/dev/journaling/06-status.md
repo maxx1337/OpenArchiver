@@ -2263,6 +2263,42 @@ das ausdrücklich als unverifiziert gemeldet, statt eine Exchange-Struktur plaus
 war die Vorgabe, und sie ist der Grund, warum diese beiden Lücken hier stehen und nicht als geprüft
 gelten.
 
+### E5 ist zurückgemergt
+
+`107346d` auf dem Integrationsbranch, `--no-ff`, kein Squash, nach `JR-5-09` — wie ADR-014 und
+`12-parallelbetrieb.md` §4 es verlangen. Vorher geprüft: der Integrationsbranch stand unverändert auf
+`18a9175`, E5 null Commits zurück. Der Volllauf ist **auf dem Merge-Ergebnis** gefahren, nicht auf dem
+Epic-Branch, und erst danach gepusht.
+
+> **Und dabei ist die Falle aus `CLAUDE.md` §5.1 zweimal zugeschnappt.** Nach `pnpm install` war
+> Postgres weg; der erste Lauf meldete `534 passed | 117 skipped` und `integration: ci 0/97`. Das sieht
+> grün aus und ist es nicht. Erst der zweite Lauf mit laufender Datenbank war ein Nachweis. Genau
+> deshalb wird hier **`integration: ci 97/97` zitiert und nicht „grün"** — F42 oben ist die
+> Bequemlichkeitsursache dieser Falle, und deshalb ist er jetzt behoben.
+
+### Korrektur an meiner eigenen Entscheidung aus `JR-5-07`
+
+In `JR-5-07` habe ich die Validierung der Domaingruppen „dorthin, wo `journaling_sources.
+organizationDomains` tatsächlich geschrieben wird" verwiesen — nach `packages/backend`. **Diese Stelle
+existiert nicht.** Nachgesehen: Die Tabelle ist in
+`packages/backend/src/database/schema/journaling-sources.ts` definiert, aber **kein einziger Schreib-
+oder Lesepfad** im OSS-Backend berührt `journalingSources`; der Zugriff gehörte zum
+Enterprise-Overlay, der hier fehlt (`CLAUDE.md` §2).
+
+Damit ist die Validierung **keine eigenständige Backend-Folgeaufgabe**, sondern Teil des Epics, das den
+Schreibpfad überhaupt erst anlegt: **E4, `JR-4-05`** (Quellenkonfiguration). Dort ist sie zusammen mit
+ADR-028s `sourceMode` zu erledigen — beides sind Zusagen, die an derselben Stelle entstehen. Eine Task
+gegen `packages/backend` anzulegen hätte auf nichts gezeigt.
+
+Offen bleibt damit für E4/E6:
+
+| Was                                                                                                               | wohin                |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `sourceMode` durchreichen (ADR-028) — sonst ist die Zusage verschenkt                                             | `JR-4-05`, `JR-6-02` |
+| Domain zweimal konfiguriert; `main` ist keine Domain (F43s Restgrenze)                                            | `JR-4-05`            |
+| Was `archived_emails.userEmail` bedeutet — und damit die `Recipient:`-Frage aus `JR-5-07`                         | `JR-6-02` (ADR-010)  |
+| Zwei Abdeckungslücken (`Recipient:` in spitzen Klammern, semikolongetrennt) — brauchen ein echtes Exchange-Sample | offen, kein Defekt   |
+
 ### Zahlen
 
 | Stand                         | Volllauf                                            |
@@ -2290,10 +2326,15 @@ aus dem E2-Handover sind **überholt** — die Differenz zur Basis sind E3s zehn
    angefasst (fremdes Gebiet, `12-parallelbetrieb.md` §5) — die Meldung hat gereicht.
 1. **`pnpm test` ist nicht in `dotenv --` gewickelt** (`package.json:28`), anders als `CLAUDE.md` §4
    für alle Root-Skripte behauptet. Ohne exportiertes `DATABASE_URL` überspringt die gesamte
-   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Aufgenommen als F42**
-   (2026-08-02, PO) — nach E3s **F40** und **F41** war das die nächste freie Nummer. Behoben wird er
-   nicht in E5: `package.json` ist gemeinsames Gebiet, und ein Griff hinein während E3s Abschluss wäre
-   genau der Konflikt, den `12-parallelbetrieb.md` §3.2 vermeiden will.
+   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Aufgenommen als F42 und behoben**
+   (2026-08-02, PO) — nach E3s **F40** und **F41** war das die nächste freie Nummer. Nach dem
+   E5-Rückmerge gab es kein gemeinsames Gebiet mehr zu schonen, also gleich mitgenommen: alle sieben
+   `test*`-Skripte sind jetzt in `dotenv --` gewickelt, womit `CLAUDE.md` §4 wieder stimmt.
+   **Vorher geprüft, statt gehofft:** `dotenv-cli` verträgt eine **fehlende** `.env` (Exit 0), und
+   vorhandene Umgebungsvariablen behalten **Vorrang** vor der Datei — CI setzt `DATABASE_URL` im
+   Workflow und bleibt daher unberührt. Beides an der installierten Version gemessen, nicht aus der
+   Dokumentation geschlossen. **Beleg der Wirkung:** `pnpm test` **ohne** exportiertes `DATABASE_URL`
+   liefert jetzt `integration: ci 97/97` statt `0/97`.
 2. ~~**Die ADR-Nummer 027 könnte kollidieren**~~ — **gegengeprüft, sie tut es nicht**. Session A hat
    im gesamten E3-Abschluss keine ADR geschrieben; ADR-027 ist nach dem Rebase die einzige mit dieser
    Nummer.
