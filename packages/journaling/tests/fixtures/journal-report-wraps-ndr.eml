@@ -1,0 +1,46 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Undelivered Mail Returned to Sender
+Date: Wed, 01 Jul 2026 09:20:00 +0000
+Message-ID: <outer-ndr-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalWrapsNdrBoundary"
+
+--JournalWrapsNdrBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: MAILER-DAEMON@contoso.com
+Subject: Undelivered Mail Returned to Sender
+Message-Id: <inner-ndr-1@contoso.com>
+To: journal-archive@example.org
+Recipient: journal-archive@example.org
+
+--JournalWrapsNdrBoundary
+Content-Type: message/rfc822
+
+From: MAILER-DAEMON@contoso.com
+To: journal-archive@example.org
+Subject: Undelivered Mail Returned to Sender
+Message-ID: <inner-ndr-1@contoso.com>
+Date: Wed, 01 Jul 2026 09:19:00 +0000
+Auto-Submitted: auto-replied
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=delivery-status;
+	boundary="InnerNdrBoundary"
+
+--InnerNdrBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+Delivery to nobody@nonexistent.example.com failed permanently.
+
+--InnerNdrBoundary
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; contoso.com
+Final-Recipient: rfc822; nobody@nonexistent.example.com
+Action: failed
+Status: 5.1.1
+
+--InnerNdrBoundary--
+
+--JournalWrapsNdrBoundary--

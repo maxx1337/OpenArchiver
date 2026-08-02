@@ -179,15 +179,19 @@ suite(
 );
 
 suite('ci', 'parseJournalReport() -- never throws on malformed input', () => {
-	it('returns parse_failed when the outer message is not multipart/mixed at all', async () => {
+	it('classifies a well-formed message with no journal wrapper as plain_bcc, not parse_failed (JR-5-05)', async () => {
+		// `not-multipart.eml` is a well-formed, ordinary RFC 5322 message ("This message was sent to
+		// the journaling address by mistake") -- exactly the shape JR-5-05 exists for, not a broken
+		// journal report. Before JR-5-05 there was no `'plain_bcc'` kind to put it in, so it fell into
+		// `parse_failed`; now that the kind exists, that was a temporary approximation, not the
+		// intended final classification -- see `parseJournalReport()`'s module doc comment.
 		const raw = loadFixture('not-multipart.eml');
 		const result = await parseJournalReport(raw);
-		expect(result.kind).toBe('parse_failed');
-		if (result.kind !== 'parse_failed') {
+		expect(result.kind).toBe('plain_bcc');
+		if (result.kind !== 'plain_bcc') {
 			throw new Error('unreachable');
 		}
-		// Fallback header extraction (JR-5-04): this fixture's own top-level headers are still
-		// readable RFC 5322 headers, even though the message never matched the journal-report shape.
+		expect(result.reducedEnvelopeFidelity).toBe(true);
 		expect(result.extractableHeaders.subject).not.toBeNull();
 	});
 
@@ -200,7 +204,10 @@ suite('ci', 'parseJournalReport() -- never throws on malformed input', () => {
 		expect(result.extractableHeaders).toEqual({ subject: null, from: null, messageId: null });
 	});
 
-	it('returns parse_failed rather than throwing on random binary garbage', async () => {
+	it('returns parse_failed rather than throwing on random binary garbage (not a well-formed message, JR-5-05)', async () => {
+		// Distinguishes "no journal wrapper, but a real message" (plain_bcc, above) from "not
+		// recognisable as a message at all" -- these must not be conflated
+		// (`looksLikeOrdinaryMessage()`'s guard in journal-report.ts).
 		const random = Buffer.from(Array.from({ length: 512 }, (_, i) => (i * 37 + 11) % 256));
 		const result = await parseJournalReport(random);
 		expect(result.kind).toBe('parse_failed');
@@ -413,3 +420,174 @@ suite(
 		});
 	}
 );
+
+/**
+ * `JR-5-05`, RFC section 6.2: plain-BCC/routing-rule fallback. Acceptance criterion: "Postfix-
+ * `always_bcc`- und Google-Routing-Muster werden korrekt erkannt und markiert" -- both patterns are
+ * byte-for-byte the same shape (an ordinary message with no journal wrapper at all; RFC section 6.2
+ * says Google Workspace routing gets identical treatment to plain BCC, precisely because Workspace has
+ * no SMTP-journaling equivalent of its own), so both fixtures below assert the same `kind` and the
+ * same `reducedEnvelopeFidelity` -- the "recognition" is that neither is misclassified as
+ * `parse_failed` (the outcome before this slice existed) nor silently treated as a full-fidelity
+ * journal report.
+ */
+suite('ci', 'parseJournalReport() -- plain BCC / routing-rule fallback (JR-5-05)', () => {
+	it('classifies a Postfix always_bcc-style copy as plain_bcc with the SMTP envelope attached', async () => {
+		const raw = loadFixture('plain-bcc-postfix-always-bcc.eml');
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: 'alice@contoso.com',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.kind).toBe('plain_bcc');
+		if (result.kind !== 'plain_bcc') {
+			throw new Error('unreachable');
+		}
+		// Reduced fidelity is a structural fact of this kind, not a per-message observation -- always
+		// literally `true` (see `JournalPlainBcc`'s doc comment).
+		expect(result.reducedEnvelopeFidelity).toBe(true);
+		// The envelope carried through is this receiver's own SMTP transaction, using exactly the
+		// `envelopeFrom`/`envelopeRcpt` field names `JournalTransactionInput` and the ledger row use --
+		// not a renamed or reshaped copy.
+		expect(result.envelope).toEqual({
+			envelopeFrom: 'alice@contoso.com',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.extractableHeaders.subject).toBe('Q3 budget draft');
+		expect(result.extractableHeaders.from).toContain('alice@contoso.com');
+	});
+
+	it('classifies a Google Workspace "also deliver to" routing copy identically (RFC section 6.2)', async () => {
+		const raw = loadFixture('plain-bcc-google-routing.eml');
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: 'dave@workspace-example.com',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.kind).toBe('plain_bcc');
+		if (result.kind !== 'plain_bcc') {
+			throw new Error('unreachable');
+		}
+		expect(result.reducedEnvelopeFidelity).toBe(true);
+		expect(result.envelope).toEqual({
+			envelopeFrom: 'dave@workspace-example.com',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.extractableHeaders.subject).toBe('Vendor contract renewal');
+	});
+
+	it('falls back to an unknown envelope rather than fabricating one when the caller supplies none', async () => {
+		// `parseJournalReport()`'s second parameter defaults to "no SMTP envelope information
+		// available" -- this must surface as `null`/`null`, never as an empty array or an invented
+		// address, so a caller can tell "we don't know" apart from "we know it was empty".
+		const raw = loadFixture('plain-bcc-postfix-always-bcc.eml');
+		const result = await parseJournalReport(raw);
+		expect(result.kind).toBe('plain_bcc');
+		if (result.kind !== 'plain_bcc') {
+			throw new Error('unreachable');
+		}
+		expect(result.envelope).toEqual({ envelopeFrom: null, envelopeRcpt: null });
+	});
+});
+
+/**
+ * `JR-5-06`, RFC section 6.2: NDRs and bounces addressed to the journal mailbox. Acceptance
+ * criterion: "NDR wird archiviert und ist als solcher erkennbar" -- each fixture below isolates one
+ * signal (or, for the canonical DSN fixture, several at once) so the "erkennbar" half of the
+ * criterion is demonstrated per-signal, not just for the easiest case.
+ */
+suite('ci', 'parseJournalReport() -- NDR / bounce detection (JR-5-06)', () => {
+	it('recognises a canonical RFC 3464 delivery-status notification (all three signals present)', async () => {
+		const raw = loadFixture('ndr-delivery-status.eml');
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: '',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.kind).toBe('ndr');
+		if (result.kind !== 'ndr') {
+			throw new Error('unreachable');
+		}
+		expect(result.signals).toEqual(
+			expect.arrayContaining([
+				'null-envelope-sender',
+				'delivery-status-report',
+				'auto-submitted-header',
+			])
+		);
+		expect(result.signals).toHaveLength(3);
+		expect(result.extractableHeaders.subject).toBe('Undelivered Mail Returned to Sender');
+		// The SMTP envelope that led to this classification is passed through, not summarised away --
+		// symmetric with `plain_bcc` (see `JournalNdr.envelope`'s doc comment).
+		expect(result.envelope).toEqual({
+			envelopeFrom: '',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+	});
+
+	it('recognises a null envelope sender (MAIL FROM:<>) as sufficient by itself', async () => {
+		const raw = loadFixture('ndr-null-sender-only.eml');
+		const result = await parseJournalReport(raw, { envelopeFrom: '', envelopeRcpt: null });
+		expect(result.kind).toBe('ndr');
+		if (result.kind !== 'ndr') {
+			throw new Error('unreachable');
+		}
+		expect(result.signals).toEqual(['null-envelope-sender']);
+		expect(result.envelope).toEqual({ envelopeFrom: '', envelopeRcpt: null });
+	});
+
+	it('recognises Auto-Submitted alone as sufficient by itself, even without a null sender', async () => {
+		const raw = loadFixture('ndr-auto-submitted-only.eml');
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: 'mailer-daemon@mx.example.org',
+			envelopeRcpt: null,
+		});
+		expect(result.kind).toBe('ndr');
+		if (result.kind !== 'ndr') {
+			throw new Error('unreachable');
+		}
+		expect(result.signals).toEqual(['auto-submitted-header']);
+		expect(result.envelope).toEqual({
+			envelopeFrom: 'mailer-daemon@mx.example.org',
+			envelopeRcpt: null,
+		});
+	});
+
+	it('treats Auto-Submitted: no as explicitly NOT auto-submitted (RFC 3834 section 5 default)', async () => {
+		// Reuses the plain-BCC fixture's ordinary shape but adds an explicit "no" -- must not fire the
+		// weak signal just because the header is present at all.
+		const raw = Buffer.from(
+			loadFixture('plain-bcc-postfix-always-bcc.eml')
+				.toString('latin1')
+				.replace('MIME-Version: 1.0', 'Auto-Submitted: no\r\nMIME-Version: 1.0'),
+			'latin1'
+		);
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: 'alice@contoso.com',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.kind).toBe('plain_bcc');
+	});
+
+	it('classification order: an NDR that Exchange itself journalled stays kind "journal_report", never "ndr"', async () => {
+		// The sharpest test of the ordering decision documented in `parseJournalReport()`'s module doc
+		// comment: the outer message matches the Exchange journal-report shape, so it wins outright --
+		// regardless of the inner message being shaped exactly like the RFC 3464 fixture above
+		// (multipart/report; report-type=delivery-status, plus Auto-Submitted). A null envelope sender
+		// here would describe the *outer* SMTP transaction (Exchange delivering the journal report to
+		// this receiver), which is not itself null in this fixture, and is irrelevant to the inner
+		// message's own history in any case.
+		const raw = loadFixture('journal-report-wraps-ndr.eml');
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: 'journal@contoso.com',
+			envelopeRcpt: ['journal-archive@example.org'],
+		});
+		expect(result.kind).toBe('journal_report');
+		if (result.kind !== 'journal_report') {
+			throw new Error('unreachable');
+		}
+		expect(result.envelope.sender).toBe('MAILER-DAEMON@contoso.com');
+		expect(result.innerMessage.present).toBe(true);
+		if (!result.innerMessage.present) {
+			throw new Error('unreachable');
+		}
+		expect(result.innerMessage.subject).toBe('Undelivered Mail Returned to Sender');
+	});
+});

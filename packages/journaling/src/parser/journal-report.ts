@@ -2,13 +2,22 @@ import { simpleParser } from 'mailparser';
 import type {
 	ExtractableHeaders,
 	InnerMessagePart,
+	JournalNdr,
 	JournalParseFailed,
+	JournalPlainBcc,
 	JournalReportParseResult,
 	JournalReportParsed,
+	NdrSignal,
 	ParsedEnvelope,
+	SmtpTransactionEnvelope,
 } from '@open-archiver/types';
 import { parseEnvelope } from './envelope';
-import { isSmimeWrappedMessage, locateJournalParts, splitHeaderAndBody } from './mime-split';
+import {
+	isSmimeWrappedMessage,
+	locateJournalParts,
+	parseContentType,
+	splitHeaderAndBody,
+} from './mime-split';
 
 /**
  * Parses an Exchange envelope-journaling report (`JR-5-01`/`JR-5-02`, RFC section 6.1): the outer
@@ -64,12 +73,50 @@ import { isSmimeWrappedMessage, locateJournalParts, splitHeaderAndBody } from '.
  *    fine, it is just unreadable ciphertext. That is `kind: 'journal_report'` with
  *    `innerMessage.contentEncrypted = true` -- see `describeInnerMessage()`'s doc comment.
  *
- * `kind: 'parse_failed'` is reserved for the cases where the *report part itself* never parsed
- * (not multipart/mixed, no boundary, no text/plain part, a `mailparser` exception on the report
- * text, or a thrown envelope parse) -- there, `extractableHeaders` is the best-effort fallback
- * (`extractFallbackHeaders()`) because no envelope exists to fall back on.
+ * `kind: 'parse_failed'` is reserved for the cases where the outer message *looked like* an attempt
+ * at the journal-report shape (`multipart/mixed` with a boundary) but broke down while being read --
+ * wrong/missing boundary, no `text/plain` part, a `mailparser` exception on the report text, a thrown
+ * envelope parse -- or where it looks like neither a journal report nor a well-formed ordinary
+ * message at all (garbage, truncated headers, an empty buffer). See `classifyNonJournalMessage()`
+ * below for the two cases that are *not* `parse_failed` even though the message never had a journal
+ * wrapper. `extractableHeaders` there is the best-effort fallback (`extractFallbackHeaders()`)
+ * because no journal-report envelope exists to fall back on.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `JR-5-05`/`JR-5-06`: classification order across all four `kind`s (RFC section 6.2)
+ * ---------------------------------------------------------------------------------------------
+ * The Exchange journal-report shape is checked **first, unconditionally**, exactly as it was before
+ * this slice: `located.outerIsMultipartMixed` decides it, before anything about NDR signals or
+ * plain-BCC fallback is even looked at. This is a deliberate ordering decision, not a happy accident
+ * of the code's structure, and it is the one fact this slice's tests care most about:
+ *
+ *  - **An NDR that Exchange itself journalled** -- a bounce message wrapped as the `message/rfc822`
+ *    inner part of an otherwise well-formed journal report -- must stay `kind: 'journal_report'`,
+ *    never `'ndr'`. Exchange journals a bounce exactly like any other message that transits the
+ *    organization; nothing about the *inner* message's content type or headers is ever consulted to
+ *    decide the *outer* `kind` once the outer shape itself already matched. See
+ *    `journal-report-wraps-ndr.eml` for the fixture this is tested against.
+ *  - Only once `located.outerIsMultipartMixed` is `false` -- there genuinely is no journal wrapper --
+ *    does {@link classifyNonJournalMessage} run, and it decides between `'ndr'` and `'plain_bcc'`.
+ *    An NDR is checked before falling through to plain-BCC, because an NDR is not itself a "plain BCC
+ *    copy of an ordinary message" -- it is evidence of a delivery problem, and RFC section 6.2 asks
+ *    for it to be flagged as such, not archived indistinguishably from routine traffic.
+ *  - A `multipart/mixed` message whose boundary/parts do not resolve to a report part (wrong
+ *    boundary, no `text/plain` child, etc.) is deliberately **left as `parse_failed`**, not
+ *    reclassified as `'plain_bcc'`, even though in principle an ordinary email can legitimately be
+ *    `multipart/mixed` (e.g. one with a file attachment). Widening `'plain_bcc'` to cover that shape
+ *    would mean re-deciding, for every `multipart/mixed` message, whether it is a broken journal
+ *    report or an ordinary attachment-bearing email -- exactly the ambiguity `JR-5-03`'s "missing
+ *    inner part" case already resolved one way (report part found, no inner part ⇒ still
+ *    `'journal_report'`) after a PO review (R1) about not silently re-deciding settled, tested
+ *    behaviour. That is a real gap for a plain-BCC copy of an email that happens to carry an
+ *    attachment -- flagged here rather than fixed quietly, and left for the PO to decide whether it
+ *    belongs in this slice or a later one.
  */
-export async function parseJournalReport(rawMessage: Buffer): Promise<JournalReportParseResult> {
+export async function parseJournalReport(
+	rawMessage: Buffer,
+	smtpEnvelope: SmtpTransactionEnvelope = { envelopeFrom: null, envelopeRcpt: null }
+): Promise<JournalReportParseResult> {
 	let located;
 	try {
 		located = locateJournalParts(rawMessage);
@@ -78,11 +125,7 @@ export async function parseJournalReport(rawMessage: Buffer): Promise<JournalRep
 	}
 
 	if (!located.outerIsMultipartMixed) {
-		return parseFailed(
-			'outer message is not a multipart/mixed report (or has no boundary parameter)',
-			null,
-			rawMessage
-		);
+		return classifyNonJournalMessage(rawMessage, smtpEnvelope);
 	}
 	if (located.reportPart === null) {
 		return parseFailed(
@@ -137,6 +180,143 @@ export async function parseJournalReport(rawMessage: Buffer): Promise<JournalRep
 		reportText,
 		innerMessage,
 	} satisfies JournalReportParsed;
+}
+
+/**
+ * RFC 5322's *field-name* grammar: one or more printable US-ASCII characters excluding `:`
+ * (`%d33-57 / %d59-126`). Used by {@link looksLikeOrdinaryMessage} to reject buffers that merely
+ * happen to contain a `:` byte -- e.g. random binary -- from being misread as a header name; a
+ * genuine header name a real MTA writes can never contain a control character, a raw 8-bit byte, or
+ * whitespace, all of which `splitHeaderAndBody()`'s deliberately permissive line-based parser (built
+ * for the journal-report shape, not for input validation) would otherwise let through unchallenged.
+ */
+const VALID_HEADER_NAME = /^[\x21-\x39\x3b-\x7e]+$/;
+
+/**
+ * `JR-5-05`'s guard against misclassifying garbage as a plain-BCC copy: a buffer only reaches
+ * `'plain_bcc'`/`'ndr'` classification if it looks like an actual RFC 5322 message, not merely
+ * "not multipart/mixed" (which random bytes, an empty buffer, and truncated headers all also are).
+ *
+ * Requires at least one header, and every header name found to be valid RFC 5322 `field-name` text
+ * (see {@link VALID_HEADER_NAME}). This is what keeps `parseJournalReport()`'s existing
+ * "never throws on malformed input" fixtures (empty buffer, random binary, 8-bit garbage) landing on
+ * `parse_failed` exactly as before this slice: `splitHeaderAndBody()`'s fallback -- treating the whole
+ * buffer as one giant header line when no blank-line separator exists at all -- reliably produces a
+ * "header name" containing control bytes or raw 8-bit characters for those fixtures, which this check
+ * rejects. A real Postfix `always_bcc` copy or Google-routed message, by contrast, always has a
+ * well-formed header block (that is what made it a deliverable email in the first place), so it
+ * always passes.
+ */
+function looksLikeOrdinaryMessage(raw: Buffer): boolean {
+	const { headers } = splitHeaderAndBody(raw);
+	if (headers.size === 0) {
+		return false;
+	}
+	for (const name of headers.keys()) {
+		if (!VALID_HEADER_NAME.test(name)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * RFC 3834 section 5: `Auto-Submitted: no` is the explicit default (equivalent to the header being
+ * absent) and means the message was *not* auto-submitted; any other token (`auto-replied`,
+ * `auto-generated`, `auto-notified`, or a value this parser has not seen) marks it as automatically
+ * generated. Whitespace-trimmed, case-insensitive: header values fold case and can carry incidental
+ * surrounding whitespace under RFC 5322's unfolding rules, and this parser already unfolds via
+ * `splitHeaderAndBody()` -- this only normalises the token itself.
+ */
+function isAutoSubmitted(headers: ReadonlyMap<string, string>): boolean {
+	const value = headers.get('auto-submitted');
+	return value !== undefined && value.trim().toLowerCase() !== 'no';
+}
+
+/**
+ * `JR-5-06`'s NDR detection, run only once {@link parseJournalReport} has already established the
+ * outer message is not shaped like an Exchange journal report at all (RFC section 6.2). Never throws:
+ * every signal check here is a header lookup or an equality check against an already-parsed value,
+ * none of which can fail the way decoding a MIME body can.
+ *
+ * Returns every signal that fired -- see `NdrSignal`'s doc comment (`journal-parser.types.ts`) for
+ * why a caller gets the full list rather than a single verdict, and for the relative strength of each
+ * one. An empty array means "not an NDR by any signal this parser checks", which is
+ * {@link classifyNonJournalMessage}'s cue to classify as `'plain_bcc'` instead.
+ */
+function detectNdrSignals(raw: Buffer, smtpEnvelope: SmtpTransactionEnvelope): NdrSignal[] {
+	const { headers } = splitHeaderAndBody(raw);
+	const signals: NdrSignal[] = [];
+
+	// Strongest: RFC 5321 section 4.5.5's null reverse-path, MAIL FROM:<>. Read from the SMTP
+	// transaction itself, not from any header -- see `SmtpTransactionEnvelope.envelopeFrom`'s doc
+	// comment for why `''` (not `null`) is what signals this.
+	if (smtpEnvelope.envelopeFrom === '') {
+		signals.push('null-envelope-sender');
+	}
+
+	// Strong: RFC 3464's canonical delivery-status-notification shape.
+	const contentType = parseContentType(headers.get('content-type'));
+	const reportType = (contentType.params['report-type'] ?? '').toLowerCase();
+	if (contentType.type === 'multipart/report' && reportType === 'delivery-status') {
+		signals.push('delivery-status-report');
+	}
+
+	// Weak, corroborating: see `isAutoSubmitted()`'s and `NdrSignal`'s doc comments for why this is
+	// sufficient alone despite being the weakest signal -- a malformed DSN missing `report-type` must
+	// not silently fall through to `'plain_bcc'` and lose its NDR flag.
+	if (isAutoSubmitted(headers)) {
+		signals.push('auto-submitted-header');
+	}
+
+	return signals;
+}
+
+/**
+ * `JR-5-05`/`JR-5-06`, RFC section 6.2: classifies a message that is definitively *not* shaped like an
+ * Exchange journal report (`parseJournalReport()` already checked `located.outerIsMultipartMixed` and
+ * found it `false`) as either an NDR or a plain-BCC/routing-rule copy -- see `parseJournalReport()`'s
+ * module doc comment for why this function only ever runs after that check, never before or instead
+ * of it.
+ *
+ * NDR is checked before falling through to plain-BCC (not the other way around): a bounce is not
+ * "an ordinary message that happens to lack a journal wrapper", it is itself evidence of a delivery
+ * problem RFC section 6.2 asks to have flagged distinctly, so the stronger claim is decided first.
+ *
+ * Garbage that does not even look like a well-formed RFC 5322 message (see
+ * {@link looksLikeOrdinaryMessage}) still falls back to `parse_failed`, exactly as it did before this
+ * slice existed -- `'plain_bcc'` asserts "this is a real message that simply arrived without a journal
+ * wrapper", which is not true of an empty buffer or random bytes.
+ */
+function classifyNonJournalMessage(
+	rawMessage: Buffer,
+	smtpEnvelope: SmtpTransactionEnvelope
+): JournalReportParseResult {
+	if (!looksLikeOrdinaryMessage(rawMessage)) {
+		return parseFailed(
+			'outer message is not a multipart/mixed report (or has no boundary parameter), and does not look like a well-formed RFC 5322 message either',
+			null,
+			rawMessage
+		);
+	}
+
+	const extractableHeaders = extractFallbackHeaders(rawMessage);
+	const signals = detectNdrSignals(rawMessage, smtpEnvelope);
+	if (signals.length > 0) {
+		return {
+			kind: 'ndr',
+			signals,
+			envelope: smtpEnvelope,
+			extractableHeaders,
+		} satisfies JournalNdr;
+	}
+
+	return {
+		kind: 'plain_bcc',
+		envelope: smtpEnvelope,
+		reducedEnvelopeFidelity: true,
+		extractableHeaders,
+	} satisfies JournalPlainBcc;
 }
 
 /**

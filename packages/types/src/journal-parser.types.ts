@@ -15,10 +15,19 @@
  *
  * `'journal_report'` and `'parse_failed'` are implemented by `JR-5-01`/`JR-5-02`. `'plain_bcc'`
  * (no journal wrapper, envelope taken from the SMTP transaction -- `JR-5-05`) and `'ndr'` (a bounce
- * addressed to the journal mailbox -- `JR-5-06`) are added by a later E5 slice. Deliberately left
- * open here as an extensible union rather than a closed two-case type: a caller that already
- * switches on `kind` gets a compile error at every such switch when a member is added, not a silent
- * fallthrough -- so the extension is additive, not a breaking change to this file.
+ * addressed to the journal mailbox -- `JR-5-06`) were left open here as an extensible union rather
+ * than a closed two-case type, precisely so a caller that already switches on `kind` gets a compile
+ * error at every such switch when a member is added, not a silent fallthrough -- and `JR-5-05`/
+ * `JR-5-06` are the slice that spends that extensibility: both members are now implemented, by
+ * `packages/journaling/src/parser/journal-report.ts`'s `classifyNonJournalMessage()`.
+ *
+ * The classification order between all four `kind`s is deliberate, not incidental (see that
+ * function's doc comment for the full reasoning): an Exchange journal-report wrapper is checked
+ * *first*, and wins regardless of what its inner message looks like -- Exchange can journal a bounce
+ * exactly like any other message, so an NDR wrapped inside a well-formed journal report is still
+ * `'journal_report'`, never `'ndr'`. Only once that shape is structurally absent does the parser ask
+ * whether the message is an NDR (`'ndr'`) or an ordinary message that simply never had a journal
+ * wrapper to begin with (`'plain_bcc'`).
  *
  * `JR-5-03` adds `InnerMessagePresent.contentEncrypted` (S/MIME-encrypted inner message: stored and
  * flagged, never rejected) and makes `InnerMessageAbsent` (below) an actually-produced case: a
@@ -181,7 +190,139 @@ export interface JournalParseFailed {
 	readonly extractableHeaders: ExtractableHeaders;
 }
 
-export type JournalReportParseResult = JournalReportParsed | JournalParseFailed;
+/**
+ * Everything the parser needs from the SMTP transaction that delivered the message, for the two
+ * cases where there is no journal-report wrapper to source an envelope from at all (`JR-5-05`'s
+ * plain-BCC/routing-rule fallback, RFC section 6.2, and `JR-5-06`'s NDR detection, whose strongest
+ * signal -- the null reverse-path -- lives in the transaction, not in any header).
+ *
+ * Deliberately narrower than `JournalTransactionInput`
+ * (`packages/journaling/src/spool/acceptance.ts`): that type also carries `chunks` (the raw wire
+ * bytes as an async iterable) and `chainScopeId` (which chain this receipt belongs to), neither of
+ * which this package's pure parsing logic has any business touching -- the parser only ever sees
+ * bytes already read into a buffer, and is not itself on the ledger/chain seam.
+ *
+ * Field names are exactly `envelopeFrom`/`envelopeRcpt`, matching `JournalTransactionInput` and the
+ * ledger row (`journal-ledger.types.ts`'s `JournalLedgerRecord`) -- not `mailFrom`/`rcptTo` or any
+ * other alias. Three different names for the same SMTP concept across ingress, ledger and parser is
+ * exactly the vocabulary drift `CLAUDE.md` section 5.4 warns about for permissions, and it is just as
+ * avoidable here: a caller (the `journal-inbound` worker, epic E6) should be able to pass its
+ * `JournalTransactionInput` fields straight through without renaming anything.
+ */
+export interface SmtpTransactionEnvelope {
+	/**
+	 * `MAIL FROM` as the SMTP transaction that delivered this message carried it.
+	 *
+	 * **Convention this type establishes** (no earlier consumer of `envelopeFrom` had reason to
+	 * distinguish these): `''` (empty string) is RFC 5321 section 4.5.5's null reverse-path,
+	 * `MAIL FROM:<>` -- reserved for delivery status notifications and other messages that must
+	 * never themselves generate a bounce -- and is this parser's single strongest NDR signal,
+	 * because it comes from the transaction itself, not from a header a forwarded or forged message
+	 * could carry regardless of what actually happened on the wire. `null` means "no SMTP envelope
+	 * information available at all" (e.g. a caller outside a live transaction), never "known to be
+	 * empty" -- collapsing those two into one `null` would silently discard the null-reverse-path
+	 * signal for every message a future caller does have transaction data for.
+	 */
+	readonly envelopeFrom: string | null;
+	/**
+	 * `RCPT TO` in arrival order, or `null` if unavailable. For a `JournalPlainBcc` result this is
+	 * **not** the original message's full distribution list -- see that type's doc comment for why.
+	 */
+	readonly envelopeRcpt: readonly string[] | null;
+}
+
+/**
+ * `JR-5-05`, RFC section 6.2: the outer message carries no Exchange envelope-journaling wrapper at
+ * all (`multipart/mixed` with a `text/plain` report part, RFC section 6.1) but is otherwise a
+ * well-formed message -- the shape produced by a Postfix `always_bcc` copy (Zimbra and mailcow have
+ * the same always-bcc pattern), or by a Google Workspace routing rule with "also deliver to"
+ * (Workspace has no SMTP-journaling equivalent at all; RFC section 6.2 says to treat it identically
+ * to plain BCC and to document the limitation -- this type's doc comment, and its use from both
+ * patterns, is that documentation).
+ *
+ * There is no journal report to source Bcc recipients or distribution-list-expansion members from --
+ * that information was never transmitted to this receiver in the first place, structurally, not
+ * because parsing failed on it. `reducedEnvelopeFidelity` is therefore always the literal `true` for
+ * this `kind`, never a best-effort flag that might someday read `false`: it is the defining fact of
+ * the case, not an observation about one particular message. A caller must not treat `envelope` here
+ * as if it were a `JournalReportParsed.envelope` with some fields missing -- there is no
+ * `bcc`/`recipients`/`onBehalfOf`/`unknownFields` here to be a reduced version *of*; the whole
+ * concept of a journal-report envelope does not apply to this case, only the raw SMTP transaction
+ * does.
+ */
+export interface JournalPlainBcc {
+	readonly kind: 'plain_bcc';
+	/**
+	 * `MAIL FROM`/`RCPT TO` exactly as this receiver's own SMTP transaction saw them -- **not** the
+	 * original message's distribution list. A Postfix `always_bcc` copy's `RCPT TO` is typically just
+	 * the archive mailbox address itself (Postfix does not replay the original message's recipients
+	 * as additional `RCPT TO` commands on the always-bcc leg); the message's own `To`/`Cc` headers
+	 * (readable via `extractableHeaders`, or by a caller's own header parse of the stored bytes) are
+	 * the only surviving hint at the original recipients, and any genuine Bcc recipient is gone
+	 * without a trace -- exactly the reduction `reducedEnvelopeFidelity` names.
+	 */
+	readonly envelope: SmtpTransactionEnvelope;
+	readonly reducedEnvelopeFidelity: true;
+	/** See {@link ExtractableHeaders}. Read from the message's own top-level RFC 5322 headers. */
+	readonly extractableHeaders: ExtractableHeaders;
+}
+
+/**
+ * Which signal(s) `JR-5-06`'s NDR detection found, strongest first as listed here -- but a result
+ * carries *all* signals it found, in no particular order, rather than picking one: collapsing that
+ * down to a single reason or a boolean would be the same class of information loss
+ * `ParsedEnvelope.undisclosedRecipientFields`'s doc comment already warns against for a different
+ * field, and an auditor asking "why was this flagged as a bounce" deserves the real answer.
+ *
+ *  - `'null-envelope-sender'` -- **strongest**: `MAIL FROM:<>` (RFC 5321 section 4.5.5) on the
+ *    transaction that delivered this message. Reserved by convention for delivery status
+ *    notifications and their close cousins; comes from the SMTP layer, not from a header.
+ *  - `'delivery-status-report'` -- **strong**: the outer message's own `Content-Type` is
+ *    `multipart/report` with a `report-type` parameter of `delivery-status` (RFC 3464's canonical
+ *    DSN shape).
+ *  - `'auto-submitted-header'` -- **weak, corroborating**: an `Auto-Submitted` header (RFC 3834
+ *    section 5) present with any value other than `no` (`no` is the explicit default, meaning *not*
+ *    auto-submitted). Also set by ordinary vacation autoresponders and other automated notices, not
+ *    only by bounces, so on its own this is weaker evidence than the other two -- but a malformed DSN
+ *    that omits `report-type` is exactly the failure this project cannot afford to miss silently
+ *    (RFC section 5.3: completeness over precision), so it is still sufficient by itself to classify
+ *    as `'ndr'` rather than falling through to `'plain_bcc'`.
+ */
+export type NdrSignal = 'null-envelope-sender' | 'delivery-status-report' | 'auto-submitted-header';
+
+/**
+ * `JR-5-06`, RFC section 6.2: a non-delivery report or bounce addressed to the journal mailbox.
+ * Stored and flagged like any other accepted message -- never rejected, this is not a `parse_failed`
+ * variant -- because it is itself evidence of a delivery problem an auditor may want to see.
+ *
+ * Only reachable when the outer message did *not* match the Exchange journal-report shape first: an
+ * NDR that Exchange itself journalled (wrapped as the `message/rfc822` inner part of an otherwise
+ * well-formed report) stays `kind: 'journal_report'` -- see `journal-report.ts`'s module doc comment
+ * for why that ordering is the deliberate, tested choice and not an oversight.
+ */
+export interface JournalNdr {
+	readonly kind: 'ndr';
+	/** See {@link NdrSignal}. Never empty for a value of this `kind` -- at least one signal fired. */
+	readonly signals: readonly NdrSignal[];
+	/**
+	 * The same `SmtpTransactionEnvelope` the caller passed to `parseJournalReport()`, passed straight
+	 * through rather than summarised away. The caller already held this value (it is their own
+	 * input), so returning it here is not new information -- but a consumer that only keeps the
+	 * `JournalReportParseResult` (logs it, queues it, stores it) rather than also holding onto the
+	 * original argument would otherwise lose track of which transaction produced this classification.
+	 * Kept symmetric with `JournalPlainBcc.envelope` for exactly that reason, not because this `kind`
+	 * needs its own copy of the envelope for any other purpose.
+	 */
+	readonly envelope: SmtpTransactionEnvelope;
+	/** See {@link ExtractableHeaders}. Read from the message's own top-level RFC 5322 headers. */
+	readonly extractableHeaders: ExtractableHeaders;
+}
+
+export type JournalReportParseResult =
+	| JournalReportParsed
+	| JournalParseFailed
+	| JournalPlainBcc
+	| JournalNdr;
 
 /**
  * `JR-5-04`'s alerting requirement ("Operator wird alarmiert") deliberately has **no type here**.

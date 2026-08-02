@@ -169,7 +169,16 @@ export const SUITES: readonly SuiteSpec[] = [
 		// which replaced 2 parse_failed-shaped tests with 2 tests proving that (including a
 		// dedicated Bcc/DL-expansion-survives-a-missing-inner-part fixture, R1's sharpest form), and
 		// R3 added one more test for the deprecated application/x-pkcs7-mime alias -- net +1.
-		expectedTests: { ci: 448, nightly: 1, manual: 0 },
+		// 456 after JR-5-05/JR-5-06 (no new file -- journal-report.test.ts gained 8 tests): the
+		// `not-multipart.eml` fixture's expectation flipped from `parse_failed` to `plain_bcc` (it
+		// was always a well-formed ordinary message, just classified into the only bucket that
+		// existed before this slice) -- same test count there, reworded; 3 new tests for the
+		// plain-BCC/routing-rule fallback (Postfix `always_bcc`, Google Workspace routing, and the
+		// "no SMTP envelope supplied" default); 5 new tests for NDR detection (the canonical RFC 3464
+		// shape with all three signals at once, the null-envelope-sender signal alone, the
+		// Auto-Submitted signal alone, `Auto-Submitted: no` correctly NOT firing it, and the
+		// classification-order proof that an NDR Exchange itself journalled stays `'journal_report'`).
+		expectedTests: { ci: 456, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

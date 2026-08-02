@@ -1,0 +1,13 @@
+From: alice@contoso.com
+To: bob@example.org
+Cc: carol@example.org
+Subject: Q3 budget draft
+Date: Wed, 01 Jul 2026 09:00:00 +0000
+Message-ID: <postfix-always-bcc-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+Here is the draft budget for review. No journal wrapper was ever applied to
+this copy -- Postfix's always_bcc simply opens a fresh SMTP transaction to
+the archive mailbox with this message's own bytes as the payload, which is
+exactly why the true Bcc/DL recipient list never reaches this receiver.
