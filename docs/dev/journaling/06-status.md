@@ -265,7 +265,7 @@ eingeschoben (siehe `03-backlog.md`).
 | 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen  | 9 / 9 + 8 / 8 Nacharbeit |
 | 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)          | 11 / 11                  |
 | 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)              | 9 / 9                    |
-| 5           | E4   | `smtp-ingress`-Service             | in Arbeit (`JR-4-01`, `JR-4-02`, `JR-4-03` erledigt, DEV, ungeprüft) | 3 / 15                   |
+| 5           | E4   | `smtp-ingress`-Service             | in Arbeit (`JR-4-01`, `JR-4-02`, `JR-4-03` erledigt, DEV, ungeprüft) | 3 / 16                   |
 | 6           | E5   | Journal-Report-Parser              | offen                                                                | 0 / 9                    |
 | 7           | E6   | Phase-B-Worker                     | offen                                                                | 0 / 8                    |
 | 8           | E7   | WORM-Storage                       | offen                                                                | 0 / 6                    |
@@ -275,8 +275,8 @@ eingeschoben (siehe `03-backlog.md`).
 | 12          | E11  | Compliance-Features                | offen                                                                | 0 / 10                   |
 | 13          | E12  | Rollout und Dokumentation          | offen                                                                | 0 / 9                    |
 
-113 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 2 aus **ADR-026** — `JR-4-14`
-und `JR-4-15`, die Auflagen des selbst gebauten SMTP-Servers). Dazu **`JR-13-10`** als Folge-Task nach
+114 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 3: `JR-4-14` und `JR-4-15` als
+Auflagen aus **ADR-026**, dazu `JR-4-16` für **F44**). Dazu **`JR-13-10`** als Folge-Task nach
 E13 (Variante C aus ADR-017) — er gehört zu keinem Epic und zählt nicht in die Abnahme von `JR-13-09`.
 
 **Produktionscode für den Receiver:** seit E2 gibt es welchen — `packages/journaling` (kanonische

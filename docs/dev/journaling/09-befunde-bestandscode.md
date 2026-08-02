@@ -14,15 +14,15 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde                         |
-| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29 |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22              |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39          |
-| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34     |
-| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35                             |
-| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                             |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38                             |
+| Kategorie                  | Bedeutung                                                                              | Befunde                          |
+| -------------------------- | -------------------------------------------------------------------------------------- | -------------------------------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29  |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22               |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43 |
+| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34      |
+| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                         |
+| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                              |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44                    |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -1930,3 +1930,95 @@ belegen, dass sie **das getan hat, was sie tun sollte**. Rot allein ist kein Bel
 Fehlermeldung muss die erwartete Zusicherung nennen. `expected 'fs:stat' to be 'ledger-append'`
 beweist etwas; `expected { kind: 'ledger-append-failed' } to deeply equal { kind: 'accepted' }`
 beweist nur, dass irgendwo etwas geworfen hat, und verrät nicht, was.
+
+---
+
+## F42 — `tsconfig.build.json` kennt weder `packages/journaling` noch `apps/*` und wird von nichts benutzt
+
+**Schwere:** niedrig · **Kategorie:** Entwicklungsumgebung · **Ort:** `tsconfig.build.json`
+(Repo-Wurzel) · **Gefunden:** `JR-4-01` (2026-08-02, Rolle DEV), gemeldet und **nicht** behoben ·
+**Status:** **offen**
+
+Das Aggregat referenziert `packages/types`, `packages/backend` und `packages/frontend`. Seit E2 gibt
+es `packages/journaling`, seit `JR-4-01` `apps/smtp-ingress` — beide fehlen. `grep -rn
+"tsconfig.build.json"` findet **keine** Verwendung in einem Skript, in `package.json` oder in der CI.
+
+**Warum es trotzdem hier steht und nicht ignoriert wird:** eine Datei, die aussieht wie der
+Projektbau, es aber nicht ist, wird irgendwann von jemandem benutzt — und liefert dann einen grünen
+Build, der zwei Pakete nicht angefasst hat. Entweder sie wird vervollständigt oder entfernt.
+
+---
+
+## F43 — der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:** der Speichernachweis von `JR-3-02`
+(`packages/journaling`, Durable-Write-Pfad) und jede weitere Stelle, die „ohne proportionalen
+Heap-Anstieg" über `process.memoryUsage().heapUsed` belegt · **Gefunden:** `JR-4-03` (2026-08-02,
+Rolle DEV) beim Aufbau des eigenen Nachweises · **Status:** **offen** · **Betrifft ein bereits
+abgenommenes Epic** (E3, `JR-3-08`)
+
+**Node-`Buffer`-Inhalte liegen außerhalb des V8-Heaps.** Wer Vollpufferung über `heapUsed` sucht,
+sucht am falschen Ort: `JR-4-03` hat zur Kalibrierung absichtlich eine Voll-Pufferung eingebaut und
+gemessen — `heapUsed` blieb **flach bei 13–17 MB**, also exakt so, wie der korrekte Code aussieht,
+während 150 MB gepuffert wurden. Umgestellt auf `process.memoryUsage().arrayBuffers` trennt die
+beiden Zustände deutlich: **166 MB** mit Regression, **unter 40 MB** ohne. In beiden Richtungen
+verifiziert.
+
+**Die Folge ist keine Vermutung, sondern eine Frage an einen abgenommenen Nachweis:** `JR-3-02`s
+Akzeptanzkriterium lautet „150-MB-Nachricht ohne proportionalen Heap-Anstieg", und `JR-3-08` hat es
+abgenommen. Wenn dieser Nachweis über `heapUsed` geführt wurde, belegt er die Eigenschaft **nicht** —
+unabhängig davon, ob der Produktionscode korrekt ist (er ist es aller Wahrscheinlichkeit nach, weil
+`writeDurableSpoolFile()` streamt). Zu prüfen ist der **Nachweis**, nicht der Code: dieselbe
+Kalibrierung dort einmal fahren.
+
+**Die allgemeine Regel dahinter**, weil sie sich wiederholen wird: ein Messinstrument, das eine
+absichtlich eingebaute Regression **nicht** rot macht, misst nicht die Eigenschaft, die es zu messen
+vorgibt. Jeder Speichernachweis in diesem Projekt bekommt diese Kalibrierung, bevor er zitiert wird.
+
+---
+
+## F44 — nach einem `552` im `DATA`-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos
+
+**Schwere:** **hoch** · **Kategorie:** Neuer Code · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts`, `DataScanner.push()`/`handleDataChunk()` →
+`finishData()` → `completeTransfer()` · **Gefunden:** von `JR-4-03` (2026-08-02, Rolle DEV) als
+Klasse benannt, vom PO am selben Tag **gemessen und in der Schwere heraufgestuft** · **Status:**
+**offen, vor `JR-4-06` zu beheben** — als `JR-4-16` im Backlog
+
+`DataScanner` setzt bei Überschreitung des `SIZE`-Limits sofort `finished = true`, ohne bis zum
+`<CRLF>.<CRLF>`-Terminator weiterzulesen. `completeTransfer()` antwortet `552 5.3.4` und setzt
+`state = 'ready'`. **Der Sender weiß davon nichts und sendet den Rest seiner Nachricht** — und dieser
+Rest läuft ab jetzt durch `processCommandLine()`.
+
+**Gemessen** (Probe des PO gegen den gebauten Server, `sizeLimitBytes: 1000`, Rumpf 1500 Byte, danach
+in einem **eigenen** TCP-Segment drei Zeilen aus dem „Rumpf"):
+
+```
+552 5.3.4 Message size exceeds fixed maximum message size
+250 2.1.0 Ok        <- auf  MAIL FROM:<attacker@evil.invalid>
+250 2.1.5 Ok        <- auf  RCPT TO:<j@example.com>
+250 2.0.0 Ok        <- auf  NOOP
+```
+
+**Nachrichteninhalt wird zu Envelope.** Sobald `JR-4-06` `JournalAcceptance.accept()` anschließt,
+entsteht daraus ein Ledger-Eintrag mit einem `envelope_from`, den nie ein Sender gesendet hat — und
+`envelope_from`/`envelope_rcpt` gehören zu den 16 gehashten Feldern (ADR-006). Der Ledger würde einen
+Empfang bezeugen, den es nicht gab. Deshalb **hoch**, obwohl heute noch nichts archiviert wird: der
+Defekt wird durch die nächste Scheibe scharf, nicht durch einen Angriff.
+
+**Zwei Details, die die Einordnung tragen:**
+
+1. **Es braucht keinen Angreifer.** Ein legitimer Sender mit einer zu großen Nachricht sendet nach dem
+   `552` genauso weiter. Der konstruierte Fall ist nur die schnellste Art, es sichtbar zu machen.
+2. **Es hängt an der TCP-Segmentierung, und die kontrolliert die Gegenstelle.** Die erste Probe des PO
+   war **negativ** — sie sendete Rumpf und Kommandos in **einem** `write`, und der Rest desselben
+   Chunks wird verworfen, weil `handleDataChunk()` ihn nicht aufteilt. Erst mit einem eigenen Segment
+   trat der Fall ein. **Eine Probe, die den Fall verfehlt, ist kein Beleg für seine Abwesenheit** —
+   dieselbe Lehre wie in F41s Nachtrag, hier innerhalb einer Viertelstunde ein zweites Mal.
+
+**Der `BDAT`-Pfad hat den Defekt nicht**, und zwar strukturell: `handleBdatChunkBytes()` zählt die
+deklarierte Chunk-Länge immer vollständig ab, bevor es auf ein Oversize reagiert, und gibt den
+Überhang gezielt an die Kommandoverarbeitung zurück. Der Fix für `DATA` folgt derselben Linie —
+nach Oversize bis zum Terminator weiterlesen und verwerfen, dann antworten; alternativ die Verbindung
+nach der Antwort schließen. Was `JR-4-16` daraus macht, entscheidet die Task; ein stiller
+Zustandswechsel nach `'ready'` mitten im Rumpf ist keine der beiden Möglichkeiten.
