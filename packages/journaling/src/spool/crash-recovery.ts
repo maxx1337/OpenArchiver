@@ -1,13 +1,13 @@
 import path from 'node:path';
-import {
-	INCOMING_DIR_NAME,
-	QUARANTINE_DIR_NAME,
-	ensureQuarantineShardDir,
-	incomingFilePath,
-	quarantineFilePath,
-} from './layout';
+import { INCOMING_DIR_NAME, QUARANTINE_DIR_NAME, incomingFilePath } from './layout';
 import type { SpoolFileSystem } from './fs-port';
 import type { LedgerEntryByTxId, LedgerLookup } from '../ledger/ledger-lookup-port';
+import {
+	quarantineSpoolFile,
+	type QuarantineAlert,
+	type QuarantineAlertSink,
+	type QuarantinedEntry,
+} from './quarantine';
 
 /**
  * The crash-recovery scan (`JR-3-05`, RFC section 3 + architecture doc section 5, skill
@@ -42,11 +42,12 @@ import type { LedgerEntryByTxId, LedgerLookup } from '../ledger/ledger-lookup-po
  * `fsyncDirectory`, `readdir`, `stat`, `rename`. **There is no delete/unlink method on the port.** A
  * caller that only has a `SpoolFileSystem` cannot delete a spool file no matter what it does with it --
  * the capability does not exist to be misused. This function only ever calls `readdir` (to discover
- * files) and, for the no-ledger-entry case, `mkdir` (to ensure the quarantine shard exists) and
- * `rename` (to move the file there). A `rename()` is not a delete: the bytes still exist, just at a
- * different path, which is exactly what the skill requires ("never delete a spool file that has no
- * ledger entry without recording that decision somewhere durable" -- here, the alert plus the file's
- * new, quarantined location *is* that record).
+ * files) and, for the no-ledger-entry case, {@link quarantineSpoolFile} (`./quarantine.ts`, shared with
+ * `acceptance.ts`'s own quarantine-on-write-failure path since `JR-3-09`) -- `mkdir` to ensure the
+ * quarantine shard exists, `rename` to move the file there. A `rename()` is not a delete: the bytes
+ * still exist, just at a different path, which is exactly what the skill requires ("never delete a
+ * spool file that has no ledger entry without recording that decision somewhere durable" -- here, the
+ * alert plus the file's new, quarantined location *is* that record).
  *
  * `crash-recovery.test.ts` checks the empirical side of this: across a scan that both requeues and
  * quarantines files, the total number of files known to the fake filesystem is unchanged, and every
@@ -112,37 +113,32 @@ export interface RequeueCandidate {
 	readonly receivedAt: Date;
 }
 
-/** No ledger entry was found: the transaction was never acknowledged, and the file has been quarantined. */
-export interface QuarantinedEntry {
-	readonly spoolTxId: string;
-	readonly originalFilePath: string;
-	readonly quarantineFilePath: string;
-}
+/**
+ * No ledger entry was found: the transaction was never acknowledged, and the file has been quarantined.
+ * Re-exports {@link QuarantinedEntry} (`./quarantine.ts`, imported above) under its original name here,
+ * so existing imports do not need to change for a rename that is purely about where the type now lives.
+ */
+export type { QuarantinedEntry };
 
 /**
- * The operator-visible event a quarantine produces (skill section 3: "alarmieren").
+ * The operator-visible event a quarantine produces (skill section 3: "alarmieren"). Alias of
+ * {@link QuarantineAlert} (`./quarantine.ts`).
  *
- * `reason` is a literal union of one value today, deliberately -- so a future second cause (e.g. a
- * corrupt spool entry the scan cannot even parse a txid from) extends this without a breaking change,
- * the same convention `journalEventTypeEnum` uses for the ledger's own event types. `E10`'s monitoring
- * and `JR-10-02`'s gap detection are the intended future consumers; nothing about this shape is private
- * to this module.
+ * `reason` was a literal union of one value until `JR-3-09` gave `acceptance.ts`'s own
+ * quarantine-on-write-failure path (F40 half 1) a second, structurally identical reason
+ * (`'write-failed'`) to report through this same shape -- see `quarantine.ts`'s module doc comment for
+ * why one mechanism serves both. `E10`'s monitoring and `JR-10-02`'s gap detection are the intended
+ * future consumers; nothing about this shape is private to this module.
  */
-export interface CrashRecoveryAlert {
-	readonly spoolTxId: string;
-	readonly originalFilePath: string;
-	readonly quarantineFilePath: string;
-	readonly reason: 'no-ledger-entry';
-}
+export type CrashRecoveryAlert = QuarantineAlert;
 
 /**
- * Where a quarantine alert goes. Injected, not a `console.log` and not a backend logger import --
- * `packages/journaling` has neither (architecture doc section 2), and a startup scan's alert needs to
- * reach wherever an operator actually looks, which is a wiring decision for whoever calls this.
+ * Where a quarantine alert goes. Alias of {@link QuarantineAlertSink} (`./quarantine.ts`). Injected,
+ * not a `console.log` and not a backend logger import -- `packages/journaling` has neither (architecture
+ * doc section 2), and a startup scan's alert needs to reach wherever an operator actually looks, which
+ * is a wiring decision for whoever calls this.
  */
-export interface CrashRecoveryAlertSink {
-	alert(event: CrashRecoveryAlert): Promise<void> | void;
-}
+export type CrashRecoveryAlertSink = QuarantineAlertSink;
 
 export interface CrashRecoveryScanResult {
 	readonly requeue: readonly RequeueCandidate[];
@@ -210,9 +206,10 @@ async function listSpoolFiles(fs: SpoolFileSystem, topDir: string): Promise<Disc
 }
 
 /**
- * Move one never-acknowledged file to quarantine and alert. Tolerates a concurrent scan (see the
- * module doc comment's race section) by treating `rename()`'s `ENOENT` -- the source already gone -- as
- * "already quarantined by the other caller", not a failure.
+ * Move one never-acknowledged file to quarantine and alert, via the shared {@link quarantineSpoolFile}
+ * (`./quarantine.ts`). Tolerates a concurrent scan (see the module doc comment's race section) by
+ * treating `rename()`'s `ENOENT` -- the source already gone -- as "already quarantined by the other
+ * caller", not a failure.
  *
  * Returns `null` when the race case above applies (nothing to report for this file from this call).
  */
@@ -222,30 +219,14 @@ async function quarantineOne(
 	file: DiscoveredFile,
 	alertSink: CrashRecoveryAlertSink
 ): Promise<QuarantinedEntry | null> {
-	await ensureQuarantineShardDir(fs, spoolRoot, file.txid);
-	const targetPath = quarantineFilePath(spoolRoot, file.txid);
-
-	try {
-		await fs.rename(file.filePath, targetPath);
-	} catch (error) {
-		if (isEnoent(error)) {
-			return null;
-		}
-		throw error;
-	}
-
-	await alertSink.alert({
-		spoolTxId: file.txid,
-		originalFilePath: file.filePath,
-		quarantineFilePath: targetPath,
-		reason: 'no-ledger-entry',
-	});
-
-	return {
-		spoolTxId: file.txid,
-		originalFilePath: file.filePath,
-		quarantineFilePath: targetPath,
-	};
+	return quarantineSpoolFile(
+		fs,
+		spoolRoot,
+		file.txid,
+		file.filePath,
+		'no-ledger-entry',
+		alertSink
+	);
 }
 
 /** Run the scan once. See the module doc comment for the full contract. */

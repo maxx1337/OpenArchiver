@@ -1821,3 +1821,112 @@ Fall die Länge und nicht die Tag-Position.
 **Entscheidung des Auftraggebers offen:** beheben (kleine Teständerung, gehört sinnvollerweise in
 die nächste Arbeit an `packages/journaling`), oder bewusst akzeptieren, weil das Golden-File die
 Eigenschaft trägt. **Blockiert nichts** und war kein Hindernis für die Abnahme von E2.
+
+## F40 — eine Spool-Datei ohne Ledger-Eintrag belegt **keinen** Absturz, und ihr Müll frisst die Kapazität auf
+
+**Schwere:** mittel · **Kategorie:** Verfügbarkeit und Betriebsaussage · **Ort:**
+`packages/journaling/src/spool/durable-write.ts`, `…/acceptance.ts`,
+`docs/dev/journaling/02-architektur.md` §5 · **Gefunden:** `JR-3-06` (2026-08-02, Rolle `tester`),
+gemeldet und **nicht** behoben · **Status:** **offen**
+
+Drei der fünf Teiloperationen des durablen Schreibens — `write()`, Datei-`fsync` und
+Verzeichnis-`fsync` — hinterlassen bei einem **gewöhnlichen Laufzeitfehler** eine vollständige
+Spool-Datei ohne Ledger-Eintrag. `SpoolFileSystem` hat keine Löschmethode, und
+`writeDurableSpoolFile()` räumt nicht weg, was es angelegt hat.
+
+**Das Nicht-Löschen ist richtig und bleibt.** Skill §3 verbietet ausdrücklich, eine Spool-Datei ohne
+Ledger-Eintrag ohne durable Aufzeichnung zu entfernen. Der Befund richtet sich nicht dagegen,
+sondern gegen zwei Folgen, die bisher niemand ausgesprochen hat.
+
+**Erstens: die Aussage in `02-architektur.md` §5 ist falsch.** Dort stand, die liegengebliebene Datei
+sei „Beleg dafür, dass ein Absturz stattgefunden hat“. Sie ist es nicht — ein einzelner
+fehlgeschlagener `write()` erzeugt dieselbe Spur, ohne dass irgendetwas abgestürzt wäre. Der Test
+`„an ordinary write failure looks exactly like a crash to JR-3-05“` fädelt ein gescheitertes
+`accept()` direkt in `runCrashRecoveryScan()` und zeigt: die Datei wird quarantänisiert und
+alarmiert, **ununterscheidbar von einem echten Absturz**. Der Betreiber sucht dann einen Absturz,
+den es nie gab. Satz korrigiert am 2026-08-02.
+
+**Zweitens, und das ist der eigentliche Schaden: der Müll frisst das Kapazitätsbudget.**
+`checkSpoolHighWaterMark()` zählt `quarantine/` bewusst mit (`JR-3-01`, richtig — sonst bliebe ein
+langsam volllaufender Spool unsichtbar). Nur leert die Quarantäne niemand. Wiederholte
+Schreibfehler — also genau der Fall, in dem das System ohnehin schon leidet — füllen das Budget
+dauerhaft mit Rückständen, bis eine **spätere, unabhängige, völlig gesunde** Transaktion mit `452`
+abgewiesen wird. Ein zweiter Testfall belegt das. Das ist eine schleichende Selbstblockade: die
+Fehlerbehandlung erzeugt den nächsten Ausfall.
+
+**Zwei Richtungen, keine davon hier entschieden:**
+
+1. Der Annahmepfad verschiebt seinen eigenen Rest bei einem Schreibfehler **selbst** nach
+   `quarantine/`, mit eigenem Grund (`'write-failed'` statt `'no-ledger-entry'`). Dann ist der
+   spätere Alarm ehrlich, und der Scan sieht nichts, was er falsch deuten könnte. Löscht nichts,
+   verletzt Skill §3 also nicht. Kostet einen weiteren fehlbaren Aufruf im Fehlerpfad.
+2. Die Quarantäne bekommt ein Verfahren — Aufbewahrungsfrist, Betreiber-Freigabe, Alarm bei
+   Erreichen eines Anteils am Budget. Gehört dann zu E10 (Monitoring) und E12 (Betriebsleitfaden).
+
+Beide schließen einander nicht aus; (1) macht die Meldung ehrlich, (2) macht den Speicher wieder
+frei. **Sie ersetzen einander aber auch nicht** — (1) allein gibt **kein** Byte frei, weil die
+Quarantäne im Budget bleibt.
+
+**Entscheidung des Auftraggebers vom 2026-08-02: vor der Abnahme von E3 beheben, Hälfte 1.**
+Angelegt als **`JR-3-09`** in E3 (DEV). **Hälfte 2 bleibt offen** und ist keine Codefrage: sie
+verlangt ein Verfahren — Aufbewahrungsfrist für die Quarantäne, Betreiber-Freigabe, Alarm bei
+Erreichen eines Anteils am Budget — und gehört damit zu **E10** (Monitoring) und **E12**
+(Betriebsleitfaden). Bis dahin gilt: ein Spool, der wiederholt Schreibfehler sieht, läuft langsam
+voll, und **niemand räumt ihn automatisch**.
+
+## F41 — das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher
+
+**Schwere:** niedrig · **Kategorie:** Testharness · **Ort:**
+`packages/journaling/src/spool/acceptance.test.ts:141–143` (`timelineFileSystem()`),
+`packages/journaling/tests/support/fake-spool-fs.ts`, sowie der Dokukommentar in
+`packages/journaling/src/spool/acceptance.ts` · **Gefunden:** `JR-3-08` (Abnahme E3, 2026-08-02,
+Rolle `tester`), gemeldet und **nicht** behoben · **Status:** **offen** ·
+**Kein Produktdefekt** — der Produktionscode ist korrekt, nur unzureichend eingezäunt.
+
+`timelineFileSystem()` instrumentiert `mkdir`, `createFile`/`write`/`fsync`/`close` und
+`fsyncDirectory`. **`readdir`, `stat` und `rename` reicht es ungetrackt durch** (Zeilen 141–143), und
+`FakeSpoolFileSystem` führt für sie auch kein eigenes Protokoll. Eine Regression, die nach dem
+Ledger-Append eine dieser drei Operationen einfügt und die **gelingt**, würde von keinem Test
+bemerkt.
+
+Der Dokukommentar in `acceptance.ts` behauptet mehr, als das Netz hält: „`accept.test.ts` asserts the
+empirical half of this: after `backend.append()` resolves, the fake filesystem's call log is
+unchanged“. Das gilt für vier der sieben Operationen des Ports.
+
+**Die strukturelle Zusage bleibt unberührt** und ist der Grund, warum der Befund niedrig eingestuft
+ist: `buildAcceptedTransaction()` ist synchron, total und bekommt weder `SpoolFileSystem` noch
+`LedgerBackend`, kann also gar keine Operation auslösen; und
+`buildAcceptedTransaction(txid, await this.backend.append(request))` ist **eine** Anweisung, deren
+Zerlegung ein sichtbarer Diff ist. Was fehlt, ist der zweite Zaun hinter dem ersten.
+
+**Ein Nachtrag zur Aufklärungsgeschichte, weil er lehrreich ist.** Drei Mutationsproben wurden gegen
+diese Zusage gefahren — zwei vom PO (ein zweiter `append()`, ein `fs.stat()` danach) und eine vom
+Prüfer. Die beiden des PO wurden **rot** und galten als Bestätigung des Netzes. Sie waren es nicht:
+sie wurden rot, weil die eingefügte Operation **scheiterte** und der umgebende `catch` sie als
+`'ledger-append-failed'` meldete — nicht, weil ein Test sie **bemerkt** hätte. Erst eine Probe mit
+einer **gelingenden** Operation trennt beides. Wer ein Netz per Mutation prüft, muss die Mutation so
+wählen, dass sie **nur** über das Netz auffallen kann.
+
+**Behoben am 2026-08-02 (`fe5b410`), vor dem Rückmerge.** `timelineFileSystem()` erfasst jetzt
+**alle neun** Operationen auf derselben Zeitachse — die bestehende Zusicherung „nach dem letzten
+`ledger-append` folgt nichts“ greift damit automatisch für alle, ohne eine zweite Buchführung in
+`FakeSpoolFileSystem` einzuführen. Dokukommentar in `acceptance.ts` auf das zurückgenommen, was das
+Netz trägt. Nachweis über drei Proben mit **gelingender** Operation (`stat`, `rename`, `readdir`),
+jede meldet `expected 'fs:<op>' to be 'ledger-append'` — also rot, **weil beobachtet**. Vom PO mit
+`stat(durable.filePath)` unabhängig nachgestellt: zwei Zusicherungen rot, und der
+`ledger-append-failed`-Test bleibt **grün**, was belegt, dass nichts geworfen hat.
+
+### Nachtrag: warum der PO das Loch dreimal übersehen hat
+
+Der Absatz oben schrieb, seine beiden früheren Proben seien „rot geworden, weil die eingefügte
+Operation **scheiterte**“. Das war die halbe Wahrheit. **Sie sind nie ausgeführt worden:** der PO
+schrieb `written.filePath`, die Variable heißt im Code aber `durable`. Jede seiner Proben starb an
+einem `ReferenceError` — **vor** dem beabsichtigten Dateisystemaufruf —, wurde vom umgebenden `catch`
+als `'ledger-append-failed'` gemeldet und sah damit exakt so aus wie eine Probe, die etwas bewiesen
+hat.
+
+**Die Regel daraus ist schärfer als ‚wähle eine gelingende Mutation‘:** eine Mutationsprobe muss
+belegen, dass sie **das getan hat, was sie tun sollte**. Rot allein ist kein Beleg — die
+Fehlermeldung muss die erwartete Zusicherung nennen. `expected 'fs:stat' to be 'ledger-append'`
+beweist etwas; `expected { kind: 'ledger-append-failed' } to deeply equal { kind: 'accepted' }`
+beweist nur, dass irgendwo etwas geworfen hat, und verrät nicht, was.

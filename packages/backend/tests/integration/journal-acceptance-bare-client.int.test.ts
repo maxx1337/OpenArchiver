@@ -12,6 +12,7 @@ import {
 	normalizeRemoteIp,
 	type JournalTransactionInput,
 	type LedgerAppendRequest,
+	type QuarantineAlertSink,
 } from '@open-archiver/journaling';
 import type { JournalLedgerRecord } from '@open-archiver/types';
 import { acquireTestDatabase } from '../support/pg-harness';
@@ -184,6 +185,15 @@ function baseInput(
 	};
 }
 
+/**
+ * `alertSink` is a required `JournalAcceptance` constructor option (`JR-3-09`, PO decision
+ * 2026-08-02) -- this file is about the bare-client ledger path (F38), not about `'write-failed'`
+ * alerts, so the one construction below passes this explicit no-op rather than relying on any default.
+ */
+function noopAlertSink(): QuarantineAlertSink {
+	return { alert: () => {} };
+}
+
 suiteRequiring(
 	'ci',
 	'JournalAcceptance.accept() through a bare (non-drizzle) Postgres client (JR-3-04, F38)',
@@ -201,6 +211,7 @@ suiteRequiring(
 				fs,
 				backend: writer,
 				spoolConfig: { rootPath: '/spool', highWaterBytes: 10_000_000n },
+				alertSink: noopAlertSink(),
 			});
 
 			const sentBytes = Buffer.from('Subject: bare client test\r\n\r\nhello, journal.\r\n');
