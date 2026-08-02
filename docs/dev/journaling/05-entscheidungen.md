@@ -1726,6 +1726,68 @@ Suite und Klasse und nicht deren Namen — die Umbenennung geht daran vorbei. Da
 `tsc -p tsconfig.test.json` je Exit 0, `svelte-check` 0 Fehler / 0 Warnungen, Prettier sauber über
 alle 75 Dateien.
 
+## ADR-027 — `mailparser` als MIME-Leser in `packages/journaling`
+
+**Status:** **entschieden** (2026-08-02) · **Entscheider:** Auftraggeber · **Betrifft:** E5, und
+jede spätere Stelle in `packages/journaling`, die MIME liest
+
+Der Journal-Report-Parser aus E5 zerlegt MIME mit **`mailparser` ^3.7.4** — derselben Version, die
+`packages/backend` seit Langem für die Pull-Ingestion nutzt. `packages/journaling` bekommt damit die
+erste Fremdabhängigkeit außer `zod`.
+
+### Warum das die Architekturregel nicht bricht
+
+`CLAUDE.md` §2 fasst `packages/journaling` als „depends on `types` **only**" zusammen. Das ist die
+Kurzfassung; die Regel selbst steht in **ADR-002** und lautet anders: das Paket darf **nicht von
+`packages/backend` abhängen**, und **Konfiguration und DB-Verbindung werden injiziert**. Verboten ist
+also die Kopplung an den Monolithen und an seine Umgebung — nicht jede Bibliothek. `zod` steht seit
+`JR-3-01` als Präzedenzfall in denselben `dependencies`.
+
+`mailparser` ist eine reine Bibliothek: kein Prozess, kein Netz, keine Umgebungsvariable, keine
+Datenbank. Sie berührt keine der Eigenschaften, die ADR-002 schützt.
+
+### Warum dieselbe Bibliothek wie das Backend, und nicht eine kleinere
+
+Das ist der eigentliche Grund, und er ist inhaltlich, nicht bequem: **dieselbe Nachricht kann über
+beide Wege ins Archiv kommen** — per IMAP-Pull und per Journal-Report —, und `JR-12-02` verlangt
+ausdrücklich, dass daraus **ein** Archiveintrag wird. Zwei verschiedene MIME-Implementierungen im
+selben Repository würden für dieselben Bytes unterschiedliche Header-Interpretationen liefern können:
+andere Entfaltung gefalteter Header, andere Behandlung von RFC-2231-Parametern, andere
+Zeichensatz-Erkennung. Der Unterschied wäre nicht theoretisch sichtbar, sondern als Metadaten-Drift
+zwischen zwei Kopien derselben Mail — und zwar genau in dem Produkt, dessen Zweck Nachweisbarkeit ist.
+
+Eine Abhängigkeit weniger wäre der Gewinn gewesen. Eine Divergenz mehr der Preis. Der Schnitt geht
+klar in eine Richtung.
+
+### Verworfene Alternativen
+
+- **`postal-mime`** — kleiner und ohne Node-Bindung, aber es wäre die **zweite** MIME-Implementierung
+  im Repository, mit genau der oben beschriebenen Divergenz als Folge. Verworfen.
+- **Eigener MIME-Leser** — verworfen ohne langes Abwägen. MIME ist RFC 2045–2049 plus RFC 2231, dazu
+  gefaltete Header, verschachtelte Multiparts und die Abweichungen realer Absender. Ein selbst
+  geschriebener Leser scheitert nicht laut, sondern still: er lässt ein `Bcc` fallen, das niemand
+  vermisst, weil niemand es je gesehen hat. Bei einem Feature, dessen ganze Begründung die
+  Blindkopie-Empfänger sind, ist das die teuerste denkbare Fehlerklasse.
+
+### Was die Entscheidung ausdrücklich **nicht** erlaubt
+
+1. **`mailparser` liegt nie im Pfad der archivierten Bytes.** Das Archivobjekt ist und bleibt die rohe
+   Außenmail, wie empfangen (RFC §4.4, Randbedingung 3). Was `mailparser` produziert, sind
+   **Metadaten** — nie die Eingabe für Storage oder für einen Hash. Ein Test hält den Eingabepuffer
+   byteweise gegen sich selbst.
+2. **Ein Wurf aus `mailparser` verlässt den Parser nicht.** Parse-Fehler werden zu einem Ergebnistyp
+   (`parse_failed`), nicht zu einer Ausnahme — RFC §5.3: archivieren, nicht ablehnen. Die
+   Bibliothek ist tolerant, aber sie ist nicht unfehlbar, und ihr Verhalten bei bösartiger Eingabe ist
+   keine Zusage, auf die sich der Acceptance-Contract stützen darf.
+3. **Keine weitere Fremdabhängigkeit ohne eigene ADR.** Diese Entscheidung gilt für `mailparser`,
+   nicht als allgemeine Öffnung von `packages/journaling`.
+
+### Konsequenz
+
+`packages/journaling/package.json` bekommt `mailparser` und `@types/mailparser` in derselben Version
+wie `packages/backend`. Weichen die beiden je auseinander, ist das ein Befund und keine Kleinigkeit —
+die Begründung dieser ADR hängt an der Gleichheit.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill

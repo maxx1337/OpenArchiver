@@ -44,6 +44,7 @@ SEC 17a-4, FINRA 4511, MiFID II).
 | 09  | `09-befunde-bestandscode.md` | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes          | bevor man einen davon „nebenbei" behebt |
 | 10  | `10-upstream-meldung.md`     | **Entwurf** der Upstream-Sicherheitsmeldung — **nicht versendet**  | nur wenn der Auftraggeber sie versendet |
 | 11  | `11-archiv-e1.md`            | Protokoll des abgenommenen Epics E1, unverändert ausgegliedert     | nur bei Fragen zur E1-Historie          |
+| 12  | `12-parallelbetrieb.md`      | Regeln für zwei gleichzeitig laufende Sessions                     | **sobald eine zweite Session läuft**    |
 
 ## Team und Rollen
 
