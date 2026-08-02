@@ -7,10 +7,11 @@ import type {
 	LedgerAppendResult,
 	LedgerBackend,
 } from '../../src/ledger/ledger-port';
-import { incomingFilePath, incomingShardDir } from '../../src/spool/layout';
+import { incomingFilePath, incomingShardDir, quarantineFilePath } from '../../src/spool/layout';
 import type { SpoolConfig } from '../../src/spool/config';
 import { JournalAcceptance, type JournalTransactionInput } from '../../src/spool/acceptance';
 import { runCrashRecoveryScan, type CrashRecoveryAlert } from '../../src/spool/crash-recovery';
+import type { QuarantineAlert, QuarantineAlertSink } from '../../src/spool/quarantine';
 
 /**
  * `JR-3-06` -- fsync/write fault injection, driven through `JournalAcceptance.accept()`, the
@@ -35,23 +36,31 @@ import { runCrashRecoveryScan, type CrashRecoveryAlert } from '../../src/spool/c
  *      transaction leaves a file behind. It matters because `JR-3-05`'s crash-recovery scan decides
  *      quarantine-vs-requeue purely by asking the ledger about whatever it finds in `incoming/`
  *      (`crash-recovery.ts`'s own doc comment: "the ledger is the only authority"). A file an ordinary
- *      *runtime* failure left behind is therefore indistinguishable from a genuine crash artifact --
- *      see "FINDING" below.
+ *      *runtime* failure left behind used to be indistinguishable from a genuine crash artifact --
+ *      see "F40 / JR-3-09" below.
  *
  * ---------------------------------------------------------------------------------------------
- * FINDING -- an ordinary (non-crash) write-stage or fsync-stage failure leaves permanent spool debris
+ * F40 / JR-3-09 -- an ordinary (non-crash) write-stage or fsync-stage failure used to leave permanent,
+ * misdiagnosable spool debris; the accept path now quarantines its own debris immediately
  * ---------------------------------------------------------------------------------------------
  * `SpoolFileSystem` has no delete/unlink method (`crash-recovery.ts` relies on exactly this fact to
- * argue it can never delete a file). That is also true of `writeDurableSpoolFile()`'s own failure
- * path: once `createFile()` has succeeded, nothing calls anything path-mutating on failure, so the
- * file entry it created stays exactly where it is. The suite below ("state after a failure") shows
- * this is true for three of the five sub-cases (`write()`, file-fsync, directory-fsync) and false for
- * the other two (mkdir, createFile) -- and then, in "an ordinary write failure looks exactly like a
- * crash to JR-3-05", chains a failed `accept()` straight into `runCrashRecoveryScan()` to show the
- * consequence end to end: the leftover file gets quarantined and alerted on the next startup, exactly
- * as if the process had crashed, even though nothing crashed -- a client got a `451` and, per the
- * acceptance contract, is expected to retry with a brand-new transaction id. This is reported as a
- * finding, not fixed here (role: TEST does not patch `packages/journaling/src`).
+ * argue it can never delete a file). Before `JR-3-09`, that was also true of `writeDurableSpoolFile()`'s
+ * *caller*: once `createFile()` had succeeded, nothing called anything path-mutating on a later failure,
+ * so the file it created stayed exactly where it was, in `incoming/`, indistinguishable from a genuine
+ * crash victim to `JR-3-05`'s crash-recovery scan (architecture doc section 5's corrected sentence). The
+ * suite below ("state after a failure") still shows the underlying fact that motivated the finding --
+ * three of the five sub-cases (`write()`, file-fsync, directory-fsync) leave a file behind, the other
+ * two (mkdir, createFile) do not -- but now shows where that file ends up: quarantined by
+ * `JournalAcceptance.accept()` itself, under reason `'write-failed'`, not sitting in `incoming/` for a
+ * later startup to misdiagnose. "an ordinary write failure is quarantined immediately, not left for
+ * JR-3-05 to misdiagnose" chains a failed `accept()` straight into `runCrashRecoveryScan()` to show the
+ * fix end to end: the scan now finds **nothing** and raises **no** crash alert, because the debris was
+ * already moved and alerted on, honestly, before the scan ever ran.
+ *
+ * F40's second half -- quarantine is never auto-emptied and still counts toward the high-water-mark
+ * budget, so repeated write failures still erode spool capacity over time -- is unresolved by this and
+ * belongs to E10/E12 (retention/release procedure), not to `packages/journaling`. The last suite in this
+ * file demonstrates that this slice does not, and is not meant to, change that.
  */
 
 const SPOOL_ROOT = '/spool';
@@ -123,6 +132,23 @@ function shardDirOf(txid: string): string {
 
 function fileOf(txid: string): string {
 	return incomingFilePath(SPOOL_ROOT, txid);
+}
+
+function quarantinedFileOf(txid: string): string {
+	return quarantineFilePath(SPOOL_ROOT, txid);
+}
+
+/** A `QuarantineAlertSink` that records every alert. Same shape as `crash-recovery.test.ts`'s fake. */
+function fakeAlertSink(): { sink: QuarantineAlertSink; alerts: QuarantineAlert[] } {
+	const alerts: QuarantineAlert[] = [];
+	return {
+		sink: {
+			alert(event: QuarantineAlert): void {
+				alerts.push(event);
+			},
+		},
+		alerts,
+	};
 }
 
 const FAULT_CASES: readonly FaultCase[] = [
@@ -274,45 +300,69 @@ suite(
 
 suite(
 	'ci',
-	'JR-3-06: state after a failure -- which sub-operations leave a spool artifact behind (FINDING)',
+	'JR-3-06/JR-3-09: state after a failure -- which sub-operations leave debris, and where it ends up',
 	() => {
-		it('records exactly which failing sub-operation leaves a file behind: mkdir and createFile are clean, write()/file-fsync/directory-fsync are not', async () => {
-			const observed: Record<string, boolean> = {};
+		it("mkdir and createFile leave nothing to quarantine; write()/file-fsync/directory-fsync are quarantined under 'write-failed'", async () => {
+			const observedIncoming: Record<string, boolean> = {};
+			const observedQuarantine: Record<string, boolean> = {};
+			const observedAlertReason: Record<string, string | undefined> = {};
+
 			for (const testCase of FAULT_CASES) {
 				const fake = new FakeSpoolFileSystem();
 				const txid = freshTxid();
 				testCase.inject(fake, txid, eio(`i/o error injected for ${testCase.label}`));
 				const { backend, requests } = recordingBackend();
+				const { sink, alerts } = fakeAlertSink();
 				const acceptance = new JournalAcceptance({
 					fs: fake,
 					backend,
 					spoolConfig: spoolConfig(),
+					alertSink: sink,
 				});
 
 				const result = await acceptance.accept(baseInput({ txid }));
 				expect(result.kind).not.toBe('accepted');
 				expect(requests).toHaveLength(0);
 
-				observed[testCase.label] = fake.hasFile(fileOf(txid));
+				observedIncoming[testCase.label] = fake.hasFile(fileOf(txid));
+				observedQuarantine[testCase.label] = fake.hasFile(quarantinedFileOf(txid));
+				observedAlertReason[testCase.label] = alerts[0]?.reason;
 			}
 
-			// This is the finding: three of the five sub-cases leave a file with no ledger entry sitting
-			// in incoming/ -- structurally identical to what JR-3-05's crash-recovery scan treats as "a
-			// crash happened here". mkdir and createFile fail *before* a file object is ever created, so
-			// those two are the only clean cases.
-			expect(observed).toEqual({
+			// JR-3-09: nothing is ever left in incoming/ after a failed write, for any of the five
+			// sub-operations -- the two that never created a file (mkdir, createFile) have nothing to
+			// quarantine either, but they are not distinguishable from "already quarantined" by this check
+			// alone, which is exactly why the next assertion checks quarantine/ directly.
+			expect(Object.values(observedIncoming).every((present) => present === false)).toBe(
+				true
+			);
+
+			// Where the debris actually ended up: quarantined for the three sub-operations that leave a
+			// file behind (durable-write.ts's module doc comment), nothing to quarantine for the two that
+			// fail before any file exists.
+			expect(observedQuarantine).toEqual({
 				'mkdir (shard directory creation)': false,
 				'createFile (exclusive file creation)': false,
 				'write() (a chunk write call)': true,
 				'file fsync()': true,
 				'directory fsync()': true,
 			});
+
+			// The alarm reason distinguishes this cleanup from crash-recovery's 'no-ledger-entry': only
+			// the three cases that were actually quarantined raised an alert, and all three say why.
+			expect(observedAlertReason).toEqual({
+				'mkdir (shard directory creation)': undefined,
+				'createFile (exclusive file creation)': undefined,
+				'write() (a chunk write call)': 'write-failed',
+				'file fsync()': 'write-failed',
+				'directory fsync()': 'write-failed',
+			});
 		});
 
-		it('a write() failure partway through a multi-chunk message leaves the already-written chunks on disk, not zero bytes', async () => {
-			// A stronger version of the case above: the leftover is not merely an empty placeholder file,
-			// it can carry genuinely partial message content -- worse for an operator trying to make sense
-			// of quarantine/ later, since the file looks like a truncated real message rather than an
+		it('a write() failure partway through a multi-chunk message quarantines the already-written chunks, not zero bytes', async () => {
+			// A stronger version of the case above: the debris is not merely an empty placeholder file, it
+			// can carry genuinely partial message content -- worse for an operator trying to make sense of
+			// quarantine/ later, since the file looks like a truncated real message rather than an
 			// obviously-empty artifact. `failNextWrite()` is a one-shot armed for whichever write() call
 			// happens *next*, so it is armed from inside the chunk generator itself, between the first
 			// chunk's `yield` and the second's -- i.e. after the first chunk's `write()` has already been
@@ -334,55 +384,77 @@ suite(
 			const result = await acceptance.accept(baseInput({ txid, chunks: twoChunks() }));
 
 			expect(result.kind).toBe('spool-capacity-exceeded');
-			expect(fake.hasFile(fileOf(txid))).toBe(true);
-			// The first chunk's 21 bytes are genuinely on disk; the second chunk's write is what failed.
-			expect(fake.fileContent(fileOf(txid))?.toString()).toBe('Subject: partial\r\n\r\n');
+			// Not in incoming/ anymore (JR-3-09) -- moved to quarantine/, first chunk's 21 bytes intact.
+			expect(fake.hasFile(fileOf(txid))).toBe(false);
+			expect(fake.hasFile(quarantinedFileOf(txid))).toBe(true);
+			expect(fake.fileContent(quarantinedFileOf(txid))?.toString()).toBe(
+				'Subject: partial\r\n\r\n'
+			);
 		});
 	}
 );
 
 suite(
 	'ci',
-	'JR-3-06: an ordinary write failure looks exactly like a crash to JR-3-05 (FINDING, end to end)',
+	'JR-3-06/JR-3-09: an ordinary write failure is quarantined immediately, so JR-3-05 never sees it (FIX for F40 half 1)',
 	() => {
-		it('the file a failed write() left behind gets quarantined and alerted by the crash-recovery scan, even though nothing crashed', async () => {
+		it("the file a failed write() left behind is quarantined by accept() itself, under 'write-failed' -- and a later crash-recovery scan finds nothing and raises no alert", async () => {
 			const fake = new FakeSpoolFileSystem();
 			const txid = freshTxid();
 			fake.failNextWrite(
 				fileOf(txid),
 				enospc('disk full during an ordinary, non-crash write')
 			);
+			const acceptanceAlerts = fakeAlertSink();
 			const acceptance = new JournalAcceptance({
 				fs: fake,
 				backend: recordingBackend().backend,
 				spoolConfig: spoolConfig(),
+				alertSink: acceptanceAlerts.sink,
 			});
 
 			const result = await acceptance.accept(baseInput({ txid }));
 			expect(result.kind).toBe('spool-capacity-exceeded');
+
+			// The debris never sat in incoming/ waiting to be found -- accept() moved and alerted on it
+			// before returning, with the honest reason: an ordinary write failure, not a crash.
+			expect(fake.hasFile(fileOf(txid))).toBe(false);
+			expect(fake.hasFile(quarantinedFileOf(txid))).toBe(true);
+			expect(acceptanceAlerts.alerts).toEqual([
+				{
+					spoolTxId: txid,
+					originalFilePath: fileOf(txid),
+					quarantineFilePath: quarantinedFileOf(txid),
+					reason: 'write-failed',
+				},
+			]);
+
 			// Nothing crashed: the process is still running, and it is about to run the exact same scan
-			// `apps/smtp-ingress` runs at *startup* -- simulating a restart here to show the consequence,
-			// not because this scan runs mid-session in production (architecture doc section 5 says it must
-			// not, precisely to avoid racing a live acceptance -- this is a different scenario: the process
-			// restarting normally sometime *after* the failed transaction, with the orphan still sitting
-			// there).
+			// `apps/smtp-ingress` runs at *startup* -- simulating a restart here to show there is nothing
+			// left for it to find, not because this scan runs mid-session in production (architecture doc
+			// section 5 says it must not, precisely to avoid racing a live acceptance -- this is a
+			// different scenario: the process restarting normally sometime *after* the failed
+			// transaction, with the debris already resolved).
 			const ledgerLookup = new FakeLedgerLookup(); // correctly empty: accept() never reached append()
-			const alerts: CrashRecoveryAlert[] = [];
+			const scanAlerts: CrashRecoveryAlert[] = [];
 
 			const scan = await runCrashRecoveryScan({
 				fs: fake,
 				ledgerLookup,
 				spoolRoot: SPOOL_ROOT,
-				alertSink: { alert: (event) => void alerts.push(event) },
+				alertSink: { alert: (event) => void scanAlerts.push(event) },
 			});
 
-			expect(scan.quarantined).toHaveLength(1);
-			expect(scan.quarantined[0]!.spoolTxId).toBe(txid);
-			expect(alerts).toHaveLength(1);
-			expect(alerts[0]!.reason).toBe('no-ledger-entry');
-			// The alert is indistinguishable from a genuine crash alert -- CrashRecoveryAlert carries no
-			// field that could say "this was actually just a 452, not a crash". An operator paging on this
-			// alert has no way to tell the two apart from the alert alone.
+			// This is the fix, measured: before JR-3-09, this scan found the file in incoming/, quarantined
+			// it a *second* time and raised a *second*, indistinguishable-from-a-crash alert. Now there is
+			// nothing in incoming/ to find -- incomingFilesScanned is 0, not 1 -- and the one file the scan
+			// does see (in quarantine/, from accept()'s own cleanup) is only ever counted, never re-queried,
+			// re-quarantined or re-alerted (crash-recovery.ts's own contract for quarantine/).
+			expect(scan.incomingFilesScanned).toBe(0);
+			expect(scan.requeue).toHaveLength(0);
+			expect(scan.quarantined).toHaveLength(0);
+			expect(scan.preexistingQuarantineFiles).toBe(1);
+			expect(scanAlerts).toHaveLength(0);
 		});
 	}
 );
@@ -419,13 +491,17 @@ suite(
 
 suite(
 	'ci',
-	'JR-3-06 -> JR-3-07 link: orphaned files silently erode the high-water-mark budget',
+	'JR-3-06 -> JR-3-07 link: quarantined debris still silently erodes the high-water-mark budget (F40 half 2, still open)',
 	() => {
-		it('debris left by file-fsync failures counts toward the spool budget and can reject an unrelated, otherwise-healthy transaction', async () => {
+		it('debris left by file-fsync failures -- now quarantined, not left in incoming/ -- still counts toward the spool budget and can reject an unrelated, otherwise-healthy transaction', async () => {
 			// Five failed transactions, each fully written (20 real bytes) but never file-synced -- the
-			// "file fsync()" row of the finding above, which leaves the complete byte content behind. That
-			// content is real as far as `computeDirectoryUsageBytes()` (./layout.ts) is concerned: it walks
-			// the spool with `stat()`, which has no notion of "durable" versus "written but unsynced".
+			// "file fsync()" row of the state-after-a-failure suite above, which leaves the complete byte
+			// content behind. Since JR-3-09, that content is quarantined immediately rather than left in
+			// incoming/ -- but `computeDirectoryUsageBytes()` (./layout.ts) walks *both* incoming/ and
+			// quarantine/ (JR-3-01, deliberately: quarantine is never auto-emptied, so excluding it would
+			// hide exactly this failure mode), so moving the debris changes *where* it sits, not whether it
+			// counts. This is F40's still-open second half, demonstrated rather than fixed here: JR-3-09
+			// only made the *alarm* honest, not the budget self-healing.
 			//
 			// The budget is exactly 100 (5 x 20 bytes): each iteration's own high-water-mark check only
 			// ever sees the *prior* iterations' debris (0, 20, 40, 60, 80 -- all under 100), so all five
@@ -442,8 +518,10 @@ suite(
 				spoolConfig: spoolConfig(100n),
 			});
 
+			const failingTxids: string[] = [];
 			for (let i = 0; i < 5; i += 1) {
 				const txid = freshTxid();
+				failingTxids.push(txid);
 				fake.failNextFileFsync(fileOf(txid));
 				const failed = await acceptance.accept(
 					baseInput({ txid, chunks: chunksOf('x'.repeat(20)) })
@@ -451,9 +529,15 @@ suite(
 				expect(failed.kind).toBe('spool-write-failed');
 			}
 
-			// Five failed transactions, 100 leftover bytes nobody asked for -- and a sixth, entirely
+			// The debris is in quarantine/, not incoming/ -- JR-3-09's fix -- but it is debris all the same.
+			for (const txid of failingTxids) {
+				expect(fake.hasFile(fileOf(txid))).toBe(false);
+				expect(fake.hasFile(quarantinedFileOf(txid))).toBe(true);
+			}
+
+			// Five failed transactions, 100 quarantined bytes nobody asked for -- and a sixth, entirely
 			// unrelated and otherwise-healthy transaction is rejected by the high-water-mark check because
-			// of them, purely because nothing ever cleans up a failed write's debris.
+			// of them, purely because nothing frees quarantined capacity (F40 half 2, E10/E12).
 			const healthyTxid = freshTxid();
 			const result = await acceptance.accept(baseInput({ txid: healthyTxid }));
 			expect(result.kind).toBe('high-water-mark-exceeded');

@@ -98,11 +98,18 @@ export {
 } from './spool/acceptance';
 
 export {
+	quarantineSpoolFile,
+	type QuarantineAlert,
+	type QuarantineAlertSink,
+	type QuarantineReason,
+	type QuarantinedEntry,
+} from './spool/quarantine';
+
+export {
 	runCrashRecoveryScan,
 	type CrashRecoveryAlert,
 	type CrashRecoveryAlertSink,
 	type CrashRecoveryScanOptions,
 	type CrashRecoveryScanResult,
-	type QuarantinedEntry,
 	type RequeueCandidate,
 } from './spool/crash-recovery';

@@ -1,6 +1,7 @@
-import { checkSpoolHighWaterMark, type HighWaterMarkStatus } from './layout';
+import { checkSpoolHighWaterMark, incomingFilePath, type HighWaterMarkStatus } from './layout';
 import { DurableWriteError, writeDurableSpoolFile, type DurableWriteStage } from './durable-write';
 import { generateTxId } from './txid';
+import { quarantineSpoolFile, type QuarantineAlertSink } from './quarantine';
 import type { SpoolConfig } from './config';
 import type { SpoolFileSystem } from './fs-port';
 import { normalizeRemoteIp } from '../ledger/canonical-encoding';
@@ -83,6 +84,38 @@ import type { LedgerAppendRequest, LedgerAppendResult, LedgerBackend } from '../
  * call alike. The distinguishing bit lives in {@link DurableWriteError.cause} (`cause.code ===
  * 'ENOSPC'`), so this module inspects both together and reports `'spool-capacity-exceeded'`
  * (→ `452`, retry once space exists) separately from `'spool-write-failed'` (→ `451`, ordinary retry).
+ *
+ * ---------------------------------------------------------------------------------------------
+ * A failed durable write quarantines its own debris (`JR-3-09`, F40 half 1)
+ * ---------------------------------------------------------------------------------------------
+ * Three of `writeDurableSpoolFile()`'s five sub-operations (`write()`, file-fsync, directory-fsync)
+ * can leave a fully- or partially-written file in `incoming/` behind a {@link DurableWriteError} --
+ * `durable-write.ts`'s module doc comment; the other two (`mkdir`, `createFile`) fail before any file
+ * exists. Left in `incoming/`, that debris is indistinguishable from a genuine crash victim to
+ * `JR-3-05`'s crash-recovery scan (architecture doc section 5's corrected sentence, F40) -- an ordinary
+ * `451`/`452` here would page an operator to investigate a crash that never happened, on a process that
+ * never stopped running.
+ *
+ * So {@link JournalAcceptance.accept}'s `DurableWriteError` handler quarantines whatever the failed
+ * write left behind, immediately, with reason `'write-failed'` -- structurally the same operation
+ * `crash-recovery.ts` performs for `'no-ledger-entry'`, shared through {@link quarantineSpoolFile}
+ * (`./quarantine.ts`). Never a deletion (skill section 3; `SpoolFileSystem` has no delete method to
+ * misuse), and never a *guess* at whether a file exists: {@link quarantineSpoolFile} attempts the
+ * `rename()` unconditionally and tolerates the `ENOENT` that `mkdir`/`createFile` failures produce
+ * (nothing was ever there to move) the same way it tolerates a second scan racing the same file.
+ *
+ * This cleanup is attempted, never awaited-and-trusted: it runs from inside a catch block that already
+ * holds the real failure the caller needs (`DurableWriteError.stage`/`.cause`, which decide `451` vs
+ * `452`). A second, independent failure *of the cleanup itself* (the quarantine side has its own
+ * `mkdir`/`rename` that can fail) must never replace or mask that original cause, so it is caught and
+ * discarded rather than left to propagate or to change the returned result -- see
+ * {@link JournalAcceptance.quarantineFailedWrite}'s own doc comment for what happens to the debris in
+ * that (rare, double-fault) case.
+ *
+ * Not in scope here, and not solved by this: moving debris into `quarantine/` frees no capacity --
+ * `checkSpoolHighWaterMark()` counts `quarantine/` deliberately (`JR-3-01`), and quarantine is never
+ * auto-emptied. F40's second half (a retention/release procedure for quarantine) is unresolved and
+ * belongs to E10/E12, not this module.
  */
 
 /** Everything one journal transaction needs beyond process-wide configuration. */
@@ -164,9 +197,7 @@ export type JournalAcceptanceResult =
 	| LedgerAppendFailed;
 
 /** `true` only for the one kind that may ever precede a `250`. */
-export function isAccepted(
-	result: JournalAcceptanceResult
-): result is AcceptedJournalTransaction {
+export function isAccepted(result: JournalAcceptanceResult): result is AcceptedJournalTransaction {
 	return result.kind === 'accepted';
 }
 
@@ -202,19 +233,37 @@ export interface JournalAcceptanceOptions {
 	readonly spoolConfig: SpoolConfig;
 	/** Injectable clock for `generateTxId()`. Defaults to `Date.now`; tests can pin it. */
 	readonly now?: () => number;
+	/**
+	 * Where a `'write-failed'` quarantine alert goes (`JR-3-09`, see the module doc comment's "A failed
+	 * durable write quarantines its own debris" section). Optional, defaulting to a sink that discards
+	 * the event: most existing callers and tests only care about the returned
+	 * {@link JournalAcceptanceResult} classification, and `apps/smtp-ingress` (E4) is the first real
+	 * caller with somewhere for an operator to actually look. A missing or discarding sink never changes
+	 * what {@link accept} returns, and never turns a cleanup failure into a masked original cause -- see
+	 * {@link JournalAcceptance.quarantineFailedWrite}.
+	 */
+	readonly alertSink?: QuarantineAlertSink;
 }
+
+const DISCARDING_ALERT_SINK: QuarantineAlertSink = {
+	alert: () => {
+		/* discarded deliberately -- see JournalAcceptanceOptions.alertSink's doc comment */
+	},
+};
 
 export class JournalAcceptance {
 	private readonly fs: SpoolFileSystem;
 	private readonly backend: LedgerBackend;
 	private readonly spoolConfig: SpoolConfig;
 	private readonly now: () => number;
+	private readonly alertSink: QuarantineAlertSink;
 
 	constructor(options: JournalAcceptanceOptions) {
 		this.fs = options.fs;
 		this.backend = options.backend;
 		this.spoolConfig = options.spoolConfig;
 		this.now = options.now ?? Date.now;
+		this.alertSink = options.alertSink ?? DISCARDING_ALERT_SINK;
 	}
 
 	/**
@@ -251,6 +300,12 @@ export class JournalAcceptance {
 				// Swallowing it into a typed `451` would hide a bug behind a retry that can never succeed.
 				throw cause;
 			}
+			// JR-3-09 (F40 half 1): whatever the failed write left behind in incoming/ -- fully, partially,
+			// or not at all, depending which of the five sub-operations failed -- is quarantined right now,
+			// under its own reason. See the module doc comment and quarantineFailedWrite()'s own doc comment
+			// for why this never masks `cause.stage`/`cause.cause` below, which the caller still needs for
+			// `451` vs `452`.
+			await this.quarantineFailedWrite(txid);
 			if (isCapacityCause(cause.cause)) {
 				return {
 					kind: 'spool-capacity-exceeded',
@@ -294,8 +349,50 @@ export class JournalAcceptance {
 		try {
 			return buildAcceptedTransaction(txid, await this.backend.append(request));
 		} catch (cause) {
-			// The spool file stays on disk -- see the module doc comment. Nothing here deletes it.
-			return { kind: 'ledger-append-failed', spoolTxId: txid, filePath: durable.filePath, cause };
+			// The spool file stays on disk -- see the module doc comment. Nothing here deletes it. Unlike
+			// the DurableWriteError branch above, this is deliberately *not* quarantined: a ledger-append
+			// failure is genuinely ambiguous (the try/catch also catches a network blip after a successful
+			// commit -- crash-recovery.ts's own doc comment), so only the ledger, asked by spool_txid, may
+			// decide this file's fate. Quarantining it here on a guess could hide a message the ledger
+			// actually did record.
+			return {
+				kind: 'ledger-append-failed',
+				spoolTxId: txid,
+				filePath: durable.filePath,
+				cause,
+			};
+		}
+	}
+
+	/**
+	 * Quarantine whatever a failed durable write left behind in `incoming/`, under reason
+	 * `'write-failed'` (`JR-3-09`, F40 half 1). See the module doc comment's "A failed durable write
+	 * quarantines its own debris" section for why this exists and why the reason differs from
+	 * crash-recovery's `'no-ledger-entry'`.
+	 *
+	 * Never throws. {@link quarantineSpoolFile} is itself fallible -- its own `mkdir`/`rename` on the
+	 * quarantine side can fail independently of whatever failed on the incoming side -- and this method
+	 * is always called from inside a catch block that already holds the real {@link DurableWriteError}
+	 * the caller needs `stage`/`cause` from to choose `451` vs `452`. A second failure here must never
+	 * replace or hide that one, so it is caught and discarded. Worst case: the debris stays in
+	 * `incoming/` exactly as it would have before this slice, and `JR-3-05`'s crash-recovery scan is
+	 * still there to quarantine it -- under `'no-ledger-entry'` instead of `'write-failed'` -- on the
+	 * next startup. That is a degraded diagnosis (F40's original bug, not fixed for this one file), never
+	 * a lost message and never a masked cause.
+	 */
+	private async quarantineFailedWrite(txid: string): Promise<void> {
+		const filePath = incomingFilePath(this.spoolConfig.rootPath, txid);
+		try {
+			await quarantineSpoolFile(
+				this.fs,
+				this.spoolConfig.rootPath,
+				txid,
+				filePath,
+				'write-failed',
+				this.alertSink
+			);
+		} catch {
+			// Swallowed deliberately -- see this method's doc comment.
 		}
 	}
 }
