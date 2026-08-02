@@ -24,6 +24,13 @@ ADR-014 es für ein Epic vorsieht.
 Stand bei Beginn von Session B: `9725a5d`, `JR-3-01`…`JR-3-05` committet, offen `JR-3-06`
 (fsync-Fault-Injection), `JR-3-07` (Disk-Full) und die Abnahme `JR-3-08`.
 
+> **Nachtrag 2026-08-02: E3 ist abgenommen (21/21) und zurückgemergt** (`185e9bd`, `--no-ff`, kein
+> Squash). Session A hat dabei nachträglich sichtbar gemacht, **warum** sie auf dem Integrationsbranch
+> stand statt auf einem Epic-Zweig — siehe §8. Der Parallelbetrieb geht damit in seine zweite Form
+> über: Session B arbeitet auf `claude/journaling-e5-parser` weiter, der Integrationsbranch ist
+> vorerst niemandes Arbeitsbranch. **Die Regeln unten gelten unverändert**, denn sobald eine dritte
+> Session ein weiteres Epic aufmacht, ist die Lage dieselbe.
+
 ## 2. Warum E5 überhaupt parallel geht
 
 Nicht, weil E5 unwichtig wäre, sondern weil es **kein Byte mit E3 teilt**:
@@ -75,16 +82,38 @@ Konflikttyp, weil git ihn nicht sinnvoll auflösen kann und ein Fehler dabei sti
 ## 4. Merge-Richtung
 
 ```
-Integrationsbranch ──────▶ claude/journaling-e5-parser        erlaubt, oft, am besten vor jedem Commit
+Integrationsbranch ──────▶ claude/journaling-e5-parser        oft, am besten vor jedem Commit
 Integrationsbranch ◀────── claude/journaling-e5-parser        erst nach der unabhängigen Abnahme JR-5-09
 ```
 
-Der Rückmerge passiert **nach** `JR-5-09`, mit `--no-ff` und ohne Squash, wie bei E2 und E13.
+Der Rückmerge passiert **nach** `JR-5-09`, mit `--no-ff` und ohne Squash, wie bei E2, E13 und E3.
 `main` wird bis zur Abnahme von E12 nicht angefasst (ADR-014).
 
-**Häufig mergen ist die eigentliche Maßnahme.** Drei kleine Konflikte über eine Woche kosten
+**Für die Vorwärtsrichtung wird `rebase` benutzt, nicht `merge`** (Entscheidung des Auftraggebers,
+2026-08-02, beim E3-Rückmerge angewandt):
+
+```bash
+git fetch origin claude/enterprise-product-implementation-cxmmqe
+git rebase origin/claude/enterprise-product-implementation-cxmmqe
+git push --force-with-lease origin claude/journaling-e5-parser
+```
+
+Das ist hier zulässig, weil auf den Epic-Branch **nur diese eine Session** schreibt — es gibt keinen
+fremden Stand, den ein Force-Push überschreiben könnte. `--force-with-lease` statt `--force` ist
+trotzdem Pflicht: es bricht ab, falls doch jemand dazwischengeschrieben hat, statt dessen Arbeit
+stillschweigend zu verwerfen. Die Regel gilt **ausschließlich** für den Epic-Branch; auf dem
+Integrationsbranch wird nichts umgeschrieben.
+
+**Häufig nachziehen ist die eigentliche Maßnahme.** Drei kleine Konflikte über eine Woche kosten
 zusammen weniger als einer am Ende, und vor allem: ein kleiner Konflikt ist einer, den man noch
 verstehen kann.
+
+> **Ein sauberer Rebase ist kein Beleg dafür, dass die Zahlen stimmen.** Beim Nachziehen auf `d201612`
+> gab es **keinen einzigen Konflikt**, obwohl beide Sessions `tests/support/suite-inventory.ts`
+> geändert hatten — E3 die `adversarial`-Zahlen, E5 die `unit`-Zahlen, also verschiedene Zeilen. Git
+> hat beide Seiten übernommen, und ob die zusammengesetzten Zahlen der Wirklichkeit entsprechen, weiß
+> es nicht. **Nach jedem Rebase deshalb ein Volllauf**, egal wie glatt er durchlief. (Hier stimmten
+> sie: 45 Dateien, `559 passed | 5 skipped`.)
 
 ## 5. Was Session B ausdrücklich nicht anfasst
 
@@ -147,3 +176,32 @@ unit: ci 371/371 · integration: ci 97/97 · adversarial: ci 18/18
 
 Das ist die Basis, gegen die E5s Zahlen gelesen werden — **nicht** die `398 passed | 2 skipped` bei
 30 Dateien aus dem E2-Handover. Die Differenz sind E3s zehn Dateien aus `JR-3-01`…`JR-3-05`.
+
+**Nach dem Rebase auf `d201612` (E3 abgenommen und gemergt) lautet die Basis:** 42 Dateien,
+`505 passed | 5 skipped` ohne E5, mit E5 **45 Dateien, `559 passed | 5 skipped`**,
+`unit 425/425 · integration 97/97 · adversarial 37/37`.
+
+Zwei Umgebungspunkte sind seit der ersten Fassung dazugekommen bzw. erledigt:
+
+- **PostgreSQL überlebt einen Containerneustart nicht.** Kommt die `integration`-Suite plötzlich mit
+  `0/97` zurück, obwohl `DATABASE_URL` gesetzt ist, läuft der Dienst nicht mehr:
+  `service postgresql start`. Der sichtbare Skip nennt „`DATABASE_URL` is not set" — die Meldung
+  zeigt in die falsche Richtung, der Ausfall liegt am Dienst, nicht an der Variablen.
+- **Der Lint-Rückstand in `packages/journaling/src/spool/acceptance.ts` ist erledigt** — Session A hat
+  ihn beim E3-Abschluss selbst behoben. `pnpm lint` ist repo-weit grün.
+
+## 8. Was der E3-Abschluss über Epic-Branches gelernt hat — und was das hier bedeutet
+
+`d201612` hält einen Befund fest, der Session B direkt betroffen hätte:
+**`git checkout -b <epic> origin/<integration>` setzt den Upstream des Epic-Branches auf den
+Integrationsbranch.** Ein anschließendes blankes `git push` landet damit **auf dem
+Integrationsbranch** — ohne Merge-Commit, ohne Abnahme, ohne Warnung. Bei E3 sind so elf Commits vor
+der Abnahme auf die Hauptlinie gelangt.
+
+Session B hat exakt dieses Rezept benutzt. **Gegengeprüft und sauber:** alle drei E5-Commits sind
+mit `git merge-base --is-ancestor` gegen den Integrationsbranch geprüft, keiner ist dort gelandet.
+Der Grund ist, dass unmittelbar nach dem Anlegen `git push -u origin claude/journaling-e5-parser`
+lief und den Upstream damit korrigiert hat, bevor der erste Push fällig war.
+
+> **Regel: `git push -u origin <epic>` gehört an das Ende des Anlegens, nicht an den ersten Push.**
+> Die Lücke dazwischen ist genau so groß wie die Zahl der Commits, die man vorher macht.

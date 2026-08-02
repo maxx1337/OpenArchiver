@@ -1908,7 +1908,10 @@ Formulierung („der Fix bricht Bestandsinstallationen") ist **nicht** nötig.
 > noch die Abschnitte der E3-Session in dieser Datei an — auch nicht die Kopfzeile
 > „Letzte Aktualisierung", die der E3-Session gehört.
 
-**Branch:** `claude/journaling-e5-parser`, abgezweigt vom Integrationsbranch bei `9725a5d`.
+**Branch:** `claude/journaling-e5-parser`, abgezweigt vom Integrationsbranch bei `9725a5d`, am
+2026-08-02 auf `d201612` rebased (E3 abgenommen und zurückgemergt). **Kein E5-Commit ist je auf dem
+Integrationsbranch gelandet** — mit `git merge-base --is-ancestor` für alle drei geprüft, nachdem
+`d201612` die Upstream-Falle beschrieben hat; `git push -u` lief hier direkt nach dem Anlegen.
 **Warum parallel möglich:** E3 lebt in `packages/journaling/src/spool/*`, E5 in
 `packages/journaling/src/parser/*` — kein geteiltes Byte. E5 ist reine Logik über Bytes: keine
 Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft **eine** Task
@@ -1970,32 +1973,31 @@ Test rot gemacht, und drei hätten still falsche Metadaten erzeugt.
 
 ### Zahlen
 
-| Stand                      | Volllauf                                            |
-| -------------------------- | --------------------------------------------------- |
-| Basis `9725a5d` (vor E5)   | 40 Dateien, `486 passed \| 3 skipped`, unit 371/371 |
-| nach `JR-5-01`/`JR-5-02`   | 43 Dateien, `525 passed \| 3 skipped`, unit 410/410 |
-| nach der Review-Nacharbeit | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
+| Stand                         | Volllauf                                            |
+| ----------------------------- | --------------------------------------------------- |
+| Basis `9725a5d` (vor E5)      | 40 Dateien, `486 passed \| 3 skipped`, unit 371/371 |
+| nach `JR-5-01`/`JR-5-02`      | 43 Dateien, `525 passed \| 3 skipped`, unit 410/410 |
+| nach der Review-Nacharbeit    | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
+| nach dem Rebase auf `d201612` | 45 Dateien, `559 passed \| 5 skipped`, unit 425/425 |
 
-Jeweils `integration 97/97 · adversarial 18/18`, Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
+Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
+`integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
 aus dem E2-Handover sind **überholt** — die Differenz zur Basis sind E3s zehn Dateien.
 
 ### Drei Punkte für den Auftraggeber
 
-0. **Der Integrationsbranch ist gerade lint-rot, und zwar in E3s Gebiet.**
-   `packages/journaling/src/spool/acceptance.ts` verletzt Prettier an zwei Stellen (reine
-   Zeilenumbrüche, Zeilen 164 ff. und 295 ff.). Die Datei ist byteidentisch mit
-   `origin/claude/enterprise-product-implementation-cxmmqe` und stammt aus `5f9f98c`
-   („DEV session was cut off mid-slice"). **`.github/workflows/ci.yml:79` fährt `pnpm lint`**, das
-   heißt die CI ist auf dem Integrationsbranch rot, nicht erst auf E5s Zweig.
-   Session B **behebt das nicht** — fremdes Gebiet, `12-parallelbetrieb.md` §5. Die E3-Session muss es
-   wissen: `corepack pnpm exec prettier --write packages/journaling/src/spool/acceptance.ts`.
+0. ~~**Der Integrationsbranch ist lint-rot in E3s Gebiet**~~ — **erledigt**.
+   `packages/journaling/src/spool/acceptance.ts` hat Session A beim E3-Abschluss selbst formatiert.
+   Nach dem Rebase auf `d201612` ist `pnpm lint` repo-weit grün. Session B hat die Datei nie
+   angefasst (fremdes Gebiet, `12-parallelbetrieb.md` §5) — die Meldung hat gereicht.
 1. **`pnpm test` ist nicht in `dotenv --` gewickelt** (`package.json:28`), anders als `CLAUDE.md` §4
    für alle Root-Skripte behauptet. Ohne exportiertes `DATABASE_URL` überspringt die gesamte
    `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Kandidat für einen Befund; die
    F-Nummer vergibt der PO**, weil die Nummernfolge zwischen beiden Sessions geteilt ist
-   (`12-parallelbetrieb.md` §6).
-2. **Die ADR-Nummer 027 hat Session B selbst vergeben**, nach Sicht auf die höchste vorhandene (026).
-   Schreibt Session A gleichzeitig eine ADR, kollidiert das — beim Rückmerge gegenprüfen.
+   (`12-parallelbetrieb.md` §6). Nach E3s **F40** und **F41** wäre **F42** die nächste freie.
+2. ~~**Die ADR-Nummer 027 könnte kollidieren**~~ — **gegengeprüft, sie tut es nicht**. Session A hat
+   im gesamten E3-Abschluss keine ADR geschrieben; ADR-027 ist nach dem Rebase die einzige mit dieser
+   Nummer.
 
 ---
 
