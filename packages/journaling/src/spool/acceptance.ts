@@ -235,21 +235,21 @@ export interface JournalAcceptanceOptions {
 	readonly now?: () => number;
 	/**
 	 * Where a `'write-failed'` quarantine alert goes (`JR-3-09`, see the module doc comment's "A failed
-	 * durable write quarantines its own debris" section). Optional, defaulting to a sink that discards
-	 * the event: most existing callers and tests only care about the returned
-	 * {@link JournalAcceptanceResult} classification, and `apps/smtp-ingress` (E4) is the first real
-	 * caller with somewhere for an operator to actually look. A missing or discarding sink never changes
-	 * what {@link accept} returns, and never turns a cleanup failure into a masked original cause -- see
-	 * {@link JournalAcceptance.quarantineFailedWrite}.
+	 * durable write quarantines its own debris" section). **Required, deliberately** -- PO decision
+	 * 2026-08-02: an optional field defaulting to a discarding sink is exactly R-09
+	 * (`docs/dev/journaling/08-risiken.md`, "stiller Ausfall bleibt unbemerkt") built into this
+	 * constructor. Every other guarantee in this file is structural rather than disciplinary --
+	 * {@link LedgerAppendRequest} gives a caller nowhere to put a pre-computed chain hash,
+	 * {@link buildAcceptedTransaction} holds no capability to do I/O, {@link SpoolFileSystem} has no
+	 * delete method -- and a required constructor parameter is the same kind of argument: a caller that
+	 * has not decided where alerts go does not compile, rather than compiling into a silently discarded
+	 * alert. A caller that genuinely does not care passes an explicit no-op or collecting sink of its
+	 * own, visibly, at the call site -- see any test in `acceptance.test.ts` for the shape. A missing or
+	 * discarding sink never changes what {@link accept} returns, and never turns a cleanup failure into
+	 * a masked original cause -- see {@link JournalAcceptance.quarantineFailedWrite}.
 	 */
-	readonly alertSink?: QuarantineAlertSink;
+	readonly alertSink: QuarantineAlertSink;
 }
-
-const DISCARDING_ALERT_SINK: QuarantineAlertSink = {
-	alert: () => {
-		/* discarded deliberately -- see JournalAcceptanceOptions.alertSink's doc comment */
-	},
-};
 
 export class JournalAcceptance {
 	private readonly fs: SpoolFileSystem;
@@ -263,7 +263,7 @@ export class JournalAcceptance {
 		this.backend = options.backend;
 		this.spoolConfig = options.spoolConfig;
 		this.now = options.now ?? Date.now;
-		this.alertSink = options.alertSink ?? DISCARDING_ALERT_SINK;
+		this.alertSink = options.alertSink;
 	}
 
 	/**

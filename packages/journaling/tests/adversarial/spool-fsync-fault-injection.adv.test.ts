@@ -207,6 +207,7 @@ suite(
 					fs: fake,
 					backend,
 					spoolConfig: spoolConfig(),
+					alertSink: fakeAlertSink().sink,
 				});
 
 				const result = await acceptance.accept(baseInput({ txid }));
@@ -235,6 +236,7 @@ suite(
 				fs: fake,
 				backend,
 				spoolConfig: spoolConfig(),
+				alertSink: fakeAlertSink().sink,
 			});
 
 			const result = await acceptance.accept(baseInput({ txid }));
@@ -255,6 +257,7 @@ suite(
 				fs: fake,
 				backend,
 				spoolConfig: spoolConfig(),
+				alertSink: fakeAlertSink().sink,
 			});
 
 			const result = await acceptance.accept(baseInput({ txid }));
@@ -282,6 +285,7 @@ suite(
 					fs: fake,
 					backend,
 					spoolConfig: spoolConfig(),
+					alertSink: fakeAlertSink().sink,
 				});
 
 				const result = await acceptance.accept(baseInput({ txid }));
@@ -373,6 +377,7 @@ suite(
 				fs: fake,
 				backend: recordingBackend().backend,
 				spoolConfig: spoolConfig(),
+				alertSink: fakeAlertSink().sink,
 			});
 
 			async function* twoChunks(): AsyncGenerator<Uint8Array> {
@@ -473,6 +478,7 @@ suite(
 					fs: fake,
 					backend,
 					spoolConfig: spoolConfig(),
+					alertSink: fakeAlertSink().sink,
 				});
 
 				const failed = await acceptance.accept(baseInput({ txid: failingTxid }));
@@ -516,6 +522,7 @@ suite(
 				fs: fake,
 				backend,
 				spoolConfig: spoolConfig(100n),
+				alertSink: fakeAlertSink().sink,
 			});
 
 			const failingTxids: string[] = [];

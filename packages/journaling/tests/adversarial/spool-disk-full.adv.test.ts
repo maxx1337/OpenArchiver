@@ -17,6 +17,7 @@ import {
 import type { SpoolConfig } from '../../src/spool/config';
 import { NodeSpoolFileSystem } from '../../src/spool/fs-port';
 import { JournalAcceptance, type JournalTransactionInput } from '../../src/spool/acceptance';
+import type { QuarantineAlertSink } from '../../src/spool/quarantine';
 
 /**
  * `JR-3-07` -- disk full (Testplan section 12.3). Classification: split, per the PO decision recorded
@@ -115,6 +116,15 @@ function enospc(message: string): Error {
 	return Object.assign(new Error(message), { code: 'ENOSPC' });
 }
 
+/**
+ * `alertSink` is a required `JournalAcceptance` constructor option (`JR-3-09`, PO decision
+ * 2026-08-02) -- this file's cases are about disk-full classification, not about `'write-failed'`
+ * alerts, so each construction below passes this explicit no-op rather than relying on any default.
+ */
+function noopAlertSink(): QuarantineAlertSink {
+	return { alert: () => {} };
+}
+
 let txidCounter = 0;
 /**
  * A fresh, valid-looking 26-character transaction id per call. Fixed-width and never truncated -- see
@@ -130,7 +140,12 @@ suite('ci', 'JR-3-07: recovery after the capacity fault clears', () => {
 	it('a transaction rejected as spool-capacity-exceeded is followed by a healthy transaction that succeeds normally', async () => {
 		const fake = new FakeSpoolFileSystem();
 		const { backend, requests } = recordingBackend();
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		const failingTxid = freshTxid();
 		fake.failNextWrite(incomingFilePath(SPOOL_ROOT, failingTxid), enospc('device full'));
@@ -162,6 +177,7 @@ suite('ci', 'JR-3-07: recovery after the capacity fault clears', () => {
 			fs: fake,
 			backend,
 			spoolConfig: spoolConfig(50n),
+			alertSink: noopAlertSink(),
 		});
 		const rejected = await tightAcceptance.accept(baseInput({ txid: freshTxid() }));
 		expect(rejected.kind).toBe('high-water-mark-exceeded');
@@ -173,6 +189,7 @@ suite('ci', 'JR-3-07: recovery after the capacity fault clears', () => {
 			fs: fake,
 			backend,
 			spoolConfig: spoolConfig(1_000n),
+			alertSink: noopAlertSink(),
 		});
 		const recovered = await relaxedAcceptance.accept(baseInput({ txid: freshTxid() }));
 		expect(recovered.kind).toBe('accepted');
@@ -200,6 +217,7 @@ suite(
 				fs: fake,
 				backend,
 				spoolConfig: spoolConfig(100n),
+				alertSink: noopAlertSink(),
 			});
 
 			const result = await acceptance.accept(baseInput({ txid: freshTxid() }));
@@ -217,7 +235,12 @@ suite('ci', 'JR-3-07: repeated capacity failures never produce a single ledger e
 	it('twenty consecutive ENOSPC-rejected transactions leave the ledger backend uncalled throughout', async () => {
 		const fake = new FakeSpoolFileSystem();
 		const { backend, requests } = recordingBackend();
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		for (let i = 0; i < 20; i += 1) {
 			const txid = freshTxid();
@@ -306,6 +329,7 @@ suiteRequiring(
 				fs,
 				backend,
 				spoolConfig: { rootPath: root, highWaterBytes: 10_000_000_000n },
+				alertSink: noopAlertSink(),
 			});
 
 			const CHUNK_SIZE = 256 * 1024;
@@ -333,6 +357,7 @@ suiteRequiring(
 				fs,
 				backend,
 				spoolConfig: { rootPath: root, highWaterBytes: 10_000_000_000n },
+				alertSink: noopAlertSink(),
 			});
 
 			// Deliberately fill the volume with an oversized transaction first (same shape as the case

@@ -5,6 +5,7 @@ import type { LedgerAppendRequest, LedgerAppendResult, LedgerBackend } from '../
 import type { SpoolFileSystem } from './fs-port';
 import { incomingFilePath } from './layout';
 import type { SpoolConfig } from './config';
+import type { QuarantineAlertSink } from './quarantine';
 import { JournalAcceptance, isAccepted, type JournalTransactionInput } from './acceptance';
 
 /**
@@ -52,6 +53,16 @@ function baseInput(overrides: Partial<JournalTransactionInput> = {}): JournalTra
 		chunks: chunksOf('Subject: test\r\n\r\nhello\r\n'),
 		...overrides,
 	};
+}
+
+/**
+ * `alertSink` is a required constructor option (`JR-3-09`, PO decision 2026-08-02): a test that does
+ * not care where a `'write-failed'` alert goes still has to say so, explicitly, here at its own call
+ * site -- see `acceptance.ts`'s `JournalAcceptanceOptions.alertSink` doc comment for why an optional,
+ * silently-discarding default was rejected (R-09, `08-risiken.md`).
+ */
+function noopAlertSink(): QuarantineAlertSink {
+	return { alert: () => {} };
 }
 
 /**
@@ -138,7 +149,12 @@ suite('ci', 'JournalAcceptance.accept(): order', () => {
 		const timeline: string[] = [];
 		const fs = timelineFileSystem(new FakeSpoolFileSystem(), timeline);
 		const { backend } = fakeBackend(SUCCESS_RESULT, timeline);
-		const acceptance = new JournalAcceptance({ fs, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		const result = await acceptance.accept(baseInput());
 
@@ -162,7 +178,12 @@ suite('ci', 'JournalAcceptance.accept(): order', () => {
 		const timeline: string[] = [];
 		const fs = timelineFileSystem(new FakeSpoolFileSystem(), timeline);
 		const { backend, requests } = fakeBackend(SUCCESS_RESULT, timeline);
-		const acceptance = new JournalAcceptance({ fs, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		await acceptance.accept(baseInput());
 
@@ -183,6 +204,7 @@ suite('ci', 'JournalAcceptance.accept(): order', () => {
 				},
 			},
 			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
 		});
 		// Force the write itself to fail -- the txid is generated internally, so pre-fail every path
 		// under the shard by making the shard directory refuse to accept the file. Simpler: fail the
@@ -214,6 +236,7 @@ suite('ci', 'JournalAcceptance.accept(): high-water mark', () => {
 				},
 			},
 			spoolConfig: spoolConfig(10n),
+			alertSink: noopAlertSink(),
 		});
 
 		const before = fake.writeLog.length;
@@ -247,6 +270,7 @@ suite('ci', 'JournalAcceptance.accept(): spool write failures', () => {
 				},
 			},
 			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
 		});
 
 		const result = await acceptance.accept(baseInput({ txid }));
@@ -269,6 +293,7 @@ suite('ci', 'JournalAcceptance.accept(): spool write failures', () => {
 			fs: fake,
 			backend: failingBackend(new Error('must not be called')),
 			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
 		});
 
 		const result = await acceptance.accept(baseInput({ txid }));
@@ -293,6 +318,7 @@ suite('ci', 'JournalAcceptance.accept(): spool write failures', () => {
 			fs: fake,
 			backend: failingBackend(new Error('must not be called')),
 			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
 		});
 
 		const result = await acceptance.accept(baseInput({ txid }));
@@ -313,6 +339,7 @@ suite('ci', 'JournalAcceptance.accept(): ledger append failures', () => {
 			fs: fake,
 			backend: failingBackend(cause),
 			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
 		});
 
 		const expectedPath = incomingFilePath(SPOOL_ROOT, txid);
@@ -335,7 +362,12 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 		const fake = new FakeSpoolFileSystem();
 		const txid = '01ARZ3NDEKTSV4RRFFQ69G5FAV5';
 		const { backend } = fakeBackend(SUCCESS_RESULT);
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		const result = await acceptance.accept(baseInput({ txid }));
 
@@ -355,6 +387,7 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 			backend,
 			spoolConfig: spoolConfig(),
 			now: () => 1_700_000_000_000,
+			alertSink: noopAlertSink(),
 		});
 
 		const result = await acceptance.accept(baseInput());
@@ -369,7 +402,12 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 	it('uses the durable write result for size and content hash, never the caller-supplied input', async () => {
 		const fake = new FakeSpoolFileSystem();
 		const { backend, requests } = fakeBackend(SUCCESS_RESULT);
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		await acceptance.accept(baseInput({ chunks: chunksOf('abcde') }));
 
@@ -380,7 +418,12 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 	it('normalises the remote IP before it reaches the ledger request', async () => {
 		const fake = new FakeSpoolFileSystem();
 		const { backend, requests } = fakeBackend(SUCCESS_RESULT);
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		await acceptance.accept(baseInput({ remoteIp: '::ffff:192.0.2.1' }));
 
@@ -390,7 +433,12 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 	it('passes a null remote IP through unchanged, never normalising a null', async () => {
 		const fake = new FakeSpoolFileSystem();
 		const { backend, requests } = fakeBackend(SUCCESS_RESULT);
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		await acceptance.accept(baseInput({ remoteIp: null }));
 
@@ -402,7 +450,12 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 		// ingress process has no object-store access to check against (architecture section 1).
 		const fake = new FakeSpoolFileSystem();
 		const { backend, requests } = fakeBackend(SUCCESS_RESULT);
-		const acceptance = new JournalAcceptance({ fs: fake, backend, spoolConfig: spoolConfig() });
+		const acceptance = new JournalAcceptance({
+			fs: fake,
+			backend,
+			spoolConfig: spoolConfig(),
+			alertSink: noopAlertSink(),
+		});
 
 		await acceptance.accept(baseInput());
 
