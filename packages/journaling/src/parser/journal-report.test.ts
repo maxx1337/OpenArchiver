@@ -486,7 +486,101 @@ suite('ci', 'parseJournalReport() -- plain BCC / routing-rule fallback (JR-5-05)
 		}
 		expect(result.envelope).toEqual({ envelopeFrom: null, envelopeRcpt: null });
 	});
+
+	/**
+	 * PO review R2: a green suite that never asserted the full envelope survives is exactly how the
+	 * last round's silent data loss went unnoticed. This test names the failure mode directly --
+	 * every `envelopeRcpt` entry, in arrival order, including a repeated one, must come back
+	 * unchanged. A `Set`-based dedup or a `.sort()` introduced by a future refactor would pass every
+	 * other test in this file (they all use single-recipient envelopes) and only fail here.
+	 */
+	it('passes every envelopeRcpt entry through in order, without deduplicating, alongside reducedEnvelopeFidelity', async () => {
+		const raw = loadFixture('plain-bcc-postfix-always-bcc.eml');
+		const envelopeRcpt = [
+			'journal-archive@example.org',
+			'journal-archive@example.org',
+			'compliance-audit@example.org',
+		];
+		const result = await parseJournalReport(raw, {
+			envelopeFrom: 'alice@contoso.com',
+			envelopeRcpt,
+		});
+		expect(result.kind).toBe('plain_bcc');
+		if (result.kind !== 'plain_bcc') {
+			throw new Error('unreachable');
+		}
+		expect(result.reducedEnvelopeFidelity).toBe(true);
+		expect(result.envelope.envelopeRcpt).toEqual(envelopeRcpt);
+		expect(result.envelope.envelopeRcpt).toHaveLength(3);
+	});
 });
+
+/**
+ * PO review R1 (on top of `JR-5-03`): the report-part-found/inner-part-missing shape
+ * (`multipart/mixed`, `text/plain` body, no `message/rfc822` child) is not, by itself, proof of a
+ * journal report -- an ordinary attachment-bearing email delivered via Postfix `always_bcc` or a
+ * Google routing rule is *also* exactly that shape, because the attachment is not a `message/rfc822`
+ * part either. `JR-5-03`'s original rule ("report found, inner missing ⇒ `journal_report`") is
+ * refined here, not replaced: it now additionally requires the report part to have yielded at least
+ * one field this parser recognises (see `hasRecognizedEnvelopeField()` in `journal-report.ts`).
+ *
+ * Both fixtures in this suite share the exact same MIME shape at the top level
+ * (`multipart/mixed` / `text/plain` / no inner part) and must land on opposite `kind`s -- that
+ * contrast is the whole point of the discriminator this suite proves.
+ */
+suite(
+	'ci',
+	'parseJournalReport() -- report-part-found/inner-missing is not proof of a journal report (PO review R1)',
+	() => {
+		it('classifies a plain-BCC copy of an ordinary attachment-bearing email as plain_bcc, not journal_report', async () => {
+			// Measured by the PO against the pre-fix code: this fixture used to come back as
+			// `kind: 'journal_report'`, `innerMessage.present: false`, `envelope.sender: null`, with the
+			// message's own prose body ("Hallo Bob, anbei die Rechnung." / "Viele Gruesse") sitting in
+			// `unknownFields` under the synthetic `_unparsed` name -- free text in an envelope metadata
+			// field, no `reducedEnvelopeFidelity`, and no SMTP envelope attached at all despite this
+			// being exactly the case (a plain-BCC copy) that has no other recipient evidence to offer.
+			const raw = loadFixture('plain-bcc-with-attachment.eml');
+			const result = await parseJournalReport(raw, {
+				envelopeFrom: 'alice@contoso.com',
+				envelopeRcpt: ['journal-archive@example.org'],
+			});
+			expect(result.kind).toBe('plain_bcc');
+			if (result.kind !== 'plain_bcc') {
+				throw new Error('unreachable');
+			}
+			expect(result.reducedEnvelopeFidelity).toBe(true);
+			expect(result.envelope).toEqual({
+				envelopeFrom: 'alice@contoso.com',
+				envelopeRcpt: ['journal-archive@example.org'],
+			});
+			expect(result.extractableHeaders.subject).toBe('Rechnung Oktober');
+		});
+
+		it('still classifies a genuine journal report missing its inner part as journal_report (JR-5-03 unaffected)', async () => {
+			// Same top-level shape as the fixture above -- multipart/mixed, text/plain report part,
+			// no message/rfc822 child -- but this report part's content is a real (if incomplete)
+			// Exchange journal report: Sender/Subject/Message-Id/To/Recipient all parse out of it,
+			// which is exactly what `hasRecognizedEnvelopeField()` requires to keep JR-5-03's rule in
+			// force. Side by side with the test above, this is the discriminator's full contrast.
+			const raw = loadFixture('missing-inner-part-bcc-and-dl.eml');
+			const result = await parseJournalReport(raw);
+			expect(result.kind).toBe('journal_report');
+			if (result.kind !== 'journal_report') {
+				throw new Error('unreachable');
+			}
+			expect(result.innerMessage.present).toBe(false);
+			expect(result.envelope.to).toEqual(['team@contoso.com']);
+			expect(result.envelope.bcc).toEqual(['secretwatcher@contoso.com']);
+			expect(result.envelope.onBehalfOf).toBe('assistant@contoso.com');
+			expect(result.envelope.recipients).toEqual([
+				'team@contoso.com',
+				'dl-member-one@contoso.com',
+				'dl-member-two@contoso.com',
+				'secretwatcher@contoso.com',
+			]);
+		});
+	}
+);
 
 /**
  * `JR-5-06`, RFC section 6.2: NDRs and bounces addressed to the journal mailbox. Acceptance

@@ -101,17 +101,26 @@ import {
  *    An NDR is checked before falling through to plain-BCC, because an NDR is not itself a "plain BCC
  *    copy of an ordinary message" -- it is evidence of a delivery problem, and RFC section 6.2 asks
  *    for it to be flagged as such, not archived indistinguishably from routine traffic.
- *  - A `multipart/mixed` message whose boundary/parts do not resolve to a report part (wrong
- *    boundary, no `text/plain` child, etc.) is deliberately **left as `parse_failed`**, not
- *    reclassified as `'plain_bcc'`, even though in principle an ordinary email can legitimately be
- *    `multipart/mixed` (e.g. one with a file attachment). Widening `'plain_bcc'` to cover that shape
- *    would mean re-deciding, for every `multipart/mixed` message, whether it is a broken journal
- *    report or an ordinary attachment-bearing email -- exactly the ambiguity `JR-5-03`'s "missing
- *    inner part" case already resolved one way (report part found, no inner part ⇒ still
- *    `'journal_report'`) after a PO review (R1) about not silently re-deciding settled, tested
- *    behaviour. That is a real gap for a plain-BCC copy of an email that happens to carry an
- *    attachment -- flagged here rather than fixed quietly, and left for the PO to decide whether it
- *    belongs in this slice or a later one.
+ *  - A `multipart/mixed` message whose boundary/parts do not resolve to a report part at all (wrong
+ *    boundary, no `text/plain` child) stays `parse_failed` -- there is no report text to run the
+ *    discriminator below against, so there is nothing left to reclassify with.
+ *  - A `multipart/mixed` message that **does** resolve to a report part, but has no `message/rfc822`
+ *    inner part, is the case PO review R1 (`JR-5-05`/`JR-5-06`, on top of `JR-5-03`'s original rule)
+ *    corrected: an ordinary attachment-bearing email delivered via Postfix `always_bcc` or a Google
+ *    routing rule is *also* `multipart/mixed` with a `text/plain` body part and no `message/rfc822`
+ *    child (the attachment is not one) -- structurally indistinguishable from JR-5-03's "journal
+ *    report missing its inner part" until the report part's own *content* is looked at. The
+ *    `message/rfc822` part is what actually proves a journal report (RFC section 6.1); where it is
+ *    missing, only the report part can still prove it, by having yielded at least one **recognised**
+ *    envelope field (`Sender`/`Subject`/`Message-Id`/`On-Behalf-Of`/`To`/`Cc`/`Bcc`/`Recipient`/the
+ *    undisclosed-recipients placeholder) rather than only `_unparsed` prose or field-shaped-but-
+ *    unrecognised lines (see {@link hasRecognizedEnvelopeField}). Zero recognised fields means the
+ *    "report part" was never a report to begin with, and the whole outer message is reclassified via
+ *    {@link classifyNonJournalMessage} -- `plain_bcc` or `ndr` -- exactly as if `outerIsMultipartMixed`
+ *    had been `false` from the start. A genuine journal report missing its inner part (`JR-5-03`'s
+ *    original case, still covered by `missing-inner-part.eml`/`missing-inner-part-bcc-and-dl.eml`)
+ *    always has at least `Sender`/`Recipient` recognised, so it is unaffected and still returns
+ *    `kind: 'journal_report'` with the full envelope intact.
  */
 export async function parseJournalReport(
 	rawMessage: Buffer,
@@ -159,6 +168,15 @@ export async function parseJournalReport(
 	}
 
 	if (located.innerMessage === null) {
+		// PO review R1 (JR-5-05/JR-5-06): the report part parsing is not itself proof this was a
+		// journal report -- an ordinary attachment-bearing email delivered via plain BCC/routing-rule
+		// matches this exact shape (multipart/mixed, text/plain body, no message/rfc822 child). Only a
+		// report part that yielded at least one recognised envelope field earns `kind:
+		// 'journal_report'`; otherwise this is reclassified as if it had never matched multipart/mixed
+		// at all (see the module doc comment and {@link hasRecognizedEnvelopeField}).
+		if (!hasRecognizedEnvelopeField(envelope)) {
+			return classifyNonJournalMessage(rawMessage, smtpEnvelope);
+		}
 		// JR-5-03 (PO review R1): report part parsed fine, so the envelope -- Bcc, DL expansion,
 		// everything -- is complete and must not be dropped just because the inner message/rfc822
 		// part is missing. `kind` stays 'journal_report'; `innerMessage.present === false` is the
@@ -180,6 +198,36 @@ export async function parseJournalReport(
 		reportText,
 		innerMessage,
 	} satisfies JournalReportParsed;
+}
+
+/**
+ * PO review R1 (`JR-5-05`/`JR-5-06`): whether a parsed report-part envelope contains at least one
+ * field this parser actually recognises, as opposed to only `unknownFields` -- either the synthetic
+ * `_unparsed` entries `envelope.ts` uses for prose lines with no colon at all, or field-shaped lines
+ * whose name simply is not one of `FIELD_HANDLERS` (`envelope.ts`). Only used to decide whether a
+ * report part with no `message/rfc822` inner part is a genuine (if incomplete) journal report or an
+ * ordinary email's own body that merely happened to land in the position a report part would occupy
+ * -- see `parseJournalReport()`'s module doc comment for why that distinction matters and where this
+ * is called from.
+ *
+ * Deliberately checks the **structured** fields (`sender`/`subject`/`messageId`/`onBehalfOf`/
+ * `to`/`cc`/`bcc`/`recipients`/`undisclosedRecipientFields`), not the absence of `unknownFields`: a
+ * field-shaped-but-unrecognised line (e.g. a body that happens to contain `Note: send by Friday`) is
+ * not, by itself, evidence of a journal report either -- the PO's discriminator asks for a field this
+ * parser *understands*, not merely a line that looks field-shaped.
+ */
+function hasRecognizedEnvelopeField(envelope: ParsedEnvelope): boolean {
+	return (
+		envelope.sender !== null ||
+		envelope.subject !== null ||
+		envelope.messageId !== null ||
+		envelope.onBehalfOf !== null ||
+		envelope.to.length > 0 ||
+		envelope.cc.length > 0 ||
+		envelope.bcc.length > 0 ||
+		envelope.recipients.length > 0 ||
+		envelope.undisclosedRecipientFields.length > 0
+	);
 }
 
 /**

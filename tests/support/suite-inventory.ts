@@ -178,7 +178,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		// shape with all three signals at once, the null-envelope-sender signal alone, the
 		// Auto-Submitted signal alone, `Auto-Submitted: no` correctly NOT firing it, and the
 		// classification-order proof that an NDR Exchange itself journalled stays `'journal_report'`).
-		expectedTests: { ci: 456, nightly: 1, manual: 0 },
+		// 459 after PO review R1/R2 on JR-5-05/JR-5-06 (still no new file): R1 found that
+		// `JR-5-03`'s "report found, inner missing ⇒ journal_report" rule wrongly classified an
+		// ordinary attachment-bearing email delivered via plain BCC as a journal report (same
+		// multipart/mixed-with-no-message/rfc822-child shape as a genuinely incomplete journal
+		// report) -- 2 new tests prove the fix side by side: the attachment-bearing fixture now
+		// classifies `plain_bcc`, and the pre-existing `missing-inner-part-bcc-and-dl.eml` fixture
+		// still classifies `journal_report` (the discriminator's full contrast). R2 added 1 test
+		// proving a multi-entry, duplicate-containing `envelopeRcpt` survives a `plain_bcc` result
+		// unreordered and undeduplicated, alongside `reducedEnvelopeFidelity` -- the earlier
+		// plain-BCC tests only ever used a single-recipient envelope, which could not have caught a
+		// `Set`-based dedup or a sort. Net +3.
+		expectedTests: { ci: 459, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',
