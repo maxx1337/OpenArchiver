@@ -32,6 +32,7 @@ export class FakeSpoolFileSystem implements SpoolFileSystem {
 	/** File path -> accumulated bytes. Only for files created through `createFile()`. */
 	private readonly files = new Map<string, Buffer>();
 
+	private readonly pendingMkdirFailures = new Map<string, Error>();
 	private readonly pendingCreateFailures = new Map<string, Error>();
 	private readonly pendingWriteFailures = new Map<string, Error>();
 	private readonly pendingFileFsyncFailures = new Map<string, Error>();
@@ -59,8 +60,30 @@ export class FakeSpoolFileSystem implements SpoolFileSystem {
 		});
 	}
 
+	/**
+	 * Make the very next `mkdir(path, ...)` reject with `error`. One-shot.
+	 *
+	 * Added for `JR-3-06` (`tests/adversarial/spool-fsync-fault-injection.adv.test.ts`): the PO
+	 * decision recorded in `docs/dev/journaling/02-architektur.md` section 3 requires the `'write'`
+	 * stage's fault-injection matrix to cover a failing shard `mkdir()`, not only `createFile()` and
+	 * `write()` -- `ensureIncomingShardDir()` (`../../src/spool/layout.ts`) calls `fs.mkdir()` before
+	 * `writeDurableSpoolFile()` ever calls `createFile()`, so without this the 'write' stage's first
+	 * sub-operation had no way to fail at all.
+	 */
+	failNextMkdir(
+		path: string,
+		error: Error = Object.assign(new Error(`EIO: i/o error, mkdir '${path}'`), { code: 'EIO' })
+	): void {
+		this.pendingMkdirFailures.set(norm(path), error);
+	}
+
 	async mkdir(rawPath: string, options?: { recursive?: boolean }): Promise<void> {
 		const path = norm(rawPath);
+		const mkdirFailure = this.pendingMkdirFailures.get(path);
+		if (mkdirFailure) {
+			this.pendingMkdirFailures.delete(path);
+			throw mkdirFailure;
+		}
 		if (!options?.recursive && this.directories.has(path)) {
 			throw Object.assign(new Error(`EEXIST: file already exists, mkdir '${path}'`), {
 				code: 'EEXIST',

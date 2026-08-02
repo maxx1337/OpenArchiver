@@ -174,13 +174,22 @@ export const SUITES: readonly SuiteSpec[] = [
 		name: 'adversarial',
 		include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
 		// 1 until JR-2-08/JR-2-09; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
-		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)).
-		expectedFiles: 3,
+		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 4 after JR-3-06 added
+		// packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts.
+		expectedFiles: 4,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
 		// the no-lock counter-check, and the F38 regression); 18 with the 11 tamper cases of JR-2-09.
-		expectedTests: { ci: 18, nightly: 1, manual: 1 },
+		// 33 after JR-3-06: 15 in spool-fsync-fault-injection.adv.test.ts (3 write-stage sub-operations x
+		// non-capacity cause, 2 file-fsync/directory-fsync cases driven through accept() for the first
+		// time, 5 x ENOSPC-flavoured across all five sub-operations, 2 "state after a failure" cases
+		// proving mkdir/createFile are clean while write()/file-fsync/directory-fsync leave a spool
+		// artifact behind, 1 end-to-end case chaining a failed accept() into runCrashRecoveryScan() to
+		// show the artifact gets spuriously quarantined and alerted, 1 case proving a failure does not
+		// wedge the next transaction, 1 case proving the leftover debris erodes the high-water-mark
+		// budget against an unrelated later transaction).
+		expectedTests: { ci: 33, nightly: 1, manual: 1 },
 	},
 ];
 
