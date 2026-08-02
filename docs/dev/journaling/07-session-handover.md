@@ -518,7 +518,16 @@ zwei Eltern, Baum **byteidentisch** mit `b4eda03`, und seit dem zitierten Vollla
 git fetch origin claude/enterprise-product-implementation-cxmmqe
 git checkout -b claude/journaling-e3-spool \
     origin/claude/enterprise-product-implementation-cxmmqe
+git push -u origin claude/journaling-e3-spool   # NICHT vergessen — siehe Kasten
 ```
+
+> **Die dritte Zeile ist neu (2026-08-02) und sie ist keine Bequemlichkeit.** `checkout -b <epic>
+origin/<integration>` setzt den **Upstream des Epic-Branches auf den Integrationsbranch**. Ein
+> `git push` aus dem Epic-Branch landet damit **auf dem Integrationsbranch** — ohne Merge-Commit, ohne
+> Abnahme, ohne dass es jemandem auffällt. Genau das ist in E3 passiert: E3-Commits bis `9725a5d`
+> standen auf dem Integrationsbranch, lange bevor `JR-3-08` sie abgenommen hatte. Verloren ging
+> nichts, aber ADR-014 war verletzt und niemand hat es bemerkt, bis der PO vor dem Rückmerge den
+> Zustand abglich. `push -u` gibt dem Epic-Branch seinen **eigenen** Upstream und schließt das.
 
 **Der Einstiegsprompt:**
 

@@ -246,14 +246,14 @@ auth-injecting wrapper `src/lib/server/api.ts` (base `/api/v1`).
 project — not a working branch. Each epic gets its own branch off it. Full rules in
 `docs/dev/journaling/05-entscheidungen.md` (ADR-014).
 
-|                                               |                                                                                                                         |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Epic work                                     | branch off the integration branch as `claude/journaling-e<N>-<shortname>` (e.g. `claude/journaling-e1-test-foundation`) |
-| Groundwork (docs, ADRs, agent infrastructure) | commit directly on the integration branch                                                                               |
-| Merge back                                    | into the integration branch, only after the `tester` role has independently accepted the epic                           |
-| Upstream drift                                | merge `main` into the **integration branch** only, never into an epic branch                                            |
-| `main`                                        | **do not touch until E12 is accepted.** Never push to it                                                                |
-| Pull requests                                 | none unless explicitly asked                                                                                            |
+|                                               |                                                                                                                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Epic work                                     | branch off the integration branch as `claude/journaling-e<N>-<shortname>` (e.g. `claude/journaling-e1-test-foundation`), then **`git push -u origin <epic>` immediately** — see the warning below |
+| Groundwork (docs, ADRs, agent infrastructure) | commit directly on the integration branch                                                                                                                                                         |
+| Merge back                                    | into the integration branch, only after the `tester` role has independently accepted the epic                                                                                                     |
+| Upstream drift                                | merge `main` into the **integration branch** only, never into an epic branch                                                                                                                      |
+| `main`                                        | **do not touch until E12 is accepted.** Never push to it                                                                                                                                          |
+| Pull requests                                 | none unless explicitly asked                                                                                                                                                                      |
 
 > **Check your local state against the remote before you start.** This container has been rolled back
 > to an older commit at least once while looking entirely normal — clean worktree, `node_modules`
@@ -262,6 +262,14 @@ project — not a working branch. Each epic gets its own branch off it. Full rul
 > `git ls-remote origin refs/heads/<branch>`. If they differ, `git merge --ff-only origin/<branch>`
 > before doing anything else. Use `--ff-only`, not `reset --hard`: it fails loudly if the history has
 > genuinely diverged instead of silently discarding work.
+
+> **Give a new epic branch its own upstream before anything else.** `git checkout -b <epic>
+origin/<integration>` — the natural way to branch off — sets the **epic branch's upstream to the
+> integration branch**. A `git push` from the epic branch then lands **on the integration branch**:
+> no merge commit, no acceptance, no warning. This happened during E3; commits reached the
+> integration branch long before `JR-3-08` accepted them. Nothing was lost and nothing was rewritten,
+> but ADR-014 was violated and nobody noticed until the state was compared before the back-merge.
+> `git push -u origin <epic>` right after creating the branch closes it.
 
 - `git push -u origin <branch>`; retry network failures with backoff.
 - Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. `JR-1-05a`
