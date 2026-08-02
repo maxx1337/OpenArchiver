@@ -1,0 +1,11 @@
+From: bob@contoso.com
+To: alice@example.org
+Subject: =?UTF-8?Q?Abwesenheitsnotiz=3A_Out_of_Office?=
+Date: Wed, 01 Jul 2026 10:00:00 +0000
+Message-ID: <ooo-1@contoso.com>
+Auto-Submitted: auto-replied
+X-Autoreply: yes
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+I am currently out of the office and will reply after my return.

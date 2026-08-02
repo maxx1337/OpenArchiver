@@ -1827,6 +1827,66 @@ braucht eine eigene ADR** — der verworfene Punkt oben gilt unverändert.
 wie `packages/backend`. Weichen die beiden je auseinander, ist das ein Befund und keine Kleinigkeit —
 die Begründung dieser ADR hängt an der Gleichheit.
 
+## ADR-028 — Die Betriebsart ist Konfiguration, keine Ableitung aus der Nachricht
+
+**Status:** **entschieden** (2026-08-02) · **Entscheider:** PO · **Betrifft:** E5s Parser, E4s
+Quellenkonfiguration, E6s Aufrufer · **Nummer beim Rückmerge gegenprüfen** (`12-parallelbetrieb.md` §6)
+
+`parseJournalReport()` bekommt einen optionalen Hinweis auf die **erwartete Quellenart**
+(`'exchange-journal' | 'plain-bcc' | 'infer'`, Voreinstellung `'infer'`). Bei `'plain-bcc'` ist
+`journal_report` **kein möglicher Ausgang**, unabhängig davon, wonach der Inhalt aussieht.
+
+### Warum: fünfmal dieselbe Ursache
+
+E5 hat in fünf Runden fünfmal denselben Fehler gemacht, jedes Mal eine Ebene tiefer:
+
+| #   | Was als Beleg galt                      | Was dieselbe Form hat       | gefunden durch  |
+| --- | --------------------------------------- | --------------------------- | --------------- |
+| 1   | `multipart/mixed` mit `text/plain`-Teil | jede Mail mit Anhang        | PO-Review R1    |
+| 2   | mindestens ein erkanntes Envelope-Feld  | jede zitierte Weiterleitung | PO-Review R3    |
+| 3   | ein `message/rfc822`-Teil ist vorhanden | „Als Anlage weiterleiten"   | PO-Review R4    |
+| 4   | `Recipient:` + Feldzeilenanfang         | **vom Absender fälschbar**  | `JR-5-08`, TEST |
+| 5   | `Auto-Submitted`                        | jede Abwesenheitsnotiz      | `JR-5-08`, TEST |
+
+Die ersten drei widerlegen, dass die **Struktur** die Art belegt. Der vierte widerlegt den Ersatz —
+denn `Recipient:` und Feldzeilenanfang sind **Inhalt**, und Inhalt schreibt der Absender. Damit ist
+nicht ein Diskriminator zu schwach, sondern **die Ableitung als Verfahren** falsch.
+
+### Der Angriff, und warum er nur die Hälfte der Installationen trifft
+
+Gemessen an zwei Fixtures aus `JR-5-08`: eine Nachricht mit einem `text/plain`-Teil, der mit
+`Recipient:`-Zeilen beginnt, wird als `journal_report` mit **absenderbestimmtem** `sender` und
+`recipients` ausgegeben — die zweite Fixture erfindet dazu eine „Originalnachricht" als
+`message/rfc822`-Teil.
+
+- **Exchange-Journaling:** Exchange wickelt die Angreifernachricht in einen **echten** Journal-Report.
+  Der Reportteil oberster Ebene ist Exchanges eigener, der gefälschte Inhalt sitzt im Innenteil und wird
+  für Envelope-Felder nie herangezogen. **Nicht ausnutzbar.**
+- **Plain BCC / Routing** (Postfix `always_bcc`, Google Workspace): es gibt keinen Wrapper, die
+  Angreifernachricht **ist** die oberste Ebene. **Ausnutzbar** — ein Außenstehender bestimmt Absender
+  und Empfänger eines Archiveintrags.
+
+Der Angriff greift also genau dort, wo Journal-Reports **überhaupt nicht vorkommen**. Und das ist der
+Beweis der Entscheidung: Der Betreiber **weiß**, welche Art Quelle er eingerichtet hat. Solange der
+Parser es errät, entscheidet der Absender mit.
+
+### Was diese ADR ausdrücklich **nicht** behauptet
+
+`'plain-bcc'` schließt die Fälschung für diese Betriebsart. `'infer'` tut es **nicht** — und das steht
+so im Modulkommentar und in den Tests, statt weggeschrieben zu werden. Vor allem aber:
+
+> **Der Parser sieht nur Bytes.** Wer tatsächlich zugestellt hat, entscheidet sich an der
+> SMTP-Transaktion — `allowed_sources` als CIDR-Liste, explizite `journal_recipients`, kein Catch-all,
+> optional `AUTH` (RFC §4.3, `JR-4-05`). Diese Zusage kann der Parser weder ersetzen noch behaupten.
+> Eine Installation, die Journal-Reports von beliebigen Absendern annimmt, ist auf der Transportebene
+> defekt, und keine Inhaltsprüfung repariert das.
+
+### Konsequenz
+
+`JR-4-05` (Quellenkonfiguration) und `JR-6-02` (Aufrufer) müssen die Betriebsart **durchreichen**; ein
+Aufrufer, der sie kennt und `'infer'` übergibt, verschenkt die Zusage. Die Voreinstellung bleibt
+`'infer'`, damit E5 für sich lauffähig bleibt — sie ist eine Übergangs-, keine Zielbetriebsart.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill

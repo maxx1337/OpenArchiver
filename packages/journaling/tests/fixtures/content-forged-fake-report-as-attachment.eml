@@ -1,0 +1,25 @@
+From: mallory@external-example.net
+To: journal-archive@example.org
+Subject: Notes
+Date: Wed, 01 Jul 2026 09:31:00 +0000
+Message-ID: <forged-1@external-example.net>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="ForgeBoundary1"
+
+--ForgeBoundary1
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: someone-innocent@contoso.com
+Subject: Totally real report
+Message-Id: <inner-forged-1@contoso.com>
+To: someone-innocent@contoso.com
+Recipient: someone-innocent@contoso.com
+Recipient: another-innocent@contoso.com
+
+--ForgeBoundary1
+Content-Type: application/octet-stream; name="notes.bin"
+Content-Disposition: attachment; filename="notes.bin"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQK
+--ForgeBoundary1--

@@ -120,7 +120,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// unknown-field preservation), and the end-to-end parseJournalReport() orchestration
 		// against fixture .eml files.
 		// 27 after JR-5-07 added packages/journaling/src/parser/owner-resolution.test.ts.
-		expectedFiles: 27,
+		// 28 after JR-5-08 added packages/journaling/src/parser/journal-report-corpus.test.ts (the
+		// parser test corpus: everyday non-journal mail forms not otherwise in the corpus, plus two
+		// measured misclassifications left RED on purpose -- see that file's module doc comment and
+		// 06-status.md's E5 test-corpus section for detail).
+		expectedFiles: 28,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -229,7 +233,32 @@ export const SUITES: readonly SuiteSpec[] = [
 		// between To/Cc/Bcc/sender, the no-groups heuristic tail, the address-comparison edge cases
 		// (case-insensitive domain, no "@", more than one "@", empty local part, a domain configured
 		// as an alias of two groups), and the additionalMatches/warning transparency fields.
-		expectedTests: { ci: 491, nightly: 1, manual: 0 },
+		// 502 after JR-5-08 added packages/journaling/src/parser/journal-report-corpus.test.ts (28th
+		// unit file), 11 new tests: a Bcc-only journal report (no To/Cc at all, distinct from the
+		// existing DL-expansion fixture which always also carries a To); five everyday non-journal
+		// mail forms not otherwise in the corpus, each asserting full SMTP-envelope pass-through and
+		// `reducedEnvelopeFidelity` rather than only "classification succeeds" (a calendar invite,
+		// text/calendar method=REQUEST, x2 incl. never-mutates-buffer; a bulk newsletter with
+		// List-Unsubscribe, x2; a vacation autoresponder, which measures the EXISTING NdrSignal
+		// trade-off of labelling an out-of-office notice `kind: 'ndr'` -- not a new finding, just
+		// measured against the built parser; and a single-part message whose body happens to quote
+		// report-shaped field lines, which brackets the scope of finding (b) below by showing it is
+		// safe on this path); and 4 tests split across two NEW, MEASURED misclassifications, both left
+		// intentionally RED per the task's explicit exception for a finding a corpus must not build
+		// itself around:
+		//  (a) a message whose text/plain part is nested one level inside a child
+		//      multipart/alternative (the single most common real-world "HTML mail with an
+		//      attachment" shape) is misclassified `parse_failed` instead of `plain_bcc`, because
+		//      locateJournalParts() only inspects the outer multipart/mixed's immediate children;
+		//  (b) the content-based discriminator introduced by PO reviews R1/R3/R4
+		//      (looksLikeGenuineJournalReport(): a Recipient: line + a field-line-first report part)
+		//      is exactly as forgeable as the MIME-structure signals it replaced -- any sender able to
+		//      submit a message to the journal mailbox can author a text/plain part (optionally with a
+		//      wholesale-fabricated message/rfc822 "original message" alongside it) that satisfies both
+		//      signals and is accepted as an authoritative journal_report, with no check tying the
+		//      classification to any actual Exchange transport property.
+		// See that file's module doc comment and the JR-5-08 test report for full detail.
+		expectedTests: { ci: 502, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

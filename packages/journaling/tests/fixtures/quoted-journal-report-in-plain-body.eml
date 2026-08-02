@@ -1,0 +1,14 @@
+From: compliance-officer@contoso.com
+To: legal@contoso.com
+Subject: FYI - pasting the report below for our records
+Date: Wed, 01 Jul 2026 11:00:00 +0000
+Message-ID: <quoted-report-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Copied for reference
+Message-Id: <copy-1@contoso.com>
+To: bob@contoso.com
+Recipient: bob@contoso.com
+Recipient: carol@contoso.com

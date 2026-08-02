@@ -1,0 +1,21 @@
+From: newsletter@contoso-updates.example
+To: subscriber@example.org
+Subject: Your July digest
+Date: Wed, 01 Jul 2026 06:00:00 +0000
+Message-ID: <newsletter-1@contoso-updates.example>
+Precedence: bulk
+List-Unsubscribe: <mailto:unsub@contoso-updates.example>, <https://contoso-updates.example/unsub?id=42>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_1_20260701.164900000"
+
+------=_Part_1_20260701.164900000
+Content-Type: text/plain; charset="us-ascii"
+
+This month: three new features and a roadmap update.
+
+------=_Part_1_20260701.164900000
+Content-Type: text/html; charset="us-ascii"
+
+<p>This month: three new features and a roadmap update.</p>
+------=_Part_1_20260701.164900000--

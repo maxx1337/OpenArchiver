@@ -1,0 +1,29 @@
+From: alice@contoso.com
+To: bob@example.org
+Subject: =?UTF-8?Q?R=C3=BCckruf_ben=C3=B6tigt?=
+Date: Wed, 01 Jul 2026 09:35:00 +0000
+Message-ID: <nested-alt-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+	boundary="=_NextPart_Mixed_001"
+
+--=_NextPart_Mixed_001
+Content-Type: multipart/alternative; boundary="=_NextPart_Alt_001"
+
+--=_NextPart_Alt_001
+Content-Type: text/plain; charset="iso-8859-1"
+
+Hallo Bob, anbei die Unterlagen. Grüße, Alice
+--=_NextPart_Alt_001
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+<p>Hallo Bob, anbei die Unterlagen.</p>
+--=_NextPart_Alt_001--
+--=_NextPart_Mixed_001
+Content-Type: application/pdf; name="Unterlagen.pdf"
+Content-Disposition: attachment; filename="Unterlagen.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJeLjz9MKcGxhY2Vob2xkZXItbm90LWEtcmVhbC1wZGY=
+--=_NextPart_Mixed_001--

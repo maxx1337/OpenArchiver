@@ -1,0 +1,27 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Confidential board memo
+Date: Wed, 01 Jul 2026 08:00:00 +0000
+Message-ID: <outer-bcc-only@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BccOnlyBoundary"
+
+--BccOnlyBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Confidential board memo
+Message-Id: <bcc-only-inner@contoso.com>
+Bcc: watcher@contoso.com
+Recipient: watcher@contoso.com
+
+--BccOnlyBoundary
+Content-Type: message/rfc822
+
+From: alice@contoso.com
+Subject: Confidential board memo
+Message-ID: <bcc-only-inner@contoso.com>
+Date: Wed, 01 Jul 2026 07:55:00 +0000
+
+See attached figures.
+--BccOnlyBoundary--
