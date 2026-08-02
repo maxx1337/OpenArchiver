@@ -194,9 +194,39 @@ suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 			expect(result.done).toBe(true);
 		});
 
-		it('flags a pathological line with no CRLF at all as oversize once it exceeds the limit', () => {
+		it('flags a pathological line with no CRLF at all as oversize immediately, but does not finish until the terminator arrives (F44)', () => {
+			// Before JR-4-16's fix this reported `done: true` right here -- the bug: the scanner
+			// stopped reading mid-stream, and whatever the sender transmitted next (still believing
+			// this was ordinary message content) was left for `SmtpConnection` to misread as SMTP
+			// commands. `oversize` must flip immediately (the limit really was exceeded), but `done`
+			// must not, until the real terminator has actually been seen.
 			const scanner = new DataScanner(10);
 			const result = feed(scanner, 'x'.repeat(50));
+			expect(result).toEqual({ done: false, oversize: true });
+		});
+
+		it('keeps waiting across further CRLF-less chunks while oversize (F44)', () => {
+			const scanner = new DataScanner(10);
+			feed(scanner, 'x'.repeat(50)); // trips the pathological-line abort point
+			const stillWaiting = feed(scanner, 'y'.repeat(50)); // more garbage, still no CRLF anywhere
+			expect(stillWaiting).toEqual({ done: false, oversize: true });
+		});
+
+		it('recognises the terminator that eventually arrives after a CRLF-less oversize line (F44, the pathological-line abort point)', () => {
+			const scanner = new DataScanner(10);
+			feed(scanner, 'x'.repeat(50)); // trips oversize with no CRLF in sight
+			feed(scanner, 'more garbage, still not the terminator\r\n'); // first CRLF since the trip
+			const result = feed(scanner, '.\r\n');
+			expect(result).toEqual({ done: true, oversize: true });
+		});
+
+		it('recognises the terminator that eventually arrives after the byte-count oversize trip (F44, the line-counting abort point)', () => {
+			const scanner = new DataScanner(6); // "hello\r\n" (7 bytes) trips this on the very first line
+			const tripped = feed(scanner, 'hello\r\n');
+			expect(tripped).toEqual({ done: false, oversize: true });
+			const midway = scanner.push(Buffer.from('more content\r\n'));
+			expect(midway).toEqual({ done: false, oversize: true });
+			const result = scanner.push(Buffer.from('.\r\n'));
 			expect(result).toEqual({ done: true, oversize: true });
 		});
 

@@ -607,6 +607,91 @@ suite('ci', 'EsmtpServer BDAT/CHUNKING over the wire (JR-4-03)', () => {
 	});
 });
 
+/**
+ * `JR-4-16` -- finding F44 (`docs/dev/journaling/09-befunde-bestandscode.md`): a `DATA` transfer
+ * that exceeds the `SIZE` limit used to flip the connection back to command state mid-body, while
+ * the sender -- unaware of the rejection -- kept transmitting the rest of the message. Those bytes
+ * then reached {@link SmtpConnection.processCommandLine} (not exported; see `smtp-server.ts`) and
+ * were answered as if they were commands.
+ *
+ * Reproducing this needs the body and the "smuggled" bytes to arrive as **separate** TCP segments,
+ * not one combined write -- the finding's own note, learned the hard way: a first probe that wrote
+ * both in one `socket.write()` came back negative purely because `handleDataChunk` never splits a
+ * single incoming chunk, not because the desync did not exist. `writeRaw` plus a real trip through
+ * the event loop between calls is what gives each write its own segment here, the same technique
+ * `JR-4-03`'s BDAT chunk-boundary tests already rely on with `writeRawBuffer`.
+ */
+suite('ci', 'DATA oversize does not desync the connection (JR-4-16, F44)', () => {
+	it('message-body bytes shaped like SMTP commands, arriving in a later TCP segment after an oversize body with no terminator, get no response at all', async () => {
+		const { port } = await startServer({ sizeLimitBytes: 1_000, dataTimeoutMs: 60_000 });
+		const client = await establishTransaction(port);
+		client.send('DATA');
+		await client.nextReply(); // 354
+
+		const oversizeBody = 'X'.repeat(1_500) + '\r\n'; // one line, well over the 1000-byte limit
+		client.writeRaw(oversizeBody);
+
+		// The sender has no idea the transfer already exceeded the limit and keeps sending what it
+		// believes is still message content -- bytes that happen to look exactly like SMTP commands,
+		// in their own TCP segment (see this suite's doc comment for why that separation matters).
+		const smuggled = 'MAIL FROM:<attacker@evil.invalid>\r\nRCPT TO:<j@example.com>\r\nNOOP\r\n';
+		client.writeRaw(smuggled);
+
+		// No real end-of-DATA terminator was ever sent, so the connection must still be waiting for
+		// one -- not answering to any of the lines above as if they were commands. A reply here (the
+		// pre-fix behaviour: 250/250/250 for the smuggled MAIL/RCPT/NOOP) would resolve this
+		// assertion instead of timing out.
+		await expect(client.nextReply(500)).rejects.toThrow(/no SMTP reply/);
+	});
+
+	it('reads an oversize DATA body through to the real terminator before answering -- exactly one 552, then the connection is realigned', async () => {
+		const { port } = await startServer({ sizeLimitBytes: 1_000 });
+		const client = await establishTransaction(port);
+		client.send('DATA');
+		await client.nextReply(); // 354
+
+		const oversizeStart = 'X'.repeat(1_500) + '\r\n';
+		client.writeRaw(oversizeStart);
+
+		// No response yet: the limit was exceeded, but the terminator has not arrived -- this is the
+		// acceptance criterion that most directly rules out the old "552 mid-body" behaviour.
+		await expect(client.nextReply(300)).rejects.toThrow(/no SMTP reply/);
+
+		// The sender, still unaware of the rejection, keeps sending -- and eventually reaches the
+		// real terminator, in its own TCP segment.
+		client.writeRaw('more body content that keeps arriving\r\n.\r\n');
+
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^552 5\.3\.4/);
+
+		// Exactly one reply for the whole rejected transfer -- a second one would mean the terminator
+		// (or something around it) was echoed as if it were a command.
+		await expect(client.nextReply(300)).rejects.toThrow(/no SMTP reply/);
+
+		// The connection is correctly realigned afterward: a fresh command gets a normal reply.
+		client.send('NOOP');
+		const noopReply = await client.nextReply();
+		expect(noopReply[0]).toMatch(/^250 2\.0\.0/);
+	});
+
+	it('an oversize sender that goes silent without ever sending the terminator still times out -- discarding introduces no new exhaustion gap', async () => {
+		const { port } = await startServer({ sizeLimitBytes: 1_000, dataTimeoutMs: 150 });
+		const client = await establishTransaction(port);
+		client.send('DATA');
+		await client.nextReply(); // 354
+
+		const oversizeBody = 'X'.repeat(1_500) + '\r\n';
+		client.writeRaw(oversizeBody);
+
+		// No premature response, and the pre-existing data timeout -- re-armed on every chunk exactly
+		// as it always was, discarding or not -- is what bounds how long this connection may be kept
+		// waiting for a terminator that never comes.
+		const reply = await client.nextReply(3_000);
+		expect(reply[0]).toMatch(/^421 4\.4\.2/);
+		await client.waitForClose();
+	});
+});
+
 suite('nightly', 'BDAT streams a 150 MB message without proportional heap growth (JR-4-03)', () => {
 	it('accepts a 150 MB message over 150 x 1 MiB BDAT chunks with bounded heap growth', async () => {
 		const sizeLimitBytes = 200 * 1024 * 1024;

@@ -1983,7 +1983,40 @@ vorgibt. Jeder Speichernachweis in diesem Projekt bekommt diese Kalibrierung, be
 `packages/journaling/src/ingress/smtp-server.ts`, `DataScanner.push()`/`handleDataChunk()` →
 `finishData()` → `completeTransfer()` · **Gefunden:** von `JR-4-03` (2026-08-02, Rolle DEV) als
 Klasse benannt, vom PO am selben Tag **gemessen und in der Schwere heraufgestuft** · **Status:**
-**offen, vor `JR-4-06` zu beheben** — als `JR-4-16` im Backlog
+**behoben** in `JR-4-16` (`packages/journaling/src/ingress/smtp-server.ts`, Rolle DEV, 2026-08-02)
+
+> **Behoben (`JR-4-16`).** `DataScanner` setzt bei einem `SIZE`-Überlauf nicht mehr `finished = true`
+> mitten im Strom. Beide Abbruchstellen — die zeilenweise Byte-Zählung in `scan()` **und** die
+> `carry`-Deckelung für eine „Zeile" ohne jedes `CRLF` in `push()` — setzen jetzt `oversize = true`
+> und wechseln in einen Verwerfungs-Scan (`scanDiscard()`), der über beliebig viele weitere
+> `push()`-Aufrufe hinweg liest und verwirft, bis der echte `<CRLF>.<CRLF>`-Terminator gefunden ist —
+> `BDAT`s eigene Disziplin (deklarierte Länge immer vollständig abzählen, bevor reagiert wird) als
+> Vorbild genommen, wie vom PO verlangt. Erst wenn der Scanner `done: true` meldet, ruft
+> `handleDataChunk()` `finishData()`/`completeTransfer()` auf; `oversize` allein löst das nicht mehr
+> aus. `completeTransfer()` bleibt dabei der einzige Anschlusspunkt für `JR-4-06`, unverändert.
+>
+> **Ressourcengrenze der verworfenen Bytes:** `scanDiscard()` puffert nichts — es ist ein
+> Automat aus vier Skalaren (`discardSawCr`/`discardLineDisqualified`/`discardLineLength`/
+> `discardFirstByte`), der pro Zeile nur deren erste zwei Bytes kennen muss, um zu wissen, ob sie ein
+> einzelner Punkt war. Der Speicherbedarf zwischen den `push()`-Aufrufen bleibt damit O(1),
+> unabhängig davon, wie viel eine Gegenstelle nach der Überschreitung noch sendet. Sendet sie nie
+> einen Terminator, bleibt `state` weiter `'data'`, und der bereits vorhandene, bei jedem Chunk neu
+> gestellte `dataTimeoutMs`-Timer (`armDataTimer()` in `handleDataChunk()`, unverändert) beendet die
+> Verbindung mit `421 4.4.2` — kein neuer Mechanismus, keine neue Erschöpfungslücke.
+>
+> **Testfall im Repository, rot ohne den Fix:** `packages/journaling/tests/unit/smtp-server-protocol.test.ts`,
+> Suite „`DATA` oversize does not desync the connection (JR-4-16, F44)" — die Probe des PO als
+> Regressionstest nachgebaut (Rumpf und „geschmuggelte" Kommandozeilen in getrennten
+> `writeRaw()`-Aufrufen, nicht in einem kombinierten Write, exakt wie der Befund es verlangt), plus
+> ein Test für den legitimen Fall (Sender sendet nach der Überschreitung bis zum echten Terminator
+> weiter) und einer für die Ressourcengrenze (Sender verstummt, ohne je einen Terminator zu senden).
+> Vor dem Fix zurückgenommen: alle drei schlagen fehl, mit benannter Zusicherung, nicht nur
+> „irgendetwas ist anders" — u. a. `promise resolved "[ '552 5.3.4 ...' ]" instead of rejecting` (ein
+> `552` kam an, wo keine Antwort erwartet war) und `expected '552 ...' to match /^421 4\.4\.2/`.
+> Ergänzend in `packages/journaling/src/ingress/smtp-server.test.ts`: die reinen `DataScanner`-Fälle
+> für beide Abbruchstellen, ebenfalls rot ohne den Fix — die Zusicherung nannte `done: false`, wo
+> `done: true` ankam. Voller Lauf danach: `628 passed | 6 skipped`, 48 Dateien (vorher
+> `622 passed | 6 skipped`, +6 neue Tests: 3 je Datei).
 
 `DataScanner` setzt bei Überschreitung des `SIZE`-Limits sofort `finished = true`, ohne bis zum
 `<CRLF>.<CRLF>`-Terminator weiterzulesen. `completeTransfer()` antwortet `552 5.3.4` und setzt

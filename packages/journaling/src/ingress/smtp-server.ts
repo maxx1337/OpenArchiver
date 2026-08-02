@@ -59,6 +59,25 @@ import type { SmtpServerConfig } from './smtp-config';
  * existing "must be in `rcpt` state" check already produces that `503` once a `BDAT` has moved the
  * state to `'bdat'`, with no separate case needed; RSET clears chunking state the same way it
  * already clears the envelope.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `DATA` no longer desyncs the connection on a `SIZE` overflow (`JR-4-16`, finding F44)
+ * ---------------------------------------------------------------------------------------------
+ * Before this fix, {@link DataScanner} answered a `SIZE` overflow by setting its internal `finished`
+ * flag mid-stream, without ever reading as far as the `<CRLF>.<CRLF>` terminator. The connection
+ * answered `552` and moved back to command state immediately -- but the sender has no way to know
+ * that happened and keeps transmitting the rest of the message body, which then arrived at
+ * {@link SmtpConnection.processCommandLine} and was interpreted as SMTP commands. `BDAT`
+ * ({@link SmtpConnection.handleBdatChunkBytes}) never had this problem, because it always counts
+ * down the declared chunk length in full before reacting to anything. `DATA` has no declared
+ * length to count down, so the fix instead keeps scanning and discarding body bytes -- across
+ * as many further `push()` calls as it takes -- until the real terminator is found, and only then
+ * calls back into {@link SmtpConnection.finishData}/{@link SmtpConnection.completeTransfer}. See
+ * {@link DataScanner}'s own doc comment for the two distinct places oversize can be detected and how
+ * each one hands off into that discard scan, and {@link DataScanner.scanDiscard} for why the scan's
+ * own retained state stays O(1) regardless of how much more the sender transmits before either the
+ * terminator arrives or {@link SmtpConnection.armDataTimer}'s existing per-chunk timer resets --
+ * unchanged, and still the only bound on a sender that never sends a terminator at all.
  */
 
 /** Injected structured-logging port -- see this module's "Where `logLevel` actually gets used"
@@ -98,6 +117,8 @@ export const noopIngressLogger: IngressLogger = {
 
 const CRLF = Buffer.from('\r\n');
 const DOT = 0x2e;
+const CR_BYTE = 0x0d;
+const LF_BYTE = 0x0a;
 
 /** RFC 5321 section 4.5.3.1.4: 512 octets including the trailing CRLF for a command line. Enforced
  * a little loosely here (against the line body only) -- a client that needs the extra slack is not
@@ -255,12 +276,62 @@ export function parseBdatArguments(rest: string): ParsedBdat | null {
  * can reconstruct exactly what a `DATA` transfer delivered without buffering the whole message in
  * this class, the same way {@link BdatContentTracker}'s `onContent` does for `BDAT`. This is what
  * makes the two paths' output comparable byte-for-byte in `smtp-server.test.ts`.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Oversize handling (`JR-4-16`, finding F44)
+ * ---------------------------------------------------------------------------------------------
+ * There are two distinct places this class can notice the `SIZE` limit was exceeded, and both used
+ * to set `finished = true` immediately, mid-stream:
+ *
+ *   1. {@link scan}'s own line-by-line byte count, the ordinary case -- a complete, CRLF-terminated
+ *      content line pushes the running total over `limitBytes`.
+ *   2. `push()`'s guard against a pathological "line" that never contains a CRLF at all, which
+ *      would otherwise grow `carry` without bound.
+ *
+ * Neither point is actually the end of the `DATA` transfer on the wire: the sender does not know
+ * the limit was hit and keeps sending the rest of the message body. Stopping there left whatever
+ * came next to be read as SMTP command lines by {@link SmtpConnection.processCommandLine} -- F44.
+ * Both points now hand off into {@link scanDiscard} instead, which keeps consuming and discarding
+ * body bytes (across as many further `push()` calls as it takes) until it finds the real
+ * `<CRLF>.<CRLF>` terminator, exactly mirroring the discipline {@link BdatContentTracker} already
+ * had by construction (drain the declared length in full before reacting). Only once the
+ * terminator is found does `push()` report `done: true`; `oversize` is set the moment either abort
+ * point fires and stays `true` from then on, so a caller can tell "rejected" from "still waiting"
+ * without needing a third flag.
+ *
+ * `scanDiscard` deliberately does **not** buffer the discarded bytes anywhere: it is a tiny
+ * automaton (`discardSawCr`/`discardLineDisqualified`/`discardLineLength`/`discardFirstByte`) that
+ * only needs to know, at each CRLF, whether the line that just ended was exactly a lone `.` --
+ * which needs at most the first two bytes of that line, not the whole thing. Retained state is
+ * therefore a handful of scalars, never proportional to how much more a sender transmits before
+ * the terminator arrives (or never arrives at all, in which case
+ * {@link SmtpConnection.armDataTimer}'s existing per-chunk data timeout is what eventually ends the
+ * connection -- unchanged, since {@link SmtpConnection.handleDataChunk} still re-arms it on every
+ * chunk regardless of which scanning mode is active).
  */
 export class DataScanner {
 	private carry: Buffer = Buffer.alloc(0);
 	private bytesSeen = 0;
 	private finished = false;
 	private oversize = false;
+	/** `true` from the moment either abort point above fires until the real terminator is found --
+	 * see this class's doc comment. While `true`, `push()` routes incoming bytes to
+	 * {@link scanDiscard} instead of {@link scan}. */
+	private discarding = false;
+	/** Whether the previous byte examined while discarding was a bare `CR` not yet resolved into a
+	 * `CRLF` -- the discard scan's equivalent of {@link scan}'s `carry`, needed only to let a
+	 * terminator split exactly between `\r` and `\n` across two `push()` calls still be found. */
+	private discardSawCr = false;
+	/** `true` once the line currently being discarded is already known not to be a lone `.` --
+	 * either because it started that way (the pathological-line abort point always does) or because
+	 * a second byte has arrived since its last CRLF. Reset at the start of each new line. */
+	private discardLineDisqualified = false;
+	/** Bytes seen so far in the line currently being discarded, saturating at the one value that
+	 * matters (`1`) -- a second byte immediately disqualifies the line, so nothing past that is ever
+	 * counted or stored. */
+	private discardLineLength = 0;
+	/** The current discard line's first byte, meaningful only while `discardLineLength === 1`. */
+	private discardFirstByte = 0;
 
 	constructor(
 		private readonly limitBytes: number,
@@ -268,25 +339,34 @@ export class DataScanner {
 	) {}
 
 	/** Feed the next raw chunk. Returns the scanner's status after processing as much of it as
-	 * forms complete lines; a chunk arriving after `done`/`oversize` is ignored. */
+	 * forms complete lines; a chunk arriving once `done` is reported is ignored. Note that `oversize`
+	 * can be `true` while `done` is still `false` -- the transfer is rejected but the connection must
+	 * keep reading (and discarding) until the terminator is found; see the class doc comment. */
 	push(chunk: Buffer): { readonly done: boolean; readonly oversize: boolean } {
-		if (!this.finished) {
-			this.carry = Buffer.concat([this.carry, chunk]);
-			this.scan();
-			// A pathological "line" that never contains a CRLF would otherwise grow `carry` without
-			// bound. Capping it at the configured SIZE limit keeps worst-case memory use proportional
-			// to the configured limit rather than to whatever an attacker chooses to send.
-			if (!this.finished && this.carry.length > this.limitBytes) {
-				this.oversize = true;
-				this.finished = true;
-				this.carry = Buffer.alloc(0);
-			}
+		if (this.finished) {
+			return { done: true, oversize: this.oversize };
+		}
+		if (this.discarding) {
+			this.scanDiscard(chunk);
+			return { done: this.finished, oversize: this.oversize };
+		}
+		this.carry = Buffer.concat([this.carry, chunk]);
+		this.scan();
+		if (!this.finished && !this.discarding && this.carry.length > this.limitBytes) {
+			// The pathological-line abort point (no CRLF anywhere in `carry` yet). Hand the whole
+			// run of undecided bytes to the discard scanner rather than dropping it -- it may
+			// already contain the terminator (or bytes that end the current garbage line), and
+			// `scanDiscard`'s own retained state is O(1) regardless of how much that turns out to be.
+			const remainder = this.carry;
+			this.carry = Buffer.alloc(0);
+			this.enterDiscardMode(remainder, true);
 		}
 		return { done: this.finished, oversize: this.oversize };
 	}
 
 	/** Total content bytes seen so far (post-dot-unstuffing, including each line's terminating
-	 * CRLF, excluding the terminator line itself). */
+	 * CRLF, excluding the terminator line itself). Stops growing once oversize is detected -- bytes
+	 * discarded afterward were never counted, by design. */
 	get contentByteLength(): number {
 		return this.bytesSeen;
 	}
@@ -309,10 +389,77 @@ export class DataScanner {
 				this.onContent(Buffer.concat([contentLine, CRLF]));
 			}
 			if (this.bytesSeen > this.limitBytes) {
-				this.oversize = true;
-				this.finished = true;
+				// The line-count abort point. Unlike the pathological-line case above, this is
+				// always at a clean line boundary -- the CRLF that ended the just-processed line has
+				// already been consumed out of `carry`, so whatever remains starts a fresh line and
+				// needs no "already disqualified" flag.
+				const remainder = this.carry;
+				this.carry = Buffer.alloc(0);
+				this.enterDiscardMode(remainder, false);
 				return;
 			}
+		}
+	}
+
+	private enterDiscardMode(initial: Buffer, startDisqualified: boolean): void {
+		this.oversize = true;
+		this.discarding = true;
+		this.discardSawCr = false;
+		this.discardLineDisqualified = startDisqualified;
+		this.discardLineLength = 0;
+		this.discardFirstByte = 0;
+		this.scanDiscard(initial);
+	}
+
+	/** Consume raw bytes while oversize, looking only for the end-of-DATA terminator (a line whose
+	 * entire content is a single `.`) -- see the class doc comment for why this never buffers what
+	 * it discards. */
+	private scanDiscard(chunk: Buffer): void {
+		for (const byte of chunk) {
+			if (this.finished) {
+				return;
+			}
+			if (byte === CR_BYTE) {
+				if (this.discardSawCr) {
+					// The previous CR was not part of a CRLF after all -- it was itself an ordinary
+					// content byte of the line still being discarded.
+					this.recordDiscardByte(CR_BYTE);
+				}
+				this.discardSawCr = true;
+				continue;
+			}
+			if (this.discardSawCr) {
+				this.discardSawCr = false;
+				if (byte === LF_BYTE) {
+					if (
+						!this.discardLineDisqualified &&
+						this.discardLineLength === 1 &&
+						this.discardFirstByte === DOT
+					) {
+						this.finished = true;
+						return;
+					}
+					this.discardLineDisqualified = false;
+					this.discardLineLength = 0;
+					continue;
+				}
+				// A bare CR not followed by LF: record it as an ordinary content byte of the current
+				// line before falling through to record `byte` itself.
+				this.recordDiscardByte(CR_BYTE);
+			}
+			this.recordDiscardByte(byte);
+		}
+	}
+
+	private recordDiscardByte(byte: number): void {
+		if (this.discardLineDisqualified) {
+			return;
+		}
+		this.discardLineLength += 1;
+		if (this.discardLineLength === 1) {
+			this.discardFirstByte = byte;
+		} else {
+			this.discardLineDisqualified = true;
 		}
 	}
 }
@@ -626,7 +773,12 @@ class SmtpConnection {
 		}
 		this.armDataTimer();
 		const result = this.dataScanner.push(chunk);
-		if (result.done || result.oversize) {
+		// `JR-4-16` (F44): `oversize` alone must NOT end the transaction here -- the scanner keeps
+		// discarding body bytes until the real terminator is found (or the data timeout above fires),
+		// so the connection never reads the rejected message's own bytes as commands. Only `done`
+		// means the scanner is finished, one way or the other; `finishData` reads `oversize` off the
+		// scanner itself to decide the response.
+		if (result.done) {
 			this.finishData(result.oversize);
 		}
 	}

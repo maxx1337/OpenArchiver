@@ -201,7 +201,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		// JR-3-02's durable-write proof samples, turned out blind to a deliberately reintroduced
 		// full-buffering regression here, and had to be replaced with `arrayBuffers`, verified in
 		// both directions before being kept).
-		expectedTests: { ci: 488, nightly: 2, manual: 0 },
+		// 494 ci after JR-4-16 (F44 -- a DATA transfer over the SIZE limit no longer desyncs the
+		// connection): +3 in ingress/smtp-server.test.ts (DataScanner's oversize cases updated for the
+		// new "oversize does not imply done" contract: the pathological-line trip now reports
+		// `done: false` until a terminator arrives, waiting continues across further CRLF-less chunks,
+		// and the terminator is recognised whenever it eventually shows up after each of the two abort
+		// points -- the line-count trip and the CRLF-less-line trip) + 3 in
+		// tests/unit/smtp-server-protocol.test.ts (the F44 regression, reproduced exactly as measured:
+		// message-body bytes shaped like SMTP commands in a later TCP segment get no response at all;
+		// an oversize body read through to the real terminator gets exactly one 552 and the connection
+		// is realigned afterward; an oversize sender that never sends a terminator still times out via
+		// the pre-existing data timeout, proving discarding opened no new exhaustion gap).
+		expectedTests: { ci: 494, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',
