@@ -60,10 +60,16 @@ import type { LedgerAppendRequest, LedgerAppendResult, LedgerBackend } from '../
  * `buildAcceptedTransaction(txid, await this.backend.append(request))` is *one* expression. There is
  * no line between "the append settled" and "the function returns" for a maintainer to insert a new
  * `await` into — inserting one requires first taking the expression apart into two statements, which
- * is a visible, reviewable diff against this file, not a silent regression. `accept.test.ts` asserts
- * the empirical half of this: after `backend.append()` resolves, the fake filesystem's call log is
- * unchanged and `backend.append()` was called exactly once — i.e. nothing the success path could
- * reach actually touched the spool again.
+ * is a visible, reviewable diff against this file, not a silent regression. `acceptance.test.ts`
+ * asserts the empirical half of this: after `backend.append()` resolves, a single shared timeline
+ * records every one of `SpoolFileSystem`'s six operations (`mkdir`, `createFile`, `fsyncDirectory`,
+ * `readdir`, `stat`, `rename`) plus the three operations reachable through the handle `createFile()`
+ * returns (`write`, `fsync`, `close`) — nine in total — and no entry follows the append; and
+ * `backend.append()` was called exactly once. I.e. nothing the success path could reach actually
+ * touched the spool again. (F41: `readdir`, `stat` and `rename` used to pass through the test's
+ * instrumentation untracked, so a *succeeding* call to any of them after the append would not have
+ * been noticed — closed by extending `timelineFileSystem()` in `acceptance.test.ts` to cover all
+ * nine operations, not only the six the durable write itself exercises.)
  *
  * ---------------------------------------------------------------------------------------------
  * A failed ledger append never deletes the spool file

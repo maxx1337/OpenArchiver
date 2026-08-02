@@ -138,9 +138,22 @@ function timelineFileSystem(inner: SpoolFileSystem, timeline: string[]): SpoolFi
 			timeline.push('fs:directory-fsync');
 			await inner.fsyncDirectory(p);
 		},
-		readdir: (p) => inner.readdir(p),
-		stat: (p) => inner.stat(p),
-		rename: (from, to) => inner.rename(from, to),
+		// F41: these three used to pass straight through, untracked -- a regression inserting a
+		// *succeeding* call to any of them after the ledger append would not have shown up on the
+		// timeline at all. See the module doc comment and acceptance.ts's doc comment for what that
+		// gap meant and why all nine SpoolFileSystem/SpoolFileHandle operations belong on one timeline.
+		async readdir(p) {
+			timeline.push('fs:readdir');
+			return inner.readdir(p);
+		},
+		async stat(p) {
+			timeline.push('fs:stat');
+			return inner.stat(p);
+		},
+		async rename(from, to) {
+			timeline.push('fs:rename');
+			await inner.rename(from, to);
+		},
 	};
 }
 
