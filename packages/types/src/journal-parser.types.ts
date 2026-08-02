@@ -338,3 +338,114 @@ export type JournalReportParseResult =
  * `kind === 'parse_failed'` as the signal, `reason`/`detail`/`extractableHeaders` as the payload.
  * Defining the alert sink is E6's job, once it knows what it needs.
  */
+
+/**
+ * Owner resolution (`JR-5-07`, `docs/enterprise/journaling/guide.md` "How Owner Resolution Works" /
+ * "Domain Normalization (Alias Handling)"): deciding which internal mailbox a journaled email
+ * belongs to, given the organization's configured `OrganizationDomainGroup[]`
+ * (`journaling.types.ts`).
+ *
+ * **Defined only for `JournalReportParsed`.** The guide's documented priority order is phrased in
+ * terms of `To`/`Cc`/`Bcc`/`From` -- the journal report's own header-mirroring envelope fields
+ * (`ParsedEnvelope.to`/`.cc`/`.bcc`/`.sender`), which only a `journal_report` result carries.
+ * `JournalPlainBcc` and `JournalNdr` carry `SmtpTransactionEnvelope` (this receiver's own
+ * `MAIL FROM`/`RCPT TO`, not the original message's participant list -- see that type's doc comment)
+ * plus `ExtractableHeaders.from` at best: no `To`/`Cc`/`Bcc` header list exists for either, so there
+ * is no equivalent input to apply the same order to, only a structurally different, weaker one.
+ * Rather than have a resolver accept the whole `JournalReportParseResult` union and guess a
+ * substitute at runtime for the two kinds that do not fit, `resolveOwner()`
+ * (`packages/journaling/src/parser/owner-resolution.ts`) is typed to accept exactly
+ * {@link OwnerResolutionEnvelope} -- `JournalReportParsed.envelope` satisfies it directly, and
+ * `plain_bcc`/`ndr` results simply do not compile as an argument. Whether/how to resolve an owner
+ * for those two kinds is an open question left to whichever later slice needs it (see
+ * `06-status.md`'s `JR-5-07` entry).
+ */
+export type OwnerResolutionEnvelope = Pick<ParsedEnvelope, 'to' | 'cc' | 'bcc' | 'sender'>;
+
+/** Which envelope field a resolved owner address came from. */
+export type OwnerResolutionField = 'to' | 'cc' | 'bcc' | 'sender';
+
+/**
+ * Which of the guide's four documented priority-order outcomes decided the owner. Deliberately four
+ * distinct values, not a boolean "matched or not": a caller (the `journal-inbound` worker, E6) that
+ * indexes or displays `ownerEmail` needs to know how much to trust it, and the four cases are not
+ * equally trustworthy --
+ *
+ *  - `'primary-domain-match'` / `'alias-domain-match'`: an actual participant address matched a
+ *    configured domain group. The strongest cases; `'alias-domain-match'` additionally means
+ *    `ownerEmail`'s domain was rewritten from what the message actually carried (see
+ *    {@link OwnerResolutionResult.matchedDomain} for the pre-normalization value).
+ *  - `'heuristic-no-groups'`: no domain groups are configured at all, so the guide's fallback
+ *    heuristic (`To[0] -> Cc[0] -> Bcc[0] -> From[0] -> 'journal-unknown'`) picked *some* address
+ *    (or the literal `'journal-unknown'`) without checking it against anything -- a guess by
+ *    construction, not a match.
+ *  - `'fallback'`: domain groups are configured, but nothing in the message matched any of them.
+ *    `ownerEmail` is `default_fallback@<primary domain of the first configured group>`, and
+ *    {@link OwnerResolutionResult.warning} is set -- the guide requires this case to log a warning
+ *    (JR-5-07's acceptance criterion), and this package never imports a logger (see
+ *    `docs/dev/journaling/02-architektur.md` section 2), so the warning text is a **value** the
+ *    caller decides how to log, not a log call this package makes itself.
+ *
+ * Collapsing these into "resolved" vs. "not resolved" is exactly the class of information loss this
+ * package's `journal-parser.types.ts` already warns against elsewhere (e.g.
+ * `NdrSignal`/`ParsedEnvelope.undisclosedRecipientFields`): a guessed owner presented with the same
+ * confidence as a matched one is the "fabricated evidence" failure mode this whole parser is built
+ * to avoid, applied to ownership instead of content.
+ */
+export type OwnerResolutionMethod =
+	| 'primary-domain-match'
+	| 'alias-domain-match'
+	| 'heuristic-no-groups'
+	| 'fallback';
+
+/** The envelope field and raw (pre-normalization) address that decided ownership. */
+export interface OwnerResolutionWinner {
+	readonly field: OwnerResolutionField;
+	/** Exactly as it appeared in that field -- before alias-to-primary-domain normalization. */
+	readonly address: string;
+}
+
+/**
+ * The result of `resolveOwner()`. See {@link OwnerResolutionMethod} for what `method` promises about
+ * how much to trust `ownerEmail`.
+ */
+export interface OwnerResolutionResult {
+	/**
+	 * The resolved mailbox owner address. Only ever different from `winner.address` when `method` is
+	 * `'alias-domain-match'` or `'primary-domain-match'` with mixed-case domain input (see
+	 * `owner-resolution.ts` for the exact normalization rule) -- the local part is never altered
+	 * (README constraint: address comparison is domain-only, case-insensitively; the local part is
+	 * never touched).
+	 */
+	readonly ownerEmail: string;
+	readonly method: OwnerResolutionMethod;
+	/**
+	 * The address and field that decided `ownerEmail`. `null` exactly for the two cases where no
+	 * address decided anything: the `'heuristic-no-groups'` tail when `to`/`cc`/`bcc`/`sender` are
+	 * *all* empty (the literal `'journal-unknown'`), and `'fallback'` (nothing matched, by
+	 * definition).
+	 */
+	readonly winner: OwnerResolutionWinner | null;
+	/**
+	 * The lowercased domain that matched a configured group, for `'primary-domain-match'`/
+	 * `'alias-domain-match'` only -- `null` for `'heuristic-no-groups'`/`'fallback'`, where no domain
+	 * was matched against anything.
+	 */
+	readonly matchedDomain: string | null;
+	/**
+	 * Other `to`/`cc`/`bcc` addresses that *also* matched a configured domain group, besides
+	 * `winner` -- in scan order, `winner` itself excluded. Always `[]` unless `method` is
+	 * `'primary-domain-match'`/`'alias-domain-match'` *and* `winner.field` is `to`/`cc`/`bcc` (never
+	 * populated when the winner came from the outbound/`sender` check, since that check only runs
+	 * after the inbound scan already found zero matches). Exists so "there were multiple internal
+	 * recipients" is not silently discarded just because only the first one is the owner (JR-5-07's
+	 * hard constraint 4).
+	 */
+	readonly additionalMatches: readonly OwnerResolutionWinner[];
+	/**
+	 * Set to a human-readable explanation exactly when `method === 'fallback'`, `null` otherwise.
+	 * This package has no logger (see `OwnerResolutionMethod`'s doc comment) -- a caller that wants
+	 * the guide's documented "a warning is logged" behaviour logs this value itself.
+	 */
+	readonly warning: string | null;
+}

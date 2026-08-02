@@ -119,7 +119,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// (Sender/Subject/Message-Id/To/Cc/Bcc/Recipient/On-Behalf-Of/undisclosed-recipients/
 		// unknown-field preservation), and the end-to-end parseJournalReport() orchestration
 		// against fixture .eml files.
-		expectedFiles: 26,
+		// 27 after JR-5-07 added packages/journaling/src/parser/owner-resolution.test.ts.
+		expectedFiles: 27,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -223,7 +224,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// test, an added assertion) to confirm a genuine full report still passes the now-unconditional
 		// check, per the PO's explicit request that it becomes the test keeping the discriminator from
 		// tightening further. Net +1.
-		expectedTests: { ci: 468, nightly: 1, manual: 0 },
+		// JR-5-07 added packages/journaling/src/parser/owner-resolution.test.ts (27th unit file) --
+		// resolveOwner() against the guide's four documented example-table rows, the priority order
+		// between To/Cc/Bcc/sender, the no-groups heuristic tail, the address-comparison edge cases
+		// (case-insensitive domain, no "@", more than one "@", empty local part, a domain configured
+		// as an alias of two groups), and the additionalMatches/warning transparency fields.
+		expectedTests: { ci: 491, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

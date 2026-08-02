@@ -1925,7 +1925,7 @@ Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft
 | `JR-5-04` | **[~] parserseitig erledigt, Rest hängt an E6** — der Ledger-Eintrag, der Storage, die Indexierung und der Alarm sind E6s Arbeit |
 | `JR-5-05` | **[x] erledigt** 2026-08-02 (S3 + drei Runden Review)                                                                            |
 | `JR-5-06` | **[x] erledigt** 2026-08-02 (S3)                                                                                                 |
-| `JR-5-07` | [ ] offen — Owner-Resolution                                                                                                     |
+| `JR-5-07` | **[x] erledigt** 2026-08-02 (S4) — mit einem Befund an E6, siehe unten                                                           |
 | `JR-5-08` | [ ] offen — Fixture-Korpus (Rolle TEST)                                                                                          |
 | `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                                                                           |
 
@@ -2077,6 +2077,71 @@ Der Korpus muss Alltagsformen enthalten, die **keine** Journal-Reports sind — 
 Weiterleitung als Anlage, Mail mit Anhang, Autoreply, Kalendereinladung, `multipart/alternative` —, und
 je Fixture aussagen, **was erhalten bleibt**, nicht nur, was erkannt wird.
 
+### Was `JR-5-07` liefert
+
+`resolveOwner(envelope, domainGroups)` in `packages/journaling/src/parser/owner-resolution.ts` — rein,
+synchron, ohne Datenbank, ohne Konfiguration, **ohne Logger**. Die von Kriterium 4 verlangte Warnung ist
+ein **Wert** im Ergebnis (`warning: string | null`, nicht-null genau bei `method === 'fallback'`); den
+Logaufruf macht der Aufrufer in E6. `packages/journaling` bekommt keinen Logger, auch nicht für „nur eine
+Zeile".
+
+Die vier dokumentierten Tabellenzeilen aus `docs/enterprise/journaling/guide.md` sind gegen das gebaute
+Paket nachgefahren, dazu vier eigene Fälle:
+
+```
+OK  Tabelle Z1 alice@old-brand.com -> alice@company.com            method=alias-domain-match
+OK  Tabelle Z2 alice@company.com   -> alice@company.com            method=primary-domain-match
+OK  Tabelle Z3 bob@subsidiary.io   -> bob@subsidiary.io            method=primary-domain-match
+OK  Tabelle Z4 external@gmail.com  -> default_fallback@company.com method=fallback
+OK  ohne Gruppen (Heuristik)       -> x@fremd.tld                  method=heuristic-no-groups
+OK  GROSS in Domain                -> alice@company.com            method=alias-domain-match
+OK  Ausgang: nur sender passt      -> alice@company.com            method=primary-domain-match
+OK  Reihenfolge To vor Cc          -> a@company.com                method=primary-domain-match
+```
+
+**Der Weg steht im Ergebnis, nicht nur das Ziel.** `method` unterscheidet vier Wege — exakter Treffer,
+Alias-Normalisierung, Heuristik ohne Gruppen, Fallback —, die nicht gleich viel wert sind. Das ist die
+Richtungsregel aus S3 auf dieses Problem angewandt: aus einer passenden Domain auf Eigentümerschaft zu
+schließen ist eine Annahme, und ein geratener Eigentümer, der als sicher ausgegeben wird, wäre der
+verbotene Fall. `additionalMatches` führt außerdem mit, wenn **mehrere** Teilnehmer gepasst haben.
+
+Die Signatur nimmt bewusst nur `OwnerResolutionEnvelope` (ein `Pick` aus `ParsedEnvelope`), sodass
+`plain_bcc`- und `ndr`-Ergebnisse **gar nicht erst kompilieren** statt zur Laufzeit geraten zu werden.
+
+### Befund aus `JR-5-07`: die dokumentierte Reihenfolge kennt `Recipient:` nicht
+
+Die veröffentlichte Seite bestimmt den Eigentümer aus `To`/`Cc`/`Bcc`/`From` — also aus den Feldern, die
+die **Header spiegeln**. Sie erwähnt `Recipient:` an keiner Stelle, obwohl genau dieses Feld die wahre
+SMTP-Empfängerliste trägt und im Typ selbst als „the entire justification for this feature" beschrieben
+ist.
+
+Folge: Ein Empfänger, der **nur** in der Envelope steht — der klassische Fall ist die
+Verteilerlisten-Expansion —, beeinflusst die Eigentümerbestimmung nicht. Eine Nachricht an eine Liste
+wird unter der **Listenadresse** abgelegt, nicht unter dem expandierten Mitglied.
+
+**Entscheidung des PO (2026-08-02): der Code folgt der Doku, der Widerspruch geht an E6.** Begründung:
+Die veröffentlichte Seite still zu unterlaufen wäre die schlechtere Hälfte beider Welten, und **erst in
+E6 entscheidet sich, was `archived_emails.userEmail` überhaupt bedeutet** — ob je Nachricht ein
+Archiveintrag entsteht oder je betroffenem Postfach. Ohne diese Festlegung ist nicht entscheidbar, ob
+das expandierte Mitglied den Eigentümer stellen soll. **`JR-6-02` muss das mitentscheiden** (dort steht
+ohnehin ADR-010 offen: `processEmail` erweitern vs. eigener Pfad).
+
+Die naheliegende Zwischenform, falls E6 sie will: `recipients` als **Auffang vor** dem
+`default_fallback`-Zweig. Das ändert **keine** der vier dokumentierten Tabellenzeilen und macht keine
+Aussage der Seite falsch — es fügt einen Schritt hinzu, wo die Seite heute aufgibt.
+
+### Zweiter offener Punkt aus `JR-5-07`: doppelt konfigurierte Alias-Domain
+
+Steht dieselbe Domain in **zwei** Gruppen als Alias, gewinnt die erste in Array-Reihenfolge; innerhalb
+einer Gruppe `main` vor `aliases`. Das ist dokumentiert und getestet, aber es ist ein **Tie-Break, keine
+Prüfung** — beanstanden kann der Parser es nicht, weil er per Architekturregel keine Konfiguration
+bekommt, sondern nur die fertigen Gruppen.
+
+**Vorgeschlagene Folgeaufgabe für `packages/backend`** (Nummer vergibt der Auftraggeber, die JR-Folge ist
+zwischen den Sessions geteilt): eine Validierung dort, wo `journaling_sources.organizationDomains`
+tatsächlich geschrieben wird — eine Domain in zwei Gruppen ist ein Bedienfehler, der beim Speichern
+auffallen sollte und nicht erst bei der Ablage einer Nachricht.
+
 ### Zahlen
 
 | Stand                         | Volllauf                                            |
@@ -2087,6 +2152,7 @@ je Fixture aussagen, **was erhalten bleibt**, nicht nur, was erkannt wird.
 | nach dem Rebase auf `d201612` | 45 Dateien, `559 passed \| 5 skipped`, unit 425/425 |
 | nach `JR-5-03`/`JR-5-04`      | 45 Dateien, `582 passed \| 5 skipped`, unit 448/448 |
 | nach `JR-5-05`/`JR-5-06`      | 45 Dateien, `602 passed \| 5 skipped`, unit 468/468 |
+| nach `JR-5-07`                | 46 Dateien, `625 passed \| 5 skipped`, unit 491/491 |
 
 Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
 `integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien

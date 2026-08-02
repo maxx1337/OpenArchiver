@@ -129,3 +129,4 @@ export {
 	type SplitJournalMime,
 } from './parser/mime-split';
 export { parseJournalReport } from './parser/journal-report';
+export { resolveOwner } from './parser/owner-resolution';
