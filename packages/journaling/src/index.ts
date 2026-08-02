@@ -113,3 +113,10 @@ export {
 	type CrashRecoveryScanResult,
 	type RequeueCandidate,
 } from './spool/crash-recovery';
+
+export {
+	formatIngressConfigError,
+	ingressConfigSchema,
+	parseIngressConfig,
+	type IngressConfig,
+} from './ingress/config';

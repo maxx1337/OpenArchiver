@@ -113,7 +113,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ledger/ledger-lookup.test.ts (the batched spool_txid -> ledger read port, against a recording
 		// fake) and spool/crash-recovery.test.ts (the crash-recovery scan: requeue vs. quarantine,
 		// batching, quarantine/ observability, no-delete, and tolerance of a racing second scan).
-		expectedFiles: 23,
+		// 26 after JR-4-01 added ingress/config.test.ts (the apps/smtp-ingress zod configuration
+		// schema), tests/unit/ingress-import-graph.test.ts (a static walk proving apps/smtp-ingress
+		// never resolves anything under packages/backend/, in particular not
+		// packages/backend/src/config/* or src/database/index.ts) and
+		// tests/unit/ingress-process-boot.test.ts (the compiled process spawned for real: exits 1
+		// with a readable message and no configuration, starts and accepts a connection on its
+		// configured port with one).
+		expectedFiles: 26,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -140,7 +147,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		// counted but never queried or moved, a fresh/empty spool scans cleanly, content preserved
 		// byte-for-byte across a run that both requeues and quarantines, and a racing second scan's
 		// already-moved source is tolerated rather than thrown).
-		expectedTests: { ci: 371, nightly: 1, manual: 0 },
+		// 393 ci after JR-4-01: 15 in ingress/config.test.ts (parseIngressConfig: valid input, the
+		// logLevel default and an explicit override, missing/out-of-range smtpPort x3,
+		// missing/empty/invalid spool fields x4, an entirely empty input; formatIngressConfigError:
+		// every invalid field named on one line each, no stack frame, the non-Zod fallback, the
+		// non-Error fallback) + 5 in tests/unit/ingress-import-graph.test.ts (the walker reaches the
+		// entry point and its known imports, no unresolved specifier, no @open-archiver/backend
+		// anywhere in the graph, nothing under packages/backend/ at all, and specifically neither
+		// packages/backend/src/config/* nor src/database/index.ts) + 2 in
+		// tests/unit/ingress-process-boot.test.ts (the compiled process exits 1 with a readable
+		// message and never binds a port without configuration; with valid configuration it creates
+		// the spool layout, accepts a connection on its configured port, and stays up until stopped).
+		expectedTests: { ci: 393, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

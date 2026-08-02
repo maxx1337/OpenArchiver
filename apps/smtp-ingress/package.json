@@ -1,0 +1,20 @@
+{
+	"name": "smtp-ingress-app",
+	"version": "0.1.0",
+	"private": true,
+	"license": "AGPL-3.0",
+	"scripts": {
+		"dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+		"build": "tsc",
+		"start": "node dist/index.js"
+	},
+	"dependencies": {
+		"@open-archiver/journaling": "workspace:*",
+		"dotenv": "^17.2.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.0.13",
+		"ts-node-dev": "^2.0.0",
+		"typescript": "^5.0.0"
+	}
+}
