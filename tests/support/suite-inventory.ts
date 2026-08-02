@@ -163,7 +163,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// clear-signed inner-part fixtures end to end; and the JR-5-03 "never throws" loop over
 		// seven deliberately broken shapes -- truncated, wrong boundary, nested multipart, 8-bit
 		// garbage, empty buffer, headers-only, unterminated boundary).
-		expectedTests: { ci: 447, nightly: 1, manual: 0 },
+		// 448 after PO review R1-R3 on JR-5-03/JR-5-04: a missing inner part no longer collapses the
+		// already-parsed envelope into a three-field `parse_failed` -- it stays `kind:
+		// 'journal_report'` with `innerMessage: { present: false }` and the full envelope intact,
+		// which replaced 2 parse_failed-shaped tests with 2 tests proving that (including a
+		// dedicated Bcc/DL-expansion-survives-a-missing-inner-part fixture, R1's sharpest form), and
+		// R3 added one more test for the deprecated application/x-pkcs7-mime alias -- net +1.
+		expectedTests: { ci: 448, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

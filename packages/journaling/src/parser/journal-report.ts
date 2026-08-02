@@ -18,10 +18,12 @@ import { isSmimeWrappedMessage, locateJournalParts, splitHeaderAndBody } from '.
  * ---------------------------------------------------------------------------------------------
  * Hard rules this function upholds
  * ---------------------------------------------------------------------------------------------
- *  - **Never throws.** Every failure mode -- an unexpected MIME shape, a missing report or inner
+ *  - **Never throws.** Every failure mode -- an unexpected outer MIME shape, an unparseable report
  *    part, a `mailparser` exception -- becomes `{ kind: 'parse_failed' }`, never an exception and
- *    never a rejection of the message. `JR-5-04` (a later E5 slice) is what turns `parse_failed`
- *    into a ledger event and an alert; this function only has to make the failure representable
+ *    never a rejection of the message. A missing *inner* part is different (see "an invariant that
+ *    holds across both robustness cases" below): the report still parsed, so it stays
+ *    `kind: 'journal_report'`. `JR-5-04` (a later E5 slice) is what turns `parse_failed` into a
+ *    ledger event and an alert; this function only has to make the failure representable
  *    (`docs/dev/journaling/README.md` constraint 4, RFC section 5.3).
  *  - **Never transforms the input bytes.** `rawMessage` is read only -- via `Buffer` views and
  *    `mailparser`, both of which are given copies/views for metadata extraction, never mutated.
@@ -36,21 +38,36 @@ import { isSmimeWrappedMessage, locateJournalParts, splitHeaderAndBody } from '.
  * part, and header extraction (subject/message-id/from) of the inner message for indexing.
  *
  * ---------------------------------------------------------------------------------------------
- * `JR-5-03`: a missing inner part is a defect, an encrypted one is not
+ * `JR-5-03`: an invariant that holds across both robustness cases
  * ---------------------------------------------------------------------------------------------
- * These two "robustness" cases the backlog groups together are handled quite differently, on
- * purpose:
+ * **Once the envelope has been parsed, no path here may drop it.** The report part -- `Sender`,
+ * `Subject`, `Message-Id`, `To`/`Cc`/`Bcc`, `Recipient:` (which is where Bcc copies and
+ * distribution-list expansion members show up, RFC section 6.1's "the entire justification for this
+ * feature"), `On-Behalf-Of`, `unknownFields` -- is either fully there or the result is `parse_failed`
+ * *before* it was ever parsed. There is no third option where an envelope got parsed and then only
+ * three of its fields survive into the result; an earlier version of this function did exactly that
+ * for the missing-inner-part case (reducing a fully parsed `ParsedEnvelope` to a
+ * `{subject, from, messageId}` triple), which is precisely the kind of silent evidence loss this
+ * parser exists to prevent (PO review R1, `JR-5-03`).
  *
- *  - **No inner `message/rfc822` part at all** is a malformed report -- the whole reason this parser
- *    exists is to hand the caller both the envelope and the original message, and only one showed
- *    up. That is `parse_failed`, but *not* an information void: `locateJournalParts()` (unlike
- *    `splitJournalReportMime()`) reports the report part even when the inner part is missing, so the
- *    envelope still gets parsed and its fields end up in `extractableHeaders` -- "completeness beats
- *    searchability" applies here too, not only to the fully-unrecognisable-input case.
- *  - **An S/MIME-encrypted inner part** is a well-formed report; the inner message parses fine, it
- *    is just unreadable ciphertext. That is `kind: 'journal_report'` with
- *    `innerMessage.contentEncrypted = true`, never `parse_failed` -- see
- *    `describeInnerMessage()`'s doc comment.
+ * Concretely, both "robustness" cases the backlog groups together end up **accepted, not rejected**,
+ * but via different `kind`s:
+ *
+ *  - **No inner `message/rfc822` part at all**: the report part still parses, so the envelope is
+ *    still complete. This is `kind: 'journal_report'` with `innerMessage: { present: false }` (the
+ *    `InnerMessageAbsent` case `journal-parser.types.ts` already modelled but nothing produced until
+ *    now) -- the caller gets the full envelope to index, and the missing inner part is what it must
+ *    still act on: seeing `innerMessage.present === false` on an otherwise-successful parse is the
+ *    signal to additionally write a `parse_failed` ledger event and alert (`JR-5-04`), exactly as
+ *    unambiguous a check as switching on `kind`, just one level deeper.
+ *  - **An S/MIME-encrypted inner part** is likewise a well-formed report; the inner message parses
+ *    fine, it is just unreadable ciphertext. That is `kind: 'journal_report'` with
+ *    `innerMessage.contentEncrypted = true` -- see `describeInnerMessage()`'s doc comment.
+ *
+ * `kind: 'parse_failed'` is reserved for the cases where the *report part itself* never parsed
+ * (not multipart/mixed, no boundary, no text/plain part, a `mailparser` exception on the report
+ * text, or a thrown envelope parse) -- there, `extractableHeaders` is the best-effort fallback
+ * (`extractFallbackHeaders()`) because no envelope exists to fall back on.
  */
 export async function parseJournalReport(rawMessage: Buffer): Promise<JournalReportParseResult> {
 	let located;
@@ -99,14 +116,17 @@ export async function parseJournalReport(rawMessage: Buffer): Promise<JournalRep
 	}
 
 	if (located.innerMessage === null) {
-		// JR-5-03: report part parsed fine, but the message/rfc822 inner part is missing -- still
-		// accepted, still surfaced with whatever the envelope gave us (see the module doc comment).
-		return parseFailed(
-			'journal report has a text/plain report part but no message/rfc822 inner part',
-			null,
-			rawMessage,
-			envelopeToExtractableHeaders(envelope)
-		);
+		// JR-5-03 (PO review R1): report part parsed fine, so the envelope -- Bcc, DL expansion,
+		// everything -- is complete and must not be dropped just because the inner message/rfc822
+		// part is missing. `kind` stays 'journal_report'; `innerMessage.present === false` is the
+		// caller's signal to also write a `parse_failed` ledger event and alert (see the module doc
+		// comment).
+		return {
+			kind: 'journal_report',
+			envelope,
+			reportText,
+			innerMessage: { present: false },
+		} satisfies JournalReportParsed;
 	}
 
 	const innerMessage = await describeInnerMessage(located.innerMessage);
@@ -169,11 +189,6 @@ async function describeInnerMessage(raw: Buffer): Promise<InnerMessagePart> {
 		// Swallowed deliberately -- see the doc comment above.
 	}
 	return { present: true, raw: new Uint8Array(raw), subject, messageId, from, contentEncrypted };
-}
-
-/** `envelope`'s fields, reshaped into `JournalParseFailed.extractableHeaders` (`JR-5-04`). */
-function envelopeToExtractableHeaders(envelope: ParsedEnvelope): ExtractableHeaders {
-	return { subject: envelope.subject, from: envelope.sender, messageId: envelope.messageId };
 }
 
 /**

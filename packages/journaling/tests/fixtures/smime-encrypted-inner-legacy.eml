@@ -1,0 +1,36 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Confidential contract (legacy content type)
+Date: Wed, 01 Jul 2026 14:30:00 +0000
+Message-ID: <outer-8@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary8"
+
+--JournalReportBoundary8
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Confidential contract (legacy content type)
+Message-Id: <inner-8@contoso.com>
+To: bob@contoso.com
+Recipient: bob@contoso.com
+
+--JournalReportBoundary8
+Content-Type: message/rfc822
+
+From: alice@contoso.com
+To: bob@contoso.com
+Subject: Confidential contract (legacy content type)
+Message-ID: <inner-8@contoso.com>
+Date: Wed, 01 Jul 2026 14:29:00 +0000
+MIME-Version: 1.0
+Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7m"
+
+MIIGRwYJKoZIhvcNAQcDoIIGODCCBjQCAQAxggFEMIIBQAIBADB2MGkxCzAJBgNV
+BAYTAlVTMRUwEwYDVQQKEwxDb250b3NvIEluYzEUMBIGA1UECxMLRW5jcnlwdGlv
+bjEmMCQGA1UEAxMdVGhpc0lzTm90UmVhbEV4YW1wbGVDaXBoZXJ0ZXh0AhAtIsFA
+KEXAMPLEBASE64CIPHERTEXTONLYNOTAREALSMIMEMESSAGEXAMPLEBASE64==
+BASE64CIPHERTEXTFILLERDATATHATISNOTREALCRYPTOGRAPHICMATERIALHERE
+--JournalReportBoundary8--

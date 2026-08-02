@@ -129,36 +129,56 @@ suite('ci', 'parseJournalReport() -- inner part with Content-Disposition: inline
 	});
 });
 
-suite('ci', 'parseJournalReport() -- never throws on malformed input', () => {
-	it('returns parse_failed when the inner message/rfc822 part is missing, still accepted -- not rejected', async () => {
-		const raw = loadFixture('missing-inner-part.eml');
-		const result = await parseJournalReport(raw);
-		expect(result.kind).toBe('parse_failed');
-		if (result.kind !== 'parse_failed') {
-			throw new Error('unreachable');
-		}
-		expect(result.reason.length).toBeGreaterThan(0);
-		expect(result.reason).toContain('no message/rfc822 inner part');
-	});
-
-	it('JR-5-03: a missing inner part still surfaces the report envelope as extractableHeaders, not an information void', async () => {
-		const raw = loadFixture('missing-inner-part.eml');
-		const result = await parseJournalReport(raw);
-		expect(result.kind).toBe('parse_failed');
-		if (result.kind !== 'parse_failed') {
-			throw new Error('unreachable');
-		}
-		// The report part parsed fine (see the fixture: Sender/Subject/Message-Id lines are all
-		// present) even though the inner message/rfc822 part is missing -- JR-5-04's "index what's
-		// extractable" needs exactly this, and a `parse_failed` carrying only `reason` could not
-		// provide it.
-		expect(result.extractableHeaders).toEqual({
-			subject: 'Broken report',
-			from: 'sender@contoso.com',
-			messageId: '<inner-4@contoso.com>',
+suite(
+	'ci',
+	'parseJournalReport() -- missing inner part: accepted, envelope kept intact (JR-5-03, PO review R1)',
+	() => {
+		it('stays kind "journal_report" with innerMessage.present === false, never parse_failed', async () => {
+			const raw = loadFixture('missing-inner-part.eml');
+			const result = await parseJournalReport(raw);
+			expect(result.kind).toBe('journal_report');
+			if (result.kind !== 'journal_report') {
+				throw new Error('unreachable');
+			}
+			expect(result.innerMessage.present).toBe(false);
+			// The report part parsed fine (Sender/Subject/Message-Id/To/Recipient are all present in
+			// the fixture) even though the inner message/rfc822 part is missing -- the envelope must
+			// not be reduced to a header triple just because the inner message could not be found.
+			expect(result.envelope.sender).toBe('sender@contoso.com');
+			expect(result.envelope.subject).toBe('Broken report');
+			expect(result.envelope.messageId).toBe('<inner-4@contoso.com>');
+			expect(result.envelope.recipients).toEqual(['someone@contoso.com']);
 		});
-	});
 
+		it('keeps Bcc recipients and DL-expansion members even when the inner part is missing', async () => {
+			// The sharpest form of PO review R1: this is the exact scenario JR-5-02's own acceptance
+			// criterion names ("Bcc-Empfänger und DL-Mitglieder erscheinen in den gespeicherten
+			// Metadaten") combined with JR-5-03's "kein Innenteil" case. Losing Bcc/DL here would be
+			// losing RFC section 6.1's "entire justification for this feature", not a cosmetic gap.
+			const raw = loadFixture('missing-inner-part-bcc-and-dl.eml');
+			const result = await parseJournalReport(raw);
+			expect(result.kind).toBe('journal_report');
+			if (result.kind !== 'journal_report') {
+				throw new Error('unreachable');
+			}
+			expect(result.innerMessage.present).toBe(false);
+			expect(result.envelope.to).toEqual(['team@contoso.com']);
+			expect(result.envelope.bcc).toEqual(['secretwatcher@contoso.com']);
+			expect(result.envelope.onBehalfOf).toBe('assistant@contoso.com');
+			expect(result.envelope.recipients).toEqual([
+				'team@contoso.com',
+				'dl-member-one@contoso.com',
+				'dl-member-two@contoso.com',
+				'secretwatcher@contoso.com',
+			]);
+			expect(result.envelope.unknownFields).toEqual([
+				{ name: 'x-custom-marker', value: 'keep-me' },
+			]);
+		});
+	}
+);
+
+suite('ci', 'parseJournalReport() -- never throws on malformed input', () => {
 	it('returns parse_failed when the outer message is not multipart/mixed at all', async () => {
 		const raw = loadFixture('not-multipart.eml');
 		const result = await parseJournalReport(raw);
@@ -345,6 +365,21 @@ suite('ci', 'parseJournalReport() -- S/MIME-encrypted inner part (JR-5-03)', () 
 		expect(Buffer.from(result.innerMessage.raw).toString('utf8')).toContain(
 			'application/pkcs7-mime'
 		);
+	});
+
+	it('recognises the deprecated application/x-pkcs7-mime alias the same way (PO review R3)', async () => {
+		const raw = loadFixture('smime-encrypted-inner-legacy.eml');
+		const result = await parseJournalReport(raw);
+		expect(result.kind).toBe('journal_report');
+		if (result.kind !== 'journal_report') {
+			throw new Error('unreachable');
+		}
+		expect(result.innerMessage.present).toBe(true);
+		if (!result.innerMessage.present) {
+			throw new Error('unreachable');
+		}
+		expect(result.innerMessage.contentEncrypted).toBe(true);
+		expect(result.innerMessage.subject).toBe('Confidential contract (legacy content type)');
 	});
 
 	it('never mutates the raw message buffer for an S/MIME-encrypted inner part', async () => {

@@ -21,8 +21,12 @@
  * fallthrough -- so the extension is additive, not a breaking change to this file.
  *
  * `JR-5-03` adds `InnerMessagePresent.contentEncrypted` (S/MIME-encrypted inner message: stored and
- * flagged, never rejected) and `JR-5-04` adds `JournalParseFailed.extractableHeaders` plus the
- * `ParseFailedAlert`/`ParseFailedAlertSink` alerting seam below.
+ * flagged, never rejected) and makes `InnerMessageAbsent` (below) an actually-produced case: a
+ * missing inner `message/rfc822` part stays `kind: 'journal_report'` with `innerMessage: { present:
+ * false }` rather than discarding the already-parsed envelope, so `parse_failed` never has to
+ * substitute for a case the envelope parser already handled correctly (PO review R1). `JR-5-04`
+ * adds `JournalParseFailed.extractableHeaders` for the cases where no envelope was ever parsed at
+ * all.
  */
 
 /** One field line from the journal report text that the envelope parser does not otherwise model. */
@@ -117,13 +121,26 @@ export interface InnerMessagePresent {
 	readonly contentEncrypted: boolean;
 }
 
+/**
+ * The report part parsed fine but no `message/rfc822` inner part was found (`JR-5-03`). `envelope`
+ * on the surrounding `JournalReportParsed` is still complete -- this case is about the *original
+ * message* being unrecoverable, not the envelope. A caller must treat `present === false` here as
+ * the signal to additionally write a `parse_failed` ledger event and alert (`JR-5-04`): the outer
+ * `kind` alone reads as success, deliberately, because the envelope genuinely is one.
+ */
 export interface InnerMessageAbsent {
 	readonly present: false;
 }
 
 export type InnerMessagePart = InnerMessagePresent | InnerMessageAbsent;
 
-/** The outer message parsed as a well-formed Exchange envelope-journaling report. */
+/**
+ * The outer message parsed as a well-formed Exchange envelope-journaling report. `envelope` is
+ * always the **complete** result of `parseEnvelope()` -- including `bcc`/`recipients`/`onBehalfOf`/
+ * `unknownFields` -- regardless of whether `innerMessage` turned out to be present, absent, or
+ * encrypted; those three are properties of the *inner message*, never a reason to reduce or drop the
+ * *envelope* (PO review R1, `JR-5-03`).
+ */
 export interface JournalReportParsed {
 	readonly kind: 'journal_report';
 	readonly envelope: ParsedEnvelope;
@@ -167,30 +184,16 @@ export interface JournalParseFailed {
 export type JournalReportParseResult = JournalReportParsed | JournalParseFailed;
 
 /**
- * The operator-visible event a caller emits when `parseJournalReport()` returns `kind:
- * 'parse_failed'` (`JR-5-04`, journal-ledger skill section 6: "alarmieren"). Mirrors
- * `QuarantineAlert`/`QuarantineAlertSink`'s shape in `packages/journaling/src/spool/quarantine.ts`
- * deliberately -- the same "typed event through an injected sink" pattern, not a second one invented
- * for this slice (`docs/dev/journaling/12-parallelbetrieb.md` section on not vergeben-ing a second
- * mechanism where one already exists).
- *
- * **The parser itself never calls this.** `packages/journaling`'s parser is pure -- no I/O, no
- * ledger, no storage (that is the `journal-inbound` worker's job, `JR-6-01`/`JR-6-02`, which does not
- * exist yet). `JournalParseFailed` already carries everything an alert needs (`reason`, `detail`,
- * `extractableHeaders`); the worker is the one call site that also has the ledger `seq` and spool
- * path to attach, so it constructs the `ParseFailedAlert` and calls whichever `ParseFailedAlertSink`
- * it is wired to -- a decision this package cannot make for it (architecture doc section 2: config
- * and I/O are injected, never imported, here).
+ * `JR-5-04`'s alerting requirement ("Operator wird alarmiert") deliberately has **no type here**.
+ * An earlier version of this file added `ParseFailedAlert`/`ParseFailedAlertSink`, modelled on
+ * `QuarantineAlert`/`QuarantineAlertSink` (`packages/journaling/src/spool/quarantine.ts`) -- but
+ * unlike that pair, which `runCrashRecoveryScan()` constructs and calls in the same package, nothing
+ * in `packages/journaling` ever constructed a `ParseFailedAlert` or called a `ParseFailedAlertSink`
+ * (PO review R2, `JR-5-03`/`JR-5-04`): a seam with no producer and no caller is a guess, not a
+ * contract, and the risk is that E6 adopts it *because it exists* rather than because it fits what
+ * the `journal-inbound` worker actually needs (a ledger `seq`, a spool path, neither of which the
+ * parser has). `JournalReportParsed`/`JournalParseFailed` already carry everything the worker needs
+ * to build whatever alert shape it settles on: `innerMessage.present === false` or
+ * `kind === 'parse_failed'` as the signal, `reason`/`detail`/`extractableHeaders` as the payload.
+ * Defining the alert sink is E6's job, once it knows what it needs.
  */
-export interface ParseFailedAlert {
-	/** The ledger `seq` of the `parse_failed` event the caller just appended. Same type as `LedgerEntryInput.seq` (`journal-ledger.types.ts`). */
-	readonly seq: bigint;
-	readonly reason: string;
-	readonly detail: string | null;
-	readonly extractableHeaders: ExtractableHeaders;
-}
-
-/** Where a `parse_failed` alert goes. See {@link ParseFailedAlert}'s doc comment for who calls this and why the parser does not. */
-export interface ParseFailedAlertSink {
-	alert(event: ParseFailedAlert): Promise<void> | void;
-}

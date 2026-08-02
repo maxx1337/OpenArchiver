@@ -1917,17 +1917,17 @@ Integrationsbranch gelandet** — mit `git merge-base --is-ancestor` für alle d
 Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft **eine** Task
 (`JR-5-05`), und die SMTP-Envelope ist dort ein Eingabeparameter, kein Code aus E4.
 
-| Task      | Stand                                                                               |
-| --------- | ----------------------------------------------------------------------------------- |
-| `JR-5-01` | **[x] erledigt** 2026-08-02 (`15f7e2a` + Review-Nacharbeit)                         |
-| `JR-5-02` | **[x] erledigt** 2026-08-02 (`15f7e2a` + Review-Nacharbeit)                         |
-| `JR-5-03` | [ ] offen — kein Innenteil, S/MIME, `content_encrypted`                             |
-| `JR-5-04` | [ ] offen — `parse_failed` als Ledger-Event (der Parser liefert bereits das Signal) |
-| `JR-5-05` | [ ] offen — Plain-BCC-Fallback                                                      |
-| `JR-5-06` | [ ] offen — NDRs und Bounces                                                        |
-| `JR-5-07` | [ ] offen — Owner-Resolution                                                        |
-| `JR-5-08` | [ ] offen — Fixture-Korpus (Rolle TEST)                                             |
-| `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                              |
+| Task      | Stand                                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `JR-5-01` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
+| `JR-5-02` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
+| `JR-5-03` | **[x] erledigt** 2026-08-02 (S2 + Review-Nacharbeit)                                                                             |
+| `JR-5-04` | **[~] parserseitig erledigt, Rest hängt an E6** — der Ledger-Eintrag, der Storage, die Indexierung und der Alarm sind E6s Arbeit |
+| `JR-5-05` | [ ] offen — Plain-BCC-Fallback                                                                                                   |
+| `JR-5-06` | [ ] offen — NDRs und Bounces                                                                                                     |
+| `JR-5-07` | [ ] offen — Owner-Resolution                                                                                                     |
+| `JR-5-08` | [ ] offen — Fixture-Korpus (Rolle TEST)                                                                                          |
+| `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                                                                           |
 
 ### Was `JR-5-01`/`JR-5-02` liefern
 
@@ -1971,6 +1971,54 @@ Boundary `B1` für einen Trenner (jetzt mit RFC-2046-Prüfung des Zeilenrests).
 **Die Lehre ist nicht „prüfe Berichte".** Alle vier waren aus dem Diff lesbar, keiner davon hätte einen
 Test rot gemacht, und drei hätten still falsche Metadaten erzeugt.
 
+### Was `JR-5-03`/`JR-5-04` liefern
+
+**S/MIME:** `contentEncrypted` wird am **Content-Type des Innenteils** entschieden, nicht daran, ob
+`mailparser` gestolpert ist — die Bibliothek wirft bei verschlüsseltem Körper nämlich gar nicht, das
+Signal wäre also wertlos gewesen. `multipart/signed` bleibt ausdrücklich ausgenommen: ein
+**signierter** Innenteil ist lesbar und indexierbar, ein **verschlüsselter** nicht, und die beiden zu
+verwechseln hieße entweder Chiffrat zu indexieren oder lesbare Post nicht.
+
+**Kein Innenteil:** `kind: 'journal_report'` mit `innerMessage: { present: false }` — der Envelope
+bleibt **vollständig** erhalten. Der Aufrufer erkennt am `present === false`, dass zusätzlich ein
+`parse_failed`-Ereignis fällig ist.
+
+**Nicht-Wurf:** sieben absichtlich kaputte Eingaben (abgeschnitten, falsche Boundary, verschachtelte
+Multiparts, 8-Bit-Müll, leerer Puffer, nur Header, Boundary ohne Abschluss) — keine erzeugt eine
+Ausnahme.
+
+**Was `JR-5-04` parserseitig beiträgt:** `JournalParseFailed` trägt `extractableHeaders`, damit E6s
+„Extrahierbares wird indexieren" überhaupt etwas hat. Ein `parse_failed`, das nur einen `reason`
+trägt, macht Indexierung unmöglich.
+
+### Der Befund aus dem S2-Review: eine grüne Suite, die den Envelope verlor
+
+Der erste S2-Entwurf gab im Fall „Reportteil in Ordnung, Innenteil fehlt" ein `parse_failed` zurück
+und reduzierte den zu diesem Zeitpunkt **vollständig geparsten** Envelope auf drei Felder
+(`subject`/`from`/`messageId`). Verloren gingen dabei `bcc`, `recipients` samt
+Verteilerlisten-Expansion, `onBehalfOf` und `unknownFields` — also genau das, was RFC §6.1 „the entire
+justification for this feature" nennt und woran `JR-5-02` abgenommen wird. Ein fehlender **Innen**teil
+ist kein Grund, den **Außen**-Envelope zu verwerfen.
+
+Verschärfend: `InnerMessageAbsent { present: false }` steht seit S1 im Typ und wurde von **nichts**
+mehr erzeugt. Für einen Fall gab es zwei Mechanismen, und der ungenutzte war der, der die Daten
+behält.
+
+> **Die Lehre ist nicht „prüfe Berichte", sondern etwas Unangenehmeres: die Suite war grün.**
+> `582 passed`, kein einziger roter Test — weil keiner geprüft hat, ob der Envelope einen fehlenden
+> Innenteil überlebt. Der Befund lag nicht im Code, sondern in der Abwesenheit einer Behauptung.
+> **Für `JR-5-08` (Korpus, Rolle TEST) ist das die eigentliche Vorgabe:** jede Fixture muss eine
+> Aussage darüber tragen, was **erhalten bleibt**, nicht nur darüber, was erkannt wird.
+
+Festgelegte Invariante, ab jetzt gültig für jeden Pfad im Parser: **ist der Envelope einmal geparst,
+darf ihn kein Rückgabeweg fallen lassen.**
+
+Zwei weitere Punkte aus demselben Review: `ParseFailedAlert`/`ParseFailedAlertSink` waren ohne
+Erzeuger und ohne Aufrufer entstanden — eine Naht, die keine ist, mit dem Risiko, dass E6 sie
+übernimmt, **weil es sie gibt**. Gestrichen; die Alarmierung definiert E6, wenn sie ihren Kontext
+kennt. Und die veraltete S/MIME-Form `application/x-pkcs7-mime` hatte keine Fixture („aus
+Zeitgründen") — nachgezogen.
+
 ### Zahlen
 
 | Stand                         | Volllauf                                            |
@@ -1979,6 +2027,7 @@ Test rot gemacht, und drei hätten still falsche Metadaten erzeugt.
 | nach `JR-5-01`/`JR-5-02`      | 43 Dateien, `525 passed \| 3 skipped`, unit 410/410 |
 | nach der Review-Nacharbeit    | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
 | nach dem Rebase auf `d201612` | 45 Dateien, `559 passed \| 5 skipped`, unit 425/425 |
+| nach `JR-5-03`/`JR-5-04`      | 45 Dateien, `582 passed \| 5 skipped`, unit 448/448 |
 
 Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
 `integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
