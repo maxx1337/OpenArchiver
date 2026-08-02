@@ -264,7 +264,7 @@ eingeschoben (siehe `03-backlog.md`).
 | 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt            | 10 / 10                  |
 | 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen | 9 / 9 + 8 / 8 Nacharbeit |
 | 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)         | 11 / 11                  |
-| 4           | E3   | Spool und Acceptance-Contract      | **in Arbeit** auf `claude/journaling-e3-spool`                      | 7 / 8                    |
+| 4           | E3   | Spool und Acceptance-Contract      | **in Arbeit** auf `claude/journaling-e3-spool`                      | 7 / 9                    |
 | 5           | E4   | `smtp-ingress`-Service             | offen                                                               | 0 / 13                   |
 | 6           | E5   | Journal-Report-Parser              | offen                                                               | 0 / 9                    |
 | 7           | E6   | Phase-B-Worker                     | offen                                                               | 0 / 8                    |

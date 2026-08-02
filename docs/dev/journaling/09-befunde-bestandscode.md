@@ -1864,4 +1864,12 @@ Fehlerbehandlung erzeugt den nächsten Ausfall.
    Erreichen eines Anteils am Budget. Gehört dann zu E10 (Monitoring) und E12 (Betriebsleitfaden).
 
 Beide schließen einander nicht aus; (1) macht die Meldung ehrlich, (2) macht den Speicher wieder
-frei. **Der Auftraggeber entscheidet, ob das vor der Abnahme von E3 behoben wird oder danach.**
+frei. **Sie ersetzen einander aber auch nicht** — (1) allein gibt **kein** Byte frei, weil die
+Quarantäne im Budget bleibt.
+
+**Entscheidung des Auftraggebers vom 2026-08-02: vor der Abnahme von E3 beheben, Hälfte 1.**
+Angelegt als **`JR-3-09`** in E3 (DEV). **Hälfte 2 bleibt offen** und ist keine Codefrage: sie
+verlangt ein Verfahren — Aufbewahrungsfrist für die Quarantäne, Betreiber-Freigabe, Alarm bei
+Erreichen eines Anteils am Budget — und gehört damit zu **E10** (Monitoring) und **E12**
+(Betriebsleitfaden). Bis dahin gilt: ein Spool, der wiederholt Schreibfehler sieht, läuft langsam
+voll, und **niemand räumt ihn automatisch**.
