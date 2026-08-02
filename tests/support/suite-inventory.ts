@@ -174,9 +174,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		name: 'adversarial',
 		include: ['packages/*/tests/adversarial/**/*.adv.test.ts'],
 		// 1 until JR-2-08/JR-2-09; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
-		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 4 after JR-3-06 added
-		// packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts.
-		expectedFiles: 4,
+		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 5 after JR-3-06/JR-3-07
+		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
+		// spool-disk-full.adv.test.ts.
+		expectedFiles: 5,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -188,8 +189,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// artifact behind, 1 end-to-end case chaining a failed accept() into runCrashRecoveryScan() to
 		// show the artifact gets spuriously quarantined and alerted, 1 case proving a failure does not
 		// wedge the next transaction, 1 case proving the leftover debris erodes the high-water-mark
-		// budget against an unrelated later transaction).
-		expectedTests: { ci: 33, nightly: 1, manual: 1 },
+		// budget against an unrelated later transaction). 37 after JR-3-07 added 4 more in
+		// spool-disk-full.adv.test.ts (2 recovery-after-clearing cases, 1 quarantine-only high-water-mark
+		// case, 1 repeated-failure case). spool-disk-full.adv.test.ts also declares a `manual` suite (2
+		// cases) gated on a real size-limited volume via OA_TEST_SPOOL_DISKFULL_ROOT -- it is
+		// environment-gated rather than class-gated, so it contributes 0 executed tests on this host
+		// under every class selection, including `OA_TEST_CLASSES=manual`; manual stays 1.
+		expectedTests: { ci: 37, nightly: 1, manual: 1 },
 	},
 ];
 
