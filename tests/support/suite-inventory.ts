@@ -278,7 +278,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		//    where the forgery is actually exploitable (a genuine Exchange journal-report wrapper is
 		//    never displaced by forged inner content). Net +2 (2 tests -> 4 tests).
 		// Net change to this file: 11 -> 13 tests, so unit ci 502 -> 504.
-		expectedTests: { ci: 504, nightly: 1, manual: 0 },
+		//
+		// 512 after `JR-5-09`'s independent acceptance found F43 and the fix landed with its
+		// regression cover, all eight in the existing `owner-resolution.test.ts` (no new file, so
+		// `expectedFiles` is unchanged): matching trimmed a configured domain while the emitted
+		// address did not, so a stray space in `organizationDomains` matched and then leaked into
+		// `ownerEmail` -- and a *leading* space put whitespace in the middle of the address
+		// (`alice@ company.com`), which is never deliverable and never compares equal downstream.
+		// Four whitespace shapes, the alias path, the fallback path, and casing-preserved-while-
+		// trimmed are +7; the eighth asserts the limit that is deliberately NOT repaired, a `main`
+		// that is a full address rather than a bare domain, because guessing which half the operator
+		// meant would invent a value out of a broken input. Net +8 (504 -> 512).
+		expectedTests: { ci: 512, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

@@ -1927,7 +1927,7 @@ Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft
 | `JR-5-06` | **[x] erledigt** 2026-08-02 (S3)                                                                                                 |
 | `JR-5-07` | **[x] erledigt** 2026-08-02 (S4) — mit einem Befund an E6, siehe unten                                                           |
 | `JR-5-08` | **[x] erledigt** 2026-08-02 (S5 Korpus + S6 Reparatur) — zwei Befunde, alle behoben                                              |
-| `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                                                                           |
+| `JR-5-09` | **[x] erledigt** 2026-08-02 — **angenommen mit Auflage**, Auflage geschlossen (F43)                                              |
 
 ### Was `JR-5-01`/`JR-5-02` liefern
 
@@ -2209,6 +2209,60 @@ Weiterleitung zitiert, Weiterleitung als Anlage, Mail mit Anhang, Kalendereinlad
 Abwesenheitsnotiz sind `plain_bcc`; der DSN bleibt `ndr`. Die sieben kaputten Eingaben aus S3 werfen
 weiterhin nicht, und die vier Tabellenzeilen aus S4 sind unberührt.
 
+### `JR-5-09`: Abnahme durch die Rolle TEST — **angenommen mit Auflage**
+
+Die Prüferin hat die Basiszahlen selbst nachgefahren statt sie zu glauben (deckungsgleich), die acht
+Kriterien einzeln am **gebauten** Paket gemessen, und die zwei Fallen, die ich ihr vorgelegt habe, beide
+eingehalten:
+
+- **Reichweite über E5 hinaus:** `JR-5-01` (Storage), `JR-5-03` (Indexierung) und `JR-5-04`
+  (Ledger, Alarm) verlangen Dinge, die es in einem reinen Parser nicht gibt. Sie hat sie als
+  **teilweise** ausgewiesen und per `grep` belegt, dass **kein** Test etwas davon behauptet — statt
+  Häkchen für nicht vorhandene Strecken zu setzen.
+- **ADR-028s Grenze:** keine Beschönigung gefunden. Die Fälschungs-Fixtures liefern unter `'infer'`
+  weiterhin messbar `journal_report`, und Kommentar wie Test benennen das.
+
+Sechs Kriterien erfüllt, zwei teilweise mit benannter Reichweite, eines (`JR-5-07`) mit einem **neuen
+Befund**. Bemerkenswert an ihrer Arbeit ist ein Schritt, der selten vorkommt: Ihre erste
+Quoted-Printable-Sonde schlug an, und sie hat **das eigene Werkzeug** geprüft, nicht den Parser
+beschuldigt — das Fixture enthielt einen QP-Soft-Linebreak, der zwei Zeilen verschmolz. Ein Fehlalarm,
+den sie selbst abgefangen hat.
+
+### F43 — Whitespace in einer konfigurierten Domain landete in der Eigentümeradresse
+
+Vergeben 2026-08-02 (PO), gefunden von `JR-5-09`. Der Vergleich lief über `normalizedConfiguredDomain()`
+(trimmt), die **Ausgabe** benutzte die rohe Zeichenkette. Ein versehentliches Leerzeichen in
+`organizationDomains` passte damit weiterhin — und wanderte in die Adresse. Nachgemessen, und in einem
+Punkt schlimmer als gemeldet:
+
+```
+'company.com '   -> "alice@company.com "            Whitespace am Ende
+' company.com'   -> "alice@ company.com"            Whitespace MITTEN in der Adresse
+'company.com\t'  -> "alice@company.com\t"
+```
+
+Eine solche Adresse ist nie zustellbar und vergleicht sich mit nichts — und sie wäre nach E6 in
+`archived_emails.userEmail` gelandet. **Behoben** an beiden Ausgabestellen (Treffer- und Fallback-Pfad),
+mit acht Regressionstests.
+
+**Zwei Dinge sind dabei bewusst _nicht_ passiert.** Die **Groß-/Kleinschreibung** wird weiter erhalten —
+das ist entworfen, nicht versehentlich, und Trimmen ist eine andere Frage als Kleinschreiben; ein Test
+hält beides zugleich fest (`' Company.COM '` ⇒ `alice@Company.COM`). Und ein `main`, der **gar keine
+Domain** ist (`'admin@company.com'` ⇒ `default_fallback@admin@company.com`, zwei `@`), wird **nicht
+repariert**: zu raten, welche Hälfte der Betreiber meinte, wäre genau der verbotene Zug — aus einer
+kaputten Eingabe einen Wert erfinden. Ein Test hält diese Grenze fest, statt sie später entdecken zu
+lassen. Sie gehört in die Konfigurationsprüfung im Backend, zusammen mit der doppelt konfigurierten
+Domain aus `JR-5-07`.
+
+### Zwei Abdeckungslücken, bewusst offen
+
+`Recipient:` mit spitzen Klammern und eine semikolongetrennte `Recipient:`-Liste werden nicht
+normalisiert. Beides sind **Lücken, keine Defekte**: Sie hängen an der Annahme, Exchange schreibe eine
+nackte Adresse pro Zeile — und die ist ohne echtes Exchange-Sample nicht überprüfbar. **Die Prüferin hat
+das ausdrücklich als unverifiziert gemeldet, statt eine Exchange-Struktur plausibel zu erfinden.** Das
+war die Vorgabe, und sie ist der Grund, warum diese beiden Lücken hier stehen und nicht als geprüft
+gelten.
+
 ### Zahlen
 
 | Stand                         | Volllauf                                            |
@@ -2222,6 +2276,7 @@ weiterhin nicht, und die vier Tabellenzeilen aus S4 sind unberührt.
 | nach `JR-5-07`                | 46 Dateien, `625 passed \| 5 skipped`, unit 491/491 |
 | `JR-5-08` Korpus, 3 rot       | 47 Dateien, `633 passed \| 3 failed`, unit 502/502  |
 | nach der Reparatur (S6)       | 47 Dateien, `638 passed \| 5 skipped`, unit 504/504 |
+| nach `JR-5-09` + F43          | 47 Dateien, `646 passed \| 5 skipped`, unit 512/512 |
 
 Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
 `integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
@@ -2235,9 +2290,10 @@ aus dem E2-Handover sind **überholt** — die Differenz zur Basis sind E3s zehn
    angefasst (fremdes Gebiet, `12-parallelbetrieb.md` §5) — die Meldung hat gereicht.
 1. **`pnpm test` ist nicht in `dotenv --` gewickelt** (`package.json:28`), anders als `CLAUDE.md` §4
    für alle Root-Skripte behauptet. Ohne exportiertes `DATABASE_URL` überspringt die gesamte
-   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Kandidat für einen Befund; die
-   F-Nummer vergibt der PO**, weil die Nummernfolge zwischen beiden Sessions geteilt ist
-   (`12-parallelbetrieb.md` §6). Nach E3s **F40** und **F41** wäre **F42** die nächste freie.
+   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Aufgenommen als F42**
+   (2026-08-02, PO) — nach E3s **F40** und **F41** war das die nächste freie Nummer. Behoben wird er
+   nicht in E5: `package.json` ist gemeinsames Gebiet, und ein Griff hinein während E3s Abschluss wäre
+   genau der Konflikt, den `12-parallelbetrieb.md` §3.2 vermeiden will.
 2. ~~**Die ADR-Nummer 027 könnte kollidieren**~~ — **gegengeprüft, sie tut es nicht**. Session A hat
    im gesamten E3-Abschluss keine ADR geschrieben; ADR-027 ist nach dem Rebase die einzige mit dieser
    Nummer.

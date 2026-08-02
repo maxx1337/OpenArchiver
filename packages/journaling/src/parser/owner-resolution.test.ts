@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import type { OrganizationDomainGroup, OwnerResolutionEnvelope } from '@open-archiver/types';
 import { resolveOwner } from './owner-resolution';
@@ -243,6 +243,66 @@ suite(
 				GUIDE_GROUPS
 			);
 			expect(result.additionalMatches).toEqual([]);
+		});
+
+		/**
+		 * F43, found by `JR-5-09`'s independent acceptance. Matching trimmed the configured domain
+		 * while the emitted address did not, so a stray space in `organizationDomains` matched and
+		 * then leaked into `ownerEmail` -- `' company.com'` even put whitespace in the *middle* of
+		 * the address. Every case below produced a broken address before the fix; each asserts the
+		 * whole address rather than just "no whitespace", so a future regression cannot pass by
+		 * trimming somewhere else and mangling the rest.
+		 */
+		describe('F43: whitespace in a configured domain never reaches the owner address', () => {
+			it.each([
+				['trailing space in main', 'company.com '],
+				['leading space in main', ' company.com'],
+				['trailing tab in main', 'company.com\t'],
+				['space on both sides of main', '  company.com  '],
+			])('%s still yields a clean owner address', (_label, main) => {
+				const result = resolveOwner(envelope({ to: ['alice@company.com'] }), [
+					{ main, aliases: [] },
+				]);
+				expect(result.ownerEmail).toBe('alice@company.com');
+				expect(result.method).toBe('primary-domain-match');
+			});
+
+			it('trims the alias-matched group main too, not only the exact-match path', () => {
+				const result = resolveOwner(envelope({ to: ['alice@old-brand.com'] }), [
+					{ main: ' company.com ', aliases: ['old-brand.com'] },
+				]);
+				expect(result.ownerEmail).toBe('alice@company.com');
+				expect(result.method).toBe('alias-domain-match');
+			});
+
+			it('trims the fallback address as well, where the domain is used without any match', () => {
+				const result = resolveOwner(envelope({ to: ['external@gmail.com'] }), [
+					{ main: 'company.com ', aliases: [] },
+				]);
+				expect(result.ownerEmail).toBe('default_fallback@company.com');
+				expect(result.method).toBe('fallback');
+				expect(result.warning).not.toBeNull();
+			});
+
+			it("preserves the operator's casing while trimming -- the two are separate concerns", () => {
+				const result = resolveOwner(envelope({ to: ['alice@company.com'] }), [
+					{ main: ' Company.COM ', aliases: [] },
+				]);
+				expect(result.ownerEmail).toBe('alice@Company.COM');
+			});
+
+			/**
+			 * Deliberately *not* repaired: a `main` that is not a bare domain. Guessing which half
+			 * the operator meant would invent a value out of a broken input, which is the one thing
+			 * this parser must never do. Asserted so the limit is measured and visible rather than
+			 * discovered later; the check belongs where the config is written.
+			 */
+			it('does not invent a domain when main is a full address (documented limit)', () => {
+				const result = resolveOwner(envelope({ to: ['external@gmail.com'] }), [
+					{ main: 'admin@company.com', aliases: [] },
+				]);
+				expect(result.ownerEmail).toBe('default_fallback@admin@company.com');
+			});
 		});
 	}
 );

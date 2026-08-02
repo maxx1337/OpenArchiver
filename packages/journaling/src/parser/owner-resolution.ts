@@ -62,6 +62,27 @@ function normalizedConfiguredDomain(value: string): string {
 }
 
 /**
+ * A configured group's domain as it goes **into** an owner address: trimmed, but deliberately **not**
+ * lowercased -- see `normalizeOwnerEmail()` for why the operator's casing is preserved.
+ *
+ * Trimming here is not cosmetic. Until `JR-5-09` it was missing, and because matching went through
+ * `normalizedConfiguredDomain()` (which trims) while the output used the raw string, a single stray
+ * space in `organizationDomains` still matched and then leaked into the address: `'company.com '`
+ * produced `alice@company.com ` and `' company.com'` produced `alice@ company.com` -- whitespace in
+ * the middle of an address that is never deliverable and never compares equal to anything downstream.
+ * Recorded as **F43**.
+ *
+ * What this does **not** repair: a `main` that is not a bare domain at all (`'admin@company.com'`
+ * yields `default_fallback@admin@company.com`, two `@` signs). Guessing which half the operator meant
+ * would be the forbidden move -- inventing a value out of a broken input. That belongs in a
+ * config-time check where `journaling_sources.organizationDomains` is written, together with the
+ * duplicate-domain check from `JR-5-07`; both are proposed follow-ups for `packages/backend`.
+ */
+function configuredDomainForOwnerAddress(value: string): string {
+	return value.trim();
+}
+
+/**
  * The domain half of an address, lowercased for comparison -- `null` when the address has no `@` at
  * all (or the domain half is empty, e.g. a trailing `@`). Splits on the **last** `@`; see the module
  * doc comment.
@@ -114,12 +135,12 @@ function findGroupMatch(
 }
 
 /**
- * `<local-part>@<group.main>`, exactly as configured (not re-lowercased) -- so storage is always
+ * `<local-part>@<group.main>`, trimmed but not re-lowercased -- so storage is always
  * keyed by the exact primary-domain string the operator configured, regardless of what casing the
  * matching address happened to carry. The local part is copied verbatim from `address`.
  */
 function normalizeOwnerEmail(address: string, group: OrganizationDomainGroup): string {
-	return `${localPartOf(address)}@${group.main}`;
+	return `${localPartOf(address)}@${configuredDomainForOwnerAddress(group.main)}`;
 }
 
 interface InboundCandidate {
@@ -214,7 +235,7 @@ function heuristicResult(envelope: OwnerResolutionEnvelope): OwnerResolutionResu
  * why this package never logs it itself).
  */
 function fallbackResult(firstGroup: OrganizationDomainGroup): OwnerResolutionResult {
-	const ownerEmail = `default_fallback@${firstGroup.main}`;
+	const ownerEmail = `default_fallback@${configuredDomainForOwnerAddress(firstGroup.main)}`;
 	return {
 		ownerEmail,
 		method: 'fallback',
