@@ -51,8 +51,16 @@
  * 6.1 describes (one `multipart/mixed` envelope, boundary-delimited child parts, each child with its
  * own small header block) and nothing more exotic (nested multipart alternatives inside a child,
  * RFC 2231 continuation parameters, etc.). Anything outside that shape is surfaced as `null` by
- * {@link splitJournalReportMime}, and the caller turns that into a `parse_failed` result rather than
- * a thrown error -- never a crash, per the parser's no-throw contract.
+ * {@link splitJournalReportMime} -- never a thrown error, per the parser's no-throw contract. What a
+ * caller *does* with that `null` is the caller's decision, not this module's: `splitJournalReportMime`
+ * itself makes none. `journal-report.ts`'s actual caller (`locateJournalParts()`, below, which reports
+ * the report/inner parts independently rather than collapsing them into one `null`) deliberately does
+ * **not** treat "no report-part candidate among the immediate children" as proof of a broken
+ * journal-report attempt (`JR-5-08` finding 1) -- a shape "nothing more exotic" already disclaims,
+ * such as the report-shaped part sitting inside a nested `multipart/alternative`, is not evidence of
+ * breakage, only of a shape this deliberately shallow search does not look inside. See
+ * `journal-report.ts`'s module doc comment for the reasoning and `parseJournalReport()`'s handling of
+ * `located.reportPart === null`.
  *
  * **Never transforms the input bytes.** Every function here only reads `raw`/`body` via
  * `Buffer.indexOf`/`.subarray()` (a view, not a copy, but never written to) and `.toString()` on

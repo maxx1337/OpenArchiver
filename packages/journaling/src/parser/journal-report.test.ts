@@ -716,22 +716,37 @@ suite('ci', 'parseJournalReport() -- NDR / bounce detection (JR-5-06)', () => {
 		expect(result.envelope).toEqual({ envelopeFrom: '', envelopeRcpt: null });
 	});
 
-	it('recognises Auto-Submitted alone as sufficient by itself, even without a null sender', async () => {
-		const raw = loadFixture('ndr-auto-submitted-only.eml');
-		const result = await parseJournalReport(raw, {
-			envelopeFrom: 'mailer-daemon@mx.example.org',
-			envelopeRcpt: null,
-		});
-		expect(result.kind).toBe('ndr');
-		if (result.kind !== 'ndr') {
-			throw new Error('unreachable');
+	it(
+		'no longer recognises Auto-Submitted alone as sufficient by itself (JR-5-08 finding 3): ' +
+			'falls through to plain_bcc without either decisive signal',
+		async () => {
+			// Corrected expectation -- this test previously asserted `kind: 'ndr'` here, on the theory
+			// that `Auto-Submitted` firing alone was an accepted trade-off. Checked against RFC 3834
+			// itself instead of assumed: section 5 permits the identical `auto-replied` token on a
+			// genuine DSN AND on an ordinary vacation autoresponder (section 7's own worked example), so
+			// this header's value cannot by itself tell a bounce apart from an automatic reply that is
+			// not one. This fixture has neither RFC 3464 structure nor a null envelope sender -- only
+			// `Auto-Submitted` -- so it is exactly the shape a real out-of-office autoresponder also has,
+			// and asserting `'ndr'` for it is the same "fabricated evidence" (asserting a delivery
+			// failure that did not happen) this parser's own stated principle rules out elsewhere. See
+			// `classifyNonJournalMessage()`'s and `NdrSignal`'s doc comments for the corrected signal
+			// strength.
+			const raw = loadFixture('ndr-auto-submitted-only.eml');
+			const result = await parseJournalReport(raw, {
+				envelopeFrom: 'mailer-daemon@mx.example.org',
+				envelopeRcpt: null,
+			});
+			expect(result.kind).toBe('plain_bcc');
+			if (result.kind !== 'plain_bcc') {
+				throw new Error('unreachable');
+			}
+			expect(result.reducedEnvelopeFidelity).toBe(true);
+			expect(result.envelope).toEqual({
+				envelopeFrom: 'mailer-daemon@mx.example.org',
+				envelopeRcpt: null,
+			});
 		}
-		expect(result.signals).toEqual(['auto-submitted-header']);
-		expect(result.envelope).toEqual({
-			envelopeFrom: 'mailer-daemon@mx.example.org',
-			envelopeRcpt: null,
-		});
-	});
+	);
 
 	it('treats Auto-Submitted: no as explicitly NOT auto-submitted (RFC 3834 section 5 default)', async () => {
 		// Reuses the plain-BCC fixture's ordinary shape but adds an explicit "no" -- must not fire the

@@ -258,7 +258,27 @@ export const SUITES: readonly SuiteSpec[] = [
 		//      signals and is accepted as an authoritative journal_report, with no check tying the
 		//      classification to any actual Exchange transport property.
 		// See that file's module doc comment and the JR-5-08 test report for full detail.
-		expectedTests: { ci: 502, nightly: 1, manual: 0 },
+		// 504 after the DEV fixing pass on top of the same file closed all three findings above (by
+		// changing the parser, per the PO's brief -- never by softening the corpus's claims):
+		//  - the autoresponder test's expectation flipped from the pre-fix `kind: 'ndr'` (Auto-Submitted
+		//    alone was sufficient) to the corrected `kind: 'plain_bcc'` (Auto-Submitted is now
+		//    corroboration only -- RFC 3834 permits the identical `auto-replied` token on both a DSN and
+		//    a vacation autoresponder, so the header cannot decide this alone); same test count (1).
+		//  - the nested-multipart/alternative suite's expectation flipped from the pre-fix `parse_failed`
+		//    to the corrected `plain_bcc` (`locateJournalParts()`'s search stays shallow; "no report-part
+		//    candidate found" is now "not a journal report", not "a broken attempt at one"); same test
+		//    count (2).
+		//  - the forgery suite (finding (b)) is NOT fully closed by this pass, and is not reported as if
+		//    it were: ADR-028 adds `parseJournalReport()`'s third, optional `sourceMode` parameter
+		//    (`'exchange-journal' | 'plain-bcc' | 'infer'`, default `'infer'`). Each of the two forged
+		//    fixtures is now asserted TWICE instead of once -- under `sourceMode: 'infer'` (the default)
+		//    both still measurably classify as `journal_report`, the documented limit of `'infer'`, left
+		//    exactly as demonstrated rather than softened; under `sourceMode: 'plain-bcc'` both correctly
+		//    reclassify as `plain_bcc`, proving the fix for the one operating mode (plain-BCC/routing)
+		//    where the forgery is actually exploitable (a genuine Exchange journal-report wrapper is
+		//    never displaced by forged inner content). Net +2 (2 tests -> 4 tests).
+		// Net change to this file: 11 -> 13 tests, so unit ci 502 -> 504.
+		expectedTests: { ci: 504, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

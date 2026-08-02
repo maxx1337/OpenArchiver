@@ -232,6 +232,49 @@ export interface SmtpTransactionEnvelope {
 }
 
 /**
+ * ADR-028 (`JR-5-08`, ruling on the fifth measured instance of "MIME structure/content proves message
+ * kind"): the expected shape of a journaling source, passed to `parseJournalReport()` as an explicit,
+ * **optional** hint -- never inferred from anything this parser could compute itself.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Why this exists: the content-based discriminator (`looksLikeGenuineJournalReport()`) is forgeable
+ * ---------------------------------------------------------------------------------------------
+ * R1/R3/R4 (see `journal-report.ts`'s module doc comment) each disproved that **MIME structure**
+ * proves a message is a genuine Exchange journal report. The content-based replacement --
+ * `Recipient:` plus a field-line beginning -- is not immune to the same failure: it is *content*,
+ * and content is exactly what a message's own sender controls. Measured against two `JR-5-08`
+ * fixtures, an external sender can compose a `text/plain` part that satisfies both signals and have
+ * it accepted as an authoritative `journal_report` envelope, `sender`/`recipients` included.
+ *
+ * That forgery is **not equally exploitable everywhere**:
+ *  - **Exchange envelope journaling**: Exchange itself wraps the attacker's message in a *genuine*
+ *    journal report of its own; the top-level report part is Exchange's, and forged content in a
+ *    `message/rfc822` inner part is never consulted for envelope fields. Not exploitable.
+ *  - **Plain-BCC / routing-rule sources** (Postfix `always_bcc`, Google Workspace routing): there is
+ *    no wrapper at all -- the attacker's message *is* the outer message. Exploitable: an outside
+ *    sender decides an archive entry's `sender`/`recipients`.
+ *
+ * The attack therefore lands exactly where journal reports never occur in the first place, which is
+ * what this type is for: **the operating mode is configuration the operator already knows, not
+ * something this parser should guess from bytes.** A Postfix/Google Workspace operator knows they
+ * never receive a genuine Exchange journal-report wrapper; telling the parser that closes the
+ * forgery for that source without needing a stronger content discriminator that does not exist.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * What this type does **not** buy, and must never be read as buying
+ * ---------------------------------------------------------------------------------------------
+ * `'exchange-journal'` and `'infer'` add **no** additional proof over today's content check --
+ * `'infer'` is the pre-ADR-028 behaviour, kept as the default so an E5-only caller keeps working, and
+ * is a transitional mode, not a target one (see `06-status.md`'s ADR-028 entry). Neither this type
+ * nor `parseJournalReport()` can verify *who actually delivered* a message -- that is decided at the
+ * SMTP transaction itself (`allowed_sources` CIDR allow-list, explicit `journal_recipients`, no
+ * catch-all, optional `AUTH` -- RFC section 4.3, `JR-4-05`). This parser sees only bytes handed to
+ * it after the fact; it can narrow which bytes it is willing to call authoritative, but it can never
+ * replace, and must never be read as replacing, that transport-level guarantee.
+ */
+export type JournalReportSourceMode = 'exchange-journal' | 'plain-bcc' | 'infer';
+
+/**
  * `JR-5-05`, RFC section 6.2: the outer message carries no Exchange envelope-journaling wrapper at
  * all (`multipart/mixed` with a `text/plain` report part, RFC section 6.1) but is otherwise a
  * well-formed message -- the shape produced by a Postfix `always_bcc` copy (Zimbra and mailcow have
@@ -280,13 +323,22 @@ export interface JournalPlainBcc {
  *  - `'delivery-status-report'` -- **strong**: the outer message's own `Content-Type` is
  *    `multipart/report` with a `report-type` parameter of `delivery-status` (RFC 3464's canonical
  *    DSN shape).
- *  - `'auto-submitted-header'` -- **weak, corroborating**: an `Auto-Submitted` header (RFC 3834
- *    section 5) present with any value other than `no` (`no` is the explicit default, meaning *not*
- *    auto-submitted). Also set by ordinary vacation autoresponders and other automated notices, not
- *    only by bounces, so on its own this is weaker evidence than the other two -- but a malformed DSN
- *    that omits `report-type` is exactly the failure this project cannot afford to miss silently
- *    (RFC section 5.3: completeness over precision), so it is still sufficient by itself to classify
- *    as `'ndr'` rather than falling through to `'plain_bcc'`.
+ *  - `'auto-submitted-header'` -- **corroborating only, never decisive by itself** (`JR-5-08`
+ *    finding 3, correcting an earlier version of this doc comment that called it sufficient alone).
+ *    RFC 3834 section 5 defines `auto-generated` for automatic, non-direct-response messages (e.g.
+ *    cron output) and `auto-replied` for an automatic *direct response* to another message -- but
+ *    section 5 also explicitly permits `auto-replied` on DSNs and MDNs, so the header's value does
+ *    not cleanly separate "bounce" from "everything else automatic". In particular, RFC 3834's own
+ *    worked example of a vacation autoresponder (section 7) sets exactly `auto-replied` -- the same
+ *    token a bounce may legitimately carry. Treating this header as sufficient by itself measurably
+ *    misclassifies an ordinary out-of-office reply as `'ndr'`, asserting a delivery failure that
+ *    never happened. The two signals above it are what a DSN actually is: RFC 3464's own
+ *    machine-readable structure, or the transaction-level null reverse-path a legitimate autoresponder
+ *    has no reason to use. `'auto-submitted-header'` still appears in `signals` when it fires
+ *    alongside either of those (an auditor asking "why was this flagged" still gets the full answer),
+ *    but firing *alone* now falls through to `'plain_bcc'` -- reduced fidelity, not a fabricated
+ *    delivery-failure claim, matching this parser's general error-direction principle (see
+ *    `journal-report.ts`'s module doc comment).
  */
 export type NdrSignal = 'null-envelope-sender' | 'delivery-status-report' | 'auto-submitted-header';
 

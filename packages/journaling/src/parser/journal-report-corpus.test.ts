@@ -12,19 +12,38 @@ import { parseJournalReport } from './journal-report';
  * `journal-report.test.ts` (JR-5-01..JR-5-07 plus PO reviews R1/R3/R4) already covers the
  * documented Exchange journal-report shapes and three measured MIME-structure-vs-message-kind
  * misclassifications. This file's job, per the backlog task and `06-status.md`'s "Der teuerste
- * Befund des Epics", is different: it is the adversarial pass looking for the *fourth*
- * manifestation of the same mistake, plus the everyday, non-journal mail forms the backlog itself
- * does not enumerate (autoreply, calendar invite, newsletter, nested multipart/alternative mail
- * with an attachment, a quoted report pasted into an ordinary email body).
+ * Befund des Epics", is different: it is the adversarial pass looking for further manifestations of
+ * the same mistake, plus the everyday, non-journal mail forms the backlog itself does not enumerate
+ * (autoreply, calendar invite, newsletter, nested multipart/alternative mail with an attachment, a
+ * quoted report pasted into an ordinary email body).
  *
  * Every suite below states two things per fixture: what kind of message it is, and what survives
  * the parse -- never just "it doesn't throw" (that alone asserts nothing, per the tester role's
- * brief). Two of the suites below are, deliberately, RED: they assert the *correct* behaviour
- * (per this module's own documented "reduced fidelity, never fabricated evidence" rule) against
- * fixtures that demonstrate the current code does not follow it. Per the task's explicit
- * exception, they are left red rather than adjusted to match the current output -- a corpus that
- * builds itself around a bug it found is worthless. See the test report for full detail on both
- * findings.
+ * brief).
+ *
+ * ---------------------------------------------------------------------------------------------
+ * This corpus originally shipped with three suites deliberately RED (the TEST role's checkpoint,
+ * commit `4836beb`) -- three measured misclassifications, left unadjusted on purpose so the corpus
+ * named what it found instead of building itself around it. A subsequent fixing pass (DEV role)
+ * closed all three; every suite below is green again, but by changing the *parser*, never by
+ * softening what these suites claim:
+ *
+ *  - **Finding 1** (nested `multipart/alternative`, a common HTML-mail-with-attachment shape):
+ *    `locateJournalParts()` still only looks at the outer `multipart/mixed`'s immediate children
+ *    (unchanged, deliberately shallow) -- but `parseJournalReport()` no longer treats "no
+ *    report-part candidate found" as `parse_failed`. See `journal-report.ts`'s module doc comment
+ *    and the suite below for the corrected reasoning.
+ *  - **Finding 2** (content-based discriminator is forgeable by the message's own sender): fixed by
+ *    ADR-028's `sourceMode` parameter, **not** by a stronger content check (there is no such thing --
+ *    see the suite below for why). The finding itself is *not* fully closed: under the default
+ *    `sourceMode: 'infer'` both forged fixtures still classify as `journal_report`, and that is
+ *    asserted explicitly below as the documented, measured limit of `'infer'`, not swept away.
+ *    `sourceMode: 'plain-bcc'` is what closes it, for the operating mode where it is actually
+ *    exploitable.
+ *  - **Finding 3** (`Auto-Submitted` alone was sufficient for `kind: 'ndr'`): fixed by requiring at
+ *    least one of the two decisive NDR signals (RFC 3464 structure or the null envelope sender);
+ *    `Auto-Submitted` is corroboration only now. The autoresponder fixture below asserts the
+ *    corrected `plain_bcc` outcome, with the reasoning for the change spelled out at its suite.
  */
 
 suite('ci', 'parseJournalReport() -- Bcc-only journal report (no To/Cc at all)', () => {
@@ -135,17 +154,33 @@ suite(
 	}
 );
 
+/**
+ * ---------------------------------------------------------------------------------------------
+ * FINDING 3 (JR-5-08): `Auto-Submitted` alone is not evidence of a delivery failure.
+ * ---------------------------------------------------------------------------------------------
+ * This test originally asserted `kind: 'ndr'` here, on the theory that treating
+ * `Auto-Submitted: auto-replied` as sufficient by itself was a documented trade-off (see the
+ * superseded quote from `NdrSignal`'s doc comment in the title above), not a bug -- "some
+ * autoresponders will be misfiled as NDRs, and that is accepted". Measured against the RFC instead
+ * of assumed: RFC 3834 section 5 permits `auto-replied` on a genuine DSN, but its own worked example
+ * in section 7 sets that *exact* token on a **vacation autoresponder** -- the header's value cannot
+ * by itself separate "bounce" from "ordinary automatic reply", so "documented trade-off" was really
+ * "the parser cannot tell these apart from this signal", not an accepted cost of a real distinction.
+ * Filing this fixture as `'ndr'` asserts a delivery failure that never happened -- exactly the
+ * "fabricated evidence" direction this parser's own principle rules out (see `journal-report.ts`'s
+ * module doc comment). The decisive signals are RFC 3464's own DSN structure
+ * (`multipart/report; report-type=delivery-status`) and the transaction-level null reverse-path,
+ * neither of which this fixture has; `Auto-Submitted` is now corroboration only (see
+ * `classifyNonJournalMessage()`'s and `NdrSignal`'s doc comments), so this fixture correctly lands on
+ * `'plain_bcc'` -- what an out-of-office reply actually is.
+ */
 suite(
 	'ci',
 	'parseJournalReport() -- everyday mail: vacation autoresponder (Auto-Submitted: auto-replied)',
 	() => {
 		it(
-			'classifies an out-of-office autoresponder as kind "ndr" via the auto-submitted-header ' +
-				"signal -- a DOCUMENTED, not a new, trade-off (see NdrSignal's doc comment in " +
-				'journal-parser.types.ts: "Also set by ordinary vacation autoresponders ... not only by ' +
-				'bounces"). This test exists so that trade-off is measured against the built parser, not ' +
-				'only asserted in a comment; see the test report for why it is flagged as worth revisiting ' +
-				'even though it is not counted as a new misclassification.',
+			'classifies an out-of-office autoresponder as kind "plain_bcc", not "ndr" -- ' +
+				'Auto-Submitted alone no longer asserts a delivery failure (JR-5-08 finding 3)',
 			async () => {
 				const raw = loadFixture('autoreply-out-of-office.eml');
 				const envelope = {
@@ -153,11 +188,11 @@ suite(
 					envelopeRcpt: ['alice@example.org'],
 				};
 				const result = await parseJournalReport(raw, envelope);
-				expect(result.kind).toBe('ndr');
-				if (result.kind !== 'ndr') {
+				expect(result.kind).toBe('plain_bcc');
+				if (result.kind !== 'plain_bcc') {
 					throw new Error('unreachable');
 				}
-				expect(result.signals).toEqual(['auto-submitted-header']);
+				expect(result.reducedEnvelopeFidelity).toBe(true);
 				expect(result.envelope).toEqual(envelope);
 			}
 		);
@@ -189,26 +224,32 @@ suite(
  * journal wrapper. At scale this shape is common enough that the false-alert rate this produces
  * is likely to drown out genuine parse failures.
  *
- * This test asserts the CORRECT behaviour (plain_bcc, matching every other "ordinary mail with no
- * journal wrapper" fixture in this corpus) and is deliberately left RED against the current code
- * -- see the test report. Fixing this is the PO's call, not this task's.
+ * **Fixed**: `parseJournalReport()` no longer treats "no report-part candidate among the outer
+ * message's immediate children" as proof of a broken journal-report attempt -- see
+ * `journal-report.ts`'s module doc comment ("`JR-5-08` finding 1") for the chosen direction and why:
+ * `locateJournalParts()`'s search stays deliberately shallow (unchanged), but the absence of any
+ * candidate to run the content discriminator against is treated as "not a journal report" rather
+ * than "a broken one", falling through to the same `classifyNonJournalMessage()` path
+ * `!outerIsMultipartMixed` already used. This test now asserts the corrected behaviour, measured
+ * against the built code, not the pre-fix bug.
  */
 suite(
 	'ci',
 	'parseJournalReport() -- FINDING: nested multipart/alternative + attachment (common HTML-mail shape) should be plain_bcc, not parse_failed',
 	() => {
-		it('RED: a text/plain part nested one level inside multipart/alternative is still "no journal wrapper", not "broken journal-report attempt"', async () => {
+		it('a text/plain part nested one level inside multipart/alternative is "no journal wrapper" (plain_bcc), not "broken journal-report attempt" (parse_failed)', async () => {
 			const raw = loadFixture('mail-with-attachment-nested-alternative.eml');
 			const envelope = {
 				envelopeFrom: 'alice@contoso.com',
 				envelopeRcpt: ['journal-archive@example.org'],
 			};
 			const result = await parseJournalReport(raw, envelope);
-			// EXPECTED (per this module's own "reduced fidelity, not a rejection or a false alert for
-			// ordinary mail" principle): plain_bcc.
-			// ACTUAL (measured): 'parse_failed', reason "outer multipart/mixed message has no
+			// Before the fix (measured): 'parse_failed', reason "outer multipart/mixed message has no
 			// text/plain report part" -- because the plain-text part is nested inside a child
-			// multipart/alternative, one level below where locateJournalParts() looks.
+			// multipart/alternative, one level below where locateJournalParts() looks. Now:
+			// classifyNonJournalMessage() runs instead of returning parse_failed directly, and this
+			// fixture's own content -- ordinary prose, no Recipient:/field-line shape -- correctly lands
+			// on plain_bcc.
 			expect(result.kind).toBe('plain_bcc');
 			if (result.kind !== 'plain_bcc') {
 				throw new Error('unreachable');
@@ -228,8 +269,9 @@ suite(
 
 /**
  * ---------------------------------------------------------------------------------------------
- * FINDING 2 of 2 (the "fourth manifestation"): the content-based discriminator itself is
- * forgeable, by the message's own author.
+ * FINDING 2 (the "fourth manifestation", now the fifth if `Auto-Submitted` above is counted): the
+ * content-based discriminator itself is forgeable, by the message's own author -- and the fix is
+ * ADR-028, not a stronger content check.
  * ---------------------------------------------------------------------------------------------
  * R1/R3/R4 (see `journal-report.ts`'s module doc comment) each corrected an instance of "MIME
  * STRUCTURE proves message kind" -- structure any ordinary mail client can also produce by
@@ -257,52 +299,128 @@ suite(
  *    Date and body), which the parser accepts as `innerMessage.present: true` with no signal
  *    distinguishing it from a message Exchange itself actually transported.
  *
- * Both are measured against the built package, not hypothesised (see this file's own probe
- * output in the test report). Both tests assert the CORRECT, conservative-direction behaviour
- * (plain_bcc, per this module's own stated principle) and are deliberately left RED -- a corpus
- * that works around this finding instead of naming it would be worthless, per the task brief.
+ * **This is not fixable by a stronger content check** -- any signal expressed as message content is
+ * exactly as forgeable as the last one, by construction (that is the whole lesson of R1/R3/R4 one
+ * level further down). ADR-028's fix instead moves the decision out of content entirely: whether
+ * `journal_report` is even a reachable outcome is now `parseJournalReport()`'s third, optional
+ * `sourceMode` parameter (`'exchange-journal' | 'plain-bcc' | 'infer'`, default `'infer'`) -- see
+ * `JournalReportSourceMode`'s doc comment (`@open-archiver/types`) for the full reasoning: the
+ * forgery is exploitable *only* on a plain-BCC/routing source (there is no genuine wrapper to compete
+ * with), never on genuine Exchange journaling (Exchange's own wrapper always wins, forged content
+ * only ever reaches the *inner*, non-authoritative part), so an operator who knows their source is
+ * plain-BCC can exclude `journal_report` as an outcome entirely, regardless of content.
+ *
+ * Both fixtures below are measured against the built package, not hypothesised. Each is asserted
+ * **twice**, matching ADR-028's own claim about itself precisely -- this is not softened away, it is
+ * named on both sides:
+ *  - under `sourceMode: 'infer'` (the default, i.e. omitted): still `journal_report`, sourced entirely
+ *    from the attacker's own text. This is the **documented, measured limit** of `'infer'`, not a
+ *    fixed bug -- `'infer'` is explicitly the transitional default that keeps E5 runnable standalone,
+ *    and ADR-028 says outright that it "does not close this forgery". Asserting `plain_bcc` here
+ *    would misrepresent the fix as broader than it is.
+ *  - under `sourceMode: 'plain-bcc'`: `plain_bcc`, on the identical bytes -- proof the fix works for
+ *    the one operating mode where the attack is actually exploitable (a plain-BCC/routing source),
+ *    which is the mode ADR-028 exists for.
  */
 suite(
 	'ci',
 	"parseJournalReport() -- FINDING: report-part CONTENT is forgeable by the message's own sender, not just its MIME structure",
 	() => {
-		it('RED: an external sender-authored "report" attachment with no inner message should not be treated as an authoritative journal report', async () => {
-			const raw = loadFixture('content-forged-fake-report-as-attachment.eml');
-			const envelope = {
-				envelopeFrom: 'mallory@external-example.net',
-				envelopeRcpt: ['journal-archive@example.org'],
-			};
-			const result = await parseJournalReport(raw, envelope);
-			// EXPECTED: plain_bcc -- nothing here proves an Exchange journal connector produced this
-			// envelope; it is exactly as forgeable as the MIME-structure signals R1/R3/R4 already ruled
-			// out, just one level deeper (content instead of structure).
-			// ACTUAL (measured): 'journal_report', with envelope.recipients/to sourced entirely from
-			// the attacker-authored attachment text, asserted as authoritative.
-			expect(result.kind).toBe('plain_bcc');
-			if (result.kind !== 'plain_bcc') {
-				throw new Error('unreachable');
+		it(
+			'under sourceMode "infer" (the default): an external sender-authored "report" attachment ' +
+				'with no inner message is STILL accepted as journal_report -- the measured, documented ' +
+				'limit of "infer" (ADR-028), not a regression this task fixes away',
+			async () => {
+				const raw = loadFixture('content-forged-fake-report-as-attachment.eml');
+				const envelope = {
+					envelopeFrom: 'mallory@external-example.net',
+					envelopeRcpt: ['journal-archive@example.org'],
+				};
+				const result = await parseJournalReport(raw, envelope);
+				expect(result.kind).toBe('journal_report');
+				if (result.kind !== 'journal_report') {
+					throw new Error('unreachable');
+				}
+				// The attacker-authored report text, not the SMTP envelope, is what "wins" here -- this
+				// is exactly the fabricated-evidence failure mode: `sender`/`recipients` come from
+				// content Mallory composed, not from anything Exchange or the SMTP transaction attests
+				// to.
+				expect(result.envelope.sender).toBe('someone-innocent@contoso.com');
+				expect(result.envelope.recipients).toEqual([
+					'someone-innocent@contoso.com',
+					'another-innocent@contoso.com',
+				]);
+				expect(result.innerMessage.present).toBe(false);
 			}
-			expect(result.reducedEnvelopeFidelity).toBe(true);
-			expect(result.envelope).toEqual(envelope);
-		});
+		);
 
-		it('RED: a forged report AND a forged message/rfc822 "original message" should not be accepted as authoritative either', async () => {
-			const raw = loadFixture('content-forged-fake-report-with-fake-inner.eml');
-			const envelope = {
-				envelopeFrom: 'mallory@external-example.net',
-				envelopeRcpt: ['journal-archive@example.org'],
-			};
-			const result = await parseJournalReport(raw, envelope);
-			// EXPECTED: plain_bcc, for the same reason as above.
-			// ACTUAL (measured): 'journal_report' with a fully fabricated inner message ("FORGED-BODY-
-			// MARKER" body, forged From: ceo@contoso.com) reported as innerMessage.present: true --
-			// indistinguishable, at this parser's level, from a message Exchange itself transported.
-			expect(result.kind).toBe('plain_bcc');
-			if (result.kind !== 'plain_bcc') {
-				throw new Error('unreachable');
+		it(
+			'under sourceMode "plain-bcc": the identical bytes are correctly reclassified as ' +
+				'plain_bcc -- ADR-028 closes the forgery for the one operating mode where it is ' +
+				'actually exploitable',
+			async () => {
+				const raw = loadFixture('content-forged-fake-report-as-attachment.eml');
+				const envelope = {
+					envelopeFrom: 'mallory@external-example.net',
+					envelopeRcpt: ['journal-archive@example.org'],
+				};
+				const result = await parseJournalReport(raw, envelope, 'plain-bcc');
+				expect(result.kind).toBe('plain_bcc');
+				if (result.kind !== 'plain_bcc') {
+					throw new Error('unreachable');
+				}
+				expect(result.reducedEnvelopeFidelity).toBe(true);
+				expect(result.envelope).toEqual(envelope);
 			}
-			expect(result.reducedEnvelopeFidelity).toBe(true);
-			expect(result.envelope).toEqual(envelope);
-		});
+		);
+
+		it(
+			'under sourceMode "infer" (the default): a forged report AND a forged message/rfc822 ' +
+				'"original message" are STILL accepted as authoritative -- the sharper case of the same ' +
+				'documented limit',
+			async () => {
+				const raw = loadFixture('content-forged-fake-report-with-fake-inner.eml');
+				const envelope = {
+					envelopeFrom: 'mallory@external-example.net',
+					envelopeRcpt: ['journal-archive@example.org'],
+				};
+				const result = await parseJournalReport(raw, envelope);
+				expect(result.kind).toBe('journal_report');
+				if (result.kind !== 'journal_report') {
+					throw new Error('unreachable');
+				}
+				// Same fabricated-evidence failure mode as the fixture above, sharper: the "board
+				// resignation" report AND its wholesale-fabricated message/rfc822 "original message" are
+				// both entirely Mallory's own text.
+				expect(result.envelope.sender).toBe('ceo@contoso.com');
+				expect(result.envelope.recipients).toEqual(['board@contoso.com']);
+				expect(result.innerMessage.present).toBe(true);
+				if (!result.innerMessage.present) {
+					throw new Error('unreachable');
+				}
+				expect(Buffer.from(result.innerMessage.raw).toString('utf8')).toContain(
+					'FORGED-BODY-MARKER'
+				);
+			}
+		);
+
+		it(
+			'under sourceMode "plain-bcc": the sharper forged-inner-message case is also correctly ' +
+				'reclassified as plain_bcc',
+			async () => {
+				const raw = loadFixture('content-forged-fake-report-with-fake-inner.eml');
+				const envelope = {
+					envelopeFrom: 'mallory@external-example.net',
+					envelopeRcpt: ['journal-archive@example.org'],
+				};
+				const result = await parseJournalReport(raw, envelope, 'plain-bcc');
+				expect(result.kind).toBe('plain_bcc');
+				if (result.kind !== 'plain_bcc') {
+					throw new Error('unreachable');
+				}
+				expect(result.reducedEnvelopeFidelity).toBe(true);
+				expect(result.envelope).toEqual(envelope);
+			}
+		);
 	}
 );

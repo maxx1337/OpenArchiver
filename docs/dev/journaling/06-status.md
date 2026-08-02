@@ -1926,7 +1926,7 @@ Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft
 | `JR-5-05` | **[x] erledigt** 2026-08-02 (S3 + drei Runden Review)                                                                            |
 | `JR-5-06` | **[x] erledigt** 2026-08-02 (S3)                                                                                                 |
 | `JR-5-07` | **[x] erledigt** 2026-08-02 (S4) — mit einem Befund an E6, siehe unten                                                           |
-| `JR-5-08` | [ ] offen — Fixture-Korpus (Rolle TEST)                                                                                          |
+| `JR-5-08` | **[x] erledigt** 2026-08-02 (S5 Korpus + S6 Reparatur) — zwei Befunde, alle behoben                                              |
 | `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                                                                           |
 
 ### Was `JR-5-01`/`JR-5-02` liefern
@@ -2142,6 +2142,73 @@ zwischen den Sessions geteilt): eine Validierung dort, wo `journaling_sources.or
 tatsächlich geschrieben wird — eine Domain in zwei Gruppen ist ein Bedienfehler, der beim Speichern
 auffallen sollte und nicht erst bei der Ablage einer Nachricht.
 
+### `JR-5-08`: der Korpus hat geliefert, wofür er gebaut wurde
+
+Acht neue Fixtures, und zwar **nicht nur** die Journal-Formen aus dem Backlog, sondern Alltagspost, die
+**keine** Journal-Reports ist: Kalendereinladung, Newsletter, Abwesenheitsnotiz, Mail mit Anhang,
+zitierter Report im Fließtext. Diese Ergänzung war der Zweck — alle drei Fehlklassifikationen aus
+`JR-5-05` kamen von gewöhnlicher Post, die als Journal-Report durchging.
+
+Die Rolle TEST hat **drei Tests rot gelassen**, statt den Korpus um die Befunde herumzubauen. Genau
+richtig: ein Korpus, der sich am Fehler vorbeischreibt, ist wertlos.
+
+**Befund A — die Suche nach dem Reportteil geht nur eine Ebene tief.**
+`multipart/mixed(multipart/alternative(text/plain, text/html), Anhang)` ist das, was **jeder**
+HTML-schreibende Client für „Mail mit Anhang" erzeugt. Auf oberster Ebene gibt es kein `text/plain`,
+also kam `parse_failed` heraus — mit Ledger-Ereignis **und** Operator-Alarm, für Alltagsverkehr. In
+einem `always_bcc`-Postfach wäre das die Mehrheit. **Ein Alarm, der ständig feuert, ist derselbe
+Ausfall wie einer, der nie feuert.**
+
+Behoben in der besseren der beiden Richtungen: Wo es gar keinen Kandidaten für einen Reportteil gibt,
+kann der Diskriminator **nicht einmal laufen** — dann ist „das ist kein Journal-Report" die einzige
+Aussage, die der Parser stützen kann, und `parse_failed` („da war ein kaputter Versuch") behauptet mehr,
+als er weiß. Die Suche bleibt bewusst flach: sie in `multipart/alternative` hineinzulehren hätte den
+Fehler „Struktur belegt die Art" nur eine Ebene tiefer verschoben.
+
+**Befund B — der inhaltliche Diskriminator ist vom Absender fälschbar.** Die fünfte Ausprägung
+derselben Ursache, und die, die das **Verfahren** widerlegt statt nur ein Kriterium. Führt zu
+**ADR-028**. Die Ausnutzbarkeit ist gemessen und ungleich verteilt:
+
+| Betriebsart         | greift der Angriff? | warum                                                                        |
+| ------------------- | ------------------- | ---------------------------------------------------------------------------- |
+| Exchange-Journaling | **nein**            | Exchange wickelt ein; der gefälschte Inhalt sitzt im nie befragten Innenteil |
+| Plain BCC / Routing | **ja**              | kein Wrapper — die Angreifernachricht **ist** die oberste Ebene              |
+
+Er greift also genau dort, wo Journal-Reports gar nicht vorkommen — und das ist der Beweis der
+Reparatur: `parseJournalReport(raw, smtpEnvelope, sourceMode)`. Gemessen an denselben Bytes:
+
+```
+content-forged-fake-report-as-attachment.eml    infer=journal_report  plain-bcc=plain_bcc
+content-forged-fake-report-with-fake-inner.eml  infer=journal_report  plain-bcc=plain_bcc
+```
+
+**Die Grenze ist nicht weggeschrieben worden.** Unter `'infer'` behaupten beide Fixtures weiterhin
+messbar `journal_report` mit absenderbestimmtem `sender` — als **dokumentierte Grenze**, im Test und im
+Kommentar so benannt. Was der Parser nicht leisten kann, steht dort ausdrücklich: wer wirklich
+zugestellt hat, entscheidet sich an der SMTP-Transaktion (`JR-4-05`), und keine Inhaltsprüfung ersetzt
+das.
+
+**Befund C — eine Abwesenheitsnotiz wurde als `ndr` ausgegeben**, weil `Auto-Submitted` als
+eigenständiges Signal zählte. Ein Archiv, das eine Urlaubsantwort unter „Unzustellbarkeit" ablegt,
+behauptet ein Zustellproblem, das es nie gab.
+
+> **Hier hat der DEV den PO widerlegt, und das ist der Eintrag wert.** Meine Vorgabe lautete, RFC 3834
+> unterscheide `auto-generated` (DSN) von `auto-replied` (Autoresponder), man müsse also nur den Wert
+> auswerten. Der Agent hat den RFC geholt statt sie zu glauben: **§7 setzt `auto-replied` in seinem
+> eigenen Beispiel auf einen Urlaubsautoresponder**, und §5 erlaubt denselben Token auf einer echten
+> DSN. **Der Wert kann die beiden Fälle nicht trennen.** Die gewählte Lösung ist deshalb besser als die
+> vorgegebene: tragend sind allein die RFC-3464-Struktur und der **Null-Absender** aus der
+> SMTP-Transaktion; `Auto-Submitted` ist Bestätigung, nie Beleg. Dabei fiel ein **vorhandener** Test aus
+> `JR-5-06` auf, der das widerlegte Verhalten festgeschrieben hatte.
+
+### Gegenprobe nach der Reparatur
+
+Sechzehn Formen gegen das gebaute Paket, nicht gegen die Absicht — alle wie erwartet: echte Reports
+(vollständig, Innenteil fehlt, Bcc-only, Report umschließt NDR) bleiben `journal_report`;
+Weiterleitung zitiert, Weiterleitung als Anlage, Mail mit Anhang, Kalendereinladung, Newsletter,
+Abwesenheitsnotiz sind `plain_bcc`; der DSN bleibt `ndr`. Die sieben kaputten Eingaben aus S3 werfen
+weiterhin nicht, und die vier Tabellenzeilen aus S4 sind unberührt.
+
 ### Zahlen
 
 | Stand                         | Volllauf                                            |
@@ -2153,6 +2220,8 @@ auffallen sollte und nicht erst bei der Ablage einer Nachricht.
 | nach `JR-5-03`/`JR-5-04`      | 45 Dateien, `582 passed \| 5 skipped`, unit 448/448 |
 | nach `JR-5-05`/`JR-5-06`      | 45 Dateien, `602 passed \| 5 skipped`, unit 468/468 |
 | nach `JR-5-07`                | 46 Dateien, `625 passed \| 5 skipped`, unit 491/491 |
+| `JR-5-08` Korpus, 3 rot       | 47 Dateien, `633 passed \| 3 failed`, unit 502/502  |
+| nach der Reparatur (S6)       | 47 Dateien, `638 passed \| 5 skipped`, unit 504/504 |
 
 Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
 `integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien

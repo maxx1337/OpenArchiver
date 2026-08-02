@@ -7,6 +7,7 @@ import type {
 	JournalPlainBcc,
 	JournalReportParseResult,
 	JournalReportParsed,
+	JournalReportSourceMode,
 	NdrSignal,
 	ParsedEnvelope,
 	SmtpTransactionEnvelope,
@@ -75,12 +76,36 @@ import {
  *
  * `kind: 'parse_failed'` is reserved for the cases where the outer message *looked like* an attempt
  * at the journal-report shape (`multipart/mixed` with a boundary) but broke down while being read --
- * wrong/missing boundary, no `text/plain` part, a `mailparser` exception on the report text, a thrown
- * envelope parse -- or where it looks like neither a journal report nor a well-formed ordinary
- * message at all (garbage, truncated headers, an empty buffer). See `classifyNonJournalMessage()`
- * below for the two cases that are *not* `parse_failed` even though the message never had a journal
- * wrapper. `extractableHeaders` there is the best-effort fallback (`extractFallbackHeaders()`)
- * because no journal-report envelope exists to fall back on.
+ * a `mailparser` exception on the report text, a thrown envelope parse, an internal exception while
+ * splitting the outer MIME structure -- or where it looks like neither a journal report nor a
+ * well-formed ordinary message at all (garbage, truncated headers, an empty buffer). See
+ * `classifyNonJournalMessage()` below for the cases that are *not* `parse_failed` even though the
+ * message never had a journal wrapper. `extractableHeaders` there is the best-effort fallback
+ * (`extractFallbackHeaders()`) because no journal-report envelope exists to fall back on.
+ *
+ * `JR-5-08` finding 1 (the parser test corpus, TEST role) narrows this further: a `multipart/mixed`
+ * outer message with **no `text/plain` candidate at all among its immediate children** -- wrong
+ * boundary, a genuinely truncated part, or (the common real-world case) the report-shaped part
+ * sitting one level deeper inside a nested `multipart/alternative`, which is exactly how Outlook and
+ * Gmail emit "HTML mail with an attachment" by default -- is **no longer** `parse_failed` either. Per
+ * this module's own generalised rule below, `locateJournalParts()`'s search is deliberately
+ * shallow (`mime-split.ts`'s doc comment: "nothing more exotic than the shape RFC section 6.1
+ * describes"), so when it finds no report-part candidate at all, the discriminator that would prove
+ * or disprove a genuine journal report has nothing to run against -- there is no report text to
+ * check for `Recipient:`/field-line shape. In that situation "this is not a journal report" is the
+ * *only* claim the parser can actually support; `parse_failed` would assert "this looked like a
+ * broken attempt", which is not something the parser has evidence for once there is no candidate to
+ * examine. Concretely: `located.reportPart === null` now falls through to
+ * {@link classifyNonJournalMessage} exactly as `!located.outerIsMultipartMixed` already does, rather
+ * than returning `parse_failed` directly. Measured before this fix: `mail-with-attachment-nested-
+ * alternative.eml` (multipart/mixed(multipart/alternative(text/plain, text/html), attachment)) came
+ * back `parse_failed`, and would have raised a `parse_failed` ledger event/operator alert (`JR-5-04`)
+ * for what is, structurally, the single most common "ordinary HTML mail with an attachment" shape --
+ * at volume, that alert would drown in false positives and stop being useful for a real parse defect.
+ * The one thing `locateJournalParts()` deliberately does **not** grow is a deeper search into nested
+ * multiparts -- doing that would only relocate the same "structure implies report" mistake one level
+ * further down (see the generalised rule below); moving the decision to "no candidate ⇒ not a
+ * report" instead keeps the search shallow and the burden of proof unchanged.
  *
  * ---------------------------------------------------------------------------------------------
  * `JR-5-05`/`JR-5-06`: classification order across all four `kind`s (RFC section 6.2)
@@ -155,10 +180,42 @@ import {
  * report with its inner part present, `basic-journal-report.eml`) always has `Recipient:` lines from
  * the first line of the report part onward, so both are unaffected and still return
  * `kind: 'journal_report'` with the full envelope intact.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `JR-5-08` finding 2 / ADR-028: the content discriminator above is itself forgeable by the
+ * message's own sender -- the fifth measured instance of this same mistake
+ * ---------------------------------------------------------------------------------------------
+ * R1/R3/R4 above disprove that MIME **structure** proves message kind. `looksLikeGenuineJournalReport()`'s
+ * two-signal check is the *content* replacement -- and content is not a harder target to forge, it is
+ * an easier one: composing a `text/plain` part that starts with `Recipient:` costs nothing. Measured
+ * against two `JR-5-08` fixtures (`content-forged-fake-report-as-attachment.eml`,
+ * `content-forged-fake-report-with-fake-inner.eml`), an external sender's own crafted text is accepted
+ * as an authoritative `journal_report` envelope, `sender`/`recipients` sourced entirely from what the
+ * attacker wrote.
+ *
+ * That forgery is exploitable **only** where an Exchange journal-report wrapper never occurs in the
+ * first place -- a genuine Exchange journal always wraps the attacker's message in its *own* report,
+ * and forged content in the inner `message/rfc822` part is never read for envelope fields; a
+ * plain-BCC/routing source has no wrapper at all, so the attacker's message *is* the outer message.
+ * See {@link JournalReportSourceMode}'s doc comment for the full reasoning and ADR-028's ruling:
+ * **the operating mode is configuration the operator already knows, not something bytes can prove.**
+ * `sourceMode: 'plain-bcc'` makes `journal_report` **not a reachable outcome** at all, regardless of
+ * how convincing the content looks -- checked immediately after this discriminator, below.
+ * `sourceMode: 'infer'` (the default) is today's behaviour, unchanged, and does **not** close this
+ * forgery -- that is a documented limitation of `'infer'`, not an oversight; see the two forged-report
+ * suites in `journal-report-corpus.test.ts` for what stays demonstrably true under each mode.
+ *
+ * **What this parser can never do, under any `sourceMode`:** it sees only the bytes it was handed.
+ * Who actually delivered a message is decided at the SMTP transaction itself -- an `allowed_sources`
+ * CIDR allow-list, explicit `journal_recipients`, no catch-all recipient, optional `AUTH` (RFC section
+ * 4.3, `JR-4-05`). No content check this module performs can replace, or may be read as replacing,
+ * that transport-level guarantee; a receiver that accepts journal reports from arbitrary senders is
+ * broken at the transport layer, and no amount of parser-side scrutiny repairs that.
  */
 export async function parseJournalReport(
 	rawMessage: Buffer,
-	smtpEnvelope: SmtpTransactionEnvelope = { envelopeFrom: null, envelopeRcpt: null }
+	smtpEnvelope: SmtpTransactionEnvelope = { envelopeFrom: null, envelopeRcpt: null },
+	sourceMode: JournalReportSourceMode = 'infer'
 ): Promise<JournalReportParseResult> {
 	let located;
 	try {
@@ -171,11 +228,14 @@ export async function parseJournalReport(
 		return classifyNonJournalMessage(rawMessage, smtpEnvelope);
 	}
 	if (located.reportPart === null) {
-		return parseFailed(
-			'outer multipart/mixed message has no text/plain report part',
-			null,
-			rawMessage
-		);
+		// JR-5-08 finding 1: no text/plain candidate was found among the outer multipart/mixed's
+		// immediate children at all -- wrong/missing boundary, genuine truncation, or (measured, and
+		// the common case) the report-shaped part sitting one level deeper inside a nested
+		// multipart/alternative (see the module doc comment). Without a report-part candidate there is
+		// no report text to run `looksLikeGenuineJournalReport()` against, so this parser has no basis
+		// to claim "this looked like a broken journal-report attempt" (`parse_failed`) -- only "this is
+		// not a journal report" (the same fallback `!located.outerIsMultipartMixed` already takes).
+		return classifyNonJournalMessage(rawMessage, smtpEnvelope);
 	}
 
 	let reportText: string;
@@ -213,6 +273,20 @@ export async function parseJournalReport(
 	// presence/absence still matter -- but now only to decide what `innerMessage` looks like, never
 	// whether this is a journal report at all.
 	if (!looksLikeGenuineJournalReport(envelope, reportText)) {
+		return classifyNonJournalMessage(rawMessage, smtpEnvelope);
+	}
+
+	// JR-5-08 finding 2 / ADR-028: the content discriminator just passed is exactly as forgeable by
+	// the message's own sender as the MIME-structure signals R1/R3/R4 already ruled out (see the
+	// module doc comment and `JournalReportSourceMode`'s doc comment) -- content alone can never prove
+	// this parser is looking at a message an Exchange journal connector actually produced. When the
+	// caller knows their source never emits genuine Exchange journal-report wrappers
+	// (`sourceMode: 'plain-bcc'`), `journal_report` is excluded as an outcome altogether, regardless of
+	// how convincing the content looks; the message is reclassified exactly as if the discriminator
+	// above had failed. `'infer'` (the default) and `'exchange-journal'` do not add this check -- see
+	// `JournalReportSourceMode`'s doc comment for why `'infer'` deliberately does not close this
+	// forgery on its own.
+	if (sourceMode === 'plain-bcc') {
 		return classifyNonJournalMessage(rawMessage, smtpEnvelope);
 	}
 
@@ -340,8 +414,10 @@ function isAutoSubmitted(headers: ReadonlyMap<string, string>): boolean {
  *
  * Returns every signal that fired -- see `NdrSignal`'s doc comment (`journal-parser.types.ts`) for
  * why a caller gets the full list rather than a single verdict, and for the relative strength of each
- * one. An empty array means "not an NDR by any signal this parser checks", which is
- * {@link classifyNonJournalMessage}'s cue to classify as `'plain_bcc'` instead.
+ * one. This function only reports what it measured; it does **not** itself decide `'ndr'` vs.
+ * `'plain_bcc'` -- since `JR-5-08` finding 3, a result containing only `'auto-submitted-header'` is
+ * not sufficient for `'ndr'` (see {@link classifyNonJournalMessage}), so an empty array is no longer
+ * the only "not NDR" case; `classifyNonJournalMessage()` is what applies that threshold.
  */
 function detectNdrSignals(raw: Buffer, smtpEnvelope: SmtpTransactionEnvelope): NdrSignal[] {
 	const { headers } = splitHeaderAndBody(raw);
@@ -361,9 +437,12 @@ function detectNdrSignals(raw: Buffer, smtpEnvelope: SmtpTransactionEnvelope): N
 		signals.push('delivery-status-report');
 	}
 
-	// Weak, corroborating: see `isAutoSubmitted()`'s and `NdrSignal`'s doc comments for why this is
-	// sufficient alone despite being the weakest signal -- a malformed DSN missing `report-type` must
-	// not silently fall through to `'plain_bcc'` and lose its NDR flag.
+	// Corroborating only, never decisive by itself -- see `NdrSignal`'s doc comment (`JR-5-08` finding
+	// 3) for why: RFC 3834 permits `auto-replied` on a genuine DSN, but a vacation autoresponder sets
+	// the *identical* token (RFC 3834 section 7's own worked example), so this header's value cannot
+	// by itself distinguish a bounce from an ordinary automatic reply. Still recorded when it fires --
+	// `classifyNonJournalMessage()` decides whether it is *sufficient*, this function only reports
+	// what it measured.
 	if (isAutoSubmitted(headers)) {
 		signals.push('auto-submitted-header');
 	}
@@ -386,6 +465,18 @@ function detectNdrSignals(raw: Buffer, smtpEnvelope: SmtpTransactionEnvelope): N
  * {@link looksLikeOrdinaryMessage}) still falls back to `parse_failed`, exactly as it did before this
  * slice existed -- `'plain_bcc'` asserts "this is a real message that simply arrived without a journal
  * wrapper", which is not true of an empty buffer or random bytes.
+ *
+ * `JR-5-08` finding 3: `'ndr'` requires at least one of the two *decisive* signals --
+ * `'null-envelope-sender'` (from the SMTP transaction, not a header the sender controls) or
+ * `'delivery-status-report'` (RFC 3464's own machine-readable DSN structure). `'auto-submitted-header'`
+ * firing on its own is **not** sufficient (see `NdrSignal`'s doc comment for why: RFC 3834 permits the
+ * same `auto-replied` token on both a genuine DSN and an ordinary vacation autoresponder, so the header
+ * alone cannot tell them apart) -- a message with only that signal falls through to `'plain_bcc'`
+ * exactly as if `detectNdrSignals()` had found nothing at all. Measured: `autoreply-out-of-office.eml`
+ * (an out-of-office reply, `Auto-Submitted: auto-replied`, no DSN structure, no null sender) came back
+ * `kind: 'ndr'` before this fix -- asserting a delivery failure that never happened. When a decisive
+ * signal *does* fire, `'auto-submitted-header'` still appears in `signals` alongside it if present, so
+ * an auditor asking "why was this flagged" still gets the complete answer, not a truncated one.
  */
 function classifyNonJournalMessage(
 	rawMessage: Buffer,
@@ -401,7 +492,9 @@ function classifyNonJournalMessage(
 
 	const extractableHeaders = extractFallbackHeaders(rawMessage);
 	const signals = detectNdrSignals(rawMessage, smtpEnvelope);
-	if (signals.length > 0) {
+	const hasDecisiveSignal =
+		signals.includes('null-envelope-sender') || signals.includes('delivery-status-report');
+	if (hasDecisiveSignal) {
 		return {
 			kind: 'ndr',
 			signals,
