@@ -1923,8 +1923,8 @@ Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft
 | `JR-5-02` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
 | `JR-5-03` | **[x] erledigt** 2026-08-02 (S2 + Review-Nacharbeit)                                                                             |
 | `JR-5-04` | **[~] parserseitig erledigt, Rest hängt an E6** — der Ledger-Eintrag, der Storage, die Indexierung und der Alarm sind E6s Arbeit |
-| `JR-5-05` | [ ] offen — Plain-BCC-Fallback                                                                                                   |
-| `JR-5-06` | [ ] offen — NDRs und Bounces                                                                                                     |
+| `JR-5-05` | **[x] erledigt** 2026-08-02 (S3 + drei Runden Review)                                                                            |
+| `JR-5-06` | **[x] erledigt** 2026-08-02 (S3)                                                                                                 |
 | `JR-5-07` | [ ] offen — Owner-Resolution                                                                                                     |
 | `JR-5-08` | [ ] offen — Fixture-Korpus (Rolle TEST)                                                                                          |
 | `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                                                                           |
@@ -2019,6 +2019,64 @@ Erzeuger und ohne Aufrufer entstanden — eine Naht, die keine ist, mit dem Risi
 kennt. Und die veraltete S/MIME-Form `application/x-pkcs7-mime` hatte keine Fixture („aus
 Zeitgründen") — nachgezogen.
 
+### Was `JR-5-05`/`JR-5-06` liefern
+
+Die Union kennt jetzt vier Arten: `journal_report`, `plain_bcc`, `ndr`, `parse_failed`. Der SMTP-Envelope
+kommt als **injizierter Parameter** herein — unter genau den Feldnamen, die E3 schon vergeben hat
+(`envelopeFrom`, `envelopeRcpt` aus `JournalTransactionInput` und der Ledger-Zeile), damit derselbe
+Sachverhalt nicht unter zwei Namen durch Ingress, Ledger und Parser läuft. Das ist zugleich die Naht,
+an der E4 andockt, ohne dass E5 auf E4 warten musste.
+
+`plain_bcc` trägt `reducedEnvelopeFidelity: true` — bei einer Plain-BCC-Kopie fehlen die
+Blindkopie-Empfänger **strukturell**, weil kein Journal-Report sie liefert, und das Ergebnis sagt das,
+statt es zu verschweigen. Postfix-`always_bcc` und Google-Routing werden bewusst **nicht**
+unterschieden: aus den Bytes ist der Unterschied nicht ableitbar, eine Unterscheidung hätte Information
+vorgetäuscht.
+
+NDR-Erkennung wiegt drei Signale und sagt im Code, welches das stärkste ist: der **Null-Absender**,
+weil er aus der SMTP-Transaktion kommt und nicht aus einem Header, den der Absender selbst setzt.
+
+### Der teuerste Befund des Epics: dreimal aus der Form auf die Art geschlossen
+
+`JR-5-05` hat drei Review-Runden gebraucht, und alle drei waren **dieselbe** Ursache auf einer anderen
+MIME-Ebene:
+
+| Runde | Was als Beleg galt                      | Was in Wirklichkeit dieselbe Form hat |
+| ----- | --------------------------------------- | ------------------------------------- |
+| R1    | `multipart/mixed` mit `text/plain`-Teil | jede Mail mit Anhang                  |
+| R3    | mindestens ein erkanntes Envelope-Feld  | jede zitierte Weiterleitung           |
+| R4    | ein `message/rfc822`-Teil ist vorhanden | „Als Anlage weiterleiten"             |
+
+Gemessen, nicht vermutet. R1 ließ eine Plain-BCC-Kopie als Journal-Report durchgehen und den
+Nachrichtenkörper als `_unparsed` in die Envelope-Metadaten wandern. R3 war **schlimmer**: die zitierten
+`To:`/`Cc:`-Zeilen einer Weiterleitung wurden zu Envelope-Empfängern — aus **verlorenem** Nachweis wurde
+**erfundener**. R4 behauptete bei „als Anlage weiterleiten" einen maßgeblichen, aber **leeren** Envelope,
+also „dieser Report hatte keine Empfänger" über eine Nachricht, die welche hatte.
+
+> **Die Regel, die daraus im Modulkommentar steht:** Die MIME-Struktur belegt **nie**, dass eine
+> Nachricht ein Journal-Report ist — jede ihrer Formen entsteht auch bei gewöhnlicher Post. Beleg ist
+> ausschließlich der **Inhalt** des Reportteils: eine `Recipient:`-Zeile (die Exchange immer schreibt und
+> die eine zitierte Weiterleitung nie reproduziert, weil sie kein RFC-5322-Header ist) **und** ein
+> Feldzeilenanfang. Die Struktur entscheidet danach nur noch, was **zusätzlich** verfügbar ist.
+>
+> **Und die Richtungsregel für jede Klassifikation:** die Fehlerrichtung ist immer „reduzierte
+> Fidelity", nie „erfundener Nachweis". Im Zweifel `plain_bcc` — das sagt „unvollständig", was bei
+> Unsicherheit wahr ist; `journal_report` behauptet „maßgeblich", was dann falsch ist.
+
+Die Prüfung sitzt seit R4 **vor** der Verzweigung über den Innenteil. Der Innenteil entscheidet nur noch,
+ob `innerMessage.present` gesetzt wird — nicht mehr, _ob_ es ein Journal-Report ist.
+
+**Zwei Dinge daran sind für die Abnahme wichtiger als die Korrektur selbst.** Erstens: Über die
+Akzeptanzkriterien war nichts davon erreichbar. `JR-5-01` bis `JR-5-06` waren einzeln erfüllt, während
+der Parser Alltagspost falsch einordnete. Zweitens: Die Suite war in **jeder** der drei Runden grün.
+Sichtbar wurde es nur, indem reale Nachrichtenformen durchprobiert wurden — sieben Formen, gegen das
+gebaute Paket gefahren, nicht gegen die Absicht.
+
+**Damit ist `JR-5-08` keine Fixture-Sammelaufgabe mehr, sondern die eigentliche Prüfarbeit des Epics.**
+Der Korpus muss Alltagsformen enthalten, die **keine** Journal-Reports sind — Weiterleitung zitiert,
+Weiterleitung als Anlage, Mail mit Anhang, Autoreply, Kalendereinladung, `multipart/alternative` —, und
+je Fixture aussagen, **was erhalten bleibt**, nicht nur, was erkannt wird.
+
 ### Zahlen
 
 | Stand                         | Volllauf                                            |
@@ -2028,6 +2086,7 @@ Zeitgründen") — nachgezogen.
 | nach der Review-Nacharbeit    | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
 | nach dem Rebase auf `d201612` | 45 Dateien, `559 passed \| 5 skipped`, unit 425/425 |
 | nach `JR-5-03`/`JR-5-04`      | 45 Dateien, `582 passed \| 5 skipped`, unit 448/448 |
+| nach `JR-5-05`/`JR-5-06`      | 45 Dateien, `602 passed \| 5 skipped`, unit 468/468 |
 
 Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
 `integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien

@@ -207,7 +207,23 @@ export const SUITES: readonly SuiteSpec[] = [
 		// now correctly lands on `plain_bcc` rather than `journal_report` under the stricter check,
 		// since its report part has no `Recipient:` line -- noted in that test's own comment, not a
 		// silent behaviour change. Net +8.
-		expectedTests: { ci: 467, nightly: 1, manual: 0 },
+		// 468 after PO review R4 on JR-5-05/JR-5-06 (still no new file): R3's two-signal discriminator
+		// was only ever consulted on the `located.innerMessage === null` branch, on the assumption that
+		// a present `message/rfc822` inner part was proof enough by itself -- it is not.
+		// "Forward as Attachment" (Outlook's own menu item; Thunderbird's default forward style)
+		// produces multipart/mixed + text/plain + message/rfc822 for ordinary mail, structurally
+		// identical to a genuine journal report inner part and all. Measured by the PO: that shape came
+		// back `journal_report` with an empty-but-authoritative envelope (`sender: null`,
+		// `recipients: []`) for a message that had real recipients, which were never attached because
+		// the SMTP-envelope-carrying path never ran. The fix moves `looksLikeGenuineJournalReport()`
+		// before the inner-part-present/absent branch so it runs unconditionally; the branch on
+		// `located.innerMessage` now only decides what `innerMessage` looks like, never `kind`. 1 new
+		// test proves the fix (the forward-as-attachment fixture now classifies `plain_bcc`); the
+		// pre-existing "complete journal report" test was strengthened (not counted as new -- same
+		// test, an added assertion) to confirm a genuine full report still passes the now-unconditional
+		// check, per the PO's explicit request that it becomes the test keeping the discriminator from
+		// tightening further. Net +1.
+		expectedTests: { ci: 468, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

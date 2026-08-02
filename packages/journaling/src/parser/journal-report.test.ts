@@ -542,7 +542,7 @@ suite('ci', 'parseJournalReport() -- plain BCC / routing-rule fallback (JR-5-05)
  */
 suite(
 	'ci',
-	'parseJournalReport() -- report-part-found/inner-missing is not proof of a journal report (PO review R1/R3)',
+	'parseJournalReport() -- MIME structure never proves a journal report (PO review R1/R3/R4)',
 	() => {
 		it('classifies a plain-BCC copy of an ordinary attachment-bearing email as plain_bcc, not journal_report', async () => {
 			// Measured by the PO against the pre-R1 code: this fixture used to come back as
@@ -596,6 +596,37 @@ suite(
 			expect(result.extractableHeaders.subject).toBe('Fwd: Rechnung');
 		});
 
+		it('classifies "Forward as Attachment" (message/rfc822 inner part present) as plain_bcc, not journal_report (PO review R4)', async () => {
+			// The sharpest case, and the one that showed R3's discriminator was called from the wrong
+			// place: "Forward as Attachment" (Outlook's own menu item; Thunderbird's default forward
+			// style) produces multipart/mixed + text/plain + message/rfc822 -- structurally identical to
+			// a genuine journal report, inner part and all. Measured by the PO against the pre-R4 code:
+			// this fixture came back `kind: 'journal_report'`, `innerMessage.present: true`,
+			// `envelope.sender: null`, `recipients: []` -- an envelope that was empty, not wrong, but
+			// still asserted as authoritative. A caller reading that result learns "this journal report
+			// had no recipients", which is false: the message had real recipients, they were simply
+			// never in the report text (there is no report text -- this was never a journal report) and
+			// the SMTP envelope that does have them was never attached because this path never runs
+			// classifyNonJournalMessage(). R4's fix moves `looksLikeGenuineJournalReport()` before the
+			// inner-part-present/absent branch so it runs regardless of which side of that branch this
+			// fixture lands on.
+			const raw = loadFixture('plain-bcc-forward-as-attachment.eml');
+			const result = await parseJournalReport(raw, {
+				envelopeFrom: 'alice@contoso.com',
+				envelopeRcpt: ['journal-archive@example.org'],
+			});
+			expect(result.kind).toBe('plain_bcc');
+			if (result.kind !== 'plain_bcc') {
+				throw new Error('unreachable');
+			}
+			expect(result.reducedEnvelopeFidelity).toBe(true);
+			expect(result.envelope).toEqual({
+				envelopeFrom: 'alice@contoso.com',
+				envelopeRcpt: ['journal-archive@example.org'],
+			});
+			expect(result.extractableHeaders.subject).toBe('Fwd: Rechnung (Anhang)');
+		});
+
 		it('still classifies a genuine journal report missing its inner part as journal_report (JR-5-03 unaffected)', async () => {
 			// Same top-level shape as the two fixtures above -- multipart/mixed, text/plain report part,
 			// no message/rfc822 child -- but this report part's content is a real (if incomplete)
@@ -621,11 +652,12 @@ suite(
 			]);
 		});
 
-		it('leaves a complete journal report (inner message present) unaffected by the discriminator', async () => {
-			// The discriminator only ever runs on the `located.innerMessage === null` path -- a complete
-			// journal report never reaches it at all. Asserted directly (not just by construction) so a
-			// future refactor that starts calling `looksLikeGenuineJournalReport()` unconditionally gets
-			// caught here if it changes this outcome.
+		it('leaves a complete journal report (inner message present) unaffected by the discriminator (PO review R4)', async () => {
+			// Since R4, `looksLikeGenuineJournalReport()` runs unconditionally -- including on this
+			// fixture, which has its `message/rfc822` inner part present. It passes both signals
+			// (`Recipient:` lines present, report text begins with `Sender:`) the same way the
+			// missing-inner-part fixture above does; this is the test the PO asked for to keep the
+			// now-unconditional discriminator from being tightened into rejecting genuine reports.
 			const raw = loadFixture('basic-journal-report.eml');
 			const result = await parseJournalReport(raw);
 			expect(result.kind).toBe('journal_report');
@@ -634,6 +666,7 @@ suite(
 			}
 			expect(result.innerMessage.present).toBe(true);
 			expect(result.envelope.sender).toBe('alice@contoso.com');
+			expect(result.envelope.recipients.length).toBeGreaterThan(0);
 		});
 	}
 );
