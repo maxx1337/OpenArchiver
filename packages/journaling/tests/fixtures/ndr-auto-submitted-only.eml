@@ -1,0 +1,12 @@
+From: mailer-daemon@mx.example.org
+To: journal-archive@example.org
+Subject: Message delivery failure
+Date: Wed, 01 Jul 2026 09:14:00 +0000
+Message-ID: <ndr-3@mx.example.org>
+Auto-Submitted: auto-generated
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+A malformed but automatically generated delivery failure notice: no
+multipart/report structure at all, so RFC 3464's own machine-readable shape
+is not present here -- only the Auto-Submitted header marks it.

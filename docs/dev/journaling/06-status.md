@@ -1901,6 +1901,405 @@ Formulierung („der Fix bricht Bestandsinstallationen") ist **nicht** nötig.
 
 ---
 
+## E5 — Journal-Report-Parser (Parallelsession B, seit 2026-08-02)
+
+> **Dieser Abschnitt gehört einer zweiten, gleichzeitig laufenden Session.** Regeln, Kollisionsflächen
+> und Merge-Richtung stehen in `12-parallelbetrieb.md`. Session B fasst weder `07-session-handover.md`
+> noch die Abschnitte der E3-Session in dieser Datei an — auch nicht die Kopfzeile
+> „Letzte Aktualisierung", die der E3-Session gehört.
+
+**Branch:** `claude/journaling-e5-parser`, abgezweigt vom Integrationsbranch bei `9725a5d`, am
+2026-08-02 auf `d201612` rebased (E3 abgenommen und zurückgemergt). **Kein E5-Commit ist je auf dem
+Integrationsbranch gelandet** — mit `git merge-base --is-ancestor` für alle drei geprüft, nachdem
+`d201612` die Upstream-Falle beschrieben hat; `git push -u` lief hier direkt nach dem Anlegen.
+**Warum parallel möglich:** E3 lebt in `packages/journaling/src/spool/*`, E5 in
+`packages/journaling/src/parser/*` — kein geteiltes Byte. E5 ist reine Logik über Bytes: keine
+Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft **eine** Task
+(`JR-5-05`), und die SMTP-Envelope ist dort ein Eingabeparameter, kein Code aus E4.
+
+| Task      | Stand                                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `JR-5-01` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
+| `JR-5-02` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
+| `JR-5-03` | **[x] erledigt** 2026-08-02 (S2 + Review-Nacharbeit)                                                                             |
+| `JR-5-04` | **[~] parserseitig erledigt, Rest hängt an E6** — der Ledger-Eintrag, der Storage, die Indexierung und der Alarm sind E6s Arbeit |
+| `JR-5-05` | **[x] erledigt** 2026-08-02 (S3 + drei Runden Review)                                                                            |
+| `JR-5-06` | **[x] erledigt** 2026-08-02 (S3)                                                                                                 |
+| `JR-5-07` | **[x] erledigt** 2026-08-02 (S4) — mit einem Befund an E6, siehe unten                                                           |
+| `JR-5-08` | **[x] erledigt** 2026-08-02 (S5 Korpus + S6 Reparatur) — zwei Befunde, alle behoben                                              |
+| `JR-5-09` | **[x] erledigt** 2026-08-02 — **angenommen mit Auflage**, Auflage geschlossen (F43)                                              |
+
+### Was `JR-5-01`/`JR-5-02` liefern
+
+`packages/journaling/src/parser/` zerlegt einen Exchange-Journal-Report in Außenobjekt, Innenmail und
+Envelope, ohne die übergebenen Bytes anzufassen. `Recipient:` wird als eigene, **reihenfolgetreue und
+nicht deduplizierte** Liste geführt statt in `to`/`cc` gefaltet — dort erscheinen Blindkopie-Empfänger
+und Verteilerlisten-Mitglieder, und das ist die Existenzberechtigung des Features. An der Fixture
+gemessen: der Bcc-Empfänger und alle drei DL-Mitglieder stehen in `recipients` und in **weder** `to`
+**noch** `cc`. Feldzeilen, die der Parser nicht modelliert, bleiben unter ihrem Namen erhalten statt
+verworfen zu werden. Der Parser **wirft nicht** — jeder Fehlerpfad wird zu `kind: 'parse_failed'`
+(RFC §5.3).
+
+### Der Befund, der die Scheibe geprägt hat: `mailparser` und `Content-Disposition: inline`
+
+Der erste DEV-Entwurf begründete einen handgeschriebenen MIME-Splitter damit, `mailparser` steige
+durch die `message/rfc822`-Grenze durch. **Die Begründung stimmt, aber nur unter einer Bedingung**,
+die der Kommentar unterschlug. Gegen `mailparser@3.7.4` gemessen:
+
+```
+disposition=(keine)    | Innentext in .text = false | attachments = 1
+disposition=inline     | Innentext in .text = TRUE  | attachments = 0
+disposition=attachment | Innentext in .text = false | attachments = 1
+```
+
+Bei `inline` mischt `mailparser` den Körper der Innenmail in dieselbe `.text` wie den Reportteil — der
+Envelope-Parser läse seine Feldzeilen dann aus einem Text, in dem die Innenmail steht, **ohne Fehler
+und ohne Spur**. Die Entwurfsentscheidung ist damit richtig; ausgeschrieben ist sie im **Nachtrag zu
+ADR-027**, samt Quellstellen (`mailsplit/lib/message-splitter.js:373-378`, `mail-parser.js:806`), und
+die drei Zeilen laufen als Test bei jedem CI-Lauf mit — **damit die nächste Session das Modul nicht
+als überflüssige Komplexität löscht**, nachdem sie den harmlosen Fall geprüft hat.
+
+### Das PO-Review, weil es vier weitere Punkte gefunden hat
+
+Der DEV-Bericht war ehrlich und die Zahlen reproduzierten exakt — die Mängel lagen trotzdem im Code:
+`splitAddressList()` zerlegte `"Doe, John" <john@contoso.com>` in fünf Trümmer (jetzt über
+`mailparser`s eigenen Adressparser), eine Feldnamen-Liste konnte vom `switch` wegdriften (jetzt aus
+einer Dispatch-Tabelle abgeleitet), `undisclosedRecipients` verlor als einzelnes Bool, welches Feld den
+Platzhalter trug (jetzt eine Feldliste), und `findLineStarts()` hielt eine Körperzeile `--B1EXTRA` bei
+Boundary `B1` für einen Trenner (jetzt mit RFC-2046-Prüfung des Zeilenrests).
+
+**Die Lehre ist nicht „prüfe Berichte".** Alle vier waren aus dem Diff lesbar, keiner davon hätte einen
+Test rot gemacht, und drei hätten still falsche Metadaten erzeugt.
+
+### Was `JR-5-03`/`JR-5-04` liefern
+
+**S/MIME:** `contentEncrypted` wird am **Content-Type des Innenteils** entschieden, nicht daran, ob
+`mailparser` gestolpert ist — die Bibliothek wirft bei verschlüsseltem Körper nämlich gar nicht, das
+Signal wäre also wertlos gewesen. `multipart/signed` bleibt ausdrücklich ausgenommen: ein
+**signierter** Innenteil ist lesbar und indexierbar, ein **verschlüsselter** nicht, und die beiden zu
+verwechseln hieße entweder Chiffrat zu indexieren oder lesbare Post nicht.
+
+**Kein Innenteil:** `kind: 'journal_report'` mit `innerMessage: { present: false }` — der Envelope
+bleibt **vollständig** erhalten. Der Aufrufer erkennt am `present === false`, dass zusätzlich ein
+`parse_failed`-Ereignis fällig ist.
+
+**Nicht-Wurf:** sieben absichtlich kaputte Eingaben (abgeschnitten, falsche Boundary, verschachtelte
+Multiparts, 8-Bit-Müll, leerer Puffer, nur Header, Boundary ohne Abschluss) — keine erzeugt eine
+Ausnahme.
+
+**Was `JR-5-04` parserseitig beiträgt:** `JournalParseFailed` trägt `extractableHeaders`, damit E6s
+„Extrahierbares wird indexieren" überhaupt etwas hat. Ein `parse_failed`, das nur einen `reason`
+trägt, macht Indexierung unmöglich.
+
+### Der Befund aus dem S2-Review: eine grüne Suite, die den Envelope verlor
+
+Der erste S2-Entwurf gab im Fall „Reportteil in Ordnung, Innenteil fehlt" ein `parse_failed` zurück
+und reduzierte den zu diesem Zeitpunkt **vollständig geparsten** Envelope auf drei Felder
+(`subject`/`from`/`messageId`). Verloren gingen dabei `bcc`, `recipients` samt
+Verteilerlisten-Expansion, `onBehalfOf` und `unknownFields` — also genau das, was RFC §6.1 „the entire
+justification for this feature" nennt und woran `JR-5-02` abgenommen wird. Ein fehlender **Innen**teil
+ist kein Grund, den **Außen**-Envelope zu verwerfen.
+
+Verschärfend: `InnerMessageAbsent { present: false }` steht seit S1 im Typ und wurde von **nichts**
+mehr erzeugt. Für einen Fall gab es zwei Mechanismen, und der ungenutzte war der, der die Daten
+behält.
+
+> **Die Lehre ist nicht „prüfe Berichte", sondern etwas Unangenehmeres: die Suite war grün.**
+> `582 passed`, kein einziger roter Test — weil keiner geprüft hat, ob der Envelope einen fehlenden
+> Innenteil überlebt. Der Befund lag nicht im Code, sondern in der Abwesenheit einer Behauptung.
+> **Für `JR-5-08` (Korpus, Rolle TEST) ist das die eigentliche Vorgabe:** jede Fixture muss eine
+> Aussage darüber tragen, was **erhalten bleibt**, nicht nur darüber, was erkannt wird.
+
+Festgelegte Invariante, ab jetzt gültig für jeden Pfad im Parser: **ist der Envelope einmal geparst,
+darf ihn kein Rückgabeweg fallen lassen.**
+
+Zwei weitere Punkte aus demselben Review: `ParseFailedAlert`/`ParseFailedAlertSink` waren ohne
+Erzeuger und ohne Aufrufer entstanden — eine Naht, die keine ist, mit dem Risiko, dass E6 sie
+übernimmt, **weil es sie gibt**. Gestrichen; die Alarmierung definiert E6, wenn sie ihren Kontext
+kennt. Und die veraltete S/MIME-Form `application/x-pkcs7-mime` hatte keine Fixture („aus
+Zeitgründen") — nachgezogen.
+
+### Was `JR-5-05`/`JR-5-06` liefern
+
+Die Union kennt jetzt vier Arten: `journal_report`, `plain_bcc`, `ndr`, `parse_failed`. Der SMTP-Envelope
+kommt als **injizierter Parameter** herein — unter genau den Feldnamen, die E3 schon vergeben hat
+(`envelopeFrom`, `envelopeRcpt` aus `JournalTransactionInput` und der Ledger-Zeile), damit derselbe
+Sachverhalt nicht unter zwei Namen durch Ingress, Ledger und Parser läuft. Das ist zugleich die Naht,
+an der E4 andockt, ohne dass E5 auf E4 warten musste.
+
+`plain_bcc` trägt `reducedEnvelopeFidelity: true` — bei einer Plain-BCC-Kopie fehlen die
+Blindkopie-Empfänger **strukturell**, weil kein Journal-Report sie liefert, und das Ergebnis sagt das,
+statt es zu verschweigen. Postfix-`always_bcc` und Google-Routing werden bewusst **nicht**
+unterschieden: aus den Bytes ist der Unterschied nicht ableitbar, eine Unterscheidung hätte Information
+vorgetäuscht.
+
+NDR-Erkennung wiegt drei Signale und sagt im Code, welches das stärkste ist: der **Null-Absender**,
+weil er aus der SMTP-Transaktion kommt und nicht aus einem Header, den der Absender selbst setzt.
+
+### Der teuerste Befund des Epics: dreimal aus der Form auf die Art geschlossen
+
+`JR-5-05` hat drei Review-Runden gebraucht, und alle drei waren **dieselbe** Ursache auf einer anderen
+MIME-Ebene:
+
+| Runde | Was als Beleg galt                      | Was in Wirklichkeit dieselbe Form hat |
+| ----- | --------------------------------------- | ------------------------------------- |
+| R1    | `multipart/mixed` mit `text/plain`-Teil | jede Mail mit Anhang                  |
+| R3    | mindestens ein erkanntes Envelope-Feld  | jede zitierte Weiterleitung           |
+| R4    | ein `message/rfc822`-Teil ist vorhanden | „Als Anlage weiterleiten"             |
+
+Gemessen, nicht vermutet. R1 ließ eine Plain-BCC-Kopie als Journal-Report durchgehen und den
+Nachrichtenkörper als `_unparsed` in die Envelope-Metadaten wandern. R3 war **schlimmer**: die zitierten
+`To:`/`Cc:`-Zeilen einer Weiterleitung wurden zu Envelope-Empfängern — aus **verlorenem** Nachweis wurde
+**erfundener**. R4 behauptete bei „als Anlage weiterleiten" einen maßgeblichen, aber **leeren** Envelope,
+also „dieser Report hatte keine Empfänger" über eine Nachricht, die welche hatte.
+
+> **Die Regel, die daraus im Modulkommentar steht:** Die MIME-Struktur belegt **nie**, dass eine
+> Nachricht ein Journal-Report ist — jede ihrer Formen entsteht auch bei gewöhnlicher Post. Beleg ist
+> ausschließlich der **Inhalt** des Reportteils: eine `Recipient:`-Zeile (die Exchange immer schreibt und
+> die eine zitierte Weiterleitung nie reproduziert, weil sie kein RFC-5322-Header ist) **und** ein
+> Feldzeilenanfang. Die Struktur entscheidet danach nur noch, was **zusätzlich** verfügbar ist.
+>
+> **Und die Richtungsregel für jede Klassifikation:** die Fehlerrichtung ist immer „reduzierte
+> Fidelity", nie „erfundener Nachweis". Im Zweifel `plain_bcc` — das sagt „unvollständig", was bei
+> Unsicherheit wahr ist; `journal_report` behauptet „maßgeblich", was dann falsch ist.
+
+Die Prüfung sitzt seit R4 **vor** der Verzweigung über den Innenteil. Der Innenteil entscheidet nur noch,
+ob `innerMessage.present` gesetzt wird — nicht mehr, _ob_ es ein Journal-Report ist.
+
+**Zwei Dinge daran sind für die Abnahme wichtiger als die Korrektur selbst.** Erstens: Über die
+Akzeptanzkriterien war nichts davon erreichbar. `JR-5-01` bis `JR-5-06` waren einzeln erfüllt, während
+der Parser Alltagspost falsch einordnete. Zweitens: Die Suite war in **jeder** der drei Runden grün.
+Sichtbar wurde es nur, indem reale Nachrichtenformen durchprobiert wurden — sieben Formen, gegen das
+gebaute Paket gefahren, nicht gegen die Absicht.
+
+**Damit ist `JR-5-08` keine Fixture-Sammelaufgabe mehr, sondern die eigentliche Prüfarbeit des Epics.**
+Der Korpus muss Alltagsformen enthalten, die **keine** Journal-Reports sind — Weiterleitung zitiert,
+Weiterleitung als Anlage, Mail mit Anhang, Autoreply, Kalendereinladung, `multipart/alternative` —, und
+je Fixture aussagen, **was erhalten bleibt**, nicht nur, was erkannt wird.
+
+### Was `JR-5-07` liefert
+
+`resolveOwner(envelope, domainGroups)` in `packages/journaling/src/parser/owner-resolution.ts` — rein,
+synchron, ohne Datenbank, ohne Konfiguration, **ohne Logger**. Die von Kriterium 4 verlangte Warnung ist
+ein **Wert** im Ergebnis (`warning: string | null`, nicht-null genau bei `method === 'fallback'`); den
+Logaufruf macht der Aufrufer in E6. `packages/journaling` bekommt keinen Logger, auch nicht für „nur eine
+Zeile".
+
+Die vier dokumentierten Tabellenzeilen aus `docs/enterprise/journaling/guide.md` sind gegen das gebaute
+Paket nachgefahren, dazu vier eigene Fälle:
+
+```
+OK  Tabelle Z1 alice@old-brand.com -> alice@company.com            method=alias-domain-match
+OK  Tabelle Z2 alice@company.com   -> alice@company.com            method=primary-domain-match
+OK  Tabelle Z3 bob@subsidiary.io   -> bob@subsidiary.io            method=primary-domain-match
+OK  Tabelle Z4 external@gmail.com  -> default_fallback@company.com method=fallback
+OK  ohne Gruppen (Heuristik)       -> x@fremd.tld                  method=heuristic-no-groups
+OK  GROSS in Domain                -> alice@company.com            method=alias-domain-match
+OK  Ausgang: nur sender passt      -> alice@company.com            method=primary-domain-match
+OK  Reihenfolge To vor Cc          -> a@company.com                method=primary-domain-match
+```
+
+**Der Weg steht im Ergebnis, nicht nur das Ziel.** `method` unterscheidet vier Wege — exakter Treffer,
+Alias-Normalisierung, Heuristik ohne Gruppen, Fallback —, die nicht gleich viel wert sind. Das ist die
+Richtungsregel aus S3 auf dieses Problem angewandt: aus einer passenden Domain auf Eigentümerschaft zu
+schließen ist eine Annahme, und ein geratener Eigentümer, der als sicher ausgegeben wird, wäre der
+verbotene Fall. `additionalMatches` führt außerdem mit, wenn **mehrere** Teilnehmer gepasst haben.
+
+Die Signatur nimmt bewusst nur `OwnerResolutionEnvelope` (ein `Pick` aus `ParsedEnvelope`), sodass
+`plain_bcc`- und `ndr`-Ergebnisse **gar nicht erst kompilieren** statt zur Laufzeit geraten zu werden.
+
+### Befund aus `JR-5-07`: die dokumentierte Reihenfolge kennt `Recipient:` nicht
+
+Die veröffentlichte Seite bestimmt den Eigentümer aus `To`/`Cc`/`Bcc`/`From` — also aus den Feldern, die
+die **Header spiegeln**. Sie erwähnt `Recipient:` an keiner Stelle, obwohl genau dieses Feld die wahre
+SMTP-Empfängerliste trägt und im Typ selbst als „the entire justification for this feature" beschrieben
+ist.
+
+Folge: Ein Empfänger, der **nur** in der Envelope steht — der klassische Fall ist die
+Verteilerlisten-Expansion —, beeinflusst die Eigentümerbestimmung nicht. Eine Nachricht an eine Liste
+wird unter der **Listenadresse** abgelegt, nicht unter dem expandierten Mitglied.
+
+**Entscheidung des PO (2026-08-02): der Code folgt der Doku, der Widerspruch geht an E6.** Begründung:
+Die veröffentlichte Seite still zu unterlaufen wäre die schlechtere Hälfte beider Welten, und **erst in
+E6 entscheidet sich, was `archived_emails.userEmail` überhaupt bedeutet** — ob je Nachricht ein
+Archiveintrag entsteht oder je betroffenem Postfach. Ohne diese Festlegung ist nicht entscheidbar, ob
+das expandierte Mitglied den Eigentümer stellen soll. **`JR-6-02` muss das mitentscheiden** (dort steht
+ohnehin ADR-010 offen: `processEmail` erweitern vs. eigener Pfad).
+
+Die naheliegende Zwischenform, falls E6 sie will: `recipients` als **Auffang vor** dem
+`default_fallback`-Zweig. Das ändert **keine** der vier dokumentierten Tabellenzeilen und macht keine
+Aussage der Seite falsch — es fügt einen Schritt hinzu, wo die Seite heute aufgibt.
+
+### Zweiter offener Punkt aus `JR-5-07`: doppelt konfigurierte Alias-Domain
+
+Steht dieselbe Domain in **zwei** Gruppen als Alias, gewinnt die erste in Array-Reihenfolge; innerhalb
+einer Gruppe `main` vor `aliases`. Das ist dokumentiert und getestet, aber es ist ein **Tie-Break, keine
+Prüfung** — beanstanden kann der Parser es nicht, weil er per Architekturregel keine Konfiguration
+bekommt, sondern nur die fertigen Gruppen.
+
+**Vorgeschlagene Folgeaufgabe für `packages/backend`** (Nummer vergibt der Auftraggeber, die JR-Folge ist
+zwischen den Sessions geteilt): eine Validierung dort, wo `journaling_sources.organizationDomains`
+tatsächlich geschrieben wird — eine Domain in zwei Gruppen ist ein Bedienfehler, der beim Speichern
+auffallen sollte und nicht erst bei der Ablage einer Nachricht.
+
+### `JR-5-08`: der Korpus hat geliefert, wofür er gebaut wurde
+
+Acht neue Fixtures, und zwar **nicht nur** die Journal-Formen aus dem Backlog, sondern Alltagspost, die
+**keine** Journal-Reports ist: Kalendereinladung, Newsletter, Abwesenheitsnotiz, Mail mit Anhang,
+zitierter Report im Fließtext. Diese Ergänzung war der Zweck — alle drei Fehlklassifikationen aus
+`JR-5-05` kamen von gewöhnlicher Post, die als Journal-Report durchging.
+
+Die Rolle TEST hat **drei Tests rot gelassen**, statt den Korpus um die Befunde herumzubauen. Genau
+richtig: ein Korpus, der sich am Fehler vorbeischreibt, ist wertlos.
+
+**Befund A — die Suche nach dem Reportteil geht nur eine Ebene tief.**
+`multipart/mixed(multipart/alternative(text/plain, text/html), Anhang)` ist das, was **jeder**
+HTML-schreibende Client für „Mail mit Anhang" erzeugt. Auf oberster Ebene gibt es kein `text/plain`,
+also kam `parse_failed` heraus — mit Ledger-Ereignis **und** Operator-Alarm, für Alltagsverkehr. In
+einem `always_bcc`-Postfach wäre das die Mehrheit. **Ein Alarm, der ständig feuert, ist derselbe
+Ausfall wie einer, der nie feuert.**
+
+Behoben in der besseren der beiden Richtungen: Wo es gar keinen Kandidaten für einen Reportteil gibt,
+kann der Diskriminator **nicht einmal laufen** — dann ist „das ist kein Journal-Report" die einzige
+Aussage, die der Parser stützen kann, und `parse_failed` („da war ein kaputter Versuch") behauptet mehr,
+als er weiß. Die Suche bleibt bewusst flach: sie in `multipart/alternative` hineinzulehren hätte den
+Fehler „Struktur belegt die Art" nur eine Ebene tiefer verschoben.
+
+**Befund B — der inhaltliche Diskriminator ist vom Absender fälschbar.** Die fünfte Ausprägung
+derselben Ursache, und die, die das **Verfahren** widerlegt statt nur ein Kriterium. Führt zu
+**ADR-028**. Die Ausnutzbarkeit ist gemessen und ungleich verteilt:
+
+| Betriebsart         | greift der Angriff? | warum                                                                        |
+| ------------------- | ------------------- | ---------------------------------------------------------------------------- |
+| Exchange-Journaling | **nein**            | Exchange wickelt ein; der gefälschte Inhalt sitzt im nie befragten Innenteil |
+| Plain BCC / Routing | **ja**              | kein Wrapper — die Angreifernachricht **ist** die oberste Ebene              |
+
+Er greift also genau dort, wo Journal-Reports gar nicht vorkommen — und das ist der Beweis der
+Reparatur: `parseJournalReport(raw, smtpEnvelope, sourceMode)`. Gemessen an denselben Bytes:
+
+```
+content-forged-fake-report-as-attachment.eml    infer=journal_report  plain-bcc=plain_bcc
+content-forged-fake-report-with-fake-inner.eml  infer=journal_report  plain-bcc=plain_bcc
+```
+
+**Die Grenze ist nicht weggeschrieben worden.** Unter `'infer'` behaupten beide Fixtures weiterhin
+messbar `journal_report` mit absenderbestimmtem `sender` — als **dokumentierte Grenze**, im Test und im
+Kommentar so benannt. Was der Parser nicht leisten kann, steht dort ausdrücklich: wer wirklich
+zugestellt hat, entscheidet sich an der SMTP-Transaktion (`JR-4-05`), und keine Inhaltsprüfung ersetzt
+das.
+
+**Befund C — eine Abwesenheitsnotiz wurde als `ndr` ausgegeben**, weil `Auto-Submitted` als
+eigenständiges Signal zählte. Ein Archiv, das eine Urlaubsantwort unter „Unzustellbarkeit" ablegt,
+behauptet ein Zustellproblem, das es nie gab.
+
+> **Hier hat der DEV den PO widerlegt, und das ist der Eintrag wert.** Meine Vorgabe lautete, RFC 3834
+> unterscheide `auto-generated` (DSN) von `auto-replied` (Autoresponder), man müsse also nur den Wert
+> auswerten. Der Agent hat den RFC geholt statt sie zu glauben: **§7 setzt `auto-replied` in seinem
+> eigenen Beispiel auf einen Urlaubsautoresponder**, und §5 erlaubt denselben Token auf einer echten
+> DSN. **Der Wert kann die beiden Fälle nicht trennen.** Die gewählte Lösung ist deshalb besser als die
+> vorgegebene: tragend sind allein die RFC-3464-Struktur und der **Null-Absender** aus der
+> SMTP-Transaktion; `Auto-Submitted` ist Bestätigung, nie Beleg. Dabei fiel ein **vorhandener** Test aus
+> `JR-5-06` auf, der das widerlegte Verhalten festgeschrieben hatte.
+
+### Gegenprobe nach der Reparatur
+
+Sechzehn Formen gegen das gebaute Paket, nicht gegen die Absicht — alle wie erwartet: echte Reports
+(vollständig, Innenteil fehlt, Bcc-only, Report umschließt NDR) bleiben `journal_report`;
+Weiterleitung zitiert, Weiterleitung als Anlage, Mail mit Anhang, Kalendereinladung, Newsletter,
+Abwesenheitsnotiz sind `plain_bcc`; der DSN bleibt `ndr`. Die sieben kaputten Eingaben aus S3 werfen
+weiterhin nicht, und die vier Tabellenzeilen aus S4 sind unberührt.
+
+### `JR-5-09`: Abnahme durch die Rolle TEST — **angenommen mit Auflage**
+
+Die Prüferin hat die Basiszahlen selbst nachgefahren statt sie zu glauben (deckungsgleich), die acht
+Kriterien einzeln am **gebauten** Paket gemessen, und die zwei Fallen, die ich ihr vorgelegt habe, beide
+eingehalten:
+
+- **Reichweite über E5 hinaus:** `JR-5-01` (Storage), `JR-5-03` (Indexierung) und `JR-5-04`
+  (Ledger, Alarm) verlangen Dinge, die es in einem reinen Parser nicht gibt. Sie hat sie als
+  **teilweise** ausgewiesen und per `grep` belegt, dass **kein** Test etwas davon behauptet — statt
+  Häkchen für nicht vorhandene Strecken zu setzen.
+- **ADR-028s Grenze:** keine Beschönigung gefunden. Die Fälschungs-Fixtures liefern unter `'infer'`
+  weiterhin messbar `journal_report`, und Kommentar wie Test benennen das.
+
+Sechs Kriterien erfüllt, zwei teilweise mit benannter Reichweite, eines (`JR-5-07`) mit einem **neuen
+Befund**. Bemerkenswert an ihrer Arbeit ist ein Schritt, der selten vorkommt: Ihre erste
+Quoted-Printable-Sonde schlug an, und sie hat **das eigene Werkzeug** geprüft, nicht den Parser
+beschuldigt — das Fixture enthielt einen QP-Soft-Linebreak, der zwei Zeilen verschmolz. Ein Fehlalarm,
+den sie selbst abgefangen hat.
+
+### F43 — Whitespace in einer konfigurierten Domain landete in der Eigentümeradresse
+
+Vergeben 2026-08-02 (PO), gefunden von `JR-5-09`. Der Vergleich lief über `normalizedConfiguredDomain()`
+(trimmt), die **Ausgabe** benutzte die rohe Zeichenkette. Ein versehentliches Leerzeichen in
+`organizationDomains` passte damit weiterhin — und wanderte in die Adresse. Nachgemessen, und in einem
+Punkt schlimmer als gemeldet:
+
+```
+'company.com '   -> "alice@company.com "            Whitespace am Ende
+' company.com'   -> "alice@ company.com"            Whitespace MITTEN in der Adresse
+'company.com\t'  -> "alice@company.com\t"
+```
+
+Eine solche Adresse ist nie zustellbar und vergleicht sich mit nichts — und sie wäre nach E6 in
+`archived_emails.userEmail` gelandet. **Behoben** an beiden Ausgabestellen (Treffer- und Fallback-Pfad),
+mit acht Regressionstests.
+
+**Zwei Dinge sind dabei bewusst _nicht_ passiert.** Die **Groß-/Kleinschreibung** wird weiter erhalten —
+das ist entworfen, nicht versehentlich, und Trimmen ist eine andere Frage als Kleinschreiben; ein Test
+hält beides zugleich fest (`' Company.COM '` ⇒ `alice@Company.COM`). Und ein `main`, der **gar keine
+Domain** ist (`'admin@company.com'` ⇒ `default_fallback@admin@company.com`, zwei `@`), wird **nicht
+repariert**: zu raten, welche Hälfte der Betreiber meinte, wäre genau der verbotene Zug — aus einer
+kaputten Eingabe einen Wert erfinden. Ein Test hält diese Grenze fest, statt sie später entdecken zu
+lassen. Sie gehört in die Konfigurationsprüfung im Backend, zusammen mit der doppelt konfigurierten
+Domain aus `JR-5-07`.
+
+### Zwei Abdeckungslücken, bewusst offen
+
+`Recipient:` mit spitzen Klammern und eine semikolongetrennte `Recipient:`-Liste werden nicht
+normalisiert. Beides sind **Lücken, keine Defekte**: Sie hängen an der Annahme, Exchange schreibe eine
+nackte Adresse pro Zeile — und die ist ohne echtes Exchange-Sample nicht überprüfbar. **Die Prüferin hat
+das ausdrücklich als unverifiziert gemeldet, statt eine Exchange-Struktur plausibel zu erfinden.** Das
+war die Vorgabe, und sie ist der Grund, warum diese beiden Lücken hier stehen und nicht als geprüft
+gelten.
+
+### Zahlen
+
+| Stand                         | Volllauf                                            |
+| ----------------------------- | --------------------------------------------------- |
+| Basis `9725a5d` (vor E5)      | 40 Dateien, `486 passed \| 3 skipped`, unit 371/371 |
+| nach `JR-5-01`/`JR-5-02`      | 43 Dateien, `525 passed \| 3 skipped`, unit 410/410 |
+| nach der Review-Nacharbeit    | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
+| nach dem Rebase auf `d201612` | 45 Dateien, `559 passed \| 5 skipped`, unit 425/425 |
+| nach `JR-5-03`/`JR-5-04`      | 45 Dateien, `582 passed \| 5 skipped`, unit 448/448 |
+| nach `JR-5-05`/`JR-5-06`      | 45 Dateien, `602 passed \| 5 skipped`, unit 468/468 |
+| nach `JR-5-07`                | 46 Dateien, `625 passed \| 5 skipped`, unit 491/491 |
+| `JR-5-08` Korpus, 3 rot       | 47 Dateien, `633 passed \| 3 failed`, unit 502/502  |
+| nach der Reparatur (S6)       | 47 Dateien, `638 passed \| 5 skipped`, unit 504/504 |
+| nach `JR-5-09` + F43          | 47 Dateien, `646 passed \| 5 skipped`, unit 512/512 |
+
+Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
+`integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
+aus dem E2-Handover sind **überholt** — die Differenz zur Basis sind E3s zehn Dateien.
+
+### Drei Punkte für den Auftraggeber
+
+0. ~~**Der Integrationsbranch ist lint-rot in E3s Gebiet**~~ — **erledigt**.
+   `packages/journaling/src/spool/acceptance.ts` hat Session A beim E3-Abschluss selbst formatiert.
+   Nach dem Rebase auf `d201612` ist `pnpm lint` repo-weit grün. Session B hat die Datei nie
+   angefasst (fremdes Gebiet, `12-parallelbetrieb.md` §5) — die Meldung hat gereicht.
+1. **`pnpm test` ist nicht in `dotenv --` gewickelt** (`package.json:28`), anders als `CLAUDE.md` §4
+   für alle Root-Skripte behauptet. Ohne exportiertes `DATABASE_URL` überspringt die gesamte
+   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Aufgenommen als F42**
+   (2026-08-02, PO) — nach E3s **F40** und **F41** war das die nächste freie Nummer. Behoben wird er
+   nicht in E5: `package.json` ist gemeinsames Gebiet, und ein Griff hinein während E3s Abschluss wäre
+   genau der Konflikt, den `12-parallelbetrieb.md` §3.2 vermeiden will.
+2. ~~**Die ADR-Nummer 027 könnte kollidieren**~~ — **gegengeprüft, sie tut es nicht**. Session A hat
+   im gesamten E3-Abschluss keine ADR geschrieben; ADR-027 ist nach dem Rebase die einzige mit dieser
+   Nummer.
+
+---
+
 ## E3 – E12 (offen)
 
 Tasklisten stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics

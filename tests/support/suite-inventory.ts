@@ -113,7 +113,18 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ledger/ledger-lookup.test.ts (the batched spool_txid -> ledger read port, against a recording
 		// fake) and spool/crash-recovery.test.ts (the crash-recovery scan: requeue vs. quarantine,
 		// batching, quarantine/ observability, no-delete, and tolerance of a racing second scan).
-		expectedFiles: 23,
+		// 26 after JR-5-01/JR-5-02 added packages/journaling/src/parser/{mime-split,envelope,
+		// journal-report}.test.ts -- the hand-rolled top-level MIME splitter that keeps mailparser
+		// from recursing across the message/rfc822 boundary, the envelope field-line parser
+		// (Sender/Subject/Message-Id/To/Cc/Bcc/Recipient/On-Behalf-Of/undisclosed-recipients/
+		// unknown-field preservation), and the end-to-end parseJournalReport() orchestration
+		// against fixture .eml files.
+		// 27 after JR-5-07 added packages/journaling/src/parser/owner-resolution.test.ts.
+		// 28 after JR-5-08 added packages/journaling/src/parser/journal-report-corpus.test.ts (the
+		// parser test corpus: everyday non-journal mail forms not otherwise in the corpus, plus two
+		// measured misclassifications left RED on purpose -- see that file's module doc comment and
+		// 06-status.md's E5 test-corpus section for detail).
+		expectedFiles: 28,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -139,8 +150,146 @@ export const SUITES: readonly SuiteSpec[] = [
 		// mixed multi-shard batch resolved in exactly one ledger call, pre-existing quarantine/ files
 		// counted but never queried or moved, a fresh/empty spool scans cleanly, content preserved
 		// byte-for-byte across a run that both requeues and quarantines, and a racing second scan's
-		// already-moved source is tolerated rather than thrown).
-		expectedTests: { ci: 371, nightly: 1, manual: 0 },
+		// already-moved source is tolerated rather than thrown). 410 after JR-5-01/JR-5-02: 17
+		// tests for the top-level MIME splitter, 14 for the envelope field-line parser, 8 for the
+		// end-to-end parseJournalReport() orchestration -- 39 new tests.
+		// 425 after PO review R1-R5 on JR-5-01/JR-5-02: 15 more tests than the initial 39 -- the
+		// R1 Content-Disposition: inline regression suite (measurement + counter-proof), R2's
+		// mailparser-backed To/Cc/Bcc address-list parsing tests, R3's dispatch-table/known-names
+		// equality test, R4's undisclosedRecipientFields granularity tests, and R5's boundary-line
+		// validation tests.
+		// 447 after JR-5-03/JR-5-04: 22 new tests in the same three parser files (no new files) --
+		// 11 in mime-split.test.ts (locateJournalParts() reporting the report part independently of
+		// the inner part, and isSmimeWrappedContentType()/isSmimeWrappedMessage() classifying
+		// application/pkcs7-mime, the deprecated application/x-pkcs7-mime alias, and multipart/signed
+		// as NOT wrapped) and 11 in journal-report.test.ts (the missing-inner-part case now asserting
+		// extractableHeaders sourced from the still-parsed envelope rather than only `reason`; the
+		// not-multipart/empty-buffer fallback-header-extraction cases; the S/MIME-encrypted and
+		// clear-signed inner-part fixtures end to end; and the JR-5-03 "never throws" loop over
+		// seven deliberately broken shapes -- truncated, wrong boundary, nested multipart, 8-bit
+		// garbage, empty buffer, headers-only, unterminated boundary).
+		// 448 after PO review R1-R3 on JR-5-03/JR-5-04: a missing inner part no longer collapses the
+		// already-parsed envelope into a three-field `parse_failed` -- it stays `kind:
+		// 'journal_report'` with `innerMessage: { present: false }` and the full envelope intact,
+		// which replaced 2 parse_failed-shaped tests with 2 tests proving that (including a
+		// dedicated Bcc/DL-expansion-survives-a-missing-inner-part fixture, R1's sharpest form), and
+		// R3 added one more test for the deprecated application/x-pkcs7-mime alias -- net +1.
+		// 456 after JR-5-05/JR-5-06 (no new file -- journal-report.test.ts gained 8 tests): the
+		// `not-multipart.eml` fixture's expectation flipped from `parse_failed` to `plain_bcc` (it
+		// was always a well-formed ordinary message, just classified into the only bucket that
+		// existed before this slice) -- same test count there, reworded; 3 new tests for the
+		// plain-BCC/routing-rule fallback (Postfix `always_bcc`, Google Workspace routing, and the
+		// "no SMTP envelope supplied" default); 5 new tests for NDR detection (the canonical RFC 3464
+		// shape with all three signals at once, the null-envelope-sender signal alone, the
+		// Auto-Submitted signal alone, `Auto-Submitted: no` correctly NOT firing it, and the
+		// classification-order proof that an NDR Exchange itself journalled stays `'journal_report'`).
+		// 459 after PO review R1/R2 on JR-5-05/JR-5-06 (still no new file): R1 found that
+		// `JR-5-03`'s "report found, inner missing ⇒ journal_report" rule wrongly classified an
+		// ordinary attachment-bearing email delivered via plain BCC as a journal report (same
+		// multipart/mixed-with-no-message/rfc822-child shape as a genuinely incomplete journal
+		// report) -- 2 new tests prove the fix side by side: the attachment-bearing fixture now
+		// classifies `plain_bcc`, and the pre-existing `missing-inner-part-bcc-and-dl.eml` fixture
+		// still classifies `journal_report` (the discriminator's full contrast). R2 added 1 test
+		// proving a multi-entry, duplicate-containing `envelopeRcpt` survives a `plain_bcc` result
+		// unreordered and undeduplicated, alongside `reducedEnvelopeFidelity` -- the earlier
+		// plain-BCC tests only ever used a single-recipient envelope, which could not have caught a
+		// `Set`-based dedup or a sort. Net +3.
+		// 467 after PO review R3 on JR-5-05/JR-5-06 (still no new file): R1's discriminator accepted
+		// Sender/Subject/Message-Id/On-Behalf-Of/To/Cc/Bcc as proof of a journal report, but a quoted
+		// forwarded-message header block satisfies exactly those fields too -- measured by the PO, R1's
+		// version fabricated envelope.to/envelope.cc recipients out of quoted body text for an ordinary
+		// forwarded email with an attachment delivered via plain BCC. The fix requires two independent
+		// signals (a `Recipient:` line -- the one field a quoted forward never reproduces -- and the
+		// report text beginning with a field line, not prose/a separator). journal-report.test.ts
+		// gained 2 tests: the forwarded-with-attachment fixture now classifies `plain_bcc` (the
+		// sharper regression case), and a complete journal report (inner message present) is asserted
+		// unaffected, since the discriminator never runs on that path at all. envelope.test.ts gained
+		// 6 tests for the new exported `reportTextBeginsWithFieldLine()` (recognised field line first,
+		// unrecognised-but-field-shaped first, a quoted-forward separator first, prose first, an empty
+		// report, and leading blank lines not causing a false negative). The "never throws" broken-input
+		// loop's assertion widened from two `kind`s to all four the union now has (that loop was always
+		// about "does it throw", never "which kind"); one of its fixtures ("truncated mid-inner-part")
+		// now correctly lands on `plain_bcc` rather than `journal_report` under the stricter check,
+		// since its report part has no `Recipient:` line -- noted in that test's own comment, not a
+		// silent behaviour change. Net +8.
+		// 468 after PO review R4 on JR-5-05/JR-5-06 (still no new file): R3's two-signal discriminator
+		// was only ever consulted on the `located.innerMessage === null` branch, on the assumption that
+		// a present `message/rfc822` inner part was proof enough by itself -- it is not.
+		// "Forward as Attachment" (Outlook's own menu item; Thunderbird's default forward style)
+		// produces multipart/mixed + text/plain + message/rfc822 for ordinary mail, structurally
+		// identical to a genuine journal report inner part and all. Measured by the PO: that shape came
+		// back `journal_report` with an empty-but-authoritative envelope (`sender: null`,
+		// `recipients: []`) for a message that had real recipients, which were never attached because
+		// the SMTP-envelope-carrying path never ran. The fix moves `looksLikeGenuineJournalReport()`
+		// before the inner-part-present/absent branch so it runs unconditionally; the branch on
+		// `located.innerMessage` now only decides what `innerMessage` looks like, never `kind`. 1 new
+		// test proves the fix (the forward-as-attachment fixture now classifies `plain_bcc`); the
+		// pre-existing "complete journal report" test was strengthened (not counted as new -- same
+		// test, an added assertion) to confirm a genuine full report still passes the now-unconditional
+		// check, per the PO's explicit request that it becomes the test keeping the discriminator from
+		// tightening further. Net +1.
+		// JR-5-07 added packages/journaling/src/parser/owner-resolution.test.ts (27th unit file) --
+		// resolveOwner() against the guide's four documented example-table rows, the priority order
+		// between To/Cc/Bcc/sender, the no-groups heuristic tail, the address-comparison edge cases
+		// (case-insensitive domain, no "@", more than one "@", empty local part, a domain configured
+		// as an alias of two groups), and the additionalMatches/warning transparency fields.
+		// 502 after JR-5-08 added packages/journaling/src/parser/journal-report-corpus.test.ts (28th
+		// unit file), 11 new tests: a Bcc-only journal report (no To/Cc at all, distinct from the
+		// existing DL-expansion fixture which always also carries a To); five everyday non-journal
+		// mail forms not otherwise in the corpus, each asserting full SMTP-envelope pass-through and
+		// `reducedEnvelopeFidelity` rather than only "classification succeeds" (a calendar invite,
+		// text/calendar method=REQUEST, x2 incl. never-mutates-buffer; a bulk newsletter with
+		// List-Unsubscribe, x2; a vacation autoresponder, which measures the EXISTING NdrSignal
+		// trade-off of labelling an out-of-office notice `kind: 'ndr'` -- not a new finding, just
+		// measured against the built parser; and a single-part message whose body happens to quote
+		// report-shaped field lines, which brackets the scope of finding (b) below by showing it is
+		// safe on this path); and 4 tests split across two NEW, MEASURED misclassifications, both left
+		// intentionally RED per the task's explicit exception for a finding a corpus must not build
+		// itself around:
+		//  (a) a message whose text/plain part is nested one level inside a child
+		//      multipart/alternative (the single most common real-world "HTML mail with an
+		//      attachment" shape) is misclassified `parse_failed` instead of `plain_bcc`, because
+		//      locateJournalParts() only inspects the outer multipart/mixed's immediate children;
+		//  (b) the content-based discriminator introduced by PO reviews R1/R3/R4
+		//      (looksLikeGenuineJournalReport(): a Recipient: line + a field-line-first report part)
+		//      is exactly as forgeable as the MIME-structure signals it replaced -- any sender able to
+		//      submit a message to the journal mailbox can author a text/plain part (optionally with a
+		//      wholesale-fabricated message/rfc822 "original message" alongside it) that satisfies both
+		//      signals and is accepted as an authoritative journal_report, with no check tying the
+		//      classification to any actual Exchange transport property.
+		// See that file's module doc comment and the JR-5-08 test report for full detail.
+		// 504 after the DEV fixing pass on top of the same file closed all three findings above (by
+		// changing the parser, per the PO's brief -- never by softening the corpus's claims):
+		//  - the autoresponder test's expectation flipped from the pre-fix `kind: 'ndr'` (Auto-Submitted
+		//    alone was sufficient) to the corrected `kind: 'plain_bcc'` (Auto-Submitted is now
+		//    corroboration only -- RFC 3834 permits the identical `auto-replied` token on both a DSN and
+		//    a vacation autoresponder, so the header cannot decide this alone); same test count (1).
+		//  - the nested-multipart/alternative suite's expectation flipped from the pre-fix `parse_failed`
+		//    to the corrected `plain_bcc` (`locateJournalParts()`'s search stays shallow; "no report-part
+		//    candidate found" is now "not a journal report", not "a broken attempt at one"); same test
+		//    count (2).
+		//  - the forgery suite (finding (b)) is NOT fully closed by this pass, and is not reported as if
+		//    it were: ADR-028 adds `parseJournalReport()`'s third, optional `sourceMode` parameter
+		//    (`'exchange-journal' | 'plain-bcc' | 'infer'`, default `'infer'`). Each of the two forged
+		//    fixtures is now asserted TWICE instead of once -- under `sourceMode: 'infer'` (the default)
+		//    both still measurably classify as `journal_report`, the documented limit of `'infer'`, left
+		//    exactly as demonstrated rather than softened; under `sourceMode: 'plain-bcc'` both correctly
+		//    reclassify as `plain_bcc`, proving the fix for the one operating mode (plain-BCC/routing)
+		//    where the forgery is actually exploitable (a genuine Exchange journal-report wrapper is
+		//    never displaced by forged inner content). Net +2 (2 tests -> 4 tests).
+		// Net change to this file: 11 -> 13 tests, so unit ci 502 -> 504.
+		//
+		// 512 after `JR-5-09`'s independent acceptance found F43 and the fix landed with its
+		// regression cover, all eight in the existing `owner-resolution.test.ts` (no new file, so
+		// `expectedFiles` is unchanged): matching trimmed a configured domain while the emitted
+		// address did not, so a stray space in `organizationDomains` matched and then leaked into
+		// `ownerEmail` -- and a *leading* space put whitespace in the middle of the address
+		// (`alice@ company.com`), which is never deliverable and never compares equal downstream.
+		// Four whitespace shapes, the alias path, the fallback path, and casing-preserved-while-
+		// trimmed are +7; the eighth asserts the limit that is deliberately NOT repaired, a `main`
+		// that is a full address rather than a bare domain, because guessing which half the operator
+		// meant would invent a value out of a broken input. Net +8 (504 -> 512).
+		expectedTests: { ci: 512, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

@@ -1,0 +1,18 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Broken report
+Date: Wed, 01 Jul 2026 13:00:00 +0000
+Message-ID: <outer-4@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary4"
+
+--JournalReportBoundary4
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: sender@contoso.com
+Subject: Broken report
+Message-Id: <inner-4@contoso.com>
+To: someone@contoso.com
+Recipient: someone@contoso.com
+
+--JournalReportBoundary4--

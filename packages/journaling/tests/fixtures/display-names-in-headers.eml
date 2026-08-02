@@ -1,0 +1,32 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Display names
+Date: Wed, 01 Jul 2026 16:00:00 +0000
+Message-ID: <outer-7@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary7"
+
+--JournalReportBoundary7
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Display names
+Message-Id: <inner-7@contoso.com>
+To: "Doe, John" <john@contoso.com>, Bob Smith <bob@contoso.com>
+Cc: "Ann, Q." <ann@contoso.com>
+Recipient: john@contoso.com
+Recipient: bob@contoso.com
+Recipient: ann@contoso.com
+
+--JournalReportBoundary7
+Content-Type: message/rfc822
+
+From: alice@contoso.com
+To: "Doe, John" <john@contoso.com>, Bob Smith <bob@contoso.com>
+Subject: Display names
+Message-ID: <inner-7@contoso.com>
+Content-Type: text/plain; charset="us-ascii"
+
+Hello team.
+
+--JournalReportBoundary7--

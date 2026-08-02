@@ -1,0 +1,24 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Broken report with Bcc and DL expansion
+Date: Wed, 01 Jul 2026 13:30:00 +0000
+Message-ID: <outer-7@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary7"
+
+--JournalReportBoundary7
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: manager@contoso.com
+On-Behalf-Of: assistant@contoso.com
+Subject: Broken report with Bcc and DL expansion
+Message-Id: <inner-7@contoso.com>
+To: team@contoso.com
+Bcc: secretwatcher@contoso.com
+Recipient: team@contoso.com
+Recipient: dl-member-one@contoso.com
+    dl-member-two@contoso.com
+Recipient: secretwatcher@contoso.com
+X-Custom-Marker: keep-me
+
+--JournalReportBoundary7--

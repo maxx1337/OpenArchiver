@@ -1,0 +1,35 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Quarterly numbers
+Date: Wed, 01 Jul 2026 10:15:00 +0000
+Message-ID: <outer-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary1"
+
+--JournalReportBoundary1
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Quarterly numbers
+Message-Id: <inner-1@contoso.com>
+To: bob@contoso.com, carol@contoso.com
+Cc: dave@contoso.com
+Recipient: bob@contoso.com
+Recipient: carol@contoso.com
+Recipient: dave@contoso.com
+X-MS-Journal-Report-Version: 1.0
+
+--JournalReportBoundary1
+Content-Type: message/rfc822
+
+From: alice@contoso.com
+To: bob@contoso.com, carol@contoso.com
+Cc: dave@contoso.com
+Subject: Quarterly numbers
+Message-ID: <inner-1@contoso.com>
+Date: Wed, 01 Jul 2026 10:14:00 +0000
+Content-Type: text/plain; charset="us-ascii"
+
+Please find the quarterly numbers attached.
+
+--JournalReportBoundary1--

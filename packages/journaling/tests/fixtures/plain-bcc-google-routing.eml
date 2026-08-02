@@ -1,0 +1,17 @@
+Received: from mail-sor-f41.google.com (mail-sor-f41.google.com [209.85.220.41])
+	by mx.example.org with ESMTPS id abc123
+	for <archive@example.org>; Wed, 01 Jul 2026 09:05:00 +0000
+X-Google-Smtp-Source: AGHT+abcdEXAMPLEdoNotUseRealValueHere==
+From: dave@workspace-example.com
+To: erin@example.org
+Subject: Vendor contract renewal
+Date: Wed, 01 Jul 2026 09:05:00 +0000
+Message-ID: <google-routing-1@workspace-example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+Google Workspace has no SMTP-journaling equivalent -- this copy exists only
+because a Workspace routing rule's "also deliver to" sent it here, with no
+journal wrapper of any kind. Same handling as Postfix always_bcc (RFC
+section 6.2): reduced envelope fidelity, no journal report to recover the
+true recipient list from.

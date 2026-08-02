@@ -1,0 +1,32 @@
+From: alice@contoso.com
+To: erin@example.org
+Subject: Fwd: Rechnung
+Date: Wed, 01 Jul 2026 09:40:00 +0000
+Message-ID: <plain-bcc-forwarded-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="PlainBccForwardedBoundary"
+
+--PlainBccForwardedBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+---------- Forwarded message ---------
+From: alice@contoso.com
+Date: Mon, 2 Aug 2026 09:00:00 +0200
+Subject: Rechnung
+To: bob@contoso.com
+Cc: dave@contoso.com
+
+Hallo Bob,
+
+anbei nochmal die Rechnung zur Kenntnis.
+
+Viele Gruesse
+
+--PlainBccForwardedBoundary
+Content-Type: application/pdf; name="Rechnung.pdf"
+Content-Disposition: attachment; filename="Rechnung.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJeLjz9MKcGxhY2Vob2xkZXItbm90LWEtcmVhbC1wZGY=
+
+--PlainBccForwardedBoundary--

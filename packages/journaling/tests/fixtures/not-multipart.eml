@@ -1,0 +1,9 @@
+From: someone@contoso.com
+To: journal-archive@example.org
+Subject: Not a journal report
+Date: Wed, 01 Jul 2026 14:00:00 +0000
+Message-ID: <plain-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+This message was sent to the journaling address by mistake.

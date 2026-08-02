@@ -1,0 +1,31 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Broadcast message
+Date: Wed, 01 Jul 2026 12:00:00 +0000
+Message-ID: <outer-3@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary3"
+
+--JournalReportBoundary3
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: sender@contoso.com
+Subject: Broadcast message
+Message-Id: <inner-3@contoso.com>
+To: undisclosed-recipients:;
+Recipient: hidden-one@contoso.com
+Recipient: hidden-two@contoso.com
+
+--JournalReportBoundary3
+Content-Type: message/rfc822
+
+From: sender@contoso.com
+To: undisclosed-recipients:;
+Subject: Broadcast message
+Message-ID: <inner-3@contoso.com>
+Date: Wed, 01 Jul 2026 11:59:00 +0000
+Content-Type: text/plain; charset="us-ascii"
+
+This goes out to everyone on the list.
+
+--JournalReportBoundary3--

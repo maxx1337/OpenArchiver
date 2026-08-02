@@ -1,0 +1,22 @@
+From: alice@contoso.com
+To: bob@example.org
+Subject: Rechnung Oktober
+Date: Wed, 01 Jul 2026 09:30:00 +0000
+Message-ID: <plain-bcc-attachment-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="PlainBccAttachmentBoundary"
+
+--PlainBccAttachmentBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+Hallo Bob, anbei die Rechnung.
+Viele Gruesse
+
+--PlainBccAttachmentBoundary
+Content-Type: application/pdf; name="Rechnung.pdf"
+Content-Disposition: attachment; filename="Rechnung.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJeLjz9MKcGxhY2Vob2xkZXItbm90LWEtcmVhbC1wZGY=
+
+--PlainBccAttachmentBoundary--

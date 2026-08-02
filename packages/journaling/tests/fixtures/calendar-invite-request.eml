@@ -1,0 +1,33 @@
+From: alice@contoso.com
+To: bob@contoso.com, carol@contoso.com,
+ dave@contoso.com, erin@contoso.com
+Subject: Invitation: Quarterly review @ Thu Jul 2, 2026 10am
+Date: Wed, 01 Jul 2026 09:00:00 +0000
+Message-ID: <invite-1@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="CalendarInviteBoundary"
+
+--CalendarInviteBoundary
+Content-Type: text/plain; charset="us-ascii"
+
+When: Thursday, July 2, 2026 10:00 AM-11:00 AM.
+Where: Conference Room B
+
+--CalendarInviteBoundary
+Content-Type: text/calendar; method=REQUEST; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+BEGIN:VCALENDAR
+METHOD:REQUEST
+PRODID:-//Contoso Corp//Contoso Calendaring//EN
+VERSION:2.0
+BEGIN:VEVENT
+UID:invite-1@contoso.com
+DTSTART:20260702T100000Z
+DTEND:20260702T110000Z
+SUMMARY:Quarterly review
+ORGANIZER:mailto:alice@contoso.com
+ATTENDEE:mailto:bob@contoso.com
+ATTENDEE:mailto:carol@contoso.com
+END:VEVENT
+END:VCALENDAR

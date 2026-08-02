@@ -1726,6 +1726,167 @@ Suite und Klasse und nicht deren Namen — die Umbenennung geht daran vorbei. Da
 `tsc -p tsconfig.test.json` je Exit 0, `svelte-check` 0 Fehler / 0 Warnungen, Prettier sauber über
 alle 75 Dateien.
 
+## ADR-027 — `mailparser` als MIME-Leser in `packages/journaling`
+
+**Status:** **entschieden** (2026-08-02) · **Entscheider:** Auftraggeber · **Betrifft:** E5, und
+jede spätere Stelle in `packages/journaling`, die MIME liest
+
+Der Journal-Report-Parser aus E5 zerlegt MIME mit **`mailparser` ^3.7.4** — derselben Version, die
+`packages/backend` seit Langem für die Pull-Ingestion nutzt. `packages/journaling` bekommt damit die
+erste Fremdabhängigkeit außer `zod`.
+
+### Warum das die Architekturregel nicht bricht
+
+`CLAUDE.md` §2 fasst `packages/journaling` als „depends on `types` **only**" zusammen. Das ist die
+Kurzfassung; die Regel selbst steht in **ADR-002** und lautet anders: das Paket darf **nicht von
+`packages/backend` abhängen**, und **Konfiguration und DB-Verbindung werden injiziert**. Verboten ist
+also die Kopplung an den Monolithen und an seine Umgebung — nicht jede Bibliothek. `zod` steht seit
+`JR-3-01` als Präzedenzfall in denselben `dependencies`.
+
+`mailparser` ist eine reine Bibliothek: kein Prozess, kein Netz, keine Umgebungsvariable, keine
+Datenbank. Sie berührt keine der Eigenschaften, die ADR-002 schützt.
+
+### Warum dieselbe Bibliothek wie das Backend, und nicht eine kleinere
+
+Das ist der eigentliche Grund, und er ist inhaltlich, nicht bequem: **dieselbe Nachricht kann über
+beide Wege ins Archiv kommen** — per IMAP-Pull und per Journal-Report —, und `JR-12-02` verlangt
+ausdrücklich, dass daraus **ein** Archiveintrag wird. Zwei verschiedene MIME-Implementierungen im
+selben Repository würden für dieselben Bytes unterschiedliche Header-Interpretationen liefern können:
+andere Entfaltung gefalteter Header, andere Behandlung von RFC-2231-Parametern, andere
+Zeichensatz-Erkennung. Der Unterschied wäre nicht theoretisch sichtbar, sondern als Metadaten-Drift
+zwischen zwei Kopien derselben Mail — und zwar genau in dem Produkt, dessen Zweck Nachweisbarkeit ist.
+
+Eine Abhängigkeit weniger wäre der Gewinn gewesen. Eine Divergenz mehr der Preis. Der Schnitt geht
+klar in eine Richtung.
+
+### Verworfene Alternativen
+
+- **`postal-mime`** — kleiner und ohne Node-Bindung, aber es wäre die **zweite** MIME-Implementierung
+  im Repository, mit genau der oben beschriebenen Divergenz als Folge. Verworfen.
+- **Eigener MIME-Leser** — verworfen ohne langes Abwägen. MIME ist RFC 2045–2049 plus RFC 2231, dazu
+  gefaltete Header, verschachtelte Multiparts und die Abweichungen realer Absender. Ein selbst
+  geschriebener Leser scheitert nicht laut, sondern still: er lässt ein `Bcc` fallen, das niemand
+  vermisst, weil niemand es je gesehen hat. Bei einem Feature, dessen ganze Begründung die
+  Blindkopie-Empfänger sind, ist das die teuerste denkbare Fehlerklasse.
+
+### Nachtrag vom 2026-08-02: die eine schmale Ausnahme, und warum sie nötig war
+
+`JR-5-01` hat beim Umsetzen eine Stelle gefunden, an der `mailparser` das Verlangte **nicht** leisten
+kann, und `packages/journaling/src/parser/mime-split.ts` teilt deshalb die **oberste** MIME-Ebene von
+Hand. Das steht im Wortlaut gegen den eben verworfenen Punkt und wird hier deshalb ausgeschrieben,
+statt es im Code zu verstecken.
+
+**Der Befund, gemessen gegen `mailparser@3.7.4`** — dieselbe Nachricht, nur die
+`Content-Disposition` des `message/rfc822`-Teils variiert:
+
+```
+disposition=(keine)    | Innentext in ParsedMail.text = false | attachments = 1
+disposition=inline     | Innentext in ParsedMail.text = TRUE  | attachments = 0
+disposition=attachment | Innentext in ParsedMail.text = false | attachments = 1
+```
+
+Bei `inline` steigt `mailparser` durch die `message/rfc822`-Grenze **durch** und mischt den Körper der
+Innenmail in dieselbe `.text` wie den Reportteil. Ursache: `mailsplit/lib/message-splitter.js:373-378`
+setzt `messageNode = true` nur bei `disposition === 'inline'` (Default-Config), und erst dann greift
+der `break` in `mail-parser.js:806`, worauf die Kinder `showMeta = true` bekommen.
+
+Für diesen Parser wäre das der schlimmste denkbare Ausgang: Er läse die Envelope-Feldzeilen aus einem
+Text, in dem die Innenmail steht — **ohne Fehler, ohne Ausnahme, ohne Spur**. Ein Absender bestimmt
+damit, was in den Metadaten landet.
+
+**Umfang der Ausnahme, damit sie nicht wächst:** Das Modul trennt die Kinder **einer**
+`multipart/mixed`-Hülle anhand des Boundary und gibt jedes Kind **einzeln** an `mailparser`. Es
+dekodiert nichts (kein Base64, kein Quoted-Printable, kein Zeichensatz), es steigt in kein Kind
+hinab, und alles außerhalb der von RFC §6.1 beschriebenen Form liefert `null` ⇒ `parse_failed`. Die
+Entkodierung bleibt vollständig bei `mailparser`, wie diese ADR es vorsieht.
+
+**Belegt statt behauptet:** Die drei Zeilen oben laufen als Test bei **jedem** CI-Lauf mit, samt einer
+Gegenprobe, dass `splitJournalReportMime()` die `inline`-Fixture korrekt trennt. Das ist Absicht: eine
+Begründung, die nur im Kommentar steht, wird von der nächsten Session widerlegt, die den harmlosen
+Fall prüft und das Modul für überflüssige Komplexität hält.
+
+Diese Ausnahme gilt für die oberste Ebene des Journal-Reports. **Jede weitere Handarbeit an MIME
+braucht eine eigene ADR** — der verworfene Punkt oben gilt unverändert.
+
+### Was die Entscheidung ausdrücklich **nicht** erlaubt
+
+1. **`mailparser` liegt nie im Pfad der archivierten Bytes.** Das Archivobjekt ist und bleibt die rohe
+   Außenmail, wie empfangen (RFC §4.4, Randbedingung 3). Was `mailparser` produziert, sind
+   **Metadaten** — nie die Eingabe für Storage oder für einen Hash. Ein Test hält den Eingabepuffer
+   byteweise gegen sich selbst.
+2. **Ein Wurf aus `mailparser` verlässt den Parser nicht.** Parse-Fehler werden zu einem Ergebnistyp
+   (`parse_failed`), nicht zu einer Ausnahme — RFC §5.3: archivieren, nicht ablehnen. Die
+   Bibliothek ist tolerant, aber sie ist nicht unfehlbar, und ihr Verhalten bei bösartiger Eingabe ist
+   keine Zusage, auf die sich der Acceptance-Contract stützen darf.
+3. **Keine weitere Fremdabhängigkeit ohne eigene ADR.** Diese Entscheidung gilt für `mailparser`,
+   nicht als allgemeine Öffnung von `packages/journaling`.
+
+### Konsequenz
+
+`packages/journaling/package.json` bekommt `mailparser` und `@types/mailparser` in derselben Version
+wie `packages/backend`. Weichen die beiden je auseinander, ist das ein Befund und keine Kleinigkeit —
+die Begründung dieser ADR hängt an der Gleichheit.
+
+## ADR-028 — Die Betriebsart ist Konfiguration, keine Ableitung aus der Nachricht
+
+**Status:** **entschieden** (2026-08-02) · **Entscheider:** PO · **Betrifft:** E5s Parser, E4s
+Quellenkonfiguration, E6s Aufrufer · **Nummer beim Rückmerge gegenprüfen** (`12-parallelbetrieb.md` §6)
+
+`parseJournalReport()` bekommt einen optionalen Hinweis auf die **erwartete Quellenart**
+(`'exchange-journal' | 'plain-bcc' | 'infer'`, Voreinstellung `'infer'`). Bei `'plain-bcc'` ist
+`journal_report` **kein möglicher Ausgang**, unabhängig davon, wonach der Inhalt aussieht.
+
+### Warum: fünfmal dieselbe Ursache
+
+E5 hat in fünf Runden fünfmal denselben Fehler gemacht, jedes Mal eine Ebene tiefer:
+
+| #   | Was als Beleg galt                      | Was dieselbe Form hat       | gefunden durch  |
+| --- | --------------------------------------- | --------------------------- | --------------- |
+| 1   | `multipart/mixed` mit `text/plain`-Teil | jede Mail mit Anhang        | PO-Review R1    |
+| 2   | mindestens ein erkanntes Envelope-Feld  | jede zitierte Weiterleitung | PO-Review R3    |
+| 3   | ein `message/rfc822`-Teil ist vorhanden | „Als Anlage weiterleiten"   | PO-Review R4    |
+| 4   | `Recipient:` + Feldzeilenanfang         | **vom Absender fälschbar**  | `JR-5-08`, TEST |
+| 5   | `Auto-Submitted`                        | jede Abwesenheitsnotiz      | `JR-5-08`, TEST |
+
+Die ersten drei widerlegen, dass die **Struktur** die Art belegt. Der vierte widerlegt den Ersatz —
+denn `Recipient:` und Feldzeilenanfang sind **Inhalt**, und Inhalt schreibt der Absender. Damit ist
+nicht ein Diskriminator zu schwach, sondern **die Ableitung als Verfahren** falsch.
+
+### Der Angriff, und warum er nur die Hälfte der Installationen trifft
+
+Gemessen an zwei Fixtures aus `JR-5-08`: eine Nachricht mit einem `text/plain`-Teil, der mit
+`Recipient:`-Zeilen beginnt, wird als `journal_report` mit **absenderbestimmtem** `sender` und
+`recipients` ausgegeben — die zweite Fixture erfindet dazu eine „Originalnachricht" als
+`message/rfc822`-Teil.
+
+- **Exchange-Journaling:** Exchange wickelt die Angreifernachricht in einen **echten** Journal-Report.
+  Der Reportteil oberster Ebene ist Exchanges eigener, der gefälschte Inhalt sitzt im Innenteil und wird
+  für Envelope-Felder nie herangezogen. **Nicht ausnutzbar.**
+- **Plain BCC / Routing** (Postfix `always_bcc`, Google Workspace): es gibt keinen Wrapper, die
+  Angreifernachricht **ist** die oberste Ebene. **Ausnutzbar** — ein Außenstehender bestimmt Absender
+  und Empfänger eines Archiveintrags.
+
+Der Angriff greift also genau dort, wo Journal-Reports **überhaupt nicht vorkommen**. Und das ist der
+Beweis der Entscheidung: Der Betreiber **weiß**, welche Art Quelle er eingerichtet hat. Solange der
+Parser es errät, entscheidet der Absender mit.
+
+### Was diese ADR ausdrücklich **nicht** behauptet
+
+`'plain-bcc'` schließt die Fälschung für diese Betriebsart. `'infer'` tut es **nicht** — und das steht
+so im Modulkommentar und in den Tests, statt weggeschrieben zu werden. Vor allem aber:
+
+> **Der Parser sieht nur Bytes.** Wer tatsächlich zugestellt hat, entscheidet sich an der
+> SMTP-Transaktion — `allowed_sources` als CIDR-Liste, explizite `journal_recipients`, kein Catch-all,
+> optional `AUTH` (RFC §4.3, `JR-4-05`). Diese Zusage kann der Parser weder ersetzen noch behaupten.
+> Eine Installation, die Journal-Reports von beliebigen Absendern annimmt, ist auf der Transportebene
+> defekt, und keine Inhaltsprüfung repariert das.
+
+### Konsequenz
+
+`JR-4-05` (Quellenkonfiguration) und `JR-6-02` (Aufrufer) müssen die Betriebsart **durchreichen**; ein
+Aufrufer, der sie kennt und `'infer'` übergibt, verschenkt die Zusage. Die Voreinstellung bleibt
+`'infer'`, damit E5 für sich lauffähig bleibt — sie ist eine Übergangs-, keine Zielbetriebsart.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill

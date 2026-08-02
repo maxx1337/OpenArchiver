@@ -1,0 +1,27 @@
+From: mallory@external-example.net
+To: journal-archive@example.org
+Subject: hello
+Date: Wed, 01 Jul 2026 09:32:00 +0000
+Message-ID: <forged-2@external-example.net>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="ForgeBoundary2"
+
+--ForgeBoundary2
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: ceo@contoso.com
+Subject: Board resignation letter
+Message-Id: <fabricated-1@contoso.com>
+To: board@contoso.com
+Recipient: board@contoso.com
+
+--ForgeBoundary2
+Content-Type: message/rfc822
+
+From: ceo@contoso.com
+To: board@contoso.com
+Subject: Board resignation letter
+Date: Wed, 01 Jul 2026 09:00:00 +0000
+
+I hereby resign effective immediately. FORGED-BODY-MARKER
+--ForgeBoundary2--

@@ -1,0 +1,44 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Signed announcement
+Date: Wed, 01 Jul 2026 15:00:00 +0000
+Message-ID: <outer-6@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary6"
+
+--JournalReportBoundary6
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Signed announcement
+Message-Id: <inner-6@contoso.com>
+To: bob@contoso.com
+Recipient: bob@contoso.com
+
+--JournalReportBoundary6
+Content-Type: message/rfc822
+
+From: alice@contoso.com
+To: bob@contoso.com
+Subject: Signed announcement
+Message-ID: <inner-6@contoso.com>
+Date: Wed, 01 Jul 2026 14:59:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/pkcs7-signature"; micalg=sha-256; boundary="SigBoundary6"
+
+--SigBoundary6
+Content-Type: text/plain; charset="us-ascii"
+
+SIGNED-BODY-MARKER this announcement is clear-signed, not encrypted.
+
+--SigBoundary6
+Content-Type: application/pkcs7-signature; name="smime.p7s"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7s"
+
+MIIGRwYJKoZIhvcNAQcCoIIGODCCBjQCAQExDzANBglghkgBZQMEAgEFADALBgkq
+hkiG9w0BBwExggFEMIIBQAIBADB2EXAMPLEBASE64SIGNATUREDATAFILLERONLY
+NOTAREALCRYPTOGRAPHICSIGNATUREJUSTFIXTUREFILLERBASE64TEXTHEREXX
+--SigBoundary6--
+
+--JournalReportBoundary6--
