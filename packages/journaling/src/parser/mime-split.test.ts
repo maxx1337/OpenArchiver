@@ -1,3 +1,4 @@
+import { simpleParser } from 'mailparser';
 import { expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import { loadFixture } from '../../tests/support/fixtures';
@@ -12,8 +13,13 @@ import {
  * The hand-rolled, top-level-only MIME splitter (`JR-5-01`). Classification: `ci`.
  *
  * See the module doc comment in `mime-split.ts` for why this exists instead of handing the whole
- * outer message straight to `mailparser`: `mailparser` recurses through a `message/rfc822` boundary
- * and can merge the inner message's own `text/plain` body into the same `.text` as the report part.
+ * outer message straight to `mailparser`: under one specific condition (`message/rfc822` part
+ * encoded `7bit`/`8bit`/`binary` **and** `Content-Disposition: inline`), `mailparser` descends across
+ * the `message/rfc822` boundary and can merge the inner message's own `text/plain` body into the same
+ * `.text` as the report part. The suite below pins that condition down with a measurement, not a
+ * citation of the module comment's prose -- so that a future change to `mailparser`'s behaviour, or a
+ * future reader deciding this module is unnecessary complexity, has to reckon with a failing test
+ * rather than an assertion nobody re-checked.
  */
 
 suite('ci', 'splitHeaderAndBody()', () => {
@@ -128,6 +134,25 @@ suite('ci', 'splitMultipartBody()', () => {
 			'a part that mentions --B mid-line, not as a delimiter'
 		);
 	});
+
+	it('does not treat a line starting with the boundary text as a delimiter when it has trailing content other than whitespace (R5)', () => {
+		// Boundary is "B1"; a body line "--B1EXTRA" starts with "--B1" but is not a delimiter line --
+		// RFC 2046 requires the delimiter text to be followed only by optional linear whitespace (or,
+		// for the close delimiter, "--" then optional whitespace) and the line terminator.
+		const body = Buffer.from(
+			'--B1\r\n' + '--B1EXTRA is body content, not a delimiter\r\n' + '--B1--\r\n',
+			'utf8'
+		);
+		const parts = splitMultipartBody(body, 'B1');
+		expect(parts).toHaveLength(1);
+		expect(parts[0]!.toString('utf8')).toBe('--B1EXTRA is body content, not a delimiter');
+	});
+
+	it('still recognises a delimiter line padded with trailing linear whitespace', () => {
+		const body = Buffer.from('--B  \r\n' + 'part content\r\n' + '--B--   \r\n', 'utf8');
+		const parts = splitMultipartBody(body, 'B');
+		expect(parts.map((p) => p.toString('utf8'))).toEqual(['part content']);
+	});
 });
 
 suite('ci', 'splitJournalReportMime()', () => {
@@ -158,3 +183,85 @@ suite('ci', 'splitJournalReportMime()', () => {
 		expect(Buffer.compare(raw, copy)).toBe(0);
 	});
 });
+
+suite(
+	'ci',
+	"mailparser's message/rfc822 boundary is conditional on Content-Disposition: inline (R1)",
+	() => {
+		/**
+		 * Reproduces the module doc comment's measurement directly: three otherwise-identical
+		 * messages, differing only in the inner `message/rfc822` part's `Content-Disposition`, fed
+		 * straight to `mailparser.simpleParser()` with no splitting at all. Only `inline` causes the
+		 * inner body to appear in `.text` -- this is the mechanism `mime-split.ts` exists to route
+		 * around, and this test is what stops that reasoning from silently going stale.
+		 */
+		const INNER_MARKER = 'INNER-BODY-MARKER';
+
+		function outerMessage(disposition: string | undefined): Buffer {
+			const dispositionLine = disposition ? `Content-Disposition: ${disposition}\r\n` : '';
+			return Buffer.from(
+				[
+					'From: journal@contoso.com',
+					'To: archive@example.org',
+					'Subject: probe',
+					'MIME-Version: 1.0',
+					'Content-Type: multipart/mixed; boundary="B"',
+					'',
+					'--B',
+					'Content-Type: text/plain; charset="us-ascii"',
+					'',
+					'Sender: alice@contoso.com',
+					'Recipient: bob@contoso.com',
+					'',
+					'--B',
+					`Content-Type: message/rfc822\r\n${dispositionLine}`,
+					'From: alice@contoso.com',
+					'To: bob@contoso.com',
+					'Subject: inner subject',
+					'Content-Type: text/plain; charset="us-ascii"',
+					'',
+					`${INNER_MARKER} this is the inner text`,
+					'',
+					'--B--',
+					'',
+				].join('\r\n'),
+				'utf8'
+			);
+		}
+
+		it('does NOT merge the inner text/plain body into .text with no Content-Disposition', async () => {
+			const parsed = await simpleParser(outerMessage(undefined), { skipHtmlToText: true });
+			expect(parsed.text ?? '').not.toContain(INNER_MARKER);
+			expect(parsed.attachments).toHaveLength(1);
+		});
+
+		it('DOES merge the inner text/plain body into .text when Content-Disposition: inline', async () => {
+			const parsed = await simpleParser(outerMessage('inline'), { skipHtmlToText: true });
+			expect(parsed.text ?? '').toContain(INNER_MARKER);
+			expect(parsed.attachments).toHaveLength(0);
+		});
+
+		it('does NOT merge the inner text/plain body into .text with Content-Disposition: attachment', async () => {
+			const parsed = await simpleParser(outerMessage('attachment'), { skipHtmlToText: true });
+			expect(parsed.text ?? '').not.toContain(INNER_MARKER);
+			expect(parsed.attachments).toHaveLength(1);
+		});
+
+		it('splitJournalReportMime() still separates the two parts correctly when the inner part is Content-Disposition: inline', () => {
+			// The counter-proof that mime-split.ts's manual approach actually avoids the mixing shown
+			// above: fed the same shape, it must isolate the report text from the inner body.
+			const raw = loadFixture('inline-inner-message.eml');
+			const split = splitJournalReportMime(raw);
+			expect(split).not.toBeNull();
+			expect(split!.innerMessage.toString('utf8')).toContain('INNER-BODY-MARKER');
+
+			const { headers: reportHeaders, body: reportBody } = splitHeaderAndBody(
+				split!.reportPart
+			);
+			expect(reportHeaders.get('content-type')).toContain('text/plain');
+			// The isolated report part must not contain the inner message's body -- proving the split
+			// happened before mailparser ever saw the combined buffer.
+			expect(reportBody.toString('utf8')).not.toContain('INNER-BODY-MARKER');
+		});
+	}
+);

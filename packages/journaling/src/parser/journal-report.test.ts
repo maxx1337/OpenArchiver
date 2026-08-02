@@ -79,19 +79,53 @@ suite('ci', 'parseJournalReport() -- Bcc and distribution-list expansion in the 
 });
 
 suite('ci', 'parseJournalReport() -- undisclosed recipients', () => {
-	it('flags undisclosedRecipients while still reporting the true Recipient: list', async () => {
+	it('records that To carried the placeholder while still reporting the true Recipient: list', async () => {
 		const raw = loadFixture('undisclosed-recipients.eml');
 		const result = await parseJournalReport(raw);
 		expect(result.kind).toBe('journal_report');
 		if (result.kind !== 'journal_report') {
 			throw new Error('unreachable');
 		}
-		expect(result.envelope.undisclosedRecipients).toBe(true);
+		expect(result.envelope.undisclosedRecipientFields).toEqual(['to']);
 		expect(result.envelope.to).toEqual([]);
 		expect(result.envelope.recipients).toEqual([
 			'hidden-one@contoso.com',
 			'hidden-two@contoso.com',
 		]);
+	});
+});
+
+suite('ci', 'parseJournalReport() -- display names in To/Cc (R2)', () => {
+	it('extracts bare addresses out of quoted display names and angle-address syntax', async () => {
+		const raw = loadFixture('display-names-in-headers.eml');
+		const result = await parseJournalReport(raw);
+		expect(result.kind).toBe('journal_report');
+		if (result.kind !== 'journal_report') {
+			throw new Error('unreachable');
+		}
+		expect(result.envelope.to).toEqual(['john@contoso.com', 'bob@contoso.com']);
+		expect(result.envelope.cc).toEqual(['ann@contoso.com']);
+	});
+});
+
+suite('ci', 'parseJournalReport() -- inner part with Content-Disposition: inline (R1)', () => {
+	it('keeps the report text free of the inner message body even when mailparser would otherwise merge them', async () => {
+		const raw = loadFixture('inline-inner-message.eml');
+		const result = await parseJournalReport(raw);
+		expect(result.kind).toBe('journal_report');
+		if (result.kind !== 'journal_report') {
+			throw new Error('unreachable');
+		}
+		expect(result.reportText).not.toContain('INNER-BODY-MARKER');
+		expect(result.envelope.sender).toBe('alice@contoso.com');
+		expect(result.envelope.unknownFields).toEqual([]);
+		expect(result.innerMessage.present).toBe(true);
+		if (!result.innerMessage.present) {
+			throw new Error('unreachable');
+		}
+		expect(Buffer.from(result.innerMessage.raw).toString('utf8')).toContain(
+			'INNER-BODY-MARKER'
+		);
 	});
 });
 

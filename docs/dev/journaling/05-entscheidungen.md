@@ -1769,6 +1769,45 @@ klar in eine Richtung.
   vermisst, weil niemand es je gesehen hat. Bei einem Feature, dessen ganze Begründung die
   Blindkopie-Empfänger sind, ist das die teuerste denkbare Fehlerklasse.
 
+### Nachtrag vom 2026-08-02: die eine schmale Ausnahme, und warum sie nötig war
+
+`JR-5-01` hat beim Umsetzen eine Stelle gefunden, an der `mailparser` das Verlangte **nicht** leisten
+kann, und `packages/journaling/src/parser/mime-split.ts` teilt deshalb die **oberste** MIME-Ebene von
+Hand. Das steht im Wortlaut gegen den eben verworfenen Punkt und wird hier deshalb ausgeschrieben,
+statt es im Code zu verstecken.
+
+**Der Befund, gemessen gegen `mailparser@3.7.4`** — dieselbe Nachricht, nur die
+`Content-Disposition` des `message/rfc822`-Teils variiert:
+
+```
+disposition=(keine)    | Innentext in ParsedMail.text = false | attachments = 1
+disposition=inline     | Innentext in ParsedMail.text = TRUE  | attachments = 0
+disposition=attachment | Innentext in ParsedMail.text = false | attachments = 1
+```
+
+Bei `inline` steigt `mailparser` durch die `message/rfc822`-Grenze **durch** und mischt den Körper der
+Innenmail in dieselbe `.text` wie den Reportteil. Ursache: `mailsplit/lib/message-splitter.js:373-378`
+setzt `messageNode = true` nur bei `disposition === 'inline'` (Default-Config), und erst dann greift
+der `break` in `mail-parser.js:806`, worauf die Kinder `showMeta = true` bekommen.
+
+Für diesen Parser wäre das der schlimmste denkbare Ausgang: Er läse die Envelope-Feldzeilen aus einem
+Text, in dem die Innenmail steht — **ohne Fehler, ohne Ausnahme, ohne Spur**. Ein Absender bestimmt
+damit, was in den Metadaten landet.
+
+**Umfang der Ausnahme, damit sie nicht wächst:** Das Modul trennt die Kinder **einer**
+`multipart/mixed`-Hülle anhand des Boundary und gibt jedes Kind **einzeln** an `mailparser`. Es
+dekodiert nichts (kein Base64, kein Quoted-Printable, kein Zeichensatz), es steigt in kein Kind
+hinab, und alles außerhalb der von RFC §6.1 beschriebenen Form liefert `null` ⇒ `parse_failed`. Die
+Entkodierung bleibt vollständig bei `mailparser`, wie diese ADR es vorsieht.
+
+**Belegt statt behauptet:** Die drei Zeilen oben laufen als Test bei **jedem** CI-Lauf mit, samt einer
+Gegenprobe, dass `splitJournalReportMime()` die `inline`-Fixture korrekt trennt. Das ist Absicht: eine
+Begründung, die nur im Kommentar steht, wird von der nächsten Session widerlegt, die den harmlosen
+Fall prüft und das Modul für überflüssige Komplexität hält.
+
+Diese Ausnahme gilt für die oberste Ebene des Journal-Reports. **Jede weitere Handarbeit an MIME
+braucht eine eigene ADR** — der verworfene Punkt oben gilt unverändert.
+
 ### Was die Entscheidung ausdrücklich **nicht** erlaubt
 
 1. **`mailparser` liegt nie im Pfad der archivierten Bytes.** Das Archivobjekt ist und bleibt die rohe

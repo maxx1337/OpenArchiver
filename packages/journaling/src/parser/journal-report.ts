@@ -57,7 +57,12 @@ export async function parseJournalReport(rawMessage: Buffer): Promise<JournalRep
 		return parseFailed('mailparser threw while decoding the text/plain report part', error);
 	}
 
-	const envelope = parseEnvelope(reportText);
+	let envelope;
+	try {
+		envelope = await parseEnvelope(reportText);
+	} catch (error) {
+		return parseFailed('failed while parsing the envelope fields from the report text', error);
+	}
 	const innerMessage = await describeInnerMessage(split.innerMessage);
 
 	return {

@@ -27,6 +27,9 @@ export interface EnvelopeUnknownField {
 	readonly value: string;
 }
 
+/** The three envelope fields that can carry the RFC 5322 empty-group ("undisclosed recipients") placeholder. */
+export type EnvelopeAddressField = 'to' | 'cc' | 'bcc';
+
 /**
  * The envelope fields extracted from an Exchange journal report's `text/plain` part (RFC section
  * 6.1).
@@ -53,8 +56,17 @@ export interface ParsedEnvelope {
 	 */
 	readonly recipients: readonly string[];
 	readonly onBehalfOf: string | null;
-	/** `true` when `To`/`Cc` carried the RFC 5322 empty-group placeholder `undisclosed-recipients:;`. */
-	readonly undisclosedRecipients: boolean;
+	/**
+	 * Which of `to`/`cc`/`bcc` carried the RFC 5322 empty-group placeholder
+	 * `undisclosed-recipients:;`, in report order. Empty when none did.
+	 *
+	 * Deliberately not a single boolean: an earlier version of this field collapsed all three fields
+	 * into one flag, which is itself the class of information loss this parser exists to avoid --
+	 * "was it To or Bcc that used the placeholder" is exactly the kind of provenance the ledger and
+	 * an auditor would want back. `To` and `Cc` carrying it simultaneously is unusual but not
+	 * impossible, so this is a list, not an optional single field.
+	 */
+	readonly undisclosedRecipientFields: readonly EnvelopeAddressField[];
 	/**
 	 * Field lines the parser does not otherwise model, preserved verbatim rather than dropped.
 	 * A silently discarded field is the single most expensive mistake this parser can make: it

@@ -148,7 +148,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// already-moved source is tolerated rather than thrown). 410 after JR-5-01/JR-5-02: 17
 		// tests for the top-level MIME splitter, 14 for the envelope field-line parser, 8 for the
 		// end-to-end parseJournalReport() orchestration -- 39 new tests.
-		expectedTests: { ci: 410, nightly: 1, manual: 0 },
+		// 425 after PO review R1-R5 on JR-5-01/JR-5-02: 15 more tests than the initial 39 -- the
+		// R1 Content-Disposition: inline regression suite (measurement + counter-proof), R2's
+		// mailparser-backed To/Cc/Bcc address-list parsing tests, R3's dispatch-table/known-names
+		// equality test, R4's undisclosedRecipientFields granularity tests, and R5's boundary-line
+		// validation tests.
+		expectedTests: { ci: 425, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

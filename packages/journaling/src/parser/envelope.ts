@@ -1,4 +1,10 @@
-import type { EnvelopeUnknownField, ParsedEnvelope } from '@open-archiver/types';
+import { simpleParser } from 'mailparser';
+import type { AddressObject, EmailAddress } from 'mailparser';
+import type {
+	EnvelopeAddressField,
+	EnvelopeUnknownField,
+	ParsedEnvelope,
+} from '@open-archiver/types';
 
 /**
  * Parses the plain-text body of an Exchange envelope-journaling report into structured envelope
@@ -14,13 +20,28 @@ import type { EnvelopeUnknownField, ParsedEnvelope } from '@open-archiver/types'
  *  - A line beginning with whitespace **continues** the previous field's value rather than
  *    starting a new one. Exchange uses this to note distribution-list expansion: a `Recipient:`
  *    line for a DL address is followed by one indented line per expanded member.
- *  - `To`/`Cc` may carry the RFC 5322 empty-group placeholder `undisclosed-recipients:;` instead of
- *    an address list.
+ *  - `To`/`Cc`/`Bcc` may carry the RFC 5322 empty-group placeholder `undisclosed-recipients:;`
+ *    instead of an address list.
  *
  * `Recipient:` is the field this whole feature exists for (RFC section 6.1): it lists the true SMTP
  * envelope recipients, which is where BCC copies and DL-expansion members appear that `To`/`Cc`
- * never show. It is therefore parsed as a repeatable, order-preserving, non-deduplicating list, not
- * folded into `to`/`cc`.
+ * never show. Exchange writes one bare SMTP address per `Recipient:` entry -- never a display name
+ * -- so it is parsed as a repeatable, order-preserving, non-deduplicating list split on commas *or*
+ * whitespace: both the one-address-per-continuation-line style and a hypothetical comma-separated
+ * one land in the same list.
+ *
+ * `To`/`Cc`/`Bcc`, in contrast, mirror the original message headers and so can carry the full RFC
+ * 5322 address-list grammar: display names, quoted strings (which may themselves contain commas or
+ * semicolons), angle-address syntax. Splitting those on a bare `,`/whitespace regex -- this module's
+ * first version did exactly that -- shreds a quoted display name like `"Doe, John"
+ * <john@contoso.com>` into garbage tokens (`'"Doe'`, `'John"'`, `'<john@contoso.com>'`, ...).
+ * `parseHeaderAddressList()` below fixes that not by hand-rolling the grammar and not by reaching
+ * past `mailparser` (the only parsing dependency ADR-027 permits) into its internal
+ * `nodemailer/lib/addressparser`, but by building a synthetic one-line header (`To: <value>`) and
+ * running it through `mailparser`'s own public `simpleParser()` entry point, then reading back
+ * `ParsedMail.to`/`.cc`/`.bcc`. That is a `mailparser` call like every other one in this package, not
+ * a new dependency, and it reuses address-list parsing already exercised by the library's own test
+ * suite instead of re-implementing RFC 5322 quoting here.
  *
  * ---------------------------------------------------------------------------------------------
  * Unknown fields
@@ -30,12 +51,20 @@ import type { EnvelopeUnknownField, ParsedEnvelope } from '@open-archiver/types'
  * dropped. A line that is neither a recognisable `Field: value` line nor a continuation of one is
  * kept too, under the synthetic name `_unparsed` -- so nothing in the report text is silently
  * discarded, even content this parser was not written to expect.
+ *
+ * The field names this module recognises are exactly the keys of {@link FIELD_HANDLERS} --
+ * {@link KNOWN_ENVELOPE_FIELD_NAMES} is *derived* from that same object rather than listed a second
+ * time, so a field handled in the dispatch table and a field advertised as "known" cannot drift
+ * apart the way a hand-maintained `switch` alongside a hand-maintained `Set` could.
  */
 
 const FIELD_LINE = /^([A-Za-z][A-Za-z0-9-]*)\s*:[ \t]?(.*)$/;
 const CONTINUATION_LINE = /^[ \t]+(\S.*)$/;
 const UNDISCLOSED_RECIPIENTS = /^undisclosed[- ]recipients\s*:\s*;?\s*$/i;
 const UNPARSED_FIELD_NAME = '_unparsed';
+
+/** Options for the address-list-only `simpleParser()` calls: no HTML/text conversion needed. */
+const ADDRESS_PARSE_OPTIONS = { skipHtmlToText: true, skipTextToHtml: true } as const;
 
 interface UnfoldedLine {
 	/** Lowercased field name, or `_unparsed` for a line that matched neither pattern. */
@@ -81,11 +110,11 @@ function unfold(reportText: string): UnfoldedLine[] {
 }
 
 /**
- * Splits an address-list field's merged value into individual addresses. Continuation lines are
- * merged with a single space (see {@link unfold}), so both comma-separated (`Recipient: a@x, b@x`)
- * and one-per-line (`Recipient: a@x` + indented `b@x`) styles end up splittable the same way.
+ * Splits a plain SMTP-address list (no display names expected) on commas and/or whitespace. Used
+ * only for `Recipient:` -- see the module doc comment for why `To`/`Cc`/`Bcc` need the
+ * `mailparser`-backed parser instead.
  */
-function splitAddressList(value: string): string[] {
+function splitPlainAddressList(value: string): string[] {
 	if (value.trim().length === 0) {
 		return [];
 	}
@@ -95,77 +124,156 @@ function splitAddressList(value: string): string[] {
 		.filter((part) => part.length > 0);
 }
 
-const KNOWN_FIELD_NAMES = new Set([
-	'sender',
-	'subject',
-	'message-id',
-	'on-behalf-of',
-	'recipient',
-	'to',
-	'cc',
-	'bcc',
-]);
-
-export function parseEnvelope(reportText: string): ParsedEnvelope {
-	const lines = unfold(reportText);
-
-	let sender: string | null = null;
-	let subject: string | null = null;
-	let messageId: string | null = null;
-	let onBehalfOf: string | null = null;
-	let undisclosedRecipients = false;
-	const to: string[] = [];
-	const cc: string[] = [];
-	const bcc: string[] = [];
-	const recipients: string[] = [];
-	const unknownFields: EnvelopeUnknownField[] = [];
-
-	for (const line of lines) {
-		switch (line.name) {
-			case 'sender':
-				sender = line.value;
-				break;
-			case 'subject':
-				subject = line.value;
-				break;
-			case 'message-id':
-				messageId = line.value;
-				break;
-			case 'on-behalf-of':
-				onBehalfOf = line.value;
-				break;
-			case 'recipient':
-				recipients.push(...splitAddressList(line.value));
-				break;
-			case 'to':
-			case 'cc':
-			case 'bcc': {
-				if (UNDISCLOSED_RECIPIENTS.test(line.value)) {
-					undisclosedRecipients = true;
-					break;
-				}
-				const target = line.name === 'to' ? to : line.name === 'cc' ? cc : bcc;
-				target.push(...splitAddressList(line.value));
-				break;
-			}
-			default:
-				unknownFields.push({ name: line.name, value: line.value });
+/** Recursively flattens `EmailAddress[]` (which may nest via `.group`) into bare address strings. */
+function collectAddresses(addresses: readonly EmailAddress[] | undefined, out: string[]): void {
+	if (!addresses) {
+		return;
+	}
+	for (const entry of addresses) {
+		if (entry.group && entry.group.length > 0) {
+			collectAddresses(entry.group, out);
+			continue;
+		}
+		if (entry.address) {
+			out.push(entry.address);
 		}
 	}
+}
 
+function addressObjectsOf(value: AddressObject | AddressObject[] | undefined): AddressObject[] {
+	if (!value) {
+		return [];
+	}
+	return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * Parses a `To`/`Cc`/`Bcc` value's full RFC 5322 address-list grammar via `mailparser`, by building
+ * a synthetic one-header message and reading back the corresponding `ParsedMail` field. Never throws
+ * -- a `mailparser` failure on this synthetic, deliberately tiny input is treated as "no addresses"
+ * rather than failing the whole envelope over one malformed address list (consistent with this
+ * parser's overall no-throw contract, see `journal-report.ts`).
+ */
+async function parseHeaderAddressList(
+	headerName: 'To' | 'Cc' | 'Bcc',
+	value: string
+): Promise<string[]> {
+	if (value.trim().length === 0) {
+		return [];
+	}
+	let parsedField: AddressObject | AddressObject[] | undefined;
+	try {
+		const synthetic = Buffer.from(`${headerName}: ${value}\r\n\r\n`, 'utf8');
+		const parsed = await simpleParser(synthetic, ADDRESS_PARSE_OPTIONS);
+		parsedField =
+			headerName === 'To' ? parsed.to : headerName === 'Cc' ? parsed.cc : parsed.bcc;
+	} catch {
+		return [];
+	}
+	const out: string[] = [];
+	for (const addressObject of addressObjectsOf(parsedField)) {
+		collectAddresses(addressObject.value, out);
+	}
+	return out;
+}
+
+/** The envelope fields accumulated while walking the unfolded lines, before freezing into `ParsedEnvelope`. */
+interface EnvelopeAccumulator {
+	sender: string | null;
+	subject: string | null;
+	messageId: string | null;
+	onBehalfOf: string | null;
+	to: string[];
+	cc: string[];
+	bcc: string[];
+	recipients: string[];
+	undisclosedRecipientFields: EnvelopeAddressField[];
+	unknownFields: EnvelopeUnknownField[];
+}
+
+function newAccumulator(): EnvelopeAccumulator {
 	return {
-		sender,
-		subject,
-		messageId,
-		to,
-		cc,
-		bcc,
-		recipients,
-		onBehalfOf,
-		undisclosedRecipients,
-		unknownFields,
+		sender: null,
+		subject: null,
+		messageId: null,
+		onBehalfOf: null,
+		to: [],
+		cc: [],
+		bcc: [],
+		recipients: [],
+		undisclosedRecipientFields: [],
+		unknownFields: [],
 	};
 }
 
+async function handleAddressField(
+	acc: EnvelopeAccumulator,
+	field: EnvelopeAddressField,
+	value: string
+): Promise<void> {
+	if (UNDISCLOSED_RECIPIENTS.test(value)) {
+		acc.undisclosedRecipientFields.push(field);
+		return;
+	}
+	const headerName = field === 'to' ? 'To' : field === 'cc' ? 'Cc' : 'Bcc';
+	const addresses = await parseHeaderAddressList(headerName, value);
+	acc[field].push(...addresses);
+}
+
+type FieldHandler = (acc: EnvelopeAccumulator, value: string) => Promise<void>;
+
+/**
+ * The single source of truth for which field names this parser recognises.
+ * {@link KNOWN_ENVELOPE_FIELD_NAMES} is derived from this object's keys -- see the module doc
+ * comment for why that derivation, rather than a hand-maintained second list, is the point.
+ */
+const FIELD_HANDLERS: Readonly<Record<string, FieldHandler>> = {
+	sender: async (acc, value) => {
+		acc.sender = value;
+	},
+	subject: async (acc, value) => {
+		acc.subject = value;
+	},
+	'message-id': async (acc, value) => {
+		acc.messageId = value;
+	},
+	'on-behalf-of': async (acc, value) => {
+		acc.onBehalfOf = value;
+	},
+	recipient: async (acc, value) => {
+		acc.recipients.push(...splitPlainAddressList(value));
+	},
+	to: async (acc, value) => handleAddressField(acc, 'to', value),
+	cc: async (acc, value) => handleAddressField(acc, 'cc', value),
+	bcc: async (acc, value) => handleAddressField(acc, 'bcc', value),
+};
+
 /** Exposed for tests that want to assert exactly which field names this parser recognises. */
-export const KNOWN_ENVELOPE_FIELD_NAMES: ReadonlySet<string> = KNOWN_FIELD_NAMES;
+export const KNOWN_ENVELOPE_FIELD_NAMES: ReadonlySet<string> = new Set(Object.keys(FIELD_HANDLERS));
+
+export async function parseEnvelope(reportText: string): Promise<ParsedEnvelope> {
+	const lines = unfold(reportText);
+	const acc = newAccumulator();
+
+	for (const line of lines) {
+		const handler = FIELD_HANDLERS[line.name];
+		if (handler) {
+			await handler(acc, line.value);
+			continue;
+		}
+		acc.unknownFields.push({ name: line.name, value: line.value });
+	}
+
+	return {
+		sender: acc.sender,
+		subject: acc.subject,
+		messageId: acc.messageId,
+		to: acc.to,
+		cc: acc.cc,
+		bcc: acc.bcc,
+		recipients: acc.recipients,
+		onBehalfOf: acc.onBehalfOf,
+		undisclosedRecipientFields: acc.undisclosedRecipientFields,
+		unknownFields: acc.unknownFields,
+	};
+}

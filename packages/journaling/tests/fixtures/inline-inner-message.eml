@@ -1,0 +1,30 @@
+From: journal@contoso.com
+To: journal-archive@example.org
+Subject: FW: Inline inner part
+Date: Wed, 01 Jul 2026 15:00:00 +0000
+Message-ID: <outer-6@contoso.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="JournalReportBoundary6"
+
+--JournalReportBoundary6
+Content-Type: text/plain; charset="us-ascii"
+
+Sender: alice@contoso.com
+Subject: Inline inner part
+Message-Id: <inner-6@contoso.com>
+To: bob@contoso.com
+Recipient: bob@contoso.com
+
+--JournalReportBoundary6
+Content-Type: message/rfc822
+Content-Disposition: inline
+
+From: alice@contoso.com
+To: bob@contoso.com
+Subject: Inline inner part
+Message-ID: <inner-6@contoso.com>
+Content-Type: text/plain; charset="us-ascii"
+
+INNER-BODY-MARKER this text must never end up in the report envelope fields.
+
+--JournalReportBoundary6--

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
-import { parseEnvelope } from './envelope';
+import { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './envelope';
 
 /**
  * The journal-report envelope field parser (`JR-5-02`, RFC section 6.1). Classification: `ci`.
@@ -8,12 +8,13 @@ import { parseEnvelope } from './envelope';
  * Covers the acceptance criterion word for word: `Sender`, `Subject`, `Message-Id`, `To`, `Cc`,
  * `Bcc`, multiple `Recipient:` lines (including indented distribution-list expansion),
  * `On-Behalf-Of`, and "undisclosed recipients" -- plus the rule that an unrecognised field is
- * preserved, never dropped.
+ * preserved, never dropped, and (PO review R2) that `To`/`Cc`/`Bcc` parse the full RFC 5322
+ * address-list grammar rather than shredding a quoted display name on a bare comma split.
  */
 
 suite('ci', 'parseEnvelope() -- known fields', () => {
-	it('parses Sender, Subject, Message-Id, To and Cc', () => {
-		const envelope = parseEnvelope(
+	it('parses Sender, Subject, Message-Id, To and Cc', async () => {
+		const envelope = await parseEnvelope(
 			[
 				'Sender: alice@contoso.com',
 				'Subject: Quarterly numbers',
@@ -29,8 +30,8 @@ suite('ci', 'parseEnvelope() -- known fields', () => {
 		expect(envelope.cc).toEqual(['dave@contoso.com']);
 	});
 
-	it('parses Bcc as its own field, distinct from To/Cc', () => {
-		const envelope = parseEnvelope(
+	it('parses Bcc as its own field, distinct from To/Cc', async () => {
+		const envelope = await parseEnvelope(
 			[
 				'Sender: alice@contoso.com',
 				'To: bob@contoso.com',
@@ -41,8 +42,8 @@ suite('ci', 'parseEnvelope() -- known fields', () => {
 		expect(envelope.to).toEqual(['bob@contoso.com']);
 	});
 
-	it('parses multiple Recipient: lines, in order, without deduplicating', () => {
-		const envelope = parseEnvelope(
+	it('parses multiple Recipient: lines, in order, without deduplicating', async () => {
+		const envelope = await parseEnvelope(
 			[
 				'Sender: alice@contoso.com',
 				'Recipient: bob@contoso.com',
@@ -57,15 +58,15 @@ suite('ci', 'parseEnvelope() -- known fields', () => {
 		]);
 	});
 
-	it('parses On-Behalf-Of', () => {
-		const envelope = parseEnvelope(
+	it('parses On-Behalf-Of', async () => {
+		const envelope = await parseEnvelope(
 			['Sender: manager@contoso.com', 'On-Behalf-Of: assistant@contoso.com'].join('\r\n')
 		);
 		expect(envelope.onBehalfOf).toBe('assistant@contoso.com');
 	});
 
-	it('is case-insensitive on field names (Message-ID vs Message-Id)', () => {
-		const envelope = parseEnvelope('Message-ID: <a@b.com>');
+	it('is case-insensitive on field names (Message-ID vs Message-Id)', async () => {
+		const envelope = await parseEnvelope('Message-ID: <a@b.com>');
 		expect(envelope.messageId).toBe('<a@b.com>');
 	});
 });
@@ -74,8 +75,8 @@ suite(
 	'ci',
 	'parseEnvelope() -- distribution-list expansion via indented continuation lines',
 	() => {
-		it('folds indented continuation lines into the preceding Recipient: entry', () => {
-			const envelope = parseEnvelope(
+		it('folds indented continuation lines into the preceding Recipient: entry', async () => {
+			const envelope = await parseEnvelope(
 				[
 					'Sender: manager@contoso.com',
 					'Recipient: dl-member-one@contoso.com',
@@ -92,8 +93,8 @@ suite(
 			]);
 		});
 
-		it('folds a tab-indented continuation line the same way as a space-indented one', () => {
-			const envelope = parseEnvelope(
+		it('folds a tab-indented continuation line the same way as a space-indented one', async () => {
+			const envelope = await parseEnvelope(
 				['Recipient: dl-member-one@contoso.com', '\tdl-member-two@contoso.com'].join('\r\n')
 			);
 			expect(envelope.recipients).toEqual([
@@ -104,29 +105,62 @@ suite(
 	}
 );
 
-suite('ci', 'parseEnvelope() -- undisclosed recipients', () => {
-	it('flags undisclosedRecipients and does not add a literal address for the placeholder', () => {
-		const envelope = parseEnvelope(
+suite('ci', 'parseEnvelope() -- undisclosed recipients (R4: which field is tracked)', () => {
+	it('records which field carried the placeholder, not just a boolean', async () => {
+		const envelope = await parseEnvelope(
 			[
 				'Sender: sender@contoso.com',
 				'To: undisclosed-recipients:;',
 				'Recipient: hidden@contoso.com',
 			].join('\r\n')
 		);
-		expect(envelope.undisclosedRecipients).toBe(true);
+		expect(envelope.undisclosedRecipientFields).toEqual(['to']);
 		expect(envelope.to).toEqual([]);
 		expect(envelope.recipients).toEqual(['hidden@contoso.com']);
 	});
 
-	it('is false when To carries a normal address list', () => {
-		const envelope = parseEnvelope('To: bob@contoso.com');
-		expect(envelope.undisclosedRecipients).toBe(false);
+	it('is empty when To/Cc/Bcc all carry normal address lists', async () => {
+		const envelope = await parseEnvelope('To: bob@contoso.com');
+		expect(envelope.undisclosedRecipientFields).toEqual([]);
+	});
+
+	it('records more than one field when both To and Bcc carry the placeholder', async () => {
+		const envelope = await parseEnvelope(
+			['To: undisclosed-recipients:;', 'Bcc: undisclosed-recipients:;'].join('\r\n')
+		);
+		expect(envelope.undisclosedRecipientFields).toEqual(['to', 'bcc']);
+	});
+});
+
+suite('ci', 'parseEnvelope() -- To/Cc/Bcc parse full RFC 5322 address-list syntax (R2)', () => {
+	it('does not shred a quoted display name containing a comma', async () => {
+		const envelope = await parseEnvelope(
+			'To: "Doe, John" <john@contoso.com>, Bob Smith <bob@contoso.com>'
+		);
+		expect(envelope.to).toEqual(['john@contoso.com', 'bob@contoso.com']);
+	});
+
+	it('extracts the address out of angle-address syntax without a quoted name', async () => {
+		const envelope = await parseEnvelope('Cc: Ann Example <ann@contoso.com>');
+		expect(envelope.cc).toEqual(['ann@contoso.com']);
+	});
+
+	it('parses multiple plain addresses on one line', async () => {
+		const envelope = await parseEnvelope(
+			'To: bob@contoso.com, carol@contoso.com, dave@contoso.com'
+		);
+		expect(envelope.to).toEqual(['bob@contoso.com', 'carol@contoso.com', 'dave@contoso.com']);
+	});
+
+	it('parses a quoted display name on Bcc the same way as on To', async () => {
+		const envelope = await parseEnvelope('Bcc: "Watcher, Secret" <secretwatcher@contoso.com>');
+		expect(envelope.bcc).toEqual(['secretwatcher@contoso.com']);
 	});
 });
 
 suite('ci', 'parseEnvelope() -- unknown fields are preserved, not dropped', () => {
-	it('captures a field-shaped line it does not model', () => {
-		const envelope = parseEnvelope(
+	it('captures a field-shaped line it does not model', async () => {
+		const envelope = await parseEnvelope(
 			['Sender: alice@contoso.com', 'X-MS-Journal-Report-Version: 1.0'].join('\r\n')
 		);
 		expect(envelope.unknownFields).toEqual([
@@ -134,8 +168,8 @@ suite('ci', 'parseEnvelope() -- unknown fields are preserved, not dropped', () =
 		]);
 	});
 
-	it('captures a line that is neither a field nor a continuation, under `_unparsed`', () => {
-		const envelope = parseEnvelope(
+	it('captures a line that is neither a field nor a continuation, under `_unparsed`', async () => {
+		const envelope = await parseEnvelope(
 			['Sender: alice@contoso.com', 'this is not a field line'].join('\r\n')
 		);
 		expect(envelope.unknownFields).toEqual([
@@ -143,8 +177,8 @@ suite('ci', 'parseEnvelope() -- unknown fields are preserved, not dropped', () =
 		]);
 	});
 
-	it('preserves multiple unknown fields in order', () => {
-		const envelope = parseEnvelope(['X-One: 1', 'X-Two: 2'].join('\r\n'));
+	it('preserves multiple unknown fields in order', async () => {
+		const envelope = await parseEnvelope(['X-One: 1', 'X-Two: 2'].join('\r\n'));
 		expect(envelope.unknownFields).toEqual([
 			{ name: 'x-one', value: '1' },
 			{ name: 'x-two', value: '2' },
@@ -153,8 +187,8 @@ suite('ci', 'parseEnvelope() -- unknown fields are preserved, not dropped', () =
 });
 
 suite('ci', 'parseEnvelope() -- defaults and edge cases', () => {
-	it('returns null fields and empty lists for an empty report body', () => {
-		const envelope = parseEnvelope('');
+	it('returns null fields and empty lists for an empty report body', async () => {
+		const envelope = await parseEnvelope('');
 		expect(envelope).toEqual({
 			sender: null,
 			subject: null,
@@ -164,16 +198,45 @@ suite('ci', 'parseEnvelope() -- defaults and edge cases', () => {
 			bcc: [],
 			recipients: [],
 			onBehalfOf: null,
-			undisclosedRecipients: false,
+			undisclosedRecipientFields: [],
 			unknownFields: [],
 		});
 	});
 
-	it('ignores blank lines between fields', () => {
-		const envelope = parseEnvelope(
+	it('ignores blank lines between fields', async () => {
+		const envelope = await parseEnvelope(
 			['Sender: alice@contoso.com', '', 'Subject: hi'].join('\r\n')
 		);
 		expect(envelope.sender).toBe('alice@contoso.com');
 		expect(envelope.subject).toBe('hi');
+	});
+});
+
+suite('ci', 'KNOWN_ENVELOPE_FIELD_NAMES cannot drift from the dispatch table (R3)', () => {
+	it('recognises exactly the field names the acceptance criterion lists', () => {
+		expect(KNOWN_ENVELOPE_FIELD_NAMES).toEqual(
+			new Set([
+				'sender',
+				'subject',
+				'message-id',
+				'on-behalf-of',
+				'recipient',
+				'to',
+				'cc',
+				'bcc',
+			])
+		);
+	});
+
+	it('every known field name is actually handled -- an unknown one for each would fail otherwise', async () => {
+		// This is the structural half of R3: KNOWN_ENVELOPE_FIELD_NAMES is derived from the same
+		// object that dispatches parsing, so a name present in one and not the other cannot happen
+		// without changing that object -- but this still exercises the observable behaviour: every
+		// name in the set must be reachable as something other than an unknown field.
+		for (const name of KNOWN_ENVELOPE_FIELD_NAMES) {
+			const envelope = await parseEnvelope(`${name}: probe-value`);
+			const unknownNames = envelope.unknownFields.map((field) => field.name);
+			expect(unknownNames).not.toContain(name);
+		}
 	});
 });

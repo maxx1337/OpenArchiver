@@ -5,23 +5,47 @@
  * ---------------------------------------------------------------------------------------------
  * Why this exists instead of handing the whole outer message to `mailparser`
  * ---------------------------------------------------------------------------------------------
- * `mailparser` (permitted in this package by ADR-027) parses a full MIME tree, and it does **not**
- * stop at a `message/rfc822` boundary: internally (`mail-parser.js`, `processChunk`/`getTextContent`)
- * it walks straight through the nested message's own MIME tree and merges any `text/plain` content
- * it finds there into the *same* `ParsedMail.text` as the outer parts, prefixed with a
- * `From`/`Subject`/`Date`/`To`/`Cc`/`Bcc` meta block when the nested node is the embedded message's
- * root (`node.showMeta`). For a journal report whose inner message happens to be a simple,
- * non-multipart `text/plain` message, `parsed.text` would therefore silently interleave the journal
- * report's own field lines with the inner message's body -- exactly the kind of undetectable
- * data-mixing the project's rules on preserving both parts distinctly (`JR-5-01`'s acceptance
- * criterion, RFC section 6.1: "Both must be preserved") are meant to rule out.
+ * `mailparser` (permitted in this package by ADR-027) parses a full MIME tree, and it descends
+ * across a `message/rfc822` boundary **conditionally**, not always -- this is a correction of an
+ * earlier version of this comment, which stated the crossing as unconditional. Measured against the
+ * installed `mailparser@3.7.4`, three otherwise-identical fixtures that differ only in the
+ * `message/rfc822` part's `Content-Disposition` (see `mime-split.test.ts`, "mailparser's
+ * message/rfc822 boundary is conditional on Content-Disposition: inline"):
  *
- * This module does only the one thing `mailparser` cannot be asked not to do: split the *outer*
- * `multipart/mixed` envelope into its immediate child parts, without looking inside a
- * `message/rfc822` child at all. Each child part is then handed to `mailparser` independently (in
- * `journal-report.ts`) -- at that point there is no nested boundary left to cross, so the
- * recursive-descent behaviour above no longer applies and decoding (charset, quoted-printable,
- * base64) is delegated to the library exactly as ADR-027 intends.
+ * ```
+ * disposition=(none)     | inner text in .text = false | attachments=1
+ * disposition=inline     | inner text in .text = TRUE  | attachments=0
+ * disposition=attachment | inner text in .text = false | attachments=1
+ * ```
+ *
+ * The condition lives in `mailsplit/lib/message-splitter.js` (v5.4.5, lines 373-378): a
+ * `message/rfc822` node only becomes a `messageNode` -- the flag that makes `mail-parser.js` (line
+ * 806) `break` instead of emitting an attachment, and that makes the embedded message's own child
+ * nodes carry `showMeta = true` (`mail-parser.js` line 811) -- when its encoding is one of
+ * `7bit`/`8bit`/`binary` **and** its `Content-Disposition` is `inline` (with this library's default
+ * config, where `defaultInlineEmbedded` is falsy; the alternative branch there would instead require
+ * disposition *not* to be `attachment`, which is not the configuration this package uses). Only in
+ * that case does `getTextContent()` (`mail-parser.js`, `processNode`) walk into the embedded
+ * message's own MIME tree and merge its `text/plain` body into the *same* `ParsedMail.text` as the
+ * outer report part, prefixed with the embedded message's `From`/`Subject`/`Date`/`To`/`Cc`/`Bcc` as
+ * a text block (`showMeta` handling, same file, ~line 657).
+ *
+ * RFC section 6.1 does not mandate a `Content-Disposition` on the journal report's `message/rfc822`
+ * part, and Exchange's own envelope-journaling reports do not appear to set one either -- but this
+ * package cannot assume every sender does the same, and a sender (or a future Exchange version) that
+ * does set `inline` would silently interleave the inner message's body into the same text the
+ * envelope parser reads field lines from, with no error and no visible sign in the output. That is
+ * exactly the kind of undetectable data-mixing the project's rule on preserving both parts distinctly
+ * (`JR-5-01`'s acceptance criterion, RFC section 6.1: "Both must be preserved") rules out, so this
+ * module does not rely on the default case holding.
+ *
+ * This module does only the one thing `mailparser` cannot be told not to do under every
+ * `Content-Disposition`: split the *outer* `multipart/mixed` envelope into its immediate child parts
+ * by hand, without ever handing `mailparser` the combined buffer. Each child part is then handed to
+ * `mailparser` independently (in `journal-report.ts`) -- at that point there is no nested boundary
+ * left to cross, so the conditional crossing above cannot apply regardless of the inner part's
+ * `Content-Disposition`, and decoding (charset, quoted-printable, base64) is still delegated to the
+ * library exactly as ADR-027 intends.
  *
  * Deliberately **not** a general-purpose MIME parser: it understands exactly the shape RFC section
  * 6.1 describes (one `multipart/mixed` envelope, boundary-delimited child parts, each child with its
@@ -154,7 +178,32 @@ export function parseContentType(value: string | undefined): ParsedContentType {
 	return { type, params };
 }
 
-/** Byte offsets where `needle` occurs at the start of a line (position 0, or right after a `\n`). */
+/**
+ * RFC 2046: a boundary delimiter line is `--<boundary>` optionally followed by linear whitespace
+ * (some generators pad it), then the line terminator -- or, for the *closing* delimiter, an extra
+ * `--` before that same optional whitespace and terminator. `afterDelimiterText` is the offset right
+ * after the matched `--<boundary>` bytes; this checks only what follows it on the same line.
+ *
+ * Without this check, a body line that merely *starts with* `--<boundary>` -- e.g. a boundary value
+ * that is a prefix of a longer token appearing in the encapsulated content -- would be misread as a
+ * delimiter and would truncate or misattribute a part's content.
+ */
+function isBoundaryLineTail(body: Buffer, afterDelimiterText: number): boolean {
+	let index = afterDelimiterText;
+	if (body[index] === 0x2d && body[index + 1] === 0x2d) {
+		index += 2; // the closing delimiter's extra "--"
+	}
+	while (index < body.length && (body[index] === 0x20 || body[index] === 0x09)) {
+		index += 1; // linear whitespace between the delimiter and its line terminator
+	}
+	return index >= body.length || body[index] === 0x0a || body[index] === 0x0d;
+}
+
+/**
+ * Byte offsets where a valid `--<boundary>` delimiter line begins: at the start of a line (position
+ * 0, or right after a `\n`), and followed only by what {@link isBoundaryLineTail} allows -- never a
+ * bare substring match in the middle of a line or as the prefix of an unrelated token.
+ */
 function findLineStarts(body: Buffer, needle: Buffer): number[] {
 	const starts: number[] = [];
 	let searchFrom = 0;
@@ -164,7 +213,7 @@ function findLineStarts(body: Buffer, needle: Buffer): number[] {
 			break;
 		}
 		const atLineStart = index === 0 || body[index - 1] === 0x0a;
-		if (atLineStart) {
+		if (atLineStart && isBoundaryLineTail(body, index + needle.length)) {
 			starts.push(index);
 		}
 		searchFrom = index + needle.length;

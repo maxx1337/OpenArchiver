@@ -1901,6 +1901,104 @@ Formulierung („der Fix bricht Bestandsinstallationen") ist **nicht** nötig.
 
 ---
 
+## E5 — Journal-Report-Parser (Parallelsession B, seit 2026-08-02)
+
+> **Dieser Abschnitt gehört einer zweiten, gleichzeitig laufenden Session.** Regeln, Kollisionsflächen
+> und Merge-Richtung stehen in `12-parallelbetrieb.md`. Session B fasst weder `07-session-handover.md`
+> noch die Abschnitte der E3-Session in dieser Datei an — auch nicht die Kopfzeile
+> „Letzte Aktualisierung", die der E3-Session gehört.
+
+**Branch:** `claude/journaling-e5-parser`, abgezweigt vom Integrationsbranch bei `9725a5d`.
+**Warum parallel möglich:** E3 lebt in `packages/journaling/src/spool/*`, E5 in
+`packages/journaling/src/parser/*` — kein geteiltes Byte. E5 ist reine Logik über Bytes: keine
+Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft **eine** Task
+(`JR-5-05`), und die SMTP-Envelope ist dort ein Eingabeparameter, kein Code aus E4.
+
+| Task      | Stand                                                                               |
+| --------- | ----------------------------------------------------------------------------------- |
+| `JR-5-01` | **[x] erledigt** 2026-08-02 (`15f7e2a` + Review-Nacharbeit)                         |
+| `JR-5-02` | **[x] erledigt** 2026-08-02 (`15f7e2a` + Review-Nacharbeit)                         |
+| `JR-5-03` | [ ] offen — kein Innenteil, S/MIME, `content_encrypted`                             |
+| `JR-5-04` | [ ] offen — `parse_failed` als Ledger-Event (der Parser liefert bereits das Signal) |
+| `JR-5-05` | [ ] offen — Plain-BCC-Fallback                                                      |
+| `JR-5-06` | [ ] offen — NDRs und Bounces                                                        |
+| `JR-5-07` | [ ] offen — Owner-Resolution                                                        |
+| `JR-5-08` | [ ] offen — Fixture-Korpus (Rolle TEST)                                             |
+| `JR-5-09` | [ ] offen — Abnahme, **in frischer Sitzung** (ADR-021)                              |
+
+### Was `JR-5-01`/`JR-5-02` liefern
+
+`packages/journaling/src/parser/` zerlegt einen Exchange-Journal-Report in Außenobjekt, Innenmail und
+Envelope, ohne die übergebenen Bytes anzufassen. `Recipient:` wird als eigene, **reihenfolgetreue und
+nicht deduplizierte** Liste geführt statt in `to`/`cc` gefaltet — dort erscheinen Blindkopie-Empfänger
+und Verteilerlisten-Mitglieder, und das ist die Existenzberechtigung des Features. An der Fixture
+gemessen: der Bcc-Empfänger und alle drei DL-Mitglieder stehen in `recipients` und in **weder** `to`
+**noch** `cc`. Feldzeilen, die der Parser nicht modelliert, bleiben unter ihrem Namen erhalten statt
+verworfen zu werden. Der Parser **wirft nicht** — jeder Fehlerpfad wird zu `kind: 'parse_failed'`
+(RFC §5.3).
+
+### Der Befund, der die Scheibe geprägt hat: `mailparser` und `Content-Disposition: inline`
+
+Der erste DEV-Entwurf begründete einen handgeschriebenen MIME-Splitter damit, `mailparser` steige
+durch die `message/rfc822`-Grenze durch. **Die Begründung stimmt, aber nur unter einer Bedingung**,
+die der Kommentar unterschlug. Gegen `mailparser@3.7.4` gemessen:
+
+```
+disposition=(keine)    | Innentext in .text = false | attachments = 1
+disposition=inline     | Innentext in .text = TRUE  | attachments = 0
+disposition=attachment | Innentext in .text = false | attachments = 1
+```
+
+Bei `inline` mischt `mailparser` den Körper der Innenmail in dieselbe `.text` wie den Reportteil — der
+Envelope-Parser läse seine Feldzeilen dann aus einem Text, in dem die Innenmail steht, **ohne Fehler
+und ohne Spur**. Die Entwurfsentscheidung ist damit richtig; ausgeschrieben ist sie im **Nachtrag zu
+ADR-027**, samt Quellstellen (`mailsplit/lib/message-splitter.js:373-378`, `mail-parser.js:806`), und
+die drei Zeilen laufen als Test bei jedem CI-Lauf mit — **damit die nächste Session das Modul nicht
+als überflüssige Komplexität löscht**, nachdem sie den harmlosen Fall geprüft hat.
+
+### Das PO-Review, weil es vier weitere Punkte gefunden hat
+
+Der DEV-Bericht war ehrlich und die Zahlen reproduzierten exakt — die Mängel lagen trotzdem im Code:
+`splitAddressList()` zerlegte `"Doe, John" <john@contoso.com>` in fünf Trümmer (jetzt über
+`mailparser`s eigenen Adressparser), eine Feldnamen-Liste konnte vom `switch` wegdriften (jetzt aus
+einer Dispatch-Tabelle abgeleitet), `undisclosedRecipients` verlor als einzelnes Bool, welches Feld den
+Platzhalter trug (jetzt eine Feldliste), und `findLineStarts()` hielt eine Körperzeile `--B1EXTRA` bei
+Boundary `B1` für einen Trenner (jetzt mit RFC-2046-Prüfung des Zeilenrests).
+
+**Die Lehre ist nicht „prüfe Berichte".** Alle vier waren aus dem Diff lesbar, keiner davon hätte einen
+Test rot gemacht, und drei hätten still falsche Metadaten erzeugt.
+
+### Zahlen
+
+| Stand                      | Volllauf                                            |
+| -------------------------- | --------------------------------------------------- |
+| Basis `9725a5d` (vor E5)   | 40 Dateien, `486 passed \| 3 skipped`, unit 371/371 |
+| nach `JR-5-01`/`JR-5-02`   | 43 Dateien, `525 passed \| 3 skipped`, unit 410/410 |
+| nach der Review-Nacharbeit | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
+
+Jeweils `integration 97/97 · adversarial 18/18`, Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
+aus dem E2-Handover sind **überholt** — die Differenz zur Basis sind E3s zehn Dateien.
+
+### Drei Punkte für den Auftraggeber
+
+0. **Der Integrationsbranch ist gerade lint-rot, und zwar in E3s Gebiet.**
+   `packages/journaling/src/spool/acceptance.ts` verletzt Prettier an zwei Stellen (reine
+   Zeilenumbrüche, Zeilen 164 ff. und 295 ff.). Die Datei ist byteidentisch mit
+   `origin/claude/enterprise-product-implementation-cxmmqe` und stammt aus `5f9f98c`
+   („DEV session was cut off mid-slice"). **`.github/workflows/ci.yml:79` fährt `pnpm lint`**, das
+   heißt die CI ist auf dem Integrationsbranch rot, nicht erst auf E5s Zweig.
+   Session B **behebt das nicht** — fremdes Gebiet, `12-parallelbetrieb.md` §5. Die E3-Session muss es
+   wissen: `corepack pnpm exec prettier --write packages/journaling/src/spool/acceptance.ts`.
+1. **`pnpm test` ist nicht in `dotenv --` gewickelt** (`package.json:28`), anders als `CLAUDE.md` §4
+   für alle Root-Skripte behauptet. Ohne exportiertes `DATABASE_URL` überspringt die gesamte
+   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Kandidat für einen Befund; die
+   F-Nummer vergibt der PO**, weil die Nummernfolge zwischen beiden Sessions geteilt ist
+   (`12-parallelbetrieb.md` §6).
+2. **Die ADR-Nummer 027 hat Session B selbst vergeben**, nach Sicht auf die höchste vorhandene (026).
+   Schreibt Session A gleichzeitig eine ADR, kollidiert das — beim Rückmerge gegenprüfen.
+
+---
+
 ## E3 – E12 (offen)
 
 Tasklisten stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics
