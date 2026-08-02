@@ -180,7 +180,28 @@ export const SUITES: readonly SuiteSpec[] = [
 		// UTF-8 address, MAIL/RCPT/DATA out-of-sequence x3, an unrecognized command, MAIL FROM's SIZE=
 		// parameter rejected before DATA, QUIT, end-of-DATA always 451 4.3.0 never 250, and the three
 		// timeouts -- connection/command/data -- each observed as a 421 4.4.2 plus a closed socket).
-		expectedTests: { ci: 452, nightly: 1, manual: 0 },
+		// 488 ci / 2 nightly after JR-4-03 (CHUNKING/BDAT): +18 in ingress/smtp-server.test.ts
+		// (buildEhloResponseLines' CHUNKING assertion updated in place, not counted again;
+		// parseBdatArguments x9: bare size, size+LAST case-insensitively, zero with/without LAST,
+		// leading zeros, missing, non-numeric, negative, decimal, unsafe-integer-sized, a non-LAST
+		// second token; BdatContentTracker x7: single push, multi-push accumulation, onContent
+		// forwarding verbatim, exactly-at-limit, one-byte-over, oversize stays sticky, a zero-length
+		// push is a no-op; the DATA/BDAT byte-identical acceptance proof x2: a body with a bare-dot
+		// line, a leading-dot line and a chunk boundary between '\r' and '\n', plus the same proof
+		// again over maximally fragmented one-byte chunk boundaries) + 18 in
+		// tests/unit/smtp-server-protocol.test.ts (EHLO announces CHUNKING x1; the BDAT/CHUNKING wire
+		// suite x16: single chunk never 250, multi-chunk 250-then-451, BDAT 0 LAST alone, BDAT 0 LAST
+		// completing prior chunks, a zero-length non-LAST no-op, a chunk boundary mid-line, a chunk
+		// boundary between '\r' and '\n' with a follow-up command proving alignment survived, a
+		// pipelined BDAT command plus its full content, non-numeric/negative/missing chunk-size x3,
+		// BDAT before MAIL/RCPT, a chunk sum over SIZE, a stalled sender timing out, DATA after a
+		// non-LAST BDAT (RFC 3030 mixing), and a BDAT sent after BDAT...LAST already closed the
+		// transaction; classified `nightly` x1: streaming 150 MB over 150 BDAT chunks with bounded
+		// `arrayBuffers` growth -- see that test's own doc comment for why `heapUsed`, the metric
+		// JR-3-02's durable-write proof samples, turned out blind to a deliberately reintroduced
+		// full-buffering regression here, and had to be replaced with `arrayBuffers`, verified in
+		// both directions before being kept).
+		expectedTests: { ci: 488, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',

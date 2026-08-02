@@ -130,6 +130,16 @@ class TestSmtpClient {
 		this.socket.write(text);
 	}
 
+	/** Write a raw `Buffer` (for `BDAT` chunk payloads, where content is arbitrary bytes rather
+	 * than text) and resolve once Node has finished handing it off -- pacing large transfers so
+	 * they are not all queued into Node's internal write buffer at once, the same reason `JR-3-02`'s
+	 * heap-growth proof reuses one buffer instead of building an array of them. */
+	writeRawBuffer(buf: Buffer): Promise<void> {
+		return new Promise((resolve, reject) => {
+			this.socket.write(buf, (err) => (err ? reject(err) : resolve()));
+		});
+	}
+
 	nextReply(timeoutMs = 2_000): Promise<string[]> {
 		const ready = this.readyReplies.shift();
 		if (ready) {
@@ -198,6 +208,15 @@ suite('ci', 'EsmtpServer over the wire (JR-4-02)', () => {
 			expect(line).toMatch(/^250-/);
 		}
 		expect(reply[reply.length - 1]).toMatch(/^250 /);
+	});
+
+	it('EHLO announces CHUNKING (JR-4-03)', async () => {
+		const { port } = await startServer();
+		const client = await connectClient(port);
+		await client.nextReply();
+		client.send('EHLO client.example.com');
+		const reply = await client.nextReply();
+		expect(reply.join('\n')).toContain('CHUNKING');
 	});
 
 	it('EHLO SIZE reflects a configured value that differs from the 150 MB default', async () => {
@@ -387,4 +406,256 @@ suite('ci', 'EsmtpServer over the wire (JR-4-02)', () => {
 		expect(reply[0]).toMatch(/^421 4\.4\.2/);
 		await client.waitForClose();
 	});
+});
+
+/** Drive a connection through `EHLO`/`MAIL`/`RCPT` and leave it positioned right before `BDAT`/
+ * `DATA` -- every `BDAT` test below starts from here, the same envelope every `DATA` test in the
+ * suite above already assumed inline. The server's configuration (e.g. a non-default
+ * `sizeLimitBytes`) is set by the `startServer()` call the caller already made -- this only drives
+ * the protocol, it does not configure the server. */
+async function establishTransaction(port: number): Promise<TestSmtpClient> {
+	const client = await connectClient(port);
+	await client.nextReply();
+	client.send('EHLO client.example.com');
+	await client.nextReply();
+	client.send('MAIL FROM:<a@example.com>');
+	await client.nextReply();
+	client.send('RCPT TO:<b@example.com>');
+	await client.nextReply();
+	return client;
+}
+
+suite('ci', 'EsmtpServer BDAT/CHUNKING over the wire (JR-4-03)', () => {
+	it('single chunk: BDAT <n> LAST never returns 250 -- answers 451 4.3.0, same as end of DATA', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const payload = Buffer.from('Subject: test\r\n\r\nhello world\r\n');
+		client.send(`BDAT ${payload.length} LAST`);
+		await client.writeRawBuffer(payload);
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+		expect(reply[0]).not.toMatch(/^250/);
+	});
+
+	it('multi-chunk: each non-LAST BDAT gets 250, the LAST chunk gets 451 4.3.0', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const first = Buffer.from('Subject: test\r\n\r\n');
+		const second = Buffer.from('hello world\r\n');
+
+		client.send(`BDAT ${first.length}`);
+		await client.writeRawBuffer(first);
+		const firstReply = await client.nextReply();
+		expect(firstReply[0]).toMatch(/^250 2\.0\.0/);
+
+		client.send(`BDAT ${second.length} LAST`);
+		await client.writeRawBuffer(second);
+		const lastReply = await client.nextReply();
+		expect(lastReply[0]).toMatch(/^451 4\.3\.0/);
+	});
+
+	it('BDAT 0 LAST as the only BDAT of the transaction completes it (empty message)', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		client.send('BDAT 0 LAST');
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+	});
+
+	it('BDAT 0 LAST completes a transaction that already received real chunks', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const payload = Buffer.from('hello world\r\n');
+		client.send(`BDAT ${payload.length}`);
+		await client.writeRawBuffer(payload);
+		expect((await client.nextReply())[0]).toMatch(/^250 2\.0\.0/);
+
+		client.send('BDAT 0 LAST');
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+	});
+
+	it('a zero-length, non-LAST BDAT is a no-op that gets 250 and stays in the transaction', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		client.send('BDAT 0');
+		expect((await client.nextReply())[0]).toMatch(/^250 2\.0\.0/);
+
+		const payload = Buffer.from('hello world\r\n');
+		client.send(`BDAT ${payload.length} LAST`);
+		await client.writeRawBuffer(payload);
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+	});
+
+	it('a chunk boundary in the middle of a line is handled correctly', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const payload = Buffer.from('Subject: test\r\n\r\nhello world\r\n');
+		client.send(`BDAT ${payload.length} LAST`);
+		// Split well inside "hello world" -- not on any line or CRLF boundary.
+		const splitAt = payload.indexOf('hello') + 2;
+		await client.writeRawBuffer(payload.subarray(0, splitAt));
+		await client.writeRawBuffer(payload.subarray(splitAt));
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+	});
+
+	it('a chunk boundary between the \\r and \\n of a CRLF is handled correctly (the hardest case)', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const payload = Buffer.from('Subject: test\r\n\r\nhello world\r\n');
+		client.send(`BDAT ${payload.length} LAST`);
+		const crlfIdx = payload.indexOf('\r\n', payload.indexOf('hello'));
+		const splitAt = crlfIdx + 1; // right after '\r', right before '\n'
+		await client.writeRawBuffer(payload.subarray(0, splitAt));
+		await client.writeRawBuffer(payload.subarray(splitAt));
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+		// The connection's byte-alignment survived the split: a follow-up command still gets a
+		// normal reply rather than being swallowed as leftover chunk content.
+		client.send('QUIT');
+		expect((await client.nextReply())[0]).toMatch(/^221 2\.0\.0/);
+	});
+
+	it('BDAT command plus its full raw content pipelined in a single packet is accepted', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const payload = Buffer.from('hello world\r\n');
+		client.writeRaw(`BDAT ${payload.length} LAST\r\n`);
+		await client.writeRawBuffer(payload);
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^451 4\.3\.0/);
+	});
+
+	it('BDAT with a non-numeric chunk-size is a syntax error (501 5.5.4)', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		client.send('BDAT abc');
+		expect((await client.nextReply())[0]).toMatch(/^501 5\.5\.4/);
+	});
+
+	it('BDAT with a negative chunk-size is a syntax error (501 5.5.4)', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		client.send('BDAT -5');
+		expect((await client.nextReply())[0]).toMatch(/^501 5\.5\.4/);
+	});
+
+	it('BDAT with a missing chunk-size is a syntax error (501 5.5.4)', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		client.send('BDAT');
+		expect((await client.nextReply())[0]).toMatch(/^501 5\.5\.4/);
+	});
+
+	it('BDAT before any MAIL/RCPT is a bad sequence of commands (503)', async () => {
+		const { port } = await startServer();
+		const client = await connectClient(port);
+		await client.nextReply();
+		client.send('EHLO client.example.com');
+		await client.nextReply();
+		client.send('BDAT 10');
+		expect((await client.nextReply())[0]).toMatch(/^503 /);
+	});
+
+	it('a chunk sum over the configured SIZE limit is rejected with 552, with an alert logged', async () => {
+		const { port } = await startServer({ sizeLimitBytes: 20 });
+		const client = await establishTransaction(port);
+		const first = Buffer.alloc(15, 'a'); // under the limit alone
+		client.send(`BDAT ${first.length}`);
+		await client.writeRawBuffer(first);
+		expect((await client.nextReply())[0]).toMatch(/^250 2\.0\.0/);
+
+		const second = Buffer.alloc(10, 'b'); // 15 + 10 = 25 > 20
+		client.send(`BDAT ${second.length} LAST`);
+		await client.writeRawBuffer(second);
+		const reply = await client.nextReply();
+		expect(reply[0]).toMatch(/^552 5\.3\.4/);
+	});
+
+	it('a client that declares more bytes than it sends and then goes idle times out (421 4.4.2)', async () => {
+		const { port } = await startServer({ dataTimeoutMs: 150 });
+		const client = await establishTransaction(port);
+		client.send('BDAT 100 LAST');
+		await client.writeRawBuffer(Buffer.alloc(10, 'x')); // far short of the declared 100
+		const reply = await client.nextReply(3_000);
+		expect(reply[0]).toMatch(/^421 4\.4\.2/);
+		await client.waitForClose();
+	});
+
+	it('DATA after a non-LAST BDAT in the same transaction is a bad sequence of commands (503) -- RFC 3030 mixing rule', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		const payload = Buffer.from('hello world\r\n');
+		client.send(`BDAT ${payload.length}`);
+		await client.writeRawBuffer(payload);
+		expect((await client.nextReply())[0]).toMatch(/^250 2\.0\.0/);
+
+		client.send('DATA');
+		expect((await client.nextReply())[0]).toMatch(/^503 /);
+	});
+
+	it('a BDAT sent after a BDAT ... LAST already completed the transaction is rejected (503) -- RFC 3030', async () => {
+		const { port } = await startServer();
+		const client = await establishTransaction(port);
+		client.send('BDAT 0 LAST');
+		expect((await client.nextReply())[0]).toMatch(/^451 4\.3\.0/);
+
+		client.send('BDAT 10');
+		expect((await client.nextReply())[0]).toMatch(/^503 /);
+	});
+});
+
+suite('nightly', 'BDAT streams a 150 MB message without proportional heap growth (JR-4-03)', () => {
+	it('accepts a 150 MB message over 150 x 1 MiB BDAT chunks with bounded heap growth', async () => {
+		const sizeLimitBytes = 200 * 1024 * 1024;
+		const { port } = await startServer({ sizeLimitBytes });
+		const client = await establishTransaction(port);
+
+		const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MiB
+		const TOTAL_BYTES = 150 * 1024 * 1024;
+		const CHUNK_COUNT = Math.ceil(TOTAL_BYTES / CHUNK_SIZE);
+		// One reused, mutated-in-place buffer -- the same discipline `JR-3-02`'s heap-growth proof
+		// uses, so the test driver's own allocations do not swamp the signal being measured.
+		const sharedBuffer = Buffer.alloc(CHUNK_SIZE);
+
+		// `heapUsed` (the metric `JR-3-02`'s durable-write test samples) turns out **not** to be the
+		// right one here, measured rather than assumed: a deliberately reintroduced full-buffering
+		// regression (every pushed chunk copied into a retained array) left `heapUsed` completely
+		// flat -- 13-17 MB throughout, correct run and regressed run alike -- while `arrayBuffers`
+		// (the metric for retained `Buffer`/`ArrayBuffer` backing stores specifically) climbed
+		// monotonically to ~157 MB by the last chunk under the regression, versus fluctuating between
+		// ~2.5 MB and ~40 MB (GC reclaiming and reallocating, not leaking) in the correct run. The
+		// reason: Node's `Buffer` contents typically live in external/off-heap memory, which
+		// `heapUsed` does not account for at all. Sampling `arrayBuffers` instead is what actually
+		// exercises the failure mode this test claims to catch.
+		const baselineArrayBuffers = process.memoryUsage().arrayBuffers;
+		let maxArrayBufferDelta = 0;
+
+		for (let i = 0; i < CHUNK_COUNT; i += 1) {
+			sharedBuffer.fill(i % 256);
+			const isLast = i === CHUNK_COUNT - 1;
+			client.send(`BDAT ${CHUNK_SIZE}${isLast ? ' LAST' : ''}`);
+			await client.writeRawBuffer(sharedBuffer);
+			const reply = await client.nextReply();
+			expect(reply[0]).toMatch(isLast ? /^451 4\.3\.0/ : /^250 2\.0\.0/);
+			// Sampled after the chunk's reply arrived, i.e. after the server has fully processed and
+			// discarded it -- the point at which a non-streaming implementation would be holding an
+			// ever-growing amount of data.
+			const currentArrayBuffers = process.memoryUsage().arrayBuffers;
+			maxArrayBufferDelta = Math.max(
+				maxArrayBufferDelta,
+				currentArrayBuffers - baselineArrayBuffers
+			);
+		}
+
+		// Coarse and noisy -- Node does not eagerly reclaim external Buffer memory between reads,
+		// so even the correct implementation shows real, non-leaking fluctuation up toward ~40 MB in
+		// this measurement (see the note above). A budget of 100 MB sits comfortably above that
+		// observed noise ceiling while still being far below the ~150+ MB a real full-buffering
+		// regression produces -- verified in both directions rather than picked blind.
+		const ARRAY_BUFFER_BUDGET_BYTES = 100 * 1024 * 1024;
+		expect(maxArrayBufferDelta).toBeLessThan(ARRAY_BUFFER_BUDGET_BYTES);
+	}, 180_000);
 });

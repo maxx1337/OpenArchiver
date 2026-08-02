@@ -1,24 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import {
+	BdatContentTracker,
 	buildEhloResponseLines,
 	DataScanner,
 	formatMultilineResponse,
+	parseBdatArguments,
 	parseMailFromArguments,
 	parseRcptToArguments,
 } from './smtp-server';
 
 /**
- * `JR-4-02` -- the ESMTP protocol engine's pure, socket-free logic: `EHLO` line construction,
- * multiline reply formatting, `MAIL FROM`/`RCPT TO` argument parsing, and the `DATA`-phase
- * terminator/dot-unstuffing scanner.
+ * `JR-4-02`/`JR-4-03` -- the ESMTP protocol engine's pure, socket-free logic: `EHLO` line
+ * construction, multiline reply formatting, `MAIL FROM`/`RCPT TO`/`BDAT` argument parsing, and the
+ * `DATA`-phase and `BDAT`-phase content trackers.
  *
  * The wire-level proof that a real client sees exactly what {@link buildEhloResponseLines} and
  * {@link formatMultilineResponse} produce -- the Product Owner's explicit instruction that the
  * `EHLO` acceptance criterion is proven over a real connection, not against an options object --
  * lives in `packages/journaling/tests/unit/smtp-server-protocol.test.ts`. This file covers the
  * functions these wire-level tests rely on in isolation, including edge cases a socket-level test
- * would be a slow and awkward way to exercise (e.g. every rejected `MAIL FROM` syntax variant).
+ * would be a slow and awkward way to exercise (e.g. every rejected `MAIL FROM` syntax variant),
+ * plus `JR-4-03`'s core acceptance proof -- that `DATA` (dot-stuffed wire bytes, unstuffed by
+ * {@link DataScanner}) and `BDAT` (raw wire bytes, untouched by {@link BdatContentTracker})
+ * reconstruct byte-identical content for the same logical message, including the two hardest
+ * cases: a content line that is itself a bare `.` (an embedded terminator look-alike) and a chunk
+ * boundary that falls between the `\r` and `\n` of a CRLF.
  */
 suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 	describe('buildEhloResponseLines', () => {
@@ -40,9 +47,9 @@ suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 			expect(lines.some((l) => l.startsWith('SIZE ') && l !== 'SIZE 42')).toBe(false);
 		});
 
-		it('never includes CHUNKING (JR-4-03) or STARTTLS (JR-4-04) -- not yet implemented', () => {
+		it('now includes CHUNKING (JR-4-03) but still not STARTTLS (JR-4-04, not yet implemented)', () => {
 			const lines = buildEhloResponseLines('host', 1000);
-			expect(lines.join(' ')).not.toContain('CHUNKING');
+			expect(lines).toContain('CHUNKING');
 			expect(lines.join(' ')).not.toContain('STARTTLS');
 		});
 	});
@@ -200,6 +207,228 @@ suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 			const result = scanner.push(Buffer.from('more\r\n.\r\n'));
 			expect(result).toEqual({ done: true, oversize: false });
 			expect(scanner.contentByteLength).toBe(before);
+		});
+	});
+
+	describe('parseBdatArguments (JR-4-03)', () => {
+		it('parses a bare chunk-size with no LAST marker', () => {
+			expect(parseBdatArguments('500')).toEqual({ chunkSize: 500, last: false });
+		});
+
+		it('parses a chunk-size with LAST, case-insensitively', () => {
+			expect(parseBdatArguments('500 LAST')).toEqual({ chunkSize: 500, last: true });
+			expect(parseBdatArguments('500 last')).toEqual({ chunkSize: 500, last: true });
+		});
+
+		it('accepts a zero chunk-size', () => {
+			expect(parseBdatArguments('0')).toEqual({ chunkSize: 0, last: false });
+			expect(parseBdatArguments('0 LAST')).toEqual({ chunkSize: 0, last: true });
+		});
+
+		it('accepts leading zeros in the chunk-size', () => {
+			expect(parseBdatArguments('007')).toEqual({ chunkSize: 7, last: false });
+		});
+
+		it('rejects a missing chunk-size', () => {
+			expect(parseBdatArguments('')).toBeNull();
+			expect(parseBdatArguments('   ')).toBeNull();
+		});
+
+		it('rejects a non-numeric chunk-size', () => {
+			expect(parseBdatArguments('abc')).toBeNull();
+		});
+
+		it('rejects a negative chunk-size (a leading "-" is not a digit)', () => {
+			expect(parseBdatArguments('-5')).toBeNull();
+		});
+
+		it('rejects a decimal chunk-size', () => {
+			expect(parseBdatArguments('5.5')).toBeNull();
+		});
+
+		it('rejects a chunk-size too large to represent as a safe integer', () => {
+			expect(parseBdatArguments('99999999999999999999')).toBeNull();
+		});
+
+		it('rejects a second token that is not literally LAST', () => {
+			expect(parseBdatArguments('500 NOW')).toBeNull();
+		});
+	});
+
+	describe('BdatContentTracker (JR-4-03)', () => {
+		it('counts a single pushed chunk', () => {
+			const tracker = new BdatContentTracker(1000);
+			const result = tracker.push(Buffer.from('hello'));
+			expect(result.oversize).toBe(false);
+			expect(tracker.contentByteLength).toBe(5);
+		});
+
+		it('accumulates length across multiple pushes, across multiple BDAT chunks', () => {
+			const tracker = new BdatContentTracker(1000);
+			tracker.push(Buffer.from('hello'));
+			tracker.push(Buffer.from(' world'));
+			expect(tracker.contentByteLength).toBe(11);
+		});
+
+		it('forwards each pushed slice to onContent verbatim, in order, with no transformation', () => {
+			const received: Buffer[] = [];
+			const tracker = new BdatContentTracker(1000, (chunk) =>
+				received.push(Buffer.from(chunk))
+			);
+			tracker.push(Buffer.from('.leading dot, untouched'));
+			tracker.push(Buffer.from('\r\n.\r\n')); // an embedded terminator look-alike -- BDAT is raw
+			expect(Buffer.concat(received).toString('utf8')).toBe(
+				'.leading dot, untouched\r\n.\r\n'
+			);
+		});
+
+		it('accepts content exactly at the byte limit', () => {
+			const tracker = new BdatContentTracker(5);
+			const result = tracker.push(Buffer.from('hello'));
+			expect(result.oversize).toBe(false);
+		});
+
+		it('flags content one byte over the limit as oversize', () => {
+			const tracker = new BdatContentTracker(4);
+			const result = tracker.push(Buffer.from('hello'));
+			expect(result.oversize).toBe(true);
+		});
+
+		it('stays oversize once tripped, even for a subsequent push that would not itself exceed', () => {
+			const tracker = new BdatContentTracker(4);
+			tracker.push(Buffer.from('hello')); // trips oversize
+			const result = tracker.push(Buffer.from('x'));
+			expect(result.oversize).toBe(true);
+		});
+
+		it('treats a zero-length push as a no-op', () => {
+			const received: Buffer[] = [];
+			const tracker = new BdatContentTracker(1000, (chunk) =>
+				received.push(Buffer.from(chunk))
+			);
+			const result = tracker.push(Buffer.alloc(0));
+			expect(result.oversize).toBe(false);
+			expect(tracker.contentByteLength).toBe(0);
+			expect(received).toHaveLength(0);
+		});
+	});
+
+	describe('DATA/BDAT byte-identical acceptance proof (JR-4-03)', () => {
+		const DOT = 0x2e;
+		const CRLFBuf = Buffer.from('\r\n');
+
+		/**
+		 * Dot-stuff a logical message body per RFC 5321 section 4.5.2 ("if the first character is a
+		 * period, one additional period is inserted") to derive the wire bytes a real `DATA` sender
+		 * would transmit -- the reverse of what {@link DataScanner} undoes. Test-local and simple on
+		 * purpose (a straight CRLF split and a per-line check) so it can be verified by inspection
+		 * rather than trusted as production logic.
+		 */
+		function dotStuffForWire(logicalBody: Buffer): Buffer {
+			const lines: Buffer[] = [];
+			let start = 0;
+			for (let i = 0; i + 1 < logicalBody.length; i += 1) {
+				if (logicalBody[i] === 0x0d && logicalBody[i + 1] === 0x0a) {
+					lines.push(logicalBody.subarray(start, i));
+					start = i + 2;
+					i += 1;
+				}
+			}
+			if (start !== logicalBody.length) {
+				throw new Error('test fixture must end with CRLF');
+			}
+			return Buffer.concat(
+				lines.map((line) =>
+					Buffer.concat([
+						line.length > 0 && line[0] === DOT ? Buffer.from('.') : Buffer.alloc(0),
+						line,
+						CRLFBuf,
+					])
+				)
+			);
+		}
+
+		function reconstructViaData(
+			wireBytesWithoutTerminator: Buffer,
+			limitBytes: number
+		): Buffer {
+			const received: Buffer[] = [];
+			const scanner = new DataScanner(limitBytes, (chunk) =>
+				received.push(Buffer.from(chunk))
+			);
+			scanner.push(Buffer.concat([wireBytesWithoutTerminator, Buffer.from('.\r\n')]));
+			return Buffer.concat(received);
+		}
+
+		function reconstructViaBdat(
+			logicalBody: Buffer,
+			splitPoints: number[],
+			limitBytes: number
+		): Buffer {
+			const received: Buffer[] = [];
+			const tracker = new BdatContentTracker(limitBytes, (chunk) =>
+				received.push(Buffer.from(chunk))
+			);
+			let offset = 0;
+			for (const point of [...splitPoints, logicalBody.length]) {
+				tracker.push(logicalBody.subarray(offset, point));
+				offset = point;
+			}
+			return Buffer.concat(received);
+		}
+
+		it('reconstructs identical bytes for a body with a bare-dot line, a leading-dot line, and a chunk boundary between \\r and \\n', () => {
+			const logicalBody = Buffer.from(
+				'Subject: test\r\n' +
+					'\r\n' +
+					'Hello world.\r\n' +
+					'.\r\n' + // bare dot -- an embedded end-of-DATA terminator look-alike
+					'.Leading dot content\r\n' + // a content line that itself starts with a dot
+					'Trailing text\r\n'
+			);
+
+			const dataResult = reconstructViaData(dotStuffForWire(logicalBody), 1_000_000);
+
+			// Split BDAT's raw feed mid-line, again precisely between the '\r' and '\n' of the first
+			// CRLF after "Hello" (the hardest case the acceptance criterion names), and once more
+			// exactly on the leading '.' of the second dot-prefixed line -- so a chunk begins with a
+			// literal '.' byte, the one alignment a spurious-unstuffing bug would need to fire on.
+			const midLine = logicalBody.indexOf('Hello') + 3;
+			const crlfIdx = logicalBody.indexOf('\r\n', logicalBody.indexOf('Hello'));
+			const midCrlf = crlfIdx + 1; // splits after '\r', before '\n'
+			const atLeadingDot = logicalBody.indexOf('.Leading dot content');
+			const bdatResult = reconstructViaBdat(
+				logicalBody,
+				[midLine, midCrlf, atLeadingDot].sort((a, b) => a - b),
+				1_000_000
+			);
+
+			expect(dataResult.equals(logicalBody)).toBe(true);
+			expect(bdatResult.equals(logicalBody)).toBe(true);
+			expect(dataResult.equals(bdatResult)).toBe(true);
+		});
+
+		it('reconstructs identical bytes across many small, arbitrary BDAT chunk boundaries', () => {
+			const logicalBody = Buffer.from(
+				'From: a@example.com\r\n' +
+					'To: b@example.com\r\n' +
+					'\r\n' +
+					'line one\r\n' +
+					'.\r\n' +
+					'..already-doubled-looking line\r\n' +
+					'.last line starts with a dot\r\n'
+			);
+
+			const dataResult = reconstructViaData(dotStuffForWire(logicalBody), 1_000_000);
+
+			// One-byte BDAT "chunks" -- the most fragmented split possible, guaranteeing some split
+			// falls between every '\r' and '\n' in the body.
+			const splitPoints = Array.from({ length: logicalBody.length - 1 }, (_, i) => i + 1);
+			const bdatResult = reconstructViaBdat(logicalBody, splitPoints, 1_000_000);
+
+			expect(dataResult.equals(logicalBody)).toBe(true);
+			expect(bdatResult.equals(logicalBody)).toBe(true);
+			expect(dataResult.equals(bdatResult)).toBe(true);
 		});
 	});
 });

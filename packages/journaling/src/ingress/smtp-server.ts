@@ -39,12 +39,26 @@ import type { SmtpServerConfig } from './smtp-config';
  * ---------------------------------------------------------------------------------------------
  * `EHLO`/`HELO`, `MAIL`/`RCPT`/`DATA` far enough to reach and terminate a `DATA` transfer,
  * `PIPELINING`/`8BITMIME`/`SMTPUTF8`/`SIZE` (RFC 1870's `MAIL FROM ... SIZE=` parameter included),
- * and the three timeouts. Deliberately **not** here: `CHUNKING`/`BDAT` (`JR-4-03` -- not
- * advertised in `EHLO` by this file precisely so a client that only received this task's server
- * never attempts it), TLS/`STARTTLS` (`JR-4-04`), source/recipient ACLs (`JR-4-05`), and wiring
- * `JournalAcceptance.accept()` (`JR-4-06`). End-of-`DATA` always answers `451 4.3.0` until that
- * wiring lands -- see {@link SmtpConnection.finishData}'s doc comment for why that is not a
- * shortcut but the Product Owner's explicit instruction for this slice.
+ * and the three timeouts. Deliberately **not** here: TLS/`STARTTLS` (`JR-4-04`), source/recipient
+ * ACLs (`JR-4-05`), and wiring `JournalAcceptance.accept()` (`JR-4-06`). End-of-`DATA` always
+ * answers `451 4.3.0` until that wiring lands -- see {@link SmtpConnection.finishData}'s doc
+ * comment for why that is not a shortcut but the Product Owner's explicit instruction for this
+ * slice.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `CHUNKING`/`BDAT` (`JR-4-03`)
+ * ---------------------------------------------------------------------------------------------
+ * `JR-4-02` deliberately left `CHUNKING`/`BDAT` out and did not advertise it, precisely so a
+ * client talking to that task's server never attempted an extension it could not honour. This
+ * task implements it and the `EHLO` line above now names it -- see {@link BdatContentTracker} and
+ * {@link SmtpConnection.handleBdatCommand}/{@link SmtpConnection.handleBdatChunkBytes} for the
+ * chunk-transfer state machine, and {@link SmtpConnection.completeTransfer} for why `DATA`'s
+ * terminator and `BDAT ... LAST` share one completion path. RFC 3030 section 2 is unambiguous that
+ * `DATA` and `BDAT` cannot be mixed within one transaction ("If a DATA statement is issued after a
+ * BDAT for the current transaction, a 503 ... MUST be issued") -- {@link SmtpConnection.handleDataCommand}'s
+ * existing "must be in `rcpt` state" check already produces that `503` once a `BDAT` has moved the
+ * state to `'bdat'`, with no separate case needed; RSET clears chunking state the same way it
+ * already clears the envelope.
  */
 
 /** Injected structured-logging port -- see this module's "Where `logLevel` actually gets used"
@@ -98,10 +112,11 @@ const MAX_COMMAND_LINE_BYTES = 512;
 const TIMEOUT_ENHANCED_CODE = '4.4.2';
 
 /**
- * Build the `EHLO` extension lines this task's acceptance criterion names: `PIPELINING`,
- * `8BITMIME`, `SMTPUTF8`, `SIZE <configured value>`. Deliberately excludes `CHUNKING` (`JR-4-03`)
- * and `STARTTLS` (`JR-4-04`) -- advertising an extension this server cannot yet honour would be a
- * protocol lie a real client (Exchange Online) could act on.
+ * Build the `EHLO` extension lines: `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE <configured
+ * value>`, and -- since `JR-4-03` -- `CHUNKING`. Still deliberately excludes `STARTTLS`
+ * (`JR-4-04`): advertising an extension this server cannot yet honour would be a protocol lie a
+ * real client (Exchange Online) could act on, exactly the reasoning `CHUNKING` was withheld under
+ * before this task implemented it.
  *
  * Pure and socket-free on purpose: the wire-level proof that a real client sees exactly these lines
  * lives in `packages/journaling/tests/unit/smtp-server-protocol.test.ts` (a real client is required
@@ -120,6 +135,7 @@ export function buildEhloResponseLines(
 		'8BITMIME',
 		'SMTPUTF8',
 		`SIZE ${sizeLimitBytes}`,
+		'CHUNKING',
 	];
 }
 
@@ -173,6 +189,47 @@ export function parseRcptToArguments(rest: string): { address: string } | null {
 	return { address: match[1]! };
 }
 
+/** Parsed `BDAT <chunk-size> [LAST]` (RFC 3030 section 2). */
+export interface ParsedBdat {
+	readonly chunkSize: number;
+	readonly last: boolean;
+}
+
+const BDAT_ARGS_PATTERN = /^\s*(\S+)(?:\s+(\S+))?\s*$/;
+
+/**
+ * Parse the argument text following the `BDAT` verb: `<chunk-size> [LAST]`. RFC 3030 section 2's
+ * ABNF is `bdat-cmd ::= "BDAT" SP chunk-size [ SP end-marker ] CR LF`, `chunk-size ::= 1*DIGIT`,
+ * `end-marker ::= "LAST"`.
+ *
+ * Returns `null` on any syntax error -- the caller maps that to `501 5.5.4`, matching every other
+ * malformed-argument case in this file:
+ *
+ *   - a missing chunk-size (`BDAT` with no argument at all);
+ *   - a non-numeric one -- a leading `-` is not a digit, so a negative chunk-size is really the
+ *     same case, not a separate one;
+ *   - one that parses but cannot be represented exactly as a JS number (`Number.isSafeInteger`);
+ *   - a second token that is not literally `LAST` (case-insensitively).
+ */
+export function parseBdatArguments(rest: string): ParsedBdat | null {
+	const match = BDAT_ARGS_PATTERN.exec(rest);
+	if (!match) {
+		return null;
+	}
+	const [, sizeToken, lastToken] = match;
+	if (!/^\d+$/.test(sizeToken!)) {
+		return null;
+	}
+	const chunkSize = Number(sizeToken);
+	if (!Number.isSafeInteger(chunkSize)) {
+		return null;
+	}
+	if (lastToken !== undefined && lastToken.toUpperCase() !== 'LAST') {
+		return null;
+	}
+	return { chunkSize, last: lastToken !== undefined };
+}
+
 /**
  * Scans `DATA`-phase bytes for the end-of-data terminator (a line consisting of a single `.`) and
  * performs dot-unstuffing (RFC 5321 section 4.5.2) as it goes -- the only transformation the
@@ -188,7 +245,16 @@ export function parseRcptToArguments(rest: string): { address: string } | null {
  * and `JR-4-11` require of the `BDAT` path -- this scanner handles the ordinary cases (a terminator
  * split across TCP packets) correctly by concatenating into `carry` before searching, but the
  * exhaustive adversarial matrix over chunk boundaries is that task's acceptance criterion, not this
- * one's.
+ * one's. `BDAT`'s equivalent is {@link BdatContentTracker}, which needs none of this scanner's line
+ * search or dot-unstuffing at all -- see that class's own doc comment for why a chunk boundary mid
+ * line, or even mid-CRLF, cannot go wrong there by construction.
+ *
+ * `onContent`, added in `JR-4-03`, is the hook this doc comment already promised: called with each
+ * unstuffed content line (plus its CRLF) as it is produced, never retained here past the call. A
+ * no-op by default -- production has nothing to hand it to until `JR-4-06` -- it exists so a test
+ * can reconstruct exactly what a `DATA` transfer delivered without buffering the whole message in
+ * this class, the same way {@link BdatContentTracker}'s `onContent` does for `BDAT`. This is what
+ * makes the two paths' output comparable byte-for-byte in `smtp-server.test.ts`.
  */
 export class DataScanner {
 	private carry: Buffer = Buffer.alloc(0);
@@ -196,7 +262,10 @@ export class DataScanner {
 	private finished = false;
 	private oversize = false;
 
-	constructor(private readonly limitBytes: number) {}
+	constructor(
+		private readonly limitBytes: number,
+		private readonly onContent?: (chunk: Buffer) => void
+	) {}
 
 	/** Feed the next raw chunk. Returns the scanner's status after processing as much of it as
 	 * forms complete lines; a chunk arriving after `done`/`oversize` is ignored. */
@@ -236,6 +305,9 @@ export class DataScanner {
 			}
 			const contentLine = line.length > 0 && line[0] === DOT ? line.subarray(1) : line;
 			this.bytesSeen += contentLine.length + 2;
+			if (this.onContent) {
+				this.onContent(Buffer.concat([contentLine, CRLF]));
+			}
 			if (this.bytesSeen > this.limitBytes) {
 				this.oversize = true;
 				this.finished = true;
@@ -245,7 +317,59 @@ export class DataScanner {
 	}
 }
 
-type SessionState = 'initial' | 'ready' | 'mail' | 'rcpt' | 'data';
+/**
+ * Accumulates the raw byte stream of one `BDAT` transaction across all of its chunks (`JR-4-03`).
+ * Unlike {@link DataScanner}, this performs **no line-oriented interpretation and no
+ * dot-unstuffing** -- RFC 3030 section 2 transfers a declared-length octet stream verbatim, and the
+ * only transformation the project's hard prohibitions allow at all (skill section 10, "no
+ * rewriting, normalizing, re-encoding, or 'cleaning' received bytes") is `DATA`'s dot-unstuffing,
+ * which simply does not apply to a counted byte stream. A chunk boundary that happens to fall in
+ * the middle of a line -- or even between the `\r` and `\n` of a CRLF, the hardest case this task's
+ * acceptance criterion names -- changes nothing about the bytes this class produces: there is no
+ * line boundary to find or get wrong, by construction, because nothing here ever looks for one.
+ *
+ * `onContent` is a no-op by default (production has nothing to hand raw content to until `JR-4-06`
+ * wires `JournalAcceptance.accept()`) and exists purely so a test can reconstruct exactly what a
+ * transaction delivered without this class ever buffering the whole message itself -- each pushed
+ * slice is forwarded verbatim and forgotten immediately afterward, which is also why the SIZE
+ * accounting below stays proportional to the configured limit rather than to message size.
+ */
+export class BdatContentTracker {
+	private totalBytes = 0;
+	private oversizeFlag = false;
+
+	constructor(
+		private readonly limitBytes: number,
+		private readonly onContent?: (chunk: Buffer) => void
+	) {}
+
+	/**
+	 * Feed raw content bytes belonging to the transaction's current `BDAT` chunk -- the caller has
+	 * already carved off exactly the declared chunk-size worth of bytes and any bytes belonging to
+	 * the next command are not included. Forwarded to `onContent` verbatim, in wire order, and
+	 * counted toward the *whole transaction's* cumulative `SIZE` check -- across every chunk seen
+	 * so far, not just this one, since RFC 3030 has no per-chunk size limit, only a message one.
+	 */
+	push(chunk: Buffer): { readonly oversize: boolean } {
+		if (chunk.length > 0) {
+			this.totalBytes += chunk.length;
+			if (this.onContent) {
+				this.onContent(chunk);
+			}
+			if (this.totalBytes > this.limitBytes) {
+				this.oversizeFlag = true;
+			}
+		}
+		return { oversize: this.oversizeFlag };
+	}
+
+	/** Total raw content bytes accumulated across every chunk pushed so far. */
+	get contentByteLength(): number {
+		return this.totalBytes;
+	}
+}
+
+type SessionState = 'initial' | 'ready' | 'mail' | 'rcpt' | 'bdat' | 'data';
 type TimeoutKind = 'connection' | 'command' | 'data';
 
 /** One accepted TCP connection's protocol state machine. Not exported -- `EsmtpServer` is the
@@ -256,6 +380,17 @@ class SmtpConnection {
 	private mailFrom: string | null = null;
 	private rcptTo: string[] = [];
 	private dataScanner: DataScanner | null = null;
+	/** Non-`null` for the whole `BDAT` transaction (created on the first `BDAT`, cleared by
+	 * {@link resetEnvelope}), not just the chunk currently being read -- RFC 3030 has one
+	 * cumulative `SIZE` check per message, not one per chunk. */
+	private bdatTracker: BdatContentTracker | null = null;
+	/** Bytes still owed for the `BDAT` chunk currently being read off the wire. `null` means "not
+	 * currently consuming raw `BDAT` content" -- {@link onData}/{@link drainCommandCarry} use that
+	 * to decide whether incoming bytes are chunk content or the next command line, the same role
+	 * `state === 'data'` plays for the `DATA` path. */
+	private bdatChunkRemaining: number | null = null;
+	/** Whether the chunk currently being read (or just finished) carried `BDAT`'s `LAST` marker. */
+	private bdatChunkIsLast = false;
 	private commandCarry: Buffer = Buffer.alloc(0);
 	private protocolTimer: NodeJS.Timeout | null = null;
 
@@ -288,8 +423,26 @@ class SmtpConnection {
 			this.handleDataChunk(chunk);
 			return;
 		}
+		if (this.bdatChunkRemaining !== null) {
+			this.handleBdatChunkBytes(chunk);
+			return;
+		}
 		this.commandCarry = Buffer.concat([this.commandCarry, chunk]);
+		this.drainCommandCarry();
+	}
+
+	/**
+	 * The command-line parsing loop, extracted out of {@link onData} in `JR-4-03` so it can be
+	 * re-entered from {@link handleBdatChunkBytes} once a `BDAT` chunk finishes and leaves a
+	 * remainder behind -- the same "bytes after the boundary belong to whatever comes next" shape
+	 * {@link onData} already handled for a pipelined `DATA` command, generalised to a second
+	 * direction (chunk bytes -> command line, not just command line -> chunk bytes).
+	 */
+	private drainCommandCarry(): void {
 		for (;;) {
+			if (this.socket.destroyed) {
+				return;
+			}
 			const idx = this.commandCarry.indexOf(CRLF);
 			if (idx === -1) {
 				if (this.commandCarry.length > MAX_COMMAND_LINE_BYTES) {
@@ -317,6 +470,16 @@ class SmtpConnection {
 				this.commandCarry = Buffer.alloc(0);
 				if (remainder.length > 0) {
 					this.handleDataChunk(remainder);
+				}
+				return;
+			}
+			if (this.bdatChunkRemaining !== null) {
+				// Same idea, for a pipelined `BDAT <n>` command plus (some or all of) its raw content
+				// arriving in the same packet.
+				const remainder = this.commandCarry;
+				this.commandCarry = Buffer.alloc(0);
+				if (remainder.length > 0) {
+					this.handleBdatChunkBytes(remainder);
 				}
 				return;
 			}
@@ -377,6 +540,9 @@ class SmtpConnection {
 				return;
 			case 'DATA':
 				this.handleDataCommand();
+				return;
+			case 'BDAT':
+				this.handleBdatCommand(rest);
 				return;
 			default:
 				this.writeResponse(500, '5.5.1', 'Command not recognized');
@@ -440,6 +606,10 @@ class SmtpConnection {
 
 	private handleDataCommand(): void {
 		if (this.state !== 'rcpt') {
+			// Also the `503` RFC 3030 section 2 requires when `DATA` follows a `BDAT` in the same
+			// transaction ("If a DATA statement is issued after a BDAT for the current transaction, a
+			// 503 ... MUST be issued") -- a `BDAT` moves `state` to `'bdat'`, which is not `'rcpt'`
+			// either, so that mixing case falls out of this same check with no separate branch.
 			this.writeResponse(503, '5.5.1', 'Bad sequence of commands');
 			this.armCommandTimer();
 			return;
@@ -462,28 +632,154 @@ class SmtpConnection {
 	}
 
 	/**
-	 * End of `DATA`. **Always answers `451 4.3.0` in this task, never `250`** -- this is the Product
-	 * Owner's explicit instruction, not an oversight: `JournalAcceptance.accept()` (`packages/journaling`,
-	 * `JR-3-04`) is wired into this server in `JR-4-06`, and until that wiring exists nothing durable
-	 * has happened to the bytes this method just finished scanning -- no spool write, no ledger append.
-	 * Answering anything but a `4xx` here (skill section 1: "`250 OK` is a promise... never issue it
-	 * before that is true") would be exactly the failure mode this entire project exists to prevent, and
-	 * the fact that this is "only an intermediate development state" does not excuse it -- a sender
-	 * cannot tell an intermediate `250` from a real one, and a real one is a promise this file cannot
-	 * back yet. When `JR-4-06` wires the real path, this method's oversize branch is unaffected and its
-	 * non-oversize branch is replaced with a call into `JournalAcceptance.accept()`, fed by this
-	 * connection's `remoteIp`/`ehloName`/`mailFrom`/`rcptTo` and a bridge from `DataScanner`'s
-	 * chunk-at-a-time interface to the `AsyncIterable<Uint8Array>` `accept()` expects.
+	 * End of `DATA`. Delegates the actual response/reset logic to {@link completeTransfer} -- see
+	 * that method's doc comment for why it always answers `451 4.3.0` in this task, never `250`.
 	 */
 	private finishData(oversize: boolean): void {
 		this.disarmProtocolTimer();
+		this.completeTransfer(oversize, this.dataScanner?.contentByteLength ?? 0, 'DATA');
+	}
+
+	/**
+	 * `BDAT <chunk-size> [LAST]` (RFC 3030 section 2). Requires the same envelope state `DATA`
+	 * does (`'rcpt'`) for the *first* `BDAT` of a transaction, or `'bdat'` for a subsequent one --
+	 * `'bdat'` is not `'rcpt'`, so a stray `BDAT` with no prior `MAIL`/`RCPT` at all is rejected by
+	 * the same check with no extra case.
+	 *
+	 * A chunk-size of zero needs no raw-byte phase at all: RFC 3030 explicitly allows it for the
+	 * `LAST` chunk ("the last BDAT command MAY have a byte-count of zero indicating there is no
+	 * additional data to be sent"), including as the *only* `BDAT` of a transaction, and this
+	 * implementation also allows it for a non-`LAST` chunk (harmless no-op, not forbidden by the
+	 * grammar). Anything else arms {@link bdatChunkRemaining} and waits for that many raw bytes,
+	 * exactly like {@link handleDataCommand} arms {@link dataScanner} and waits for a terminator.
+	 */
+	private handleBdatCommand(rest: string): void {
+		if (this.state !== 'rcpt' && this.state !== 'bdat') {
+			this.writeResponse(503, '5.5.1', 'Bad sequence of commands');
+			this.armCommandTimer();
+			return;
+		}
+		const parsed = parseBdatArguments(rest);
+		if (!parsed) {
+			this.writeResponse(501, '5.5.4', 'Syntax error in BDAT command');
+			this.armCommandTimer();
+			return;
+		}
+		if (!this.bdatTracker) {
+			this.bdatTracker = new BdatContentTracker(this.smtp.sizeLimitBytes);
+		}
+		this.bdatChunkIsLast = parsed.last;
+		if (parsed.chunkSize === 0) {
+			if (parsed.last) {
+				this.finishBdatTransaction(false);
+			} else {
+				this.writeResponse(250, '2.0.0', 'Ok: chunk received');
+				this.state = 'bdat';
+				this.armCommandTimer();
+			}
+			return;
+		}
+		this.state = 'bdat';
+		this.bdatChunkRemaining = parsed.chunkSize;
+		this.armDataTimer();
+	}
+
+	/**
+	 * Consume raw `BDAT` content bytes -- no line search, no dot-unstuffing, just counting down
+	 * {@link bdatChunkRemaining}. `chunk` may be shorter than what remains (wait for more), exactly
+	 * what remains (finish this chunk, nothing left over), or longer (finish this chunk *and* carry
+	 * the remainder back into command parsing, e.g. a pipelined next `BDAT` or `QUIT`) -- the split
+	 * point is always `min(chunk.length, bdatChunkRemaining)`, decided purely by the byte count RFC
+	 * 3030 declared, regardless of where TCP happened to break the stream up. That is also why a
+	 * chunk boundary between a `\r` and `\n` cannot matter here: nothing in this method ever looks
+	 * for either byte.
+	 *
+	 * The full declared chunk-size is always drained before this method reacts to an oversize
+	 * result, never bailed out of mid-chunk -- unlike {@link DataScanner}, which has no declared
+	 * total to drain toward and so must react as soon as it notices. That keeps this connection's
+	 * future command parsing correctly aligned even for a chunk that is going to be rejected.
+	 */
+	private handleBdatChunkBytes(chunk: Buffer): void {
+		if (this.bdatChunkRemaining === null || !this.bdatTracker) {
+			return; // unreachable in normal operation; defensive against a stray call
+		}
+		this.armDataTimer();
+		const take = Math.min(chunk.length, this.bdatChunkRemaining);
+		const { oversize } = this.bdatTracker.push(chunk.subarray(0, take));
+		this.bdatChunkRemaining -= take;
+		const remainder = chunk.subarray(take);
+		if (this.bdatChunkRemaining > 0) {
+			return; // still waiting for more of this chunk's declared bytes
+		}
+		this.bdatChunkRemaining = null;
+		if (oversize) {
+			this.finishBdatTransaction(true);
+		} else if (this.bdatChunkIsLast) {
+			this.finishBdatTransaction(false);
+		} else {
+			this.writeResponse(250, '2.0.0', 'Ok: chunk received');
+			this.state = 'bdat';
+			this.armCommandTimer();
+		}
+		if (remainder.length > 0 && !this.socket.destroyed) {
+			this.commandCarry = Buffer.concat([remainder, this.commandCarry]);
+			this.drainCommandCarry();
+		}
+	}
+
+	/**
+	 * `BDAT ... LAST`'s completion, the moment a whole message assembled from one or more chunks is
+	 * decided -- RFC 3030 gives it no reply semantics of its own beyond "the last chunk of message
+	 * data" (section 2); operationally, this is the same "the message is now fully in hand" moment
+	 * `DATA`'s terminator is, so it shares {@link completeTransfer} with {@link finishData} rather
+	 * than duplicating the response/reset logic.
+	 */
+	private finishBdatTransaction(oversize: boolean): void {
+		this.disarmProtocolTimer();
+		this.completeTransfer(oversize, this.bdatTracker?.contentByteLength ?? 0, 'BDAT');
+	}
+
+	/**
+	 * Shared end of a mail transaction's body transfer, reached either from `DATA`'s terminator
+	 * ({@link finishData}) or from `BDAT ... LAST` ({@link finishBdatTransaction}) -- kept as one
+	 * method precisely so `JR-4-06` has a single call site to change, not two.
+	 *
+	 * **Always answers `451 4.3.0` in this task, never `250`, for either path** -- this is the
+	 * Product Owner's explicit instruction, not an oversight: `JournalAcceptance.accept()`
+	 * (`packages/journaling`, `JR-3-04`) is wired into this server in `JR-4-06`, and until that
+	 * wiring exists nothing durable has happened to either path's bytes -- no spool write, no
+	 * ledger append. Answering anything but a `4xx` here (skill section 1: "`250 OK` is a
+	 * promise... never issue it before that is true") would be exactly the failure mode this
+	 * entire project exists to prevent, and the fact that this is "only an intermediate
+	 * development state" does not excuse it -- a sender cannot tell an intermediate `250` from a
+	 * real one, and a real one is a promise this file cannot back yet. When `JR-4-06` wires the
+	 * real path, the oversize branch is unaffected and the non-oversize branch is replaced with a
+	 * call into `JournalAcceptance.accept()`, fed by this connection's
+	 * `remoteIp`/`ehloName`/`mailFrom`/`rcptTo` and a bridge from whichever of
+	 * `DataScanner`/`BdatContentTracker` produced `contentByteLength` to the
+	 * `AsyncIterable<Uint8Array>` `accept()` expects.
+	 *
+	 * A non-`LAST` `BDAT` chunk's own `250` (written directly in {@link handleBdatCommand}/
+	 * {@link handleBdatChunkBytes}, never through this method) is a **different, weaker** promise
+	 * than the one this method's `451`/future `250` makes: RFC 3030 section 2 requires a `250` per
+	 * successful chunk ("A 250 response MUST be sent to each successful BDAT data block"), but that
+	 * is flow control -- "I read that chunk" -- not the durable-acceptance signal a sender relies on
+	 * to stop retrying. That signal is exclusively this method's, exactly once per transaction,
+	 * for both paths alike.
+	 */
+	private completeTransfer(
+		oversize: boolean,
+		contentByteLength: number,
+		transferMode: 'DATA' | 'BDAT'
+	): void {
 		if (oversize) {
 			this.logger.error(
 				{
 					remoteAddress: this.socket.remoteAddress,
 					sizeLimitBytes: this.smtp.sizeLimitBytes,
+					transferMode,
 				},
-				'smtp-ingress: rejecting DATA, message exceeds configured SIZE limit'
+				'smtp-ingress: rejecting message, exceeds configured SIZE limit'
 			);
 			this.writeResponse(552, '5.3.4', 'Message size exceeds fixed maximum message size');
 		} else {
@@ -491,9 +787,10 @@ class SmtpConnection {
 				{
 					remoteAddress: this.socket.remoteAddress,
 					ehloName: this.ehloName,
-					contentByteLength: this.dataScanner?.contentByteLength ?? 0,
+					contentByteLength,
+					transferMode,
 				},
-				'smtp-ingress: DATA received; acceptance path not yet wired'
+				'smtp-ingress: message received; acceptance path not yet wired'
 			);
 			this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
 		}
@@ -502,10 +799,17 @@ class SmtpConnection {
 		this.armCommandTimer();
 	}
 
+	/** Clears the envelope **and** any in-progress chunking state -- RFC 3030's requirement that
+	 * `RSET` mid-`BDAT` "clears all segments sent during that transaction" falls out of this being
+	 * the one reset path every command that starts a fresh envelope (`EHLO`/`HELO`/`RSET`) already
+	 * called, plus the two body-transfer completions above. */
 	private resetEnvelope(): void {
 		this.mailFrom = null;
 		this.rcptTo = [];
 		this.dataScanner = null;
+		this.bdatTracker = null;
+		this.bdatChunkRemaining = null;
+		this.bdatChunkIsLast = false;
 	}
 
 	private disarmProtocolTimer(): void {
