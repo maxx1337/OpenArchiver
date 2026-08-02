@@ -1,31 +1,32 @@
 import { z } from 'zod';
 import { spoolConfigSchema } from '../spool/config';
+import { smtpServerConfigSchema } from './smtp-config';
 
 /**
- * `apps/smtp-ingress` process configuration (`JR-4-01`), validated with `zod` per CLAUDE.md
- * section 5.6 and following the shape of `../spool/config.ts` (`JR-3-01`), which this schema
- * embeds rather than duplicates.
+ * `apps/smtp-ingress` process configuration (`JR-4-01`, extended by `JR-4-02`), validated with
+ * `zod` per CLAUDE.md section 5.6 and following the shape of `../spool/config.ts` (`JR-3-01`),
+ * which this schema embeds rather than duplicates -- `./smtp-config.ts` (`JR-4-02`) is embedded
+ * the same way.
  *
  * ---------------------------------------------------------------------------------------------
  * Scope: only what this slice uses
  * ---------------------------------------------------------------------------------------------
- * `JR-4-01`'s acceptance criteria are about the process boundary (starts standalone, no forbidden
- * imports, a clear message on bad configuration) -- not about the SMTP protocol itself. Fields for
- * `PIPELINING`/`8BITMIME`/`SMTPUTF8`/`SIZE`/timeouts (`JR-4-02`), TLS (`JR-4-04`), ACLs (`JR-4-05`)
- * and rate limits (`JR-4-08`) are deliberately **not** here: none of them is read by anything this
- * slice builds, and adding them now would be exactly the speculative configuration the Product
- * Owner asked not to carry. They join this schema in the tasks that consume them.
+ * `JR-4-01`'s acceptance criteria were about the process boundary only (starts standalone, no
+ * forbidden imports, a clear message on bad configuration) -- not the SMTP protocol itself, so
+ * `JR-4-01` deliberately left out every field the protocol engine needs. `JR-4-02` is the task that
+ * consumes `smtp` below; TLS (`JR-4-04`), ACLs (`JR-4-05`) and rate limits (`JR-4-08`) still are
+ * not here, for the same reason `JR-4-01`'s note gave: none of them is read by anything built so
+ * far, and adding them now would be the same speculative configuration the Product Owner asked not
+ * to carry. They join this schema in the tasks that consume them.
  *
- * Two fields earn their place because this slice genuinely uses them:
- *  - `smtpPort`: the skeleton binds a bare `net.createServer()` on this port so that "the process
- *    starts and stays up" is an observable, connectable fact rather than an unverifiable claim.
- *    The real ESMTP protocol handling is `JR-4-02`.
+ * Three fields, one added by each of `JR-4-01` and `JR-4-02`:
+ *  - `smtpPort`: the port the ESMTP listener binds (`JR-4-02`'s `EsmtpServer`, replacing `JR-4-01`'s
+ *    bare `net.createServer()` placeholder).
  *  - `spool`: the process owns the spool per the privilege-separation table in
- *    `docs/dev/journaling/02-architektur.md` section 1, and this skeleton calls
- *    `ensureSpoolLayout()` at startup so the directory structure exists before anything is ever
- *    written to it -- architecture section 5 notes the startup order has to be able to
- *    accommodate the crash-recovery scan later, and creating the directories is the first step of
- *    that order.
+ *    `docs/dev/journaling/02-architektur.md` section 1; `ensureSpoolLayout()` runs at startup so the
+ *    directory structure exists before anything is ever written to it.
+ *  - `smtp` (`JR-4-02`): `EsmtpServerOptions.smtp` -- hostname, `SIZE` limit, and the three
+ *    timeouts. See `./smtp-config.ts` for every field and its default.
  *
  * ---------------------------------------------------------------------------------------------
  * Why this package validates the shaped object, not `process.env` (`JR-4-01`)
@@ -41,7 +42,20 @@ export const ingressConfigSchema = z.object({
 	smtpPort: z.coerce.number().int().min(1, 'smtpPort must be between 1 and 65535').max(65535),
 	/** Spool configuration this process owns (`../spool/config.ts`, `JR-3-01`). */
 	spool: spoolConfigSchema,
-	/** Log verbosity. Optional -- a missing value is not a configuration error. */
+	/**
+	 * ESMTP protocol engine configuration (`./smtp-config.ts`, `JR-4-02`): hostname, `SIZE` limit,
+	 * connection/command/data timeouts. Required as a key -- the same shape `spool` above already
+	 * has -- but every field inside is itself optional and defaults on its own, so `{}` (or, per
+	 * `config-from-env.ts`, an object of all-`undefined` leaves) is a valid value.
+	 */
+	smtp: smtpServerConfigSchema,
+	/**
+	 * Log verbosity. Optional -- a missing value is not a configuration error. Read for real since
+	 * `JR-4-02`: `apps/smtp-ingress/src/index.ts` builds a `pino` instance with `level: logLevel`
+	 * and injects it into `EsmtpServer` as `logger` (`../ingress/smtp-server.ts`'s "Where `logLevel`
+	 * actually gets used" section explains why the field itself still lives here rather than in
+	 * `smtp-config.ts`: it configures the logger, not the protocol engine).
+	 */
 	logLevel: z
 		.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
 		.optional()

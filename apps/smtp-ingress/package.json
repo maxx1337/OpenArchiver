@@ -10,7 +10,8 @@
 	},
 	"dependencies": {
 		"@open-archiver/journaling": "workspace:*",
-		"dotenv": "^17.2.0"
+		"dotenv": "^17.2.0",
+		"pino": "^9.7.0"
 	},
 	"devDependencies": {
 		"@types/node": "^24.0.13",

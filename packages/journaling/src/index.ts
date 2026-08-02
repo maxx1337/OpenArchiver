@@ -120,3 +120,26 @@ export {
 	parseIngressConfig,
 	type IngressConfig,
 } from './ingress/config';
+
+export {
+	DEFAULT_COMMAND_TIMEOUT_MS,
+	DEFAULT_CONNECTION_TIMEOUT_MS,
+	DEFAULT_DATA_TIMEOUT_MS,
+	DEFAULT_SMTP_HOSTNAME,
+	DEFAULT_SMTP_SIZE_LIMIT_BYTES,
+	smtpServerConfigSchema,
+	type SmtpServerConfig,
+} from './ingress/smtp-config';
+
+export {
+	buildEhloResponseLines,
+	DataScanner,
+	EsmtpServer,
+	formatMultilineResponse,
+	noopIngressLogger,
+	parseMailFromArguments,
+	parseRcptToArguments,
+	type EsmtpServerOptions,
+	type IngressLogger,
+	type ParsedMailFrom,
+} from './ingress/smtp-server';

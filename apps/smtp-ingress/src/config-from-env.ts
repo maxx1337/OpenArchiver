@@ -22,6 +22,16 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 			rootPath: env.SMTP_INGRESS_SPOOL_ROOT_PATH,
 			highWaterBytes: env.SMTP_INGRESS_SPOOL_HIGH_WATER_BYTES,
 		},
+		// JR-4-02: every field here is optional in the zod schema (smtp-config.ts) and defaults on
+		// its own, so an entirely unset env var must map to `undefined`, not to a string like "undefined"
+		// -- `env.SMTP_INGRESS_HOSTNAME` is already `undefined` when unset, passed through as-is.
+		smtp: {
+			hostname: env.SMTP_INGRESS_HOSTNAME,
+			sizeLimitBytes: env.SMTP_INGRESS_SIZE_LIMIT_BYTES,
+			connectionTimeoutMs: env.SMTP_INGRESS_CONNECTION_TIMEOUT_MS,
+			commandTimeoutMs: env.SMTP_INGRESS_COMMAND_TIMEOUT_MS,
+			dataTimeoutMs: env.SMTP_INGRESS_DATA_TIMEOUT_MS,
+		},
 		logLevel: env.SMTP_INGRESS_LOG_LEVEL,
 	};
 }

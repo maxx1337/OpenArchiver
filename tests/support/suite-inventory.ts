@@ -120,7 +120,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/ingress-process-boot.test.ts (the compiled process spawned for real: exits 1
 		// with a readable message and no configuration, starts and accepts a connection on its
 		// configured port with one).
-		expectedFiles: 26,
+		// 29 after JR-4-02 added ingress/smtp-config.test.ts (the ESMTP engine's own config schema),
+		// ingress/smtp-server.test.ts (pure EHLO/multiline/MAIL-RCPT-parsing/DataScanner logic), and
+		// tests/unit/smtp-server-protocol.test.ts (the protocol proven over a real loopback socket --
+		// same "unit despite a real socket" classification `ingress-process-boot.test.ts` established
+		// one task earlier, see that file's own doc comment for the precedent this one follows).
+		expectedFiles: 29,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -158,7 +163,24 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/ingress-process-boot.test.ts (the compiled process exits 1 with a readable
 		// message and never binds a port without configuration; with valid configuration it creates
 		// the spool layout, accepts a connection on its configured port, and stays up until stopped).
-		expectedTests: { ci: 393, nightly: 1, manual: 0 },
+		// 452 ci after JR-4-02: +3 in ingress/config.test.ts (the smtp key now embeds
+		// smtp-config.ts's schema: defaults every field when smtp is {}, an explicit override is
+		// embedded rather than replacing every field's default, and the smtp key missing entirely is
+		// rejected -- 15 -> 18) + 13 in ingress/smtp-config.test.ts (the three named-constant checks,
+		// defaults on an empty object, a fully overridden configuration, env-var-shaped string
+		// coercion, and one rejection per non-positive/non-integer numeric field plus the empty
+		// hostname) + 28 in ingress/smtp-server.test.ts (buildEhloResponseLines x4,
+		// formatMultilineResponse x3, parseMailFromArguments x7, parseRcptToArguments x3, DataScanner
+		// x11: empty message, single line, dot-unstuffing, terminator-vs-dot-stuffed-line
+		// disambiguation, the terminator split across chunks, content split mid-line across chunks,
+		// exactly-at-limit, one-byte-over, a CRLF-less pathological line, and chunks arriving after
+		// the scanner already finished) + 16 in tests/unit/smtp-server-protocol.test.ts (the 220
+		// greeting, EHLO's default SIZE, EHLO's non-default configured SIZE, HELO's single-line
+		// extension-free reply, PIPELINING proven with two commands in one packet, an 8BITMIME/SMTPUTF8
+		// UTF-8 address, MAIL/RCPT/DATA out-of-sequence x3, an unrecognized command, MAIL FROM's SIZE=
+		// parameter rejected before DATA, QUIT, end-of-DATA always 451 4.3.0 never 250, and the three
+		// timeouts -- connection/command/data -- each observed as a 421 4.4.2 plus a closed socket).
+		expectedTests: { ci: 452, nightly: 1, manual: 0 },
 	},
 	{
 		name: 'integration',

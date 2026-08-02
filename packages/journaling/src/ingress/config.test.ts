@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import { formatIngressConfigError, parseIngressConfig } from './config';
+import { DEFAULT_SMTP_SIZE_LIMIT_BYTES } from './smtp-config';
 
 /**
  * `JR-4-01` -- the `apps/smtp-ingress` process configuration schema.
@@ -22,6 +23,10 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 				rootPath: '/var/lib/open-archiver/spool',
 				highWaterBytes: '10000000000',
 			},
+			// JR-4-02: `smtp` is a required key (like `spool` above), but every field inside it is
+			// itself optional and defaults on its own -- `{}` is exactly what
+			// `config-from-env.ts` produces when none of the SMTP_INGRESS_* smtp env vars are set.
+			smtp: {},
 		};
 
 		it('accepts a fully specified, valid configuration', () => {
@@ -39,6 +44,27 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 		it('accepts an explicit logLevel', () => {
 			const config = parseIngressConfig({ ...validInput, logLevel: 'debug' });
 			expect(config.logLevel).toBe('debug');
+		});
+
+		it('defaults every field of smtp (JR-4-02) when smtp is an empty object', () => {
+			const config = parseIngressConfig(validInput);
+			expect(config.smtp.sizeLimitBytes).toBe(DEFAULT_SMTP_SIZE_LIMIT_BYTES);
+		});
+
+		it('embeds an explicit smtp override rather than replacing it with defaults', () => {
+			const config = parseIngressConfig({
+				...validInput,
+				smtp: { sizeLimitBytes: 1_000_000 },
+			});
+			expect(config.smtp.sizeLimitBytes).toBe(1_000_000);
+			// Fields not overridden inside `smtp` still default on their own -- the embedding does not
+			// require the caller to specify every field once any one of them is given.
+			expect(config.smtp.hostname).toBeTruthy();
+		});
+
+		it('rejects a configuration with the smtp key missing entirely', () => {
+			const { smtp: _smtp, ...rest } = validInput;
+			expect(() => parseIngressConfig(rest)).toThrow();
 		});
 
 		it('rejects a missing smtpPort', () => {
