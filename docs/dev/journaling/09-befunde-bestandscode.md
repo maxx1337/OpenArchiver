@@ -1907,8 +1907,26 @@ sie wurden rot, weil die eingefügte Operation **scheiterte** und der umgebende 
 einer **gelingenden** Operation trennt beides. Wer ein Netz per Mutation prüft, muss die Mutation so
 wählen, dass sie **nur** über das Netz auffallen kann.
 
-**Behebung (nicht angewandt):** `timelineFileSystem()` auf alle sieben Operationen erweitern oder
-`FakeSpoolFileSystem` um `renameLog`/`statLog`/`readdirLog` ergänzen und diese nach dem Append leer
-prüfen; dazu den Dokukommentar in `acceptance.ts` auf das zurücknehmen, was das Netz trägt.
-**Blockiert die Abnahme von E3 nicht** — der Prüfer hat es ausdrücklich so eingeordnet, der PO folgt
-ihm.
+**Behoben am 2026-08-02 (`fe5b410`), vor dem Rückmerge.** `timelineFileSystem()` erfasst jetzt
+**alle neun** Operationen auf derselben Zeitachse — die bestehende Zusicherung „nach dem letzten
+`ledger-append` folgt nichts“ greift damit automatisch für alle, ohne eine zweite Buchführung in
+`FakeSpoolFileSystem` einzuführen. Dokukommentar in `acceptance.ts` auf das zurückgenommen, was das
+Netz trägt. Nachweis über drei Proben mit **gelingender** Operation (`stat`, `rename`, `readdir`),
+jede meldet `expected 'fs:<op>' to be 'ledger-append'` — also rot, **weil beobachtet**. Vom PO mit
+`stat(durable.filePath)` unabhängig nachgestellt: zwei Zusicherungen rot, und der
+`ledger-append-failed`-Test bleibt **grün**, was belegt, dass nichts geworfen hat.
+
+### Nachtrag: warum der PO das Loch dreimal übersehen hat
+
+Der Absatz oben schrieb, seine beiden früheren Proben seien „rot geworden, weil die eingefügte
+Operation **scheiterte**“. Das war die halbe Wahrheit. **Sie sind nie ausgeführt worden:** der PO
+schrieb `written.filePath`, die Variable heißt im Code aber `durable`. Jede seiner Proben starb an
+einem `ReferenceError` — **vor** dem beabsichtigten Dateisystemaufruf —, wurde vom umgebenden `catch`
+als `'ledger-append-failed'` gemeldet und sah damit exakt so aus wie eine Probe, die etwas bewiesen
+hat.
+
+**Die Regel daraus ist schärfer als ‚wähle eine gelingende Mutation‘:** eine Mutationsprobe muss
+belegen, dass sie **das getan hat, was sie tun sollte**. Rot allein ist kein Beleg — die
+Fehlermeldung muss die erwartete Zusicherung nennen. `expected 'fs:stat' to be 'ledger-append'`
+beweist etwas; `expected { kind: 'ledger-append-failed' } to deeply equal { kind: 'accepted' }`
+beweist nur, dass irgendwo etwas geworfen hat, und verrät nicht, was.
