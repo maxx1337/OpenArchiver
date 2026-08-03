@@ -1757,6 +1757,55 @@ Quelltext geprüft, der PO hat es unabhängig wiederholt:
 Eine Registry-Suche nach `bdat` liefert zwei Treffer, beide ohne Bezug zu SMTP. **Es gibt in Node
 keinen SMTP-Server mit `BDAT`.**
 
+### Nachtrag 2026-08-03: die Prämisse ist richtig, ihre Begründung im RFC war es nicht
+
+**Der Auftraggeber hat die Entscheidung angezweifelt** — ob eine fertige Bibliothek (`smtp-server`)
+nicht den Aufwand erheblich senken würde. Die Rückfrage war berechtigt und hat die ADR verbessert,
+denn die Begründung, auf der sie stand, hielt der Prüfung **nicht** stand.
+
+`00-rfc.md:127` sagt: „**`CHUNKING` / `BDAT`** — Exchange Online uses BDAT. Not optional." Der erste
+Halbsatz begründet den zweiten nicht. **RFC 3030 verlangt das Gegenteil:** ein Server, der `BDAT`
+anbietet, **muss** `DATA` weiter unterstützen, und ein Client darf `DATA` benutzen. Kündigt ein
+Empfänger `CHUNKING` nicht an, fällt jeder normkonforme Sender auf `DATA` zurück — genau deshalb
+liefert Exchange Online an die Mehrheit der Mailserver im Internet aus, die `CHUNKING` nicht
+anbieten. „Exchange benutzt BDAT" ist damit **kein** Argument für Unverzichtbarkeit.
+
+**Unverzichtbar ist es aus einem anderen Grund, und der trägt:** Microsoft 365 **entfernt seit
+einigen Jahren keine „bare line feeds" mehr** aus Nachrichten — früher tat es das, um an ältere
+Empfänger ausliefern zu können, und hat damit aufgehört, weil das Signaturen (DKIM) zerstört. Eine
+Nachricht mit einem `LF` ohne vorangehendes `CR` **ist über `DATA` nicht übertragbar**: `DATA` ist
+zeilenorientiert und endet auf `<CRLF>.<CRLF>`. Microsoft schreibt dazu ausdrücklich, dass für solche
+Nachrichten `CHUNKING` erforderlich ist und ein Ziel ohne `BDAT` sie **nicht annehmen kann**; der
+Sendeversuch endet in `barelinefeedsareillegal`.
+
+**Für dieses Produkt ist das die schlimmste denkbare Lückenart.** Ein Journal-Report, dessen
+Originalnachricht ein Bare-LF enthält, käme nie an — und ob er eines enthält, hängt an der
+Byte-Zusammensetzung der archivierten Mail, nicht an einer Einstellung. Die Lücke wäre also
+**unsystematisch und unauffällig**, in einem System, dessen einziger Zweck **beweisbare
+Vollständigkeit** ist. Ein Archiv, das „alles außer manchen" enthält, ist genau das, was dieses
+Projekt ersetzen soll (`README.md`, erster Abschnitt: die Pull-Ingestion ist defekt, _weil_ ihre
+Lücke nicht nachweisbar ist).
+
+**Der `00-rfc.md`-Satz bleibt unverändert** — die Datei ist byteidentisch zu halten (`.prettierignore`,
+ADR-004). Die tragende Begründung steht hier.
+
+### Was der Umstieg konkret kosten und sparen würde — gemessen, nicht geschätzt
+
+Weil die Frage wiederkommen wird, hier die Zahlen aus dem entpackten Paket (`smtp-server` 3.19.2):
+
+| Punkt                                           | Befund                                                                                                                                                                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ließe sich `handler_BDAT` „von außen" ergänzen? | Der Dispatch ist `handler = this['handler_' + commandName]` (`lib/smtp-connection.js:603`), ein Prototype-Lookup — ein Handler wäre also über einen Deep-Import in `smtp-server/lib/smtp-connection` und einen Prototype-Patch grundsätzlich anfügbar         |
+| **Aber `BDAT` ist kein Kommando-Problem**       | `lib/smtp-stream.js` (295 Zeilen) kennt **zwei** Modi: Kommandozeilen und `_dataMode` (Terminatorsuche mit Dot-Unstuffing). Ein „lies genau `n` rohe Bytes"-Modus — der, in dem `BDAT` arbeitet — **existiert nicht**. Er müsste **in** die Bibliothek hinein |
+| Was der Umstieg spart                           | `STARTTLS` (`JR-4-04`), `AUTH`/SASL (Teil von `JR-4-05`), Timeouts, Parameter-Parsing, Dot-Unstuffing — real, aber der Größenordnung nach **rund 1,5 von 16** E4-Tasks                                                                                        |
+| Was der Umstieg kostet                          | `JR-4-02`, `JR-4-03` und `JR-4-16` sind fertig, getestet und gemessen — sie wären wegzuwerfen; die Byte-Treue (Randbedingung 3) liefe künftig durch fremden Stream-Code; der `BDAT`-Eingriff läge an drei Stellen in nicht-öffentlicher API                   |
+| Unerwünschtes, das mitkommt                     | `handler_VRFY`, `handler_XCLIENT`, `handler_XFORWARD`, `handler_WIZ`, `handler_SHELL` — ADR-026 schließt die ersten drei ausdrücklich aus, weil `XCLIENT`/`XFORWARD` einer Gegenstelle erlauben, `remote_ip`/`ehlo_name` zu setzen, also gehashte Felder      |
+
+**Die Entscheidung bleibt damit bestehen**, aber ihre Begründung ist ausgetauscht: nicht „keine
+Bibliothek kann `BDAT`" allein, sondern „`BDAT` ist für Vollständigkeit unverzichtbar **und** keine
+Bibliothek kann es, und die eine, die man umbauen könnte, müsste an ihrem Bytestrom-Parser umgebaut
+werden — genau an der Stelle, an der unser Kernversprechen hängt."
+
 ### Die dritte Option, und warum sie verworfen ist
 
 Neben „Bibliothek nehmen" und „selbst bauen" gab es **`smtp-server` forken und `BDAT` nachrüsten**.
