@@ -1932,6 +1932,51 @@ Drei Auflagen daraus:
    die Messung negativ aus, ist der oben benannte Ausbaupfad zu bauen — dann mit dem vollen Preis für
    Recovery und Sperrreihenfolge.
 
+## ADR-028 — Erholung der Ledger-Anbindung: Provider statt Wert, Wiederholung bis zum ersten Erfolg
+
+**Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-06a` hat die Lücke
+selbst offengelegt und vorgelegt; Task `JR-4-19` · **Berührt:** Skill `journal-ledger` §2
+(Metadaten-DB nicht erreichbar ⇒ `451`), Architektur §5 (Scan über einen Spool, in den niemand
+schreibt), ADR-018 (Verfügbarkeit zuerst, dann fail closed)
+
+**Der Defekt.** `apps/smtp-ingress` baute seine Ledger-Anbindung **einmal**, beim Start. War die
+Datenbank in diesem Moment nicht erreichbar oder nicht migriert, blieb `journalAcceptance`
+**dauerhaft** `undefined`: der Prozess band seinen Port, sah gesund aus und antwortete jeder
+Transaktion `451`, bis ihn jemand neu startete — lange nachdem Exchange Online seine Wiederholungen
+aufgegeben und NDRs erzeugt hatte. Tabellenkonform war das; der Defekt war die fehlende Erholung.
+
+**Drei Festlegungen:**
+
+1. **`EsmtpServer` nimmt einen Provider, keinen Wert** (`journalAcceptanceProvider`), aufgelöst
+   **genau einmal je Transaktion** bei `MAIL FROM`. Ein Wert war zweifach eingefroren (Serverfeld plus
+   Kopie je Verbindung), eine nachträgliche Verdrahtung also unmöglich — auch für neue Verbindungen.
+   Die Auflösung wird für die Dauer der Transaktion festgehalten, weil dieselbe Antwort darüber
+   entscheidet, ob überhaupt eine `SpoolWriteBridge` geöffnet wird; ein Provider, der mitten in der
+   Transaktion umschaltet, ist ein Absturz oder eine Quittung ohne Spool-Datei. Der bestehende
+   Wert-Parameter bleibt und wird im Konstruktor in einen konstanten Provider gehoben — dieselbe
+   Normalisierung, die `requireTlsResolver` für `tls.requireTls` schon macht.
+2. **Wiederholt wird bis zum ersten Erfolg, danach wird der Timer abgeschaltet.** Ein späterer
+   Ausfall braucht diese Maschinerie nicht: `postgres-js` verbindet je `append()` neu, und
+   `JournalAcceptance` bildet einen fehlgeschlagenen Append bereits auf `451` ab, nie auf `250`.
+   Weiterlaufendes Polling kostete eine Verbindung je Intervall und stellte die Frage „Verdrahtung
+   wieder entfernen?", die keine gute Antwort hat.
+3. **Der Crash-Recovery-Scan läuft in jedem Versuch mit.** Zulässig, weil vor der ersten Verdrahtung
+   **kein Byte** in den Spool gelangt (ohne Acceptance keine `SpoolWriteBridge`) — genau die
+   Vorbedingung aus Architektur §5. Weil der Timer beim ersten Erfolg endet, läuft der Scan nie
+   parallel zu einer Annahme; das Scan-gegen-Annahme-Rennen, das `crash-recovery-lock.ts`
+   ausdrücklich **nicht** löst, bleibt unerreichbar. Die Gegenvariante (nur beim Boot scannen) ließe
+   den Spool einer abgestürzten Installation genau dann unabgeglichen, wenn die Datenbank beim
+   Neustart weg war — F40s Kapazitätsproblem.
+
+**Was sich nicht ändert, und das ist der Kern:** bis zum ersten Erfolg antwortet **jede**
+`DATA`/`BDAT … LAST` mit `451 4.3.0` und **nie** `250`. Es wird nichts quittiert, was keinen
+Ledger-Eintrag hat. Ein werfender Provider fällt defensiv auf `451` zurück statt den Prozess
+mitzunehmen (er läuft im `data`-Handler des Sockets).
+
+**Nicht geschlossen:** eine Bereitschaftssonde, die „nicht konfiguriert" von „konfiguriert, aber noch
+nicht verdrahtet" unterscheidbar macht (`ledger-config.ts` fragt danach). `JournalAcceptanceBootstrap`
+hat mit `isWired()` die Antwort, aber es gibt keinen Endpunkt, der sie ausliefert — Sache von E10.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill

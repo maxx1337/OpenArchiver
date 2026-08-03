@@ -30,6 +30,9 @@ import { z } from 'zod';
  * distinction between "not configured" and "configured but failed" (e.g. a readiness probe), which
  * this schema does not attempt to provide.
  */
+/** See `retryIntervalMs`'s doc comment for why 30 s. */
+export const DEFAULT_LEDGER_RETRY_INTERVAL_MS = 30_000;
+
 export const ledgerConfigSchema = z.object({
 	/** Postgres connection string this process uses for `PostgresLedgerWriter` (`JR-2-06`). No
 	 * default and no privilege-separation requirement enforced yet -- ADR-002's dedicated
@@ -41,6 +44,22 @@ export const ledgerConfigSchema = z.object({
 		.string()
 		.min(1, 'ledger.databaseUrl must be a non-empty Postgres connection string when set')
 		.optional(),
+	/**
+	 * How long `JournalAcceptanceBootstrap` waits between attempts to build the acceptance port
+	 * while it is not yet wired (`JR-4-19`). Only ever used before the first success -- see that
+	 * class's doc comment for why the retry loop stops afterwards.
+	 *
+	 * 30 s by default: long enough that a database outage does not produce a connection attempt per
+	 * second across however many replicas an operator runs, short enough that a receiver which
+	 * started during a brief outage becomes able to accept mail well inside Exchange Online's retry
+	 * window rather than after it has given up and generated NDRs.
+	 */
+	retryIntervalMs: z.coerce
+		.number()
+		.int()
+		.positive('ledger.retryIntervalMs must be a positive integer number of milliseconds')
+		.optional()
+		.default(DEFAULT_LEDGER_RETRY_INTERVAL_MS),
 });
 
 export type LedgerConfig = z.infer<typeof ledgerConfigSchema>;

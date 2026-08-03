@@ -8,6 +8,7 @@ import {
 	EsmtpServer,
 	formatIngressConfigError,
 	JournalAcceptance,
+	JournalAcceptanceBootstrap,
 	NodeSpoolFileSystem,
 	parseIngressConfig,
 	PerSourceConnectionLimiter,
@@ -84,18 +85,27 @@ import { postgresTransactor } from './postgres-transactor';
  *
  * **Unconfigured or unreachable at boot is not fatal to the process.** `ledger.databaseUrl` is
  * optional (`ledger-config.ts`'s own doc comment argues why that is safe, unlike `sourceAcl`'s
- * required one): with it unset, `journalAcceptance` stays `undefined` and this process behaves
- * exactly as it did before this task. With it set but the database unreachable (or
- * `deployment_identity` unexpectedly empty) at the one startup-time query this needs
- * (`PostgresLedgerWriter`'s own doc comment: the deployment id is read once, not per append), this
- * process logs the failure loudly and falls back to the same `undefined` rather than refusing to
- * bind the SMTP port at all -- deliberately narrower tolerance than `SourceAclCache`'s
- * available-first-then-fail-closed design (which keeps *retrying* in the background), because
- * building an equivalent retry/promotion path for the ledger is more than this task's "wire
- * `accept()` in" scope. Flagged for the Product Owner: a deployment that means to accept mail
- * durably but has a typo'd or briefly-down ledger database at the moment this process starts will
- * not crash-loop -- it will bind the port and answer every transaction `451` until the *next*
- * restart, which is a real, current limitation rather than an oversight.
+ * required one): with it unset, no acceptance is ever wired and this process behaves exactly as it
+ * did before `JR-4-06a`. With it set but the database unreachable (or `deployment_identity`
+ * unexpectedly empty) at the query this needs (`PostgresLedgerWriter`'s own doc comment: the
+ * deployment id is read once, not per append), this process logs the failure loudly and binds the
+ * SMTP port anyway, answering every transaction `451` -- rather than refusing to start.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * That start-time failure is no longer permanent (`JR-4-19`)
+ * ---------------------------------------------------------------------------------------------
+ * Until `JR-4-19` it was: the acceptance port was built once, and a database that was down for those
+ * few seconds left this process answering `451` **forever**, looking healthy the whole time, until an
+ * operator noticed and restarted it -- long after Exchange Online had given up retrying and started
+ * generating NDRs. `JournalAcceptanceBootstrap` (`@open-archiver/journaling`) closes that: it keeps
+ * retrying `buildJournalAcceptance()` on a timer (`ledger.retryIntervalMs`, 30 s by default) until it
+ * succeeds, logs the transition exactly once, and then stops -- and `EsmtpServer` takes a
+ * **provider** rather than a value, so the promotion reaches connections that are already open,
+ * without a restart and without dropping anyone. What has *not* changed, deliberately: until that
+ * first success every `DATA`/`BDAT ... LAST` answers `451 4.3.0` and never `250`, so nothing is ever
+ * acknowledged without a ledger entry. See that class's doc comment for why the retry loop stops after
+ * the first success (a later outage is already handled by `accept()` mapping a failing append to
+ * `451`) and why re-running the crash-recovery scan on each attempt is safe.
  *
  * ---------------------------------------------------------------------------------------------
  * The crash-recovery scan runs here, before the port ever binds (`JR-4-18`)
@@ -153,79 +163,66 @@ function pinoAlertSink(logger: import('pino').Logger): QuarantineAlertSink {
 }
 
 /**
- * Build the durable-acceptance dependency `EsmtpServer` needs (`JR-4-06a`). Returns `undefined`
- * whenever `journalAcceptance` should stay unwired -- either `ledger.databaseUrl` was never
- * configured, or it was configured but the one startup-time query this needs failed. See this
- * file's module doc comment, "`250` becomes possible", for why the second case is a logged failure
- * rather than a startup crash.
+ * Build the durable-acceptance dependency `EsmtpServer` needs (`JR-4-06a`), or **throw**
+ * (`JR-4-19`).
  *
- * The returned `ledgerSql`, when non-`null`, is this function's caller's responsibility to close on
- * shutdown -- this function only opens it, it never closes anything itself, so a caller that decides
- * not to use the connection (the failure path below) still owns cleanup.
+ * Throwing rather than returning `undefined` is the whole point of the `JR-4-19` change: this is now
+ * `JournalAcceptanceBootstrap`'s `build` callback, and that class is what decides what a failure
+ * means -- log it, keep answering `451`, and try again on a timer until it succeeds. Before
+ * `JR-4-19` this function swallowed its own failure and returned `undefined`, which made the failure
+ * permanent for the life of the process.
+ *
+ * `ledgerSql` is passed **in**, and deliberately reused across every attempt: `postgres-js`
+ * reconnects on its own, so a retry needs no new client, and the caller keeps sole responsibility for
+ * closing it on shutdown.
  */
 async function buildJournalAcceptance(
 	config: ReturnType<typeof parseIngressConfig>,
-	logger: import('pino').Logger
-): Promise<{
-	journalAcceptance: JournalAcceptancePort | undefined;
-	ledgerSql: postgres.Sql | null;
-}> {
-	if (config.ledger.databaseUrl === undefined) {
-		return { journalAcceptance: undefined, ledgerSql: null };
+	logger: import('pino').Logger,
+	ledgerSql: postgres.Sql
+): Promise<JournalAcceptancePort> {
+	// Read once per attempt, never per append -- PostgresLedgerWriterOptions.deploymentId's own doc
+	// comment. A bare, unpatched client (F38) -- see ./postgres-transactor.ts's doc comment.
+	const rows = await ledgerSql<{ deployment_id: string }[]>`
+		select deployment_id from deployment_identity
+	`;
+	const deploymentId = rows[0]?.deployment_id;
+	if (deploymentId === undefined) {
+		throw new Error('deployment_identity has no row -- has this database been migrated?');
 	}
 
-	const ledgerSql = postgres(config.ledger.databaseUrl, { onnotice: () => {} });
-	try {
-		// Read once, at startup, never per append -- PostgresLedgerWriterOptions.deploymentId's own
-		// doc comment. A bare, unpatched client (F38) -- see ./postgres-transactor.ts's doc comment.
-		const rows = await ledgerSql<{ deployment_id: string }[]>`
-			select deployment_id from deployment_identity
-		`;
-		const deploymentId = rows[0]?.deployment_id;
-		if (deploymentId === undefined) {
-			throw new Error('deployment_identity has no row -- has this database been migrated?');
-		}
+	const transactor = postgresTransactor(ledgerSql);
 
-		const transactor = postgresTransactor(ledgerSql);
+	// JR-4-18: reconcile the spool against the ledger before this process ever binds its port --
+	// see this file's module doc comment, "The crash-recovery scan runs here", and
+	// crash-recovery-lock.ts's own doc comment for the exclusivity this holds across processes.
+	// JR-4-19: this re-runs on every retry, which is safe for as long as acceptance is unwired --
+	// see JournalAcceptanceBootstrap's doc comment, "The crash-recovery scan runs inside every
+	// attempt".
+	const scanResult = await runExclusiveCrashRecoveryScan({
+		fs: new NodeSpoolFileSystem(),
+		ledgerLookup: new PostgresLedgerLookup(createLedgerQuery(ledgerSql)),
+		spoolRoot: config.spool.rootPath,
+		alertSink: pinoAlertSink(logger),
+		transactor,
+	});
+	logger.info(
+		{
+			incomingFilesScanned: scanResult.incomingFilesScanned,
+			requeued: scanResult.requeue.length,
+			quarantined: scanResult.quarantined.length,
+			preexistingQuarantineFiles: scanResult.preexistingQuarantineFiles,
+		},
+		'smtp-ingress: crash-recovery scan complete'
+	);
 
-		// JR-4-18: reconcile the spool against the ledger before this process ever binds its port --
-		// see this file's module doc comment, "The crash-recovery scan runs here", for why this sits
-		// inside the same try/catch as the deployment-identity read above, and
-		// crash-recovery-lock.ts's own doc comment for the exclusivity this holds across processes.
-		const scanResult = await runExclusiveCrashRecoveryScan({
-			fs: new NodeSpoolFileSystem(),
-			ledgerLookup: new PostgresLedgerLookup(createLedgerQuery(ledgerSql)),
-			spoolRoot: config.spool.rootPath,
-			alertSink: pinoAlertSink(logger),
-			transactor,
-		});
-		logger.info(
-			{
-				incomingFilesScanned: scanResult.incomingFilesScanned,
-				requeued: scanResult.requeue.length,
-				quarantined: scanResult.quarantined.length,
-				preexistingQuarantineFiles: scanResult.preexistingQuarantineFiles,
-			},
-			'smtp-ingress: crash-recovery scan complete'
-		);
-
-		const backend = new PostgresLedgerWriter({ deploymentId, transactor });
-		const journalAcceptance = new JournalAcceptance({
-			fs: new NodeSpoolFileSystem(),
-			backend,
-			spoolConfig: config.spool,
-			alertSink: pinoAlertSink(logger),
-		});
-		return { journalAcceptance, ledgerSql };
-	} catch (err) {
-		logger.error(
-			{ err },
-			'smtp-ingress: could not initialize the ledger database connection, or the crash-recovery ' +
-				'scan failed, at startup -- accepting connections, but every transaction will answer ' +
-				'451 (acceptance not wired) until this is fixed and the process is restarted'
-		);
-		return { journalAcceptance: undefined, ledgerSql };
-	}
+	const backend = new PostgresLedgerWriter({ deploymentId, transactor });
+	return new JournalAcceptance({
+		fs: new NodeSpoolFileSystem(),
+		backend,
+		spoolConfig: config.spool,
+		alertSink: pinoAlertSink(logger),
+	});
 }
 
 async function main(): Promise<void> {
@@ -255,9 +252,28 @@ async function main(): Promise<void> {
 	// "unavailable" anyway, but there is no reason to accept a connection just to reject it).
 	await sourceAclCache.start();
 
-	// JR-4-06a: see this file's module doc comment, "`250` becomes possible", for what an
-	// `undefined` result here means and why it is not a startup failure.
-	const { journalAcceptance, ledgerSql } = await buildJournalAcceptance(config, logger);
+	// JR-4-06a/JR-4-19: with no ledger database configured there is nothing to wait for, so no
+	// bootstrap is started at all and the provider stays permanently `undefined` (every transaction
+	// answers 451, exactly as before). With one configured, the bootstrap owns the retry loop -- see
+	// this file's module doc comment, "`250` becomes possible", and
+	// `JournalAcceptanceBootstrap`'s own.
+	const ledgerSql =
+		config.ledger.databaseUrl === undefined
+			? null
+			: postgres(config.ledger.databaseUrl, { onnotice: () => {} });
+	const acceptanceBootstrap =
+		ledgerSql === null
+			? undefined
+			: new JournalAcceptanceBootstrap({
+					build: () => buildJournalAcceptance(config, logger, ledgerSql),
+					retryIntervalMs: config.ledger.retryIntervalMs,
+					logger,
+				});
+	// Awaited before `listen()` below, not alongside it: on the success path the crash-recovery scan
+	// inside `build` has to finish before the port accepts anything (`JR-4-18`, and the ordering proof
+	// F49 rebuilt measures exactly that). On the failure path this resolves too -- the process binds
+	// and answers 451 while the bootstrap keeps trying in the background.
+	await acceptanceBootstrap?.start();
 
 	// JR-4-08: one limiter instance each, process-lifetime, shared by every connection --
 	// per-source bookkeeping lives inside them (see @open-archiver/journaling's
@@ -290,7 +306,11 @@ async function main(): Promise<void> {
 			sourceAclCache,
 			config.tls.requireTls
 		),
-		journalAcceptance,
+		// JR-4-19: a provider, not a value -- so acceptance that only becomes available after this
+		// server is listening still takes effect, on connections that are already open, without a
+		// restart. Resolved once per transaction at `MAIL FROM`; see `JournalAcceptanceProvider`'s doc
+		// comment in @open-archiver/journaling's smtp-server.ts.
+		journalAcceptanceProvider: acceptanceBootstrap?.provider(),
 		// JR-4-08: both keyed by the same connect-time source ACL match `sourceAclEvaluator` above
 		// already provides -- see connection-rate-limiter.ts's doc comment for why that makes both
 		// gates unreachable for a source the ACL itself has not admitted.
@@ -311,6 +331,10 @@ async function main(): Promise<void> {
 		shuttingDown = true;
 		console.log(`smtp-ingress: received ${signal}, shutting down`);
 		sourceAclCache.stop();
+		// JR-4-19: stop the retry timer too. It is `unref()`'d, so it would not hold the loop open,
+		// but a retry firing during the drain would open a database transaction and take the
+		// crash-recovery advisory lock while connections are being closed.
+		acceptanceBootstrap?.stop();
 		const closeConnections = (): Promise<void> =>
 			Promise.all([
 				sourceAclSql.end({ timeout: 5 }),

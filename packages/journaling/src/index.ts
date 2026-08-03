@@ -158,6 +158,7 @@ export {
 	type EsmtpServerOptions,
 	type IngressLogger,
 	type JournalAcceptancePort,
+	type JournalAcceptanceProvider,
 	type ParsedAuthCommand,
 	type ParsedMailFrom,
 	type PasswordVerifier,
@@ -171,6 +172,11 @@ export {
 } from './ingress/smtp-server';
 
 export { SpoolWriteBridge, type SpoolWriteBridgeCallbacks } from './ingress/spool-write-bridge';
+
+export {
+	JournalAcceptanceBootstrap,
+	type JournalAcceptanceBootstrapOptions,
+} from './ingress/journal-acceptance-bootstrap';
 
 export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
 

@@ -85,9 +85,9 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 16 von 20 Tasks, nicht abgenommen) · **Branch:**
-`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **950 Tests** bei 77
-Dateien — `unit ci 797 · integration ci 116 · adversarial ci 37`, **in der CI bestätigt**: Lauf
+**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 17 von 20 Tasks, nicht abgenommen) · **Branch:**
+`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **966 Tests** bei 80
+Dateien — `unit ci 811 · integration ci 118 · adversarial ci 37`, **in der CI bestätigt**: Lauf
 `30830897752` auf `1bea369` **success** (`JR-4-09`), davor `30827457559` auf `670b65f` (F49)
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
@@ -98,8 +98,9 @@ Dateien — `unit ci 797 · integration ci 116 · adversarial ci 37`, **in der C
 `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`, `STARTTLS` und `AUTH`, prüft Quell- und Empfänger-ACL gegen
 `journaling_sources`, fährt beim Start den Crash-Recovery-Scan, und antwortet auf das Ende von `DATA`
 bzw. `BDAT … LAST` mit **`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append
-durch sind. Offen sind noch der M365-Range-Helper, die Ledger-Erholung nach Startfehler, die vier
-TEST-Scheiben und die Abnahme.
+durch sind. Seit `JR-4-19` übersteht er auch einen Start ohne erreichbare Ledger-Datenbank: er
+antwortet `451`, holt die Verdrahtung im Hintergrund nach und nimmt danach **ohne Neustart** an.
+**Offen sind nur noch die fünf TEST-Scheiben und die Abnahme.**
 
 ### Was diese Session gemacht hat
 
@@ -329,18 +330,17 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — die letzten vier E4-Scheiben, dann die Abnahme
+### Nächster konkreter Schritt — die letzten drei TEST-Scheiben, dann die Abnahme
 
-**E4 steht bei 16 von 20.** Erledigt: `JR-4-01`…`JR-4-09` und `JR-4-16`…`JR-4-20`, dazu **F49
-behoben**. Reihenfolge des Rests:
+**E4 steht bei 17 von 20.** Erledigt: `JR-4-01`…`JR-4-09` und `JR-4-16`…`JR-4-20`, dazu **F49
+behoben** und **ADR-028**. Offen sind nur noch TEST-Scheiben und die Abnahme:
 
-| Als Nächstes         | Was                                                                                       | Warum hier                                                                         |
-| -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `JR-4-19`            | Ledger-Verbindung erholt sich nach einem gescheiterten Start nicht                        | Betriebsdefekt, den `JR-4-06a` offengelegt hat; kein Blocker für die TEST-Scheiben |
-| `JR-4-10`            | TEST: `SIGKILL` an randomisierten Punkten während 50 MB, 500 Runden, **aus Client-Sicht** | braucht den fertigen Annahmepfad — der steht seit `JR-4-06a`                       |
-| `JR-4-11`, `JR-4-12` | TEST: BDAT-Pfad explizit, Oversize-Grenzmatrix (am Limit / ein Byte drüber / weit drüber) | dito                                                                               |
-| `JR-4-14`, `JR-4-15` | TEST: adversariale Protokollrobustheit und Sicherheitsdurchsicht — **ADR-026s Auflagen**  | ohne beide ist E4 **nicht abnehmbar**                                              |
-| `JR-4-13`            | **Abnahme E4 — eigene, frische Sitzung**                                                  | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen)        |
+| Als Nächstes         | Was                                                                                       | Warum hier                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `JR-4-10`            | TEST: `SIGKILL` an randomisierten Punkten während 50 MB, 500 Runden, **aus Client-Sicht** | braucht den fertigen Annahmepfad — der steht seit `JR-4-06a`                |
+| `JR-4-11`, `JR-4-12` | TEST: BDAT-Pfad explizit, Oversize-Grenzmatrix (am Limit / ein Byte drüber / weit drüber) | dito                                                                        |
+| `JR-4-14`, `JR-4-15` | TEST: adversariale Protokollrobustheit und Sicherheitsdurchsicht — **ADR-026s Auflagen**  | ohne beide ist E4 **nicht abnehmbar**                                       |
+| `JR-4-13`            | **Abnahme E4 — eigene, frische Sitzung**                                                  | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen) |
 
 **Was `JR-4-13` an Material mitbekommt, das nicht im Backlog steht:**
 
@@ -392,11 +392,20 @@ behoben**. Reihenfolge des Rests:
 > ausgehenden Internetzugang. **Wer diesen Wächter künftig rot sieht, weicht ihn nicht auf**, sondern
 > legt die Alternativen vor.
 
+> **`JR-4-19` ist erledigt (2026-08-03), und zwei Dinge daraus gelten weiter.** **(1)**
+> `EsmtpServer` nimmt seit ADR-028 einen **Provider** statt eines Werts für `journalAcceptance`,
+> aufgelöst **genau einmal je Transaktion** bei `MAIL FROM` und für deren Dauer festgehalten. Wer das
+> anfasst, muss wissen: dieselbe Auflösung entscheidet, ob überhaupt eine `SpoolWriteBridge` geöffnet
+> wird — ein Provider, der mitten in der Transaktion neu gelesen wird, führt zu einer Quittung ohne
+> Spool-Datei oder zu einem hängenden Transfer (beides ist als Kalibrierung gemessen). **(2)** Der
+> Retry-Timer endet beim **ersten** Erfolg; ein späterer Ausfall ist bereits durch `accept()` →
+> `451` abgedeckt und braucht keine Wiederverdrahtung.
+
 **Der Einstiegsprompt für die nächste Session:**
 
 ```
 Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
-und arbeite E4 weiter ab — als Nächstes JR-4-19, dann die TEST-Scheiben.
+und arbeite E4 weiter ab — als Nächstes die TEST-Scheiben JR-4-10 bis JR-4-12.
 ```
 
 > **Für die Abnahme `JR-4-13` eine eigene Sitzung starten**, mit dem Prompt: „Nimm E4 unabhängig ab —

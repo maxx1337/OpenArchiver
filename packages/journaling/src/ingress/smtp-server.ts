@@ -1068,6 +1068,25 @@ export interface JournalAcceptancePort {
 	accept(input: JournalTransactionInput): Promise<JournalAcceptanceResult>;
 }
 
+/**
+ * How {@link EsmtpServer} obtains its acceptance port, resolved **once per transaction** at
+ * `MAIL FROM` (`JR-4-19`).
+ *
+ * The reason this indirection exists: a ledger database that is unreachable at process start left
+ * `apps/smtp-ingress` with `journalAcceptance: undefined` **forever**, answering every transaction
+ * `451 4.3.0` until someone restarted it -- a live process that looks healthy while Exchange gives up
+ * and generates NDRs. A provider lets the acceptance port appear later, on connections that are
+ * already open, without rebinding the port or dropping anyone. See
+ * `./journal-acceptance-bootstrap.ts` for the component that produces one.
+ *
+ * `undefined` keeps the pre-`JR-4-06a` behaviour for that transaction: end of `DATA`/`BDAT ... LAST`
+ * answers `451 4.3.0`, never `250`. **Must be synchronous, cheap and side-effect-free** -- it is
+ * called at every `MAIL FROM`, including for transactions that never send a body. It is resolved
+ * exactly once per transaction and never re-read mid-transaction, because the same answer decides
+ * whether a `SpoolWriteBridge` is opened at all and whether `completeTransfer` may finalize.
+ */
+export type JournalAcceptanceProvider = () => JournalAcceptancePort | undefined;
+
 /** Everything {@link RequireTlsResolver} needs to decide (`JR-4-04`, extended by `JR-4-05`). */
 export interface RequireTlsContext {
 	readonly remoteIp: string | null;
@@ -1213,10 +1232,23 @@ class SmtpConnection {
 	 */
 	private commandProcessingSuspended = false;
 	/**
+	 * The acceptance port **this** transaction resolved to (`JR-4-19`): frozen at `MAIL FROM`
+	 * ({@link handleMail}) and cleared by {@link resetEnvelope}. `undefined` both before any
+	 * transaction and for a transaction that began while acceptance was not wired.
+	 *
+	 * Resolved exactly once and never re-read from {@link journalAcceptanceProvider} mid-transaction.
+	 * That is not tidiness, it is a correctness requirement: the same answer decides whether
+	 * {@link tryBeginAcceptance} opens a {@link SpoolWriteBridge} at all, whether the `DataScanner`/
+	 * `BdatContentTracker` gets an `onContent` sink that dereferences `spoolBridge!`, and whether
+	 * {@link completeTransfer} may finalize. A provider that changed its answer between those points
+	 * would either push into a bridge that was never opened or finish a transfer that never fed one.
+	 */
+	private transactionAcceptance: JournalAcceptancePort | undefined = undefined;
+	/**
 	 * Non-`null` for the whole time an `accept()` call is in flight for the current transaction --
 	 * from {@link tryBeginAcceptance} (the first `DATA`/`BDAT` of the transaction) until
 	 * {@link finalizeAcceptance} or {@link abandonInFlightAcceptance} clears it. `null` at every other
-	 * time, including whenever `journalAcceptance` is not configured at all (`JR-4-06a`).
+	 * time, including whenever acceptance is not wired at all (`JR-4-06a`).
 	 */
 	private acceptPromise: Promise<JournalAcceptanceResult> | null = null;
 	/** The bridge feeding `acceptPromise`'s `chunks` -- see {@link SpoolWriteBridge}'s own doc
@@ -1264,13 +1296,14 @@ class SmtpConnection {
 		 * disable `AUTH`. See {@link PasswordVerifier}'s doc comment for why this is a separate
 		 * injected port rather than a dependency of this package. */
 		private readonly passwordVerifier: PasswordVerifier | undefined,
-		/** `undefined` (the default) preserves the exact pre-`JR-4-06a` behaviour: end of `DATA`/
-		 * `BDAT ... LAST` always answers `451 4.3.0`, the same convention every other optional
-		 * dependency in this constructor already established -- see this file's module doc comment,
-		 * "`JournalAcceptance.accept()` is wired in", for why that convention is what keeps every
-		 * earlier task's protocol tests passing unchanged. Production always supplies a real
-		 * `JournalAcceptance` once a ledger database is configured (`apps/smtp-ingress/src/index.ts`). */
-		private readonly journalAcceptance: JournalAcceptancePort | undefined,
+		/** Resolved once per transaction, at `MAIL FROM` (`JR-4-19`) -- never stored as a value here,
+		 * so a ledger connection that was unreachable when this connection was accepted can still
+		 * become effective on it. A provider returning `undefined` preserves the exact pre-`JR-4-06a`
+		 * behaviour for that transaction: end of `DATA`/`BDAT ... LAST` answers `451 4.3.0`, the same
+		 * convention every other optional dependency in this constructor already established -- see
+		 * this file's module doc comment, "`JournalAcceptance.accept()` is wired in", for why that
+		 * convention is what keeps every earlier task's protocol tests passing unchanged. */
+		private readonly journalAcceptanceProvider: JournalAcceptanceProvider,
 		/** `null` whenever this connection has no `sourceId` to key a rate limit by -- either no
 		 * `sourceAclEvaluator` is configured at all, or it is configured but this particular
 		 * connection's ACL decision was not `'allowed'` (unreachable in practice: a `'denied'`/
@@ -1925,6 +1958,21 @@ class SmtpConnection {
 			return;
 		}
 		this.mailFrom = parsed.address;
+		// JR-4-19: the acceptance port is frozen for this transaction here -- the same "the
+		// transaction begins now" instant the transaction rate limit is checked at (see
+		// TransactionRateLimiter's doc comment), and the only point every path to completeTransfer
+		// passes through: DATA requires state 'rcpt' and BDAT 'rcpt'|'bdat', and 'rcpt' is only ever
+		// reached from here. Wrapped defensively because this runs inside the socket's data handler:
+		// a provider that throws must degrade to 451, never take the process down, and never 250.
+		try {
+			this.transactionAcceptance = this.journalAcceptanceProvider();
+		} catch (err) {
+			this.transactionAcceptance = undefined;
+			this.logger.error(
+				{ err },
+				'smtp-ingress: the journal acceptance provider threw; this transaction will answer 451'
+			);
+		}
 		this.state = 'mail';
 		this.writeResponse(250, '2.1.0', 'Ok');
 		this.armCommandTimer();
@@ -2069,14 +2117,14 @@ class SmtpConnection {
 		// `MAIL`/`RCPT` is reachable once `state` leaves `'rcpt'`). A failed assertion here (see
 		// `tryBeginAcceptance`'s doc comment) means this transaction must never be told to send a body
 		// at all, so `354`/`state = 'data'` are skipped entirely on that path.
-		if (this.journalAcceptance && !this.tryBeginAcceptance()) {
+		if (this.transactionAcceptance && !this.tryBeginAcceptance()) {
 			return;
 		}
 		this.writePlain(354, 'Start mail input; end with <CRLF>.<CRLF>');
 		this.state = 'data';
 		this.dataScanner = new DataScanner(
 			this.smtp.sizeLimitBytes,
-			this.journalAcceptance ? (chunk) => this.spoolBridge!.push(chunk) : undefined
+			this.transactionAcceptance ? (chunk) => this.spoolBridge!.push(chunk) : undefined
 		);
 		this.armDataTimer();
 	}
@@ -2136,12 +2184,12 @@ class SmtpConnection {
 		if (!this.bdatTracker) {
 			// `JR-4-06a`: the first `BDAT` of a transaction is the `BDAT` equivalent of `DATA`'s own
 			// `tryBeginAcceptance()` call site above -- same reasoning, same envelope-frozen guarantee.
-			if (this.journalAcceptance && !this.tryBeginAcceptance()) {
+			if (this.transactionAcceptance && !this.tryBeginAcceptance()) {
 				return;
 			}
 			this.bdatTracker = new BdatContentTracker(
 				this.smtp.sizeLimitBytes,
-				this.journalAcceptance ? (chunk) => this.spoolBridge!.push(chunk) : undefined
+				this.transactionAcceptance ? (chunk) => this.spoolBridge!.push(chunk) : undefined
 			);
 		}
 		this.bdatChunkIsLast = parsed.last;
@@ -2295,7 +2343,7 @@ class SmtpConnection {
 			);
 		}
 
-		if (this.journalAcceptance) {
+		if (this.transactionAcceptance) {
 			await this.finalizeAcceptance(oversize, transferMode);
 		} else if (oversize) {
 			this.writeResponse(552, '5.3.4', 'Message size exceeds fixed maximum message size');
@@ -2356,7 +2404,7 @@ class SmtpConnection {
 				}
 			},
 		});
-		this.acceptPromise = this.journalAcceptance!.accept({
+		this.acceptPromise = this.transactionAcceptance!.accept({
 			chainScopeId,
 			// ADR-006 section 3.1: microseconds, and a whole millisecond -- `Date.now()` is already
 			// millisecond-granular, so multiplying by 1000 can never produce anything else. Captured
@@ -2395,7 +2443,7 @@ class SmtpConnection {
 
 	/**
 	 * Decide the reply once `journalAcceptance` is configured (`JR-4-06a`) -- the second half of
-	 * {@link completeTransfer}, called only when `this.journalAcceptance` is set. Ends or aborts the
+	 * {@link completeTransfer}, called only when `this.transactionAcceptance` is set. Ends or aborts the
 	 * bridge {@link tryBeginAcceptance} started, awaits the `accept()` call it began, and writes the
 	 * reply the skill `journal-ledger` section 2 table asks for.
 	 *
@@ -2553,6 +2601,12 @@ class SmtpConnection {
 		this.bdatTracker = null;
 		this.bdatChunkRemaining = null;
 		this.bdatChunkIsLast = false;
+		// JR-4-19: the *only* place this is cleared. Deliberately not in finalizeAcceptance and never
+		// between completeTransfer's branch and the await inside it -- an oversize transaction that
+		// does have acceptance would otherwise take the plain-552 branch, bridge.abort() would never
+		// run, and the quarantine reason would flip from 'oversize-rejected' to 'write-failed' while a
+		// descriptor stayed open under incoming/.
+		this.transactionAcceptance = undefined;
 		this.abandonInFlightAcceptance();
 	}
 
@@ -2809,6 +2863,18 @@ export interface EsmtpServerOptions {
 	 */
 	readonly journalAcceptance?: JournalAcceptancePort;
 	/**
+	 * Durable acceptance that may only become available *after* this server is listening (`JR-4-19`).
+	 * **Takes precedence over {@link journalAcceptance} when both are given** -- internally only this
+	 * form exists, because the constructor lifts a plain `journalAcceptance` value into a constant
+	 * provider, exactly as `requireTlsResolver` lifts the process-wide `tls.requireTls`. Stated
+	 * explicitly because a configuration that sets both and expects the value to win would fail
+	 * silently.
+	 *
+	 * `apps/smtp-ingress/src/index.ts` passes `JournalAcceptanceBootstrap.provider()` here; every
+	 * existing caller that passes a ready-made `journalAcceptance` keeps working unchanged.
+	 */
+	readonly journalAcceptanceProvider?: JournalAcceptanceProvider;
+	/**
 	 * Per-source concurrent-connection cap (`JR-4-08`), checked once per accepted TCP connection,
 	 * right after the source ACL (`sourceAclEvaluator`) resolves it to `'allowed'`. `undefined` (the
 	 * default) disables the gate entirely -- every allowed connection is admitted regardless of how
@@ -2852,7 +2918,10 @@ export class EsmtpServer {
 	private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined;
 	private readonly authCredentialEvaluator: AuthCredentialEvaluator | undefined;
 	private readonly passwordVerifier: PasswordVerifier | undefined;
-	private readonly journalAcceptance: JournalAcceptancePort | undefined;
+	/** Never the raw option: a plain `journalAcceptance` value is lifted into a constant provider by
+	 * the constructor (`JR-4-19`), so only the function case exists past this point -- the same
+	 * normalisation {@link requireTlsResolver} does for `tls.requireTls`. */
+	private readonly journalAcceptanceProvider: JournalAcceptanceProvider;
 	private readonly connectionLimiter: ConnectionLimiter | undefined;
 	private readonly transactionRateLimiter: TransactionRateLimiter | undefined;
 
@@ -2869,7 +2938,11 @@ export class EsmtpServer {
 		this.recipientAclEvaluator = options.recipientAclEvaluator;
 		this.authCredentialEvaluator = options.authCredentialEvaluator;
 		this.passwordVerifier = options.passwordVerifier;
-		this.journalAcceptance = options.journalAcceptance;
+		// JR-4-19: the value form becomes a constant provider, so nothing downstream has to know
+		// which of the two options a caller used (same lift as requireTlsResolver above).
+		const staticJournalAcceptance = options.journalAcceptance;
+		this.journalAcceptanceProvider =
+			options.journalAcceptanceProvider ?? (() => staticJournalAcceptance);
 		this.connectionLimiter = options.connectionLimiter;
 		this.transactionRateLimiter = options.transactionRateLimiter;
 		this.server = net.createServer((socket) => this.handleConnection(socket));
@@ -2976,7 +3049,7 @@ export class EsmtpServer {
 			this.recipientAclEvaluator,
 			this.authCredentialEvaluator,
 			this.passwordVerifier,
-			this.journalAcceptance,
+			this.journalAcceptanceProvider,
 			limiterSourceId,
 			this.transactionRateLimiter
 		);

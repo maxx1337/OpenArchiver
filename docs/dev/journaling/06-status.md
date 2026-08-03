@@ -258,22 +258,22 @@ adversarial: ci 3/3`. Der stärkste der 50 neuen Tests ist der, der **jedes** de
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                                                                                                         | Fertig / Gesamt                                                                                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                                                                                                     | 6 / 6                                                                                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                                                                                                       | 10 / 10                                                                                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                                                                                                            | 9 / 9 + 8 / 8 Nacharbeit                                                                                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                                                                                                    | 11 / 11                                                                                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                                                                                                        | 9 / 9                                                                                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | in Arbeit (`JR-4-01`…`JR-4-09` und `JR-4-16`…`JR-4-18`, `JR-4-20` erledigt, DEV; dazu **F49 behoben**; nur `JR-4-05a`/`JR-4-05b` vom PO mit eigenem Volllauf geprüft, der Rest noch ungeprüft) | 16 / 20 (`JR-4-05a`–`c` als eine vollständige `JR-4-05`-Scheibe gezählt; `JR-4-06` per ADR-021 in `JR-4-06a` und `JR-4-06b` (beide erledigt) gesplittet; offen: `JR-4-10`–`JR-4-15`, `JR-4-19`) |
-| 6           | E5   | Journal-Report-Parser              | offen                                                                                                                                                                                          | 0 / 9                                                                                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | offen                                                                                                                                                                                          | 0 / 8                                                                                                                                                                                           |
-| 8           | E7   | WORM-Storage                       | offen                                                                                                                                                                                          | 0 / 6                                                                                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                                                                                                          | 0 / 6                                                                                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                                                                                                          | 0 / 8                                                                                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                                                                                                          | 0 / 8                                                                                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                                                                                                          | 0 / 10                                                                                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                                                                                                          | 0 / 9                                                                                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                                                                                                                    | Fertig / Gesamt                                                                                                                                                                      |
+| ----------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                                                                                                                | 6 / 6                                                                                                                                                                                |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                                                                                                                  | 10 / 10                                                                                                                                                                              |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                                                                                                                       | 9 / 9 + 8 / 8 Nacharbeit                                                                                                                                                             |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                                                                                                               | 11 / 11                                                                                                                                                                              |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                                                                                                                   | 9 / 9                                                                                                                                                                                |
+| 5           | E4   | `smtp-ingress`-Service             | in Arbeit (`JR-4-01`…`JR-4-09`, `JR-4-19` und `JR-4-16`…`JR-4-18`, `JR-4-20` erledigt, DEV; dazu **F49 behoben**; nur `JR-4-05a`/`JR-4-05b` vom PO mit eigenem Volllauf geprüft, der Rest noch ungeprüft) | 17 / 20 (`JR-4-05a`–`c` als eine vollständige `JR-4-05`-Scheibe gezählt; `JR-4-06` per ADR-021 in `JR-4-06a` und `JR-4-06b` (beide erledigt) gesplittet; offen: `JR-4-10`–`JR-4-15`) |
+| 6           | E5   | Journal-Report-Parser              | offen                                                                                                                                                                                                     | 0 / 9                                                                                                                                                                                |
+| 7           | E6   | Phase-B-Worker                     | offen                                                                                                                                                                                                     | 0 / 8                                                                                                                                                                                |
+| 8           | E7   | WORM-Storage                       | offen                                                                                                                                                                                                     | 0 / 6                                                                                                                                                                                |
+| 9           | E8   | Anchoring                          | offen                                                                                                                                                                                                     | 0 / 6                                                                                                                                                                                |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                                                                                                                     | 0 / 8                                                                                                                                                                                |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                                                                                                                     | 0 / 8                                                                                                                                                                                |
+| 12          | E11  | Compliance-Features                | offen                                                                                                                                                                                                     | 0 / 10                                                                                                                                                                               |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                                                                                                                     | 0 / 9                                                                                                                                                                                |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-026**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-027**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -660,3 +660,58 @@ oben. Damit sind beide Scheiben dieser Sitzung auf der CI-Plattform belegt.
 
 **Nächster Schritt:** `JR-4-19` (Ledger-Verbindung erholt sich nicht), dann die TEST-Scheiben
 `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme `JR-4-13` in eigener Sitzung.
+
+#### 2026-08-03 — `JR-4-19` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme) und **ADR-028**
+
+**Der Defekt:** die Ledger-Anbindung wurde **einmal** beim Start gebaut; war die Datenbank dann nicht
+erreichbar oder nicht migriert, blieb `journalAcceptance` **dauerhaft** `undefined` — Port gebunden,
+Prozess sieht gesund aus, jede Transaktion `451`, bis jemand neu startet. **Behoben, ohne den
+Acceptance-Contract zu weichen.**
+
+**Der Kern war nicht der Timer, sondern ein Seam.** `journalAcceptance` war zweifach eingefroren
+(Serverfeld `readonly` plus Kopie je Verbindung), eine nachträgliche Verdrahtung also unmöglich.
+`EsmtpServer` nimmt jetzt einen **Provider** (`journalAcceptanceProvider`), aufgelöst **genau einmal
+je Transaktion** bei `MAIL FROM` und für deren Dauer festgehalten — dieselbe Antwort entscheidet, ob
+überhaupt eine `SpoolWriteBridge` geöffnet wird. Der Wert-Parameter bleibt und wird im Konstruktor in
+einen konstanten Provider gehoben (Muster `requireTlsResolver`), weshalb **alle 161 Bestandstests des
+Pakets ohne eine Änderung grün blieben**.
+
+**Neu:** `packages/journaling/src/ingress/journal-acceptance-bootstrap.ts` (`start`/`tryNow`/`stop`/
+`provider`/`isWired`, Vorbild `SourceAclCache`), `ledger.retryIntervalMs` (zod, Default 30 s,
+`SMTP_INGRESS_LEDGER_RETRY_INTERVAL_MS`). `buildJournalAcceptance()` **wirft** jetzt statt `undefined`
+zurückzugeben — der Fehlerfall gehört dem Bootstrap.
+
+**ADR-028 (PO):** Wiederholung **bis zum ersten Erfolg**, dann Timer aus (ein späterer Ausfall wird
+schon heute von `accept()` auf `451` abgebildet); der **Crash-Recovery-Scan läuft in jedem Versuch
+mit** (zulässig, weil vor der ersten Verdrahtung kein Byte in den Spool gelangt — Architektur §5s
+Vorbedingung; und weil der Timer beim ersten Erfolg endet, gibt es kein Scan-gegen-Annahme-Rennen).
+
+**Tests:** `ingress/journal-acceptance-bootstrap.test.ts` (7, `unit`, über `tryNow()` statt
+ausgesessener Timer), `tests/unit/smtp-acceptance-promotion.test.ts` (7, `unit`, **der `451`→`250`-
+Nachweis am Draht auf derselben offenen Verbindung**, plus beide Richtungen der
+Mitten-in-der-Transaktion-Stabilität, `BDAT 0 LAST`, werfender Provider, Wert-Form),
+`smtp-ingress-ledger-recovery.int.test.ts` (2, `integration`, echter Prozess). Inventar auf `unit` 55
+Dateien / `ci 811` und `integration` 20 / `ci 118`.
+
+**Warum der `250`-Nachweis im Unit-Test liegt und nicht im Integrationstest:** auf diesem Windows-Host
+scheitert der Directory-fsync mit `EPERM`, also antwortet auch eine **verdrahtete** Acceptance `451`
+(`spool-write-failed`) — am Antwortcode sind die beiden Zustände hier nicht unterscheidbar. Der
+Integrationstest prüft deshalb, was plattformunabhängig trägt: `451` bei **völlig leerem** `incoming/`
+(Beleg für ADR-028s Scan-Argument), die Promotion-Logzeile **genau einmal**, und dass die Transaktion
+nach der Promotion die „not yet wired"-Zeile **nicht mehr** erzeugt; auf Linux zusätzlich `250` und
+genau eine Ledger-Zeile.
+
+**Kalibriert, zweimal:** liest `completeTransfer` den Provider direkt statt des eingefrorenen Feldes,
+werden zwei Wire-Tests rot — einer davon **hängt** (Timeout), was genau zeigt, warum die Auflösung
+gekapselt sein muss. Entfernt man den Retry-Timer, scheitern beide Integrationsfälle mit
+„never logged its promotion" bzw. „did not keep retrying". Beide Regressionen zurückgenommen.
+
+**Ein Bestandstest musste angepasst werden** (`smtp-ingress-crash-recovery-boot.int.test.ts`): er prüfte
+den Wortlaut der alten Fehlermeldung, die „bis zur Neustart"-Aussage enthielt und nicht mehr stimmt.
+Der Anspruch des Tests selbst ist unberührt.
+
+**Volllauf lokal:** `966 passed | 7 skipped`, 80 Dateien, `unit ci 811/811 · integration ci 118/118 ·
+adversarial ci 37/37`; `test:types` und beide Builds grün. CI-Lauf nach dem Push zu prüfen (F48).
+
+**Nächster Schritt:** die TEST-Scheiben `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme
+`JR-4-13` in eigener Sitzung.

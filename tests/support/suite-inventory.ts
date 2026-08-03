@@ -164,7 +164,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// and tests/unit/smtp-rate-limit-protocol.test.ts -- see expectedTests below for what each proves.
 		// 53 after JR-4-09 added ingress/m365-ip-ranges.test.ts (the range refresh helper's diff logic,
 		// against a fixture of the endpoint feed -- no network access anywhere in it).
-		expectedFiles: 53,
+		// 55 after JR-4-19 added ingress/journal-acceptance-bootstrap.test.ts (the retry-until-wired
+		// bootstrap, driven through tryNow() rather than a slept-out timer) and
+		// tests/unit/smtp-acceptance-promotion.test.ts (the same open connection going 451 -> 250 at the
+		// wire, plus the mid-transaction stability of the per-transaction resolution).
+		expectedFiles: 55,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -448,7 +452,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// recommendation, `containedIn` for a narrower one, family confusion, unparseable entries on
 		// either side, and the documented union-coverage over-report), 3 on the operator report
 		// (every rendering says nothing was changed).
-		expectedTests: { ci: 797, nightly: 3, manual: 0 },
+		// 811 after JR-4-19: 7 in journal-acceptance-bootstrap.test.ts (wired on the first attempt with
+		// exactly one state line; a failed start resolving anyway and leaving the provider undefined;
+		// promotion on a later attempt logged once; no further build() once wired; concurrent attempts
+		// coalesced; the retry timer armed only on failure and cleared idempotently; the timer cleared
+		// before the promotion is claimed) and 7 in smtp-acceptance-promotion.test.ts (451 -> 250 on
+		// one unbroken connection; never 250 while unwired; a promotion mid-transfer not changing the
+		// running transaction, and the reverse direction; BDAT 0 LAST; a throwing provider degrading to
+		// 451; the plain value form still working through the constructor's lift).
+		expectedTests: { ci: 811, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -484,7 +496,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// still readable -- leaves the process bound but answering never-250 to DATA).
 		// 19 after JR-4-09 added m365-range-refresh-cli.int.test.ts (the compiled range refresh helper
 		// against a real database and a local fixture feed -- no internet access).
-		expectedFiles: 19,
+		// 20 after JR-4-19 added smtp-ingress-ledger-recovery.int.test.ts (the real process starting
+		// with an unusable ledger database and promoting itself without a restart).
+		expectedFiles: 20,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -515,7 +529,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// allowed_ips byte-identical afterwards (the security claim of RFC section 4.3), the feed
 		// asked with a clientRequestId, exit 0 when everything is covered, exit 1 (never 0) when the
 		// feed cannot be read, exit 1 without a database URL.
-		expectedTests: { ci: 116, nightly: 0, manual: 0 },
+		// 118 after JR-4-19 added 2 to smtp-ingress-ledger-recovery.int.test.ts: the process starting
+		// unusable (451, untouched spool), promoting once deployment_identity is restored and accepting
+		// on the same open connection; and the counter-direction, a database that stays broken never
+		// producing a promotion however many retries elapse.
+		expectedTests: { ci: 118, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

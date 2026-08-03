@@ -586,9 +586,13 @@ suiteRequiring(
 			try {
 				await waitUntil(() => output.stdout().includes('listening on port'), 15_000);
 				expect(exited).toBe(false);
-				// See the "pino writes to stdout" note above.
+				// See the "pino writes to stdout" note above. The wording changed with `JR-4-19`: the
+				// failure is now logged by `JournalAcceptanceBootstrap`, which also says it will retry --
+				// the old line claimed the process would answer 451 "until this is fixed and the process
+				// is restarted", which is no longer true. This test's own claim is unaffected: the scan
+				// still fails, the process still binds, and `DATA` below still never answers 250.
 				expect(output.stdout() + output.stderr()).toContain(
-					'could not initialize the ledger database connection, or the crash-recovery scan failed'
+					'could not build journal acceptance'
 				);
 
 				socket = connectTcp(port, '127.0.0.1');

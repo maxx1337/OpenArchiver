@@ -69,6 +69,9 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 		// valid), unlike sourceAcl.databaseUrl.
 		ledger: {
 			databaseUrl: env.SMTP_INGRESS_LEDGER_DATABASE_URL,
+			// JR-4-19: how long JournalAcceptanceBootstrap waits between attempts while acceptance is
+			// not yet wired. Defaults in the schema (30 s), same "unset env var -> undefined" rule.
+			retryIntervalMs: env.SMTP_INGRESS_LEDGER_RETRY_INTERVAL_MS,
 		},
 		// JR-4-08: per-source connection/transaction-rate limits. Every field is optional in the zod
 		// schema (rate-limit-config.ts) and defaults on its own, the same "unset env var -> undefined"
