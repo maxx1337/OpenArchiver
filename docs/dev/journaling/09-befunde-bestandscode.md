@@ -2198,7 +2198,31 @@ nicht geprüft. Vierzehn Scheiben wurden auf Zahlen abgenommen, die diesen Pfad 
 
 > **Die Lehre ist dieselbe wie in F14/F15 und Fallstrick 6, eine Ebene höher:** eine grüne Zahl belegt
 > nur das, was der Lauf ausgeführt hat. Bisher war die Frage „ist die Suite gelaufen?" — jetzt lautet
-> sie „**ist sie dort gelaufen, wo der Pfad existiert?**" Ein Typfehler in einer
+> sie „**ist sie dort gelaufen, wo der Pfad existiert?**"
+
+### Aufgelöst am 2026-08-03: der erste grüne Lauf, und was er zusätzlich belegt
+
+Lauf **`30808478519`** auf `1fc7de4` ist **`success`** (2 min 27 s):
+
+```
+Test Files  72 passed (72)
+[TEST-EXECUTED] unit: ci 742/742 · integration: ci 111/111 · adversarial: ci 37/37
+Suite inventory verified: unit 49/49, integration 18/18, adversarial 5/5, 0 unclassified test files.
+No oa_test_* databases left behind.
+```
+
+Die Zahlen sind mit den lokalen identisch (742 + 111 + 37 = 890) — **aber die 111
+Integrationstests sind auf Linux gelaufen**, also durch den Ledger-Append, den `EPERM` auf dem
+Windows-Host abschneidet. Damit ist der Acceptance-Contract zum ersten Mal über seine **ganze** Länge
+gemessen und nicht nur bis zum Verzeichnis-fsync. Die vierzehn Scheiben davor sind damit nachträglich
+gedeckt; der Vorbehalt aus diesem Befund ist eingelöst, nicht weggeredet.
+
+Nebenbefund aus demselben Lauf, **nicht** neu und **nicht** blockierend: der Harness lässt
+„stale-looking" Datenbanken stehen, solange etwas mit ihnen verbunden ist
+(`oa_test_…_ledger_concurrency` während `JR-2-08`s Lastlauf) und meldet das als
+`TEST-COVERAGE NOTICE`. Am Ende steht trotzdem „No `oa_test_*` databases left behind." — das
+Verhalten ist F13s bekannter Bereich und arbeitet hier korrekt. Ein Typfehler in einer
+
 > `packages/journaling`-Testdatei fällt niemandem auf, solange ihn nicht zufällig ein Agent beim
 > Arbeiten sieht — hier haben es zwei unabhängig voneinander gemeldet, und beide haben ihn korrekt als
 > nicht ihren eingeordnet und liegen gelassen. Dieselbe Klasse wie F14/F15 (der Wächter zählte
