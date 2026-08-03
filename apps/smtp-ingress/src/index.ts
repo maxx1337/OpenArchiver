@@ -10,6 +10,8 @@ import {
 	JournalAcceptance,
 	NodeSpoolFileSystem,
 	parseIngressConfig,
+	PerSourceConnectionLimiter,
+	PerSourceTransactionRateLimiter,
 	PostgresLedgerLookup,
 	PostgresLedgerWriter,
 	PostgresSourceAclLookup,
@@ -121,6 +123,20 @@ import { postgresTransactor } from './postgres-transactor';
  * process start" means here: not a crash loop, but a process that binds the port and demonstrably
  * accepts nothing, which `ingress-crash-recovery-boot.int.test.ts` measures directly rather than
  * inferring from the code.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Per-source connection/transaction-rate limits (`JR-4-08`)
+ * ---------------------------------------------------------------------------------------------
+ * `journaling_sources` has no connection- or rate-limit column -- `rate-limit-config.ts`'s doc
+ * comment explains why this is process configuration instead, with a seam a later per-source
+ * override could tighten. `PerSourceConnectionLimiter`/`PerSourceTransactionRateLimiter` are built
+ * once here, for the whole process lifetime, and passed into `EsmtpServer` as
+ * `connectionLimiter`/`transactionRateLimiter` -- both keyed by the same `sourceId` the source ACL
+ * (`sourceAclEvaluator` above) resolves at connect time, which is also why an IP the ACL itself
+ * rejects can never occupy a slot in either limiter (`connection-rate-limiter.ts`'s doc comment).
+ * Both are unconditional here (no `undefined` fallback the way `journalAcceptance` has one) --
+ * unlike the ledger, a missing rate-limit configuration is not a reason to run unbounded; the zod
+ * schema's own defaults (`rate-limit-config.ts`) are what an operator gets for free.
  */
 
 dotenv.config();
@@ -243,6 +259,17 @@ async function main(): Promise<void> {
 	// `undefined` result here means and why it is not a startup failure.
 	const { journalAcceptance, ledgerSql } = await buildJournalAcceptance(config, logger);
 
+	// JR-4-08: one limiter instance each, process-lifetime, shared by every connection --
+	// per-source bookkeeping lives inside them (see @open-archiver/journaling's
+	// connection-rate-limiter.ts for why that is safe: keyed by sourceId, which is itself bounded by
+	// the number of active journaling_sources rows, and only ever reachable for a connection the
+	// source ACL already resolved to 'allowed').
+	const connectionLimiter = new PerSourceConnectionLimiter(config.rateLimit.maxConnectionsPerSource);
+	const transactionRateLimiter = new PerSourceTransactionRateLimiter(
+		config.rateLimit.maxTransactionsPerSourcePerWindow,
+		config.rateLimit.rateLimitWindowMs
+	);
+
 	const server = new EsmtpServer({
 		smtp: config.smtp,
 		tls: config.tls,
@@ -262,6 +289,11 @@ async function main(): Promise<void> {
 			config.tls.requireTls
 		),
 		journalAcceptance,
+		// JR-4-08: both keyed by the same connect-time source ACL match `sourceAclEvaluator` above
+		// already provides -- see connection-rate-limiter.ts's doc comment for why that makes both
+		// gates unreachable for a source the ACL itself has not admitted.
+		connectionLimiter,
+		transactionRateLimiter,
 	});
 	await server.listen(config.smtpPort);
 

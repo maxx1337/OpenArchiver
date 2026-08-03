@@ -4,6 +4,7 @@ import { smtpServerConfigSchema } from './smtp-config';
 import { ingressTlsConfigSchema } from './tls-config';
 import { sourceAclConfigSchema } from './source-acl-config';
 import { ledgerConfigSchema } from './ledger-config';
+import { rateLimitConfigSchema } from './rate-limit-config';
 
 /**
  * `apps/smtp-ingress` process configuration (`JR-4-01`, extended by `JR-4-02`), validated with
@@ -17,14 +18,13 @@ import { ledgerConfigSchema } from './ledger-config';
  * `JR-4-01`'s acceptance criteria were about the process boundary only (starts standalone, no
  * forbidden imports, a clear message on bad configuration) -- not the SMTP protocol itself, so
  * `JR-4-01` deliberately left out every field the protocol engine needs. `JR-4-02` is the task that
- * consumes `smtp` below; `AUTH` (`JR-4-05c`) and rate limits (`JR-4-08`) still are not here, for the
- * same reason `JR-4-01`'s note gave: neither is read by anything built so far, and adding them now
- * would be the same speculative configuration the Product Owner asked not to carry. They join this
- * schema in the tasks that consume them. Recipient ACLs (`JR-4-05b`) needed **no** new field here --
- * it reuses `sourceAcl` below verbatim (same database connection, same refresh/staleness knobs); see
- * `./source-acl-cache.ts`'s doc comment for why that is one cache serving two ACLs, not two caches.
+ * consumes `smtp` below. `AUTH` (`JR-4-05c`) reuses `sourceAcl` verbatim, the same way recipient
+ * ACLs (`JR-4-05b`) do -- see `./source-acl-cache.ts`'s doc comment for why that is one cache
+ * serving three roles, not three caches. Rate limits (`JR-4-08`) **do** need a field of their own
+ * (`rateLimit` below) -- unlike `AUTH`/recipient ACLs, there is no existing key to piggyback on.
  *
- * Six fields, one added by each of `JR-4-01`, `JR-4-02`, `JR-4-04`, `JR-4-05a` and `JR-4-06a`:
+ * Seven fields, one added by each of `JR-4-01`, `JR-4-02`, `JR-4-04`, `JR-4-05a`, `JR-4-06a` and
+ * `JR-4-08`:
  *  - `smtpPort`: the port the ESMTP listener binds (`JR-4-02`'s `EsmtpServer`, replacing `JR-4-01`'s
  *    bare `net.createServer()` placeholder).
  *  - `spool`: the process owns the spool per the privilege-separation table in
@@ -43,6 +43,10 @@ import { ledgerConfigSchema } from './ledger-config';
  *    `PostgresLedgerWriter`/`JournalAcceptance`. Unlike `sourceAcl`, `databaseUrl` here **is**
  *    optional -- see that schema's own doc comment for why "not configured yet" is a safe default
  *    for the ledger specifically, where it would not be for the source ACL.
+ *  - `rateLimit` (`JR-4-08`): per-source connection/transaction-rate limits
+ *    (`./rate-limit-config.ts`). Required as a key, same shape as `smtp`/`tls`/`ledger` above -- `{}`
+ *    is a valid value (every field defaults on its own; see that schema's doc comment for why these
+ *    defaults are safe to ship rather than a startup error like `sourceAcl.databaseUrl`).
  *
  * ---------------------------------------------------------------------------------------------
  * Why this package validates the shaped object, not `process.env` (`JR-4-01`)
@@ -87,6 +91,12 @@ export const ingressConfigSchema = z.object({
 	 * why "unset" is safe here, unlike `sourceAcl.databaseUrl`.
 	 */
 	ledger: ledgerConfigSchema,
+	/**
+	 * Per-source connection/transaction-rate limits (`./rate-limit-config.ts`, `JR-4-08`). Required
+	 * as a key, same shape as `smtp`/`tls`/`ledger` above -- `{}` is a valid value, every field
+	 * defaults on its own.
+	 */
+	rateLimit: rateLimitConfigSchema,
 	/**
 	 * Log verbosity. Optional -- a missing value is not a configuration error. Read for real since
 	 * `JR-4-02`: `apps/smtp-ingress/src/index.ts` builds a `pino` instance with `level: logLevel`

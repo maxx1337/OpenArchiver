@@ -153,6 +153,7 @@ export {
 	parseRcptToArguments,
 	type AuthCredentialEvaluator,
 	type AuthCredentialLookupResult,
+	type ConnectionLimiter,
 	type DecodedSaslPlain,
 	type EsmtpServerOptions,
 	type IngressLogger,
@@ -166,6 +167,7 @@ export {
 	type RequireTlsResolver,
 	type SourceAclDecision,
 	type SourceAclEvaluator,
+	type TransactionRateLimiter,
 } from './ingress/smtp-server';
 
 export { SpoolWriteBridge, type SpoolWriteBridgeCallbacks } from './ingress/spool-write-bridge';
@@ -197,3 +199,16 @@ export {
 } from './ingress/source-acl-config';
 
 export { ledgerConfigSchema, type LedgerConfig } from './ingress/ledger-config';
+
+export {
+	DEFAULT_MAX_CONNECTIONS_PER_SOURCE,
+	DEFAULT_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW,
+	DEFAULT_RATE_LIMIT_WINDOW_MS,
+	rateLimitConfigSchema,
+	type RateLimitConfig,
+} from './ingress/rate-limit-config';
+
+export {
+	PerSourceConnectionLimiter,
+	PerSourceTransactionRateLimiter,
+} from './ingress/connection-rate-limiter';

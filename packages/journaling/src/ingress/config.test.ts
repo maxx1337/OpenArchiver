@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import { formatIngressConfigError, parseIngressConfig } from './config';
 import { DEFAULT_SMTP_SIZE_LIMIT_BYTES } from './smtp-config';
+import {
+	DEFAULT_MAX_CONNECTIONS_PER_SOURCE,
+	DEFAULT_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW,
+	DEFAULT_RATE_LIMIT_WINDOW_MS,
+} from './rate-limit-config';
 
 /**
  * `JR-4-01` -- the `apps/smtp-ingress` process configuration schema.
@@ -40,6 +45,10 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 			// unlike `sourceAcl.databaseUrl`, `ledger.databaseUrl` has no security consequence when
 			// unset (see ledger-config.ts's doc comment for why).
 			ledger: {},
+			// JR-4-08: `rateLimit` is required as a key, same shape as `smtp`/`tls`/`ledger` -- `{}`
+			// is valid, every field defaults on its own (rate-limit-config.ts's doc comment explains
+			// why these defaults are safe to ship, unlike sourceAcl.databaseUrl).
+			rateLimit: {},
 		};
 
 		it('accepts a fully specified, valid configuration', () => {
@@ -180,6 +189,53 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 		it('rejects an empty ledger.databaseUrl (distinct from leaving it unset)', () => {
 			expect(() =>
 				parseIngressConfig({ ...validInput, ledger: { databaseUrl: '' } })
+			).toThrow();
+		});
+
+		it('rejects a configuration with the rateLimit key missing entirely', () => {
+			const { rateLimit: _rateLimit, ...rest } = validInput;
+			expect(() => parseIngressConfig(rest)).toThrow();
+		});
+
+		it('defaults every field of rateLimit (JR-4-08) when rateLimit is an empty object', () => {
+			const config = parseIngressConfig(validInput);
+			expect(config.rateLimit.maxConnectionsPerSource).toBe(DEFAULT_MAX_CONNECTIONS_PER_SOURCE);
+			expect(config.rateLimit.maxTransactionsPerSourcePerWindow).toBe(
+				DEFAULT_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW
+			);
+			expect(config.rateLimit.rateLimitWindowMs).toBe(DEFAULT_RATE_LIMIT_WINDOW_MS);
+		});
+
+		it('embeds an explicit rateLimit override rather than replacing it with defaults', () => {
+			const config = parseIngressConfig({
+				...validInput,
+				rateLimit: { maxConnectionsPerSource: 3 },
+			});
+			expect(config.rateLimit.maxConnectionsPerSource).toBe(3);
+			// Fields not overridden inside `rateLimit` still default on their own.
+			expect(config.rateLimit.maxTransactionsPerSourcePerWindow).toBe(
+				DEFAULT_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW
+			);
+		});
+
+		it('rejects a zero or negative rateLimit.maxConnectionsPerSource', () => {
+			expect(() =>
+				parseIngressConfig({ ...validInput, rateLimit: { maxConnectionsPerSource: 0 } })
+			).toThrow();
+		});
+
+		it('rejects a zero or negative rateLimit.maxTransactionsPerSourcePerWindow', () => {
+			expect(() =>
+				parseIngressConfig({
+					...validInput,
+					rateLimit: { maxTransactionsPerSourcePerWindow: -1 },
+				})
+			).toThrow();
+		});
+
+		it('rejects a zero or negative rateLimit.rateLimitWindowMs', () => {
+			expect(() =>
+				parseIngressConfig({ ...validInput, rateLimit: { rateLimitWindowMs: 0 } })
 			).toThrow();
 		});
 

@@ -70,6 +70,14 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 		ledger: {
 			databaseUrl: env.SMTP_INGRESS_LEDGER_DATABASE_URL,
 		},
+		// JR-4-08: per-source connection/transaction-rate limits. Every field is optional in the zod
+		// schema (rate-limit-config.ts) and defaults on its own, the same "unset env var -> undefined"
+		// rule every other optional field here follows.
+		rateLimit: {
+			maxConnectionsPerSource: env.SMTP_INGRESS_MAX_CONNECTIONS_PER_SOURCE,
+			maxTransactionsPerSourcePerWindow: env.SMTP_INGRESS_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW,
+			rateLimitWindowMs: env.SMTP_INGRESS_RATE_LIMIT_WINDOW_MS,
+		},
 		logLevel: env.SMTP_INGRESS_LOG_LEVEL,
 	};
 }

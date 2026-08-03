@@ -1090,6 +1090,46 @@ export interface RequireTlsContext {
  */
 export type RequireTlsResolver = (context: RequireTlsContext) => boolean;
 
+/**
+ * Per-source concurrent-connection cap (`JR-4-08`). Checked once per accepted TCP connection, in
+ * {@link EsmtpServer.handleConnection}, immediately after the source ACL (`JR-4-05a`) resolves the
+ * connection to `'allowed'` and before {@link SmtpConnection} is ever constructed -- an IP matching
+ * no source never reaches this gate at all (it is already rejected `554`/`421` by the source ACL
+ * itself), so there is no way to grow this limiter's bookkeeping by connecting from an unauthorized
+ * address, no matter how many times. `undefined` (the default) disables the gate entirely, the same
+ * convention every other optional port in this file already establishes. See
+ * `./connection-rate-limiter.ts`'s `PerSourceConnectionLimiter` for the implementation and its own
+ * doc comment for why this is safe to key by `sourceId` alone (bounded memory).
+ */
+export interface ConnectionLimiter {
+	/** Attempt to reserve one connection slot for `sourceId`. Returns `false` when this source is
+	 * already at its configured limit -- the caller must then reject the connection (`421 4.7.0`)
+	 * and must **not** call {@link release} for it, since no slot was actually granted. */
+	tryAcquire(sourceId: string): boolean;
+	/** Release a slot previously granted by a successful {@link tryAcquire} call. Called exactly
+	 * once per accepted connection, when its socket closes -- see
+	 * `EsmtpServer.handleConnection`'s `socket.on('close', ...)` handler. */
+	release(sourceId: string): void;
+}
+
+/**
+ * Per-source transaction-rate cap (`JR-4-08`). Checked at the very start of every transaction --
+ * `SmtpConnection.handleMail`'s `MAIL FROM` handler, before the command is otherwise parsed or
+ * acted on -- never mid-transfer: a transaction that has already passed `MAIL FROM` is never
+ * retroactively throttled by this gate, matching the skill's "a running transaction is never
+ * aborted by a policy check" posture the same way `RequireTlsResolver`/the source ACL are checked
+ * only at their own fixed points, not asynchronously mid-`DATA`. `undefined` disables the gate
+ * entirely, the same convention every other optional port in this file already establishes. Keyed
+ * by the same `sourceId` {@link ConnectionLimiter} uses -- the connect-time source ACL match, never
+ * a per-IP or per-connection identity -- for the identical "unreachable by an unauthorized IP,
+ * bounded memory" reasons that class's doc comment gives.
+ */
+export interface TransactionRateLimiter {
+	/** Returns `true` if `sourceId` may start a transaction right now, and records the attempt
+	 * toward its window; `false` if the window is already exhausted. Never throws. */
+	tryConsume(sourceId: string): boolean;
+}
+
 type SessionState = 'initial' | 'ready' | 'mail' | 'rcpt' | 'bdat' | 'data';
 type TimeoutKind = 'connection' | 'command' | 'data';
 
@@ -1230,7 +1270,18 @@ class SmtpConnection {
 		 * "`JournalAcceptance.accept()` is wired in", for why that convention is what keeps every
 		 * earlier task's protocol tests passing unchanged. Production always supplies a real
 		 * `JournalAcceptance` once a ledger database is configured (`apps/smtp-ingress/src/index.ts`). */
-		private readonly journalAcceptance: JournalAcceptancePort | undefined
+		private readonly journalAcceptance: JournalAcceptancePort | undefined,
+		/** `null` whenever this connection has no `sourceId` to key a rate limit by -- either no
+		 * `sourceAclEvaluator` is configured at all, or it is configured but this particular
+		 * connection's ACL decision was not `'allowed'` (unreachable in practice: a `'denied'`/
+		 * `'unavailable'` decision closes the connection in `EsmtpServer.handleConnection` before a
+		 * `SmtpConnection` is ever constructed). Set from the same `SourceAclDecision.sourceId`
+		 * {@link ConnectionLimiter} is keyed by -- see `EsmtpServer.handleConnection` (`JR-4-08`). */
+		private readonly limiterSourceId: string | null,
+		/** `undefined` disables the transaction-rate gate entirely -- the same convention every
+		 * other optional evaluator in this constructor already establishes (`JR-4-08`). Checked in
+		 * {@link handleMail} only; never consulted anywhere else. */
+		private readonly transactionRateLimiter: TransactionRateLimiter | undefined
 	) {
 		// Connection-level backstop, independent of protocol state: Node re-arms this internally on
 		// any read *or* write activity on the socket, so it fires only on genuine idleness --
@@ -1822,6 +1873,32 @@ class SmtpConnection {
 	private handleMail(rest: string): void {
 		if (this.state !== 'ready') {
 			this.writeResponse(503, '5.5.1', 'Bad sequence of commands');
+			this.armCommandTimer();
+			return;
+		}
+		// `JR-4-08`: the transaction-rate gate runs here, at the earliest point a transaction can be
+		// said to begin, and before anything about this `MAIL FROM` is parsed or recorded -- a
+		// throttled attempt leaves `state`/`mailFrom` untouched, so the client may simply retry
+		// `MAIL FROM` later on the same connection (skill `journal-ledger` section 1: a local policy
+		// decision is a 4xx, and this connection is not even closed, unlike the connect-time
+		// `ConnectionLimiter` gate). `limiterSourceId === null` (no source ACL configured, or -- not
+		// reachable in practice -- no `sourceId` to key by) and `transactionRateLimiter === undefined`
+		// both leave this check inert, the same "undefined disables the gate" convention every other
+		// optional port in this file already follows.
+		if (
+			this.limiterSourceId !== null &&
+			this.transactionRateLimiter &&
+			!this.transactionRateLimiter.tryConsume(this.limiterSourceId)
+		) {
+			this.logger.warn(
+				{ remoteAddress: this.socket.remoteAddress, sourceId: this.limiterSourceId },
+				'smtp-ingress: rejecting MAIL FROM, source already at its transaction-rate limit'
+			);
+			this.writeResponse(
+				450,
+				'4.7.1',
+				'Requested mail action not taken: too many transactions from this source, try again later'
+			);
 			this.armCommandTimer();
 			return;
 		}
@@ -2731,6 +2808,24 @@ export interface EsmtpServerOptions {
 	 * real `JournalAcceptance` (`../spool/acceptance.ts`) here once a ledger database is configured.
 	 */
 	readonly journalAcceptance?: JournalAcceptancePort;
+	/**
+	 * Per-source concurrent-connection cap (`JR-4-08`), checked once per accepted TCP connection,
+	 * right after the source ACL (`sourceAclEvaluator`) resolves it to `'allowed'`. `undefined` (the
+	 * default) disables the gate entirely -- every allowed connection is admitted regardless of how
+	 * many others from the same source are already open, exactly this class's behaviour before this
+	 * task. Has no effect at all when `sourceAclEvaluator` is itself `undefined` -- there is no
+	 * `sourceId` to key it by. `apps/smtp-ingress/src/index.ts` always supplies a
+	 * `PerSourceConnectionLimiter` (`./connection-rate-limiter.ts`) once `sourceAcl` is configured.
+	 */
+	readonly connectionLimiter?: ConnectionLimiter;
+	/**
+	 * Per-source transaction-rate cap (`JR-4-08`), checked at every `MAIL FROM` -- see
+	 * {@link TransactionRateLimiter}'s doc comment for why that point, and not any point mid-transfer.
+	 * `undefined` (the default) disables the gate entirely, same convention as `connectionLimiter`,
+	 * and same "no effect without `sourceAclEvaluator`" caveat. `apps/smtp-ingress/src/index.ts`
+	 * always supplies a `PerSourceTransactionRateLimiter` once `sourceAcl` is configured.
+	 */
+	readonly transactionRateLimiter?: TransactionRateLimiter;
 }
 
 /**
@@ -2758,6 +2853,8 @@ export class EsmtpServer {
 	private readonly authCredentialEvaluator: AuthCredentialEvaluator | undefined;
 	private readonly passwordVerifier: PasswordVerifier | undefined;
 	private readonly journalAcceptance: JournalAcceptancePort | undefined;
+	private readonly connectionLimiter: ConnectionLimiter | undefined;
+	private readonly transactionRateLimiter: TransactionRateLimiter | undefined;
 
 	constructor(options: EsmtpServerOptions) {
 		this.smtp = options.smtp;
@@ -2773,6 +2870,8 @@ export class EsmtpServer {
 		this.authCredentialEvaluator = options.authCredentialEvaluator;
 		this.passwordVerifier = options.passwordVerifier;
 		this.journalAcceptance = options.journalAcceptance;
+		this.connectionLimiter = options.connectionLimiter;
+		this.transactionRateLimiter = options.transactionRateLimiter;
 		this.server = net.createServer((socket) => this.handleConnection(socket));
 	}
 
@@ -2823,6 +2922,7 @@ export class EsmtpServer {
 	 * is"), never as an implicit allow.
 	 */
 	private handleConnection(socket: net.Socket): void {
+		let limiterSourceId: string | null = null;
 		if (this.sourceAclEvaluator) {
 			const remoteIp = socket.remoteAddress;
 			const decision: SourceAclDecision =
@@ -2846,6 +2946,25 @@ export class EsmtpServer {
 				socket.end(`421 4.3.2 ${this.smtp.hostname} Service temporarily unavailable\r\n`);
 				return;
 			}
+			// `JR-4-08`: only reachable once `decision.kind === 'allowed'` -- an IP the source ACL
+			// itself rejects never gets this far, so there is no `sourceId` for an unauthorized
+			// connection to ever occupy a slot with (see `ConnectionLimiter`'s doc comment).
+			limiterSourceId = decision.sourceId;
+			if (this.connectionLimiter && !this.connectionLimiter.tryAcquire(limiterSourceId)) {
+				this.logger.warn(
+					{ remoteAddress: remoteIp, sourceId: limiterSourceId },
+					'smtp-ingress: rejecting connection, source already at its concurrent-connection limit'
+				);
+				// Respond fully, then close, the same socket.end(text) pattern the two rejections
+				// above already use: Node flushes the written bytes before sending the FIN, so the
+				// sending MTA reads the whole line before it ever sees the connection close (the
+				// acceptance criterion: exceeding the limit is a 4xx, not a connection drop with no
+				// reply). No slot was reserved for this connection, so there is nothing to release.
+				socket.end(
+					`421 4.7.0 ${this.smtp.hostname} Too many concurrent connections from this source, try again later\r\n`
+				);
+				return;
+			}
 		}
 
 		const connection = new SmtpConnection(
@@ -2857,9 +2976,16 @@ export class EsmtpServer {
 			this.recipientAclEvaluator,
 			this.authCredentialEvaluator,
 			this.passwordVerifier,
-			this.journalAcceptance
+			this.journalAcceptance,
+			limiterSourceId,
+			this.transactionRateLimiter
 		);
 		this.connections.set(socket, connection);
-		socket.on('close', () => this.connections.delete(socket));
+		socket.on('close', () => {
+			this.connections.delete(socket);
+			if (limiterSourceId !== null && this.connectionLimiter) {
+				this.connectionLimiter.release(limiterSourceId);
+			}
+		});
 	}
 }

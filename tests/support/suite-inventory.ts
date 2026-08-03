@@ -160,7 +160,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/no-outbound-mail-path.test.ts (the structural "no outbound mail path" scan) and
 		// tests/unit/byte-fidelity-roundtrip.test.ts (the DATA/BDAT byte-fidelity roundtrip corpus) --
 		// see expectedTests below for what each proves.
-		expectedFiles: 49,
+		// 52 after JR-4-08 added ingress/rate-limit-config.test.ts, ingress/connection-rate-limiter.test.ts
+		// and tests/unit/smtp-rate-limit-protocol.test.ts -- see expectedTests below for what each proves.
+		expectedFiles: 52,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -411,7 +413,32 @@ export const SUITES: readonly SuiteSpec[] = [
 		// bare CR only, mixed CRLF/LF/CR with no final terminator, a very long line with no line ending,
 		// non-UTF-8 Latin-1 bytes, embedded NUL bytes, arbitrary binary content -- 7 tests, plus one
 		// corpus-not-empty sanity check).
-		expectedTests: { ci: 742, nightly: 3, manual: 0 },
+		// 779 ci after JR-4-08 (per-source connection/transaction-rate limits) added: 10 in the new
+		// ingress/rate-limit-config.test.ts (the zod schema: defaults all three fields on an empty
+		// object, string coercion, a fully overridden configuration, reject zero/negative/non-integer
+		// maxConnectionsPerSource, reject zero/negative maxTransactionsPerSourcePerWindow, reject
+		// zero/negative rateLimitWindowMs) + 13 in the new ingress/connection-rate-limiter.test.ts
+		// (PerSourceConnectionLimiter x6: admits up to the max then refuses, tracks sources
+		// independently, release() frees exactly one slot, a refused tryAcquire does not itself
+		// consume a slot, a source is removed from the map once its count returns to zero -- the
+		// bounded-memory argument -- release() on a never-acquired source is a no-op; +
+		// PerSourceTransactionRateLimiter x7: admits up to the max within one window then refuses,
+		// tracks sources independently, resets once the window elapses, does not reset one instant
+		// early, currentWindowCount reports 0 once expired, pruneExpired() leaves a still-active
+		// window untouched, defaults to Date.now with no injected clock) + 8 in the new
+		// tests/unit/smtp-rate-limit-protocol.test.ts (the connection-limit gate over a real loopback
+		// socket x4: 421 4.7.0 with the full line delivered before the socket closes and the first
+		// connection unaffected, release() on close freeing the slot for a subsequent connection,
+		// two different sources never sharing a budget, a connect-time-denied source hammering the
+		// gate never occupies a slot a real source could otherwise use; the transaction-rate gate x4:
+		// 450 4.7.1 at MAIL FROM with the connection kept open and a further command still answered,
+		// two different sources tracked independently, a transaction already past MAIL FROM running
+		// to its ordinary 451 unaffected by its own now-exhausted budget, no sourceAclEvaluator
+		// configured leaving the rate limiter inert) + 6 added to the pre-existing ingress/config.test.ts
+		// (rateLimit is a required key like smtp/tls/ledger but, like them, {} satisfies it and every
+		// field defaults on its own; an explicit override embeds rather than replacing; the missing-key
+		// case and one rejection per non-positive numeric field).
+		expectedTests: { ci: 779, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
