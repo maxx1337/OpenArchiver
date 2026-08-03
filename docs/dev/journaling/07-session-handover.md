@@ -85,11 +85,11 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 17 von 20 Tasks, nicht abgenommen) · **Branch:**
-`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **966 Tests** bei 80
-Dateien — `unit ci 811 · integration ci 118 · adversarial ci 37`, **in der CI bestätigt**: Lauf
-`30838566875` auf `36c207b` **success** (`JR-4-19`), davor `30830897752` (`JR-4-09`) und
-`30827457559` (F49)
+**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 18 von 20 Tasks, nicht abgenommen) · **Branch:**
+`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **974 Tests** bei 82
+Dateien — `unit ci 818 · integration ci 118 · adversarial ci 38`, **in der CI bestätigt**: Lauf
+`30862834098` auf `708c212` **success** (`JR-4-10`), davor `30838566875` (`JR-4-19`),
+`30830897752` (`JR-4-09`) und `30827457559` (F49)
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
@@ -101,7 +101,12 @@ Dateien — `unit ci 811 · integration ci 118 · adversarial ci 37`, **in der C
 bzw. `BDAT … LAST` mit **`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append
 durch sind. Seit `JR-4-19` übersteht er auch einen Start ohne erreichbare Ledger-Datenbank: er
 antwortet `451`, holt die Verdrahtung im Hintergrund nach und nimmt danach **ohne Neustart** an.
-**Offen sind nur noch die fünf TEST-Scheiben und die Abnahme.**
+**Offen sind nur noch vier TEST-Scheiben und die Abnahme.**
+
+Seit `JR-4-10` ist die zentrale Zusage nicht mehr nur strukturell begründet, sondern **gemessen**:
+unter echtem `SIGKILL` während einer 50-MB-Übertragung haben in CI-Lauf `30862834098` sieben von
+zwanzig Runden den `250`-Zweig gezogen — und **alle sieben** hatten eine passende, byteexakt geprüfte,
+korrekt verkettete Ledger-Zeile. Kein Fall von „teilweise".
 
 ### Was diese Session gemacht hat
 
@@ -331,17 +336,31 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — die letzten drei TEST-Scheiben, dann die Abnahme
+### Nächster konkreter Schritt — die letzten TEST-Scheiben, dann die Abnahme
 
-**E4 steht bei 17 von 20.** Erledigt: `JR-4-01`…`JR-4-09` und `JR-4-16`…`JR-4-20`, dazu **F49
-behoben** und **ADR-028**. Offen sind nur noch TEST-Scheiben und die Abnahme:
+**E4 steht bei 18 von 20.** Erledigt: `JR-4-01`…`JR-4-10` und `JR-4-16`…`JR-4-20`, dazu **F49
+behoben**, **ADR-028** und **F50 offen**. Offen sind nur noch TEST-Scheiben und die Abnahme:
 
-| Als Nächstes         | Was                                                                                       | Warum hier                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `JR-4-10`            | TEST: `SIGKILL` an randomisierten Punkten während 50 MB, 500 Runden, **aus Client-Sicht** | braucht den fertigen Annahmepfad — der steht seit `JR-4-06a`                |
-| `JR-4-11`, `JR-4-12` | TEST: BDAT-Pfad explizit, Oversize-Grenzmatrix (am Limit / ein Byte drüber / weit drüber) | dito                                                                        |
-| `JR-4-14`, `JR-4-15` | TEST: adversariale Protokollrobustheit und Sicherheitsdurchsicht — **ADR-026s Auflagen**  | ohne beide ist E4 **nicht abnehmbar**                                       |
-| `JR-4-13`            | **Abnahme E4 — eigene, frische Sitzung**                                                  | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen) |
+| Als Nächstes         | Was                                                                                                                  | Warum hier                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| ~~`JR-4-10`~~        | **erledigt 2026-08-03** — CI `30862834098`: 7 von 20 Runden zogen den `250`-Zweig, alle 7 mit passender Ledger-Zeile | der erste echte Kill-Nachweis des Projekts, nicht nur grüner Testbau        |
+| `JR-4-11`, `JR-4-12` | TEST: BDAT-Pfad explizit, Oversize-Grenzmatrix (am Limit / ein Byte drüber / weit drüber)                            | **beauftragt** — zusammen, nicht parallel (siehe Kasten unten)              |
+| `JR-4-14`, `JR-4-15` | TEST: adversariale Protokollrobustheit und Sicherheitsdurchsicht — **ADR-026s Auflagen**                             | ohne beide ist E4 **nicht abnehmbar**                                       |
+| `JR-4-13`            | **Abnahme E4 — eigene, frische Sitzung**                                                                             | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen) |
+
+> **Zwei TEST-Scheiben nie parallel an zwei Bearbeiter.** `tests/support/suite-inventory.ts` trägt
+> **exakte** Zahlen für Dateien und Tests. Zwei gleichzeitige Bearbeiter auf demselben Branch
+> überschreiben sich dort zwangsläufig, und das Ergebnis ist ein Inventar, das zu keinem der beiden
+> Stände passt. `JR-4-11` und `JR-4-12` sind deshalb als **ein** Auftrag vergeben.
+
+> **Die Lehre aus `JR-4-10`, und sie gilt für jede weitere TEST-Scheibe:** die Suite war zweimal
+> hintereinander **auf jeder Plattform** untauglich und meldete trotzdem grün — einmal ein zu früher
+> Kill, einmal eine 945-Byte-Füllzeile, die jede Nachricht mit Null-Bytes auffüllte, sodass `DATA` nie
+> abgeschlossen wurde. Beide Male lautete das Symptom „keine Antwort, dann Kill", und das ist von F48
+> **nicht unterscheidbar**. Sichtbar wurden sie erst durch einen Zähler, der den **nicht gezogenen**
+> Zweig ausweist („0 Versuche" vs. „N Versuche, alle gescheitert"). **Wo die Kernaussage einer Suite
+> plattformabhängig ist, gehört diese Zählung dazu** — sonst ist „grün auf Windows" und „grün, weil
+> nichts geprüft wurde" derselbe Text.
 
 **Was `JR-4-13` an Material mitbekommt, das nicht im Backlog steht:**
 
