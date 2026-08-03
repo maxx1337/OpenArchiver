@@ -282,6 +282,12 @@ async function main(): Promise<void> {
 				sourceAclSql.end({ timeout: 5 }),
 				ledgerSql ? ledgerSql.end({ timeout: 5 }) : Promise.resolve(),
 			]).then(() => undefined);
+		// JR-4-06b: `server.close()` now performs the graceful drain itself (skill `journal-ledger`
+		// section 2's "Shutdown in progress" row) -- an idle connection gets `421 4.3.2` immediately, a
+		// connection mid-transaction is left alone until it earns its own real reply, and only then
+		// closed. Nothing here changed to get that: `EsmtpServer.close()`'s contract is what grew: see
+		// `@open-archiver/journaling`'s `smtp-server.ts`, `EsmtpServer.close()`'s doc comment, and
+		// `packages/journaling/tests/unit/smtp-graceful-shutdown.test.ts` for the proof.
 		server.close().then(
 			() => closeConnections().finally(() => process.exit(0)),
 			() => closeConnections().finally(() => process.exit(0))

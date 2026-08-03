@@ -157,7 +157,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// JR-3-05 scan's lock into the caller). 44 after JR-4-20 added
 		// tests/unit/acl-evaluator-port-shapes.test.ts and tests/unit/source-acl-cache-wiring.test.ts
 		// (F46 -- see expectedTests below for what each proves).
-		expectedFiles: 44,
+		expectedFiles: 47,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -377,7 +377,27 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/source-acl-cache-wiring.test.ts (1: bindSourceAclCache() -- the same function
 		// apps/smtp-ingress/src/index.ts calls in production -- wired into a real EsmtpServer over a
 		// real loopback socket, RCPT TO a seeded routing address reaching 250 and an unknown one 550).
-		expectedTests: { ci: 698, nightly: 3, manual: 0 },
+		// 703 ci after JR-4-06b added tests/unit/smtp-5xx-inventory.test.ts (5: the reasoned inventory
+		// of every 5xx smtp-server.ts can write, matched exactly against the source by a static scan --
+		// no uninventoried/stale pair in either direction; the one connect-time 554 5.7.1 socket.end()
+		// literal; source-acl-cache.ts writes no response code of its own; the scan finds a non-trivial
+		// count equal to the inventory's own total; every entry's reason is one of the fixed
+		// sender-fault vocabulary). 708 ci after JR-4-06b also added
+		// tests/unit/smtp-graceful-shutdown.test.ts (5: an idle connection is proactively told 421
+		// 4.3.2 and closes without needing to send another command; a connection idle between MAIL/RCPT
+		// is drained the same way; a new connection attempt is refused once close() has begun; a
+		// transaction mid-DATA with accept() still pending earns its own real 250 before the shutdown
+		// notice, proven with a deterministic drained-but-unsettled fake rather than a timing guess; a
+		// rejected (non-accepted) in-flight transaction keeps its own real 451 ahead of the shutdown
+		// notice too). 719 ci after JR-4-06b also added tests/unit/smtp-response-code-table.test.ts (11:
+		// one per row of skill journal-ledger section 2's table, in the table's own order -- accepted,
+		// spool-write-failed, ledger-append-failed, high-water-mark-exceeded, the structural
+		// object-store-unreachable proof (a scoped re-run of ingress-import-graph.test.ts's own walk),
+		// metadata-DB-unreachable resolved to the same ledger-append-failed row with a
+		// connection-loss-shaped cause, recipient denied, source denied, STARTTLS required but
+		// refused, oversize with the loud oversize-rejected alert reconfirmed end to end, and the
+		// shutdown drain's row-level check).
+		expectedTests: { ci: 719, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',

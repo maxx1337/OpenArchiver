@@ -31,7 +31,7 @@ import type { SpoolFileSystem } from '../../src/spool/fs-port';
 import { NodeSpoolFileSystem } from '../../src/spool/fs-port';
 import { FakeSpoolFileSystem } from '../support/fake-spool-fs';
 import type { QuarantineAlert, QuarantineAlertSink } from '../../src/spool/quarantine';
-import type { JournalLedgerRecord } from '@open-archiver/types';
+import type { CanonicalJsonValue, JournalLedgerRecord } from '@open-archiver/types';
 
 /**
  * `JournalAcceptance.accept()` wired into `completeTransfer()` (`JR-4-06a`) -- proven over a real
@@ -405,7 +405,14 @@ class InMemoryLedgerAndLookup implements LedgerBackend, LedgerLookup {
 			duplicateOf: request.duplicateOf,
 			journalingSourceId: request.journalingSourceId,
 			spoolTxId: request.spoolTxId,
-			eventPayload: request.eventPayload,
+			// Same cast every other in-memory ledger fake in this repository already uses
+			// (`ledger-writer.ts`, `in-memory-ledger.ts`, `ledger-backend-contract.ts`):
+			// `LedgerAppendRequest.eventPayload` is `Record<string, unknown> | null` (a caller-facing,
+			// unconstrained shape), `JournalLedgerRecord.eventPayload` is the narrower
+			// `CanonicalJsonValue | null` the canonical encoder demands. `JournalAcceptance` only ever
+			// passes `null` here (`acceptance.ts`), so the cast is never exercised with an actual
+			// object by this test file -- it exists purely so `tsc` accepts the assignment (F47).
+			eventPayload: (request.eventPayload as CanonicalJsonValue | null) ?? null,
 		};
 		const computed = chainHash(record, prevChainHash);
 		this.entriesBySeq.push({ record, chainHash: computed });
@@ -478,10 +485,14 @@ suite(
 			const reply = await client.nextReply();
 			expect(reply[0]).toMatch(/^552 5\.3\.4/);
 
-			// accept()'s own DurableWriteError handling already quarantined the debris under
-			// 'write-failed' -- proven directly, not inferred from the 552 alone.
+			// accept()'s own DurableWriteError handling already quarantined the debris -- proven
+			// directly, not inferred from the 552 alone. JR-4-06b: the reason is 'oversize-rejected',
+			// not the generic 'write-failed' -- ProtocolRejectionAbort (../../src/spool/quarantine.ts)
+			// is what lets acceptance.ts tell this deliberate protocol rejection apart from a genuine
+			// disk/fsync fault so an operator paging on the alert is not sent looking for a hardware
+			// problem that is not there.
 			expect(alerts).toHaveLength(1);
-			expect(alerts[0]!.reason).toBe('write-failed');
+			expect(alerts[0]!.reason).toBe('oversize-rejected');
 
 			// And a subsequent crash-recovery scan over the same spool finds nothing left to do:
 			// no incoming/ file (already moved), so no *new* quarantine and no false "crash" report.
@@ -494,7 +505,7 @@ suite(
 			expect(scan.incomingFilesScanned).toBe(0);
 			expect(scan.quarantined).toHaveLength(0);
 			expect(scan.requeue).toHaveLength(0);
-			// The one alert on record is still the original write-failed one -- the scan raised no
+			// The one alert on record is still the original oversize-rejected one -- the scan raised no
 			// second alert.
 			expect(alerts).toHaveLength(1);
 

@@ -8,6 +8,7 @@ import {
 	type JournalAcceptanceResult,
 	type JournalTransactionInput,
 } from '../spool/acceptance';
+import { ProtocolRejectionAbort } from '../spool/quarantine';
 
 /**
  * The ESMTP protocol engine (`JR-4-02`).
@@ -308,7 +309,11 @@ import {
  *     <seq>`; `high-water-mark-exceeded`/`spool-capacity-exceeded` -> `452 4.3.1`;
  *     `spool-write-failed`/`ledger-append-failed` -> `451 4.3.0`. See
  *     {@link SmtpConnection.finalizeAcceptance} for the implementation and for oversize's override of
- *     all of the above.
+ *     all of the above. The abort passed to the bridge is a {@link ProtocolRejectionAbort}
+ *     (`JR-4-06b`), not a plain `Error` -- see that class's doc comment (`../spool/quarantine.ts`) for
+ *     why: it lets `acceptance.ts` tell this deliberate protocol rejection apart from a genuine write
+ *     failure when it alerts through the mandatory `alertSink`, instead of reporting both under the
+ *     same `'write-failed'` reason.
  */
 
 /** Injected structured-logging port -- see this module's "Where `logLevel` actually gets used"
@@ -1177,6 +1182,18 @@ class SmtpConnection {
 	/** The bridge feeding `acceptPromise`'s `chunks` -- see {@link SpoolWriteBridge}'s own doc
 	 * comment. Same lifetime as {@link acceptPromise}. */
 	private spoolBridge: SpoolWriteBridge | null = null;
+	/**
+	 * `true` from the moment {@link beginShutdown} is called (`JR-4-06b`, skill `journal-ledger`
+	 * section 2's "Shutdown in progress" row) -- never cleared, there is no un-shutting-down. Checked
+	 * by {@link armCommandTimer}, the one chokepoint every command handler in this class reaches once
+	 * it is done writing its own reply and is ready to wait for the next command (see that method's
+	 * doc comment) -- so a connection that is idle right now, or that becomes idle moments from now
+	 * because whatever it was doing just finished, is told and closed there rather than being left to
+	 * wait indefinitely for a command a client may never send once this process stops accepting new
+	 * ones. {@link beginShutdown} additionally closes an *already*-idle connection immediately, rather
+	 * than waiting for it to reach `armCommandTimer` on its own.
+	 */
+	private shuttingDown = false;
 
 	constructor(
 		private socket: net.Socket,
@@ -2360,8 +2377,14 @@ class SmtpConnection {
 		}
 
 		if (oversize) {
+			// JR-4-06b: a ProtocolRejectionAbort, not a plain Error -- see this method's doc comment,
+			// point 6, and ProtocolRejectionAbort's own doc comment (../spool/quarantine.ts). This is
+			// what lets acceptance.ts's DurableWriteError handler report the loud quarantine alert this
+			// abort produces under 'oversize-rejected' rather than the generic 'write-failed'.
 			bridge.abort(
-				new Error('oversize: SIZE limit exceeded, aborting in-flight spool write')
+				new ProtocolRejectionAbort(
+					'oversize: SIZE limit exceeded, aborting in-flight spool write'
+				)
 			);
 		} else {
 			bridge.end();
@@ -2508,17 +2531,104 @@ class SmtpConnection {
 		}
 	}
 
+	/**
+	 * Re-arm the command-idle timeout -- and, since `JR-4-06b`, the one chokepoint
+	 * {@link shuttingDown} is checked at. Every command handler in this class reaches this method
+	 * (directly, or via {@link completeTransfer}'s tail) at the exact moment it is done writing its
+	 * own reply and would otherwise sit waiting for the next command -- which is precisely the moment
+	 * a shutting-down connection should be told and closed instead, deliberately *not* interrupting
+	 * whatever produced that reply (an accepted message's `250`, a rejected one's `451`/`452`/`552`,
+	 * an `AUTH` verdict, ...). Modifying this one method, rather than every call site, is what makes
+	 * the shutdown-aware behaviour apply uniformly without a second copy of the check.
+	 */
 	private armCommandTimer(): void {
 		this.disarmProtocolTimer();
+		if (this.shuttingDown) {
+			this.closeForShutdown();
+			return;
+		}
 		this.protocolTimer = setTimeout(
 			() => this.onTimeout('command'),
 			this.smtp.commandTimeoutMs
 		);
 	}
 
+	/**
+	 * Deliberately does **not** check {@link shuttingDown} -- re-armed on every `DATA`/`BDAT` content
+	 * chunk while a body transfer is actively receiving bytes, and a shutdown must never interrupt
+	 * that (skill section 2, "graceful drain": a transaction that has already earned its `250` must
+	 * not lose it to a shutdown). The transfer's own completion path ({@link completeTransfer}) is
+	 * what reaches {@link armCommandTimer} afterward, which is where the shutdown check belongs.
+	 */
 	private armDataTimer(): void {
 		this.disarmProtocolTimer();
 		this.protocolTimer = setTimeout(() => this.onTimeout('data'), this.smtp.dataTimeoutMs);
+	}
+
+	/**
+	 * Whether genuinely asynchronous work is in flight for this connection right now (`JR-4-06b`):
+	 * an `AUTH` bcrypt comparison or an `accept()` call ({@link commandProcessingSuspended}), or an
+	 * open {@link SpoolWriteBridge} still waiting for more `BDAT` chunks of a not-yet-`LAST`
+	 * transaction. {@link beginShutdown} defers to {@link armCommandTimer}'s own check instead of
+	 * closing the connection immediately whenever this is `true` -- forcibly ending the socket here
+	 * would either race a reply already being written ({@link commandProcessingSuspended}) or leak the
+	 * in-flight durable write the same way an unhandled `RSET` mid-`BDAT` would (see
+	 * {@link abandonInFlightAcceptance}'s doc comment): closing the raw socket does not, by itself,
+	 * abort {@link spoolBridge}.
+	 */
+	private isAsyncWorkInFlight(): boolean {
+		return this.commandProcessingSuspended || this.spoolBridge !== null;
+	}
+
+	/**
+	 * Graceful shutdown, per connection (`JR-4-06b`, skill `journal-ledger` section 2's "Shutdown in
+	 * progress" row: `421 4.3.2`, "Drain gracefully"). Called once per open connection by
+	 * `EsmtpServer.close()` when the process stops accepting new ones.
+	 *
+	 * A connection that is not currently doing anything asynchronous (see
+	 * {@link isAsyncWorkInFlight}) is told **immediately** -- there is no reason to wait for it to send
+	 * a command that may never come once this process has stopped listening. A busy connection is left
+	 * alone: whatever it is in the middle of -- an in-flight `accept()`, an `AUTH` comparison, a
+	 * `BDAT` transaction still waiting for its next (or `LAST`) chunk -- is allowed to finish and reply
+	 * exactly as it would with no shutdown happening at all; only {@link armCommandTimer}'s own check,
+	 * reached at the natural end of that work, closes it afterward. This is the one guarantee the
+	 * skill and the Product Owner's task note both name explicitly: a transaction that has already
+	 * earned its `250` must not lose it to the shutdown.
+	 *
+	 * Idempotent: a second call (should `EsmtpServer.close()` ever be invoked twice) is a no-op.
+	 */
+	beginShutdown(): void {
+		if (this.shuttingDown) {
+			return;
+		}
+		this.shuttingDown = true;
+		if (!this.isAsyncWorkInFlight()) {
+			this.closeForShutdown();
+		}
+	}
+
+	/** Write the shutdown reply and end the connection. Never throws on an already-closing socket --
+	 * the same `!this.socket.destroyed` guard {@link writeResponse}/{@link writePlain} already use,
+	 * checked here too since this method also calls {@link net.Socket.end} directly. */
+	private closeForShutdown(): void {
+		if (this.socket.destroyed) {
+			return;
+		}
+		this.logger.info(
+			{ remoteAddress: this.socket.remoteAddress },
+			'smtp-ingress: closing connection for graceful shutdown'
+		);
+		this.writeResponse(421, '4.3.2', `${this.smtp.hostname} Service shutting down`);
+		this.disarmProtocolTimer();
+		this.socket.end();
+		// Mirrors onTimeout's/rejectAuthAttempt's forced close: a peer that stopped reading may never
+		// acknowledge the FIN.
+		const forceClose = setTimeout(() => {
+			if (!this.socket.destroyed) {
+				this.socket.destroy();
+			}
+		}, 1_000);
+		forceClose.unref();
 	}
 
 	/** Fired for all three timeout kinds (connection/command/data). Always `421`, never `5xx` --
@@ -2632,7 +2742,12 @@ export class EsmtpServer {
 	private readonly server: net.Server;
 	private readonly smtp: SmtpServerConfig;
 	private readonly logger: IngressLogger;
-	private readonly sockets = new Set<net.Socket>();
+	/** Every currently open connection's protocol object, keyed by its socket -- populated in
+	 * {@link handleConnection}, removed on that socket's own `close` event. Existed as a bare
+	 * `Set<net.Socket>` (tracked, never read) since `JR-4-02`; `JR-4-06b` is what gives it a reader:
+	 * {@link close}'s graceful drain needs each connection's {@link SmtpConnection.beginShutdown},
+	 * not just its socket. */
+	private readonly connections = new Map<net.Socket, SmtpConnection>();
 	/** `null` when no certificate/key is configured -- see {@link EsmtpServerOptions.tls}. Built once
 	 * here, not per connection; see {@link SmtpConnection}'s constructor parameter of the same name
 	 * for why that matters. */
@@ -2677,15 +2792,24 @@ export class EsmtpServer {
 	}
 
 	/**
-	 * Stops accepting new connections and waits for the ones already open to end on their own.
-	 * Does **not** forcibly close them or send them anything -- a graceful drain that answers
-	 * `421 4.3.2` to in-flight sessions (skill section 2, "Shutdown in progress") is `JR-4-06b`'s job,
-	 * not this one's (`JR-4-06a` only wires `accept()` into `completeTransfer()` -- see this file's
-	 * module doc comment).
+	 * Graceful shutdown (`JR-4-06b`, skill `journal-ledger` section 2's "Shutdown in progress" row).
+	 * Stops accepting new connections (a TCP connection attempt after this point gets refused at the
+	 * OS level -- the listening socket itself is closed -- so the sending MTA's normal connect-refused
+	 * retry handles it; nothing here needs to answer it explicitly) and tells every connection that is
+	 * open right now, via {@link SmtpConnection.beginShutdown}, to drain: an idle one is closed
+	 * immediately with `421 4.3.2`; a busy one (an in-flight `accept()`, an `AUTH` comparison, an open
+	 * `BDAT` bridge) is left alone until whatever it is doing finishes and replies on its own, and is
+	 * closed only afterward -- see that method's doc comment for the full contract, in particular why
+	 * a transaction that has already earned its `250` cannot lose it to this. The returned promise
+	 * resolves once every connection has actually ended (the same `net.Server.close()` semantics this
+	 * method always had), not merely once shutdown has been requested.
 	 */
 	close(): Promise<void> {
 		return new Promise((resolve, reject) => {
 			this.server.close((err) => (err ? reject(err) : resolve()));
+			for (const connection of this.connections.values()) {
+				connection.beginShutdown();
+			}
 		});
 	}
 
@@ -2724,9 +2848,7 @@ export class EsmtpServer {
 			}
 		}
 
-		this.sockets.add(socket);
-		socket.on('close', () => this.sockets.delete(socket));
-		new SmtpConnection(
+		const connection = new SmtpConnection(
 			socket,
 			this.smtp,
 			this.logger,
@@ -2737,5 +2859,7 @@ export class EsmtpServer {
 			this.passwordVerifier,
 			this.journalAcceptance
 		);
+		this.connections.set(socket, connection);
+		socket.on('close', () => this.connections.delete(socket));
 	}
 }

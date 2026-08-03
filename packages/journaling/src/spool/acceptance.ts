@@ -1,7 +1,12 @@
 import { checkSpoolHighWaterMark, incomingFilePath, type HighWaterMarkStatus } from './layout';
 import { DurableWriteError, writeDurableSpoolFile, type DurableWriteStage } from './durable-write';
 import { generateTxId } from './txid';
-import { quarantineSpoolFile, type QuarantineAlertSink } from './quarantine';
+import {
+	quarantineSpoolFile,
+	ProtocolRejectionAbort,
+	type QuarantineAlertSink,
+	type QuarantineReason,
+} from './quarantine';
 import type { SpoolConfig } from './config';
 import type { SpoolFileSystem } from './fs-port';
 import { normalizeRemoteIp } from '../ledger/canonical-encoding';
@@ -311,7 +316,16 @@ export class JournalAcceptance {
 			// under its own reason. See the module doc comment and quarantineFailedWrite()'s own doc comment
 			// for why this never masks `cause.stage`/`cause.cause` below, which the caller still needs for
 			// `451` vs `452`.
-			await this.quarantineFailedWrite(txid);
+			//
+			// JR-4-06b: `cause.cause` is the bridge-abort `Error` `SmtpConnection.finalizeAcceptance`
+			// passed to `SpoolWriteBridge.abort()` -- a deliberate `ProtocolRejectionAbort` for an
+			// oversize rejection, or an ordinary `Error` for a genuine write failure. Choosing the
+			// quarantine reason from that, rather than always `'write-failed'`, is the fix for the
+			// mislabelled-alert half of this task -- see `quarantine.ts`'s module doc comment.
+			await this.quarantineFailedWrite(
+				txid,
+				cause.cause instanceof ProtocolRejectionAbort ? 'oversize-rejected' : 'write-failed'
+			);
 			if (isCapacityCause(cause.cause)) {
 				return {
 					kind: 'spool-capacity-exceeded',
@@ -382,11 +396,15 @@ export class JournalAcceptance {
 	 * the caller needs `stage`/`cause` from to choose `451` vs `452`. A second failure here must never
 	 * replace or hide that one, so it is caught and discarded. Worst case: the debris stays in
 	 * `incoming/` exactly as it would have before this slice, and `JR-3-05`'s crash-recovery scan is
-	 * still there to quarantine it -- under `'no-ledger-entry'` instead of `'write-failed'` -- on the
-	 * next startup. That is a degraded diagnosis (F40's original bug, not fixed for this one file), never
-	 * a lost message and never a masked cause.
+	 * still there to quarantine it -- under `'no-ledger-entry'` instead of whatever `reason` this call
+	 * would have used -- on the next startup. That is a degraded diagnosis (F40's original bug, not
+	 * fixed for this one file), never a lost message and never a masked cause.
+	 *
+	 * `reason` (`JR-4-06b`) is `'oversize-rejected'` when the failed write's `DurableWriteError` wraps
+	 * a `ProtocolRejectionAbort` (the SMTP layer's own oversize abort, see the call site), `'write-failed'`
+	 * otherwise -- see `quarantine.ts`'s module doc comment for why this distinction exists.
 	 */
-	private async quarantineFailedWrite(txid: string): Promise<void> {
+	private async quarantineFailedWrite(txid: string, reason: QuarantineReason): Promise<void> {
 		const filePath = incomingFilePath(this.spoolConfig.rootPath, txid);
 		try {
 			await quarantineSpoolFile(
@@ -394,7 +412,7 @@ export class JournalAcceptance {
 				this.spoolConfig.rootPath,
 				txid,
 				filePath,
-				'write-failed',
+				reason,
 				this.alertSink
 			);
 		} catch {

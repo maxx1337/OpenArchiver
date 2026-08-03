@@ -97,13 +97,24 @@ jobs:
             - name: Build journaling
               run: pnpm --filter @open-archiver/journaling build
 
+            # F47 (docs/dev/journaling/06-status.md, JR-4-06b): this step did not exist before, and
+            # `@open-archiver/journaling` is the package with the most new code in E4 -- a type error in
+            # its own `tests/` tree (`smtp-acceptance-wiring.test.ts`, `JR-4-06a`) went unnoticed for a
+            # whole slice because only the backend's test files were ever typechecked here. Placed right
+            # after "Build journaling", the same pairing "Build shared types" already has with nothing
+            # after it needing to typecheck against it (`@open-archiver/types` build only) -- journaling's
+            # `tsconfig.test.json` needs `@open-archiver/types`'s `dist` (built above) and nothing from
+            # `packages/backend`, so this does not have to wait for that build to run.
+            - name: Typecheck journaling test files
+              run: pnpm --filter @open-archiver/journaling test:types
+
             - name: Build backend
               run: pnpm --filter @open-archiver/backend build
 
             - name: Check frontend
               run: pnpm --filter @open-archiver/frontend check
 
-            - name: Typecheck test files
+            - name: Typecheck backend test files
               run: pnpm --filter @open-archiver/backend test:types
 
             - name: Test
