@@ -158,10 +158,13 @@ import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
  * with the source and `chainScopeId` the ACL matched it to -- see {@link matchedRecipients} --
  * because `JR-4-06` needs exactly that mapping to fill `JournalTransactionInput.chainScopeId`/
  * `journalingSourceId` when it wires `completeTransfer()` into `JournalAcceptance.accept()`. A
- * transaction whose accepted recipients resolve to **more than one** chain is a real, open
- * question this task does not resolve on its own -- see {@link recordMatchedRecipient}'s doc
- * comment for what is recorded, what is only logged, and what is deliberately left for the Product
- * Owner to decide by ADR before `JR-4-06`.
+ * transaction can no longer end up with recipients resolving to **more than one** chain: `JR-4-05b`
+ * recorded the case and left it undecided, and `ADR-027` (`docs/dev/journaling/05-entscheidungen.md`,
+ * implemented by `JR-4-17`) decided it -- the second and every later `RCPT TO` that would add a
+ * *different* `chainScopeId` to this transaction is rejected with `452 4.5.3` in {@link handleRcpt},
+ * before it ever reaches {@link recordMatchedRecipient}. See that method's doc comment for what
+ * stays recorded once a transaction is committed to its one chain, and `handleRcpt`'s own doc
+ * comment for why `452` and not `550`.
  *
  * `tlsVersion`/`tlsCipher` (ADR-006 section 1: two of the sixteen hashed ledger fields, added
  * precisely because the RFC's eight-field formula would let them change after the fact without
@@ -1763,6 +1766,46 @@ class SmtpConnection {
 				this.armCommandTimer();
 				return;
 			}
+			// ADR-027 (docs/dev/journaling/05-entscheidungen.md), JR-4-17: a second, or later, RCPT TO
+			// that would add a *different* chainScopeId to the one(s) already matched in this
+			// transaction. One SMTP transaction produces one receipt in exactly one chain (ADR-007,
+			// skill journal-ledger section 5) -- JR-4-05b's recordMatchedRecipient only ever logged
+			// this case; ADR-027 is the decision. Rejected with 452 4.5.3 ("too many recipients"),
+			// deliberately not 550: sending MTAs already implement recipient-limit splitting for
+			// exactly this enhanced code and resend the rejected recipient in a transaction of its
+			// own, where it is unambiguous again -- a 550 would be permanent and would silently lose
+			// the second chain instead of merely delaying it into a visible NDR (see the ADR's
+			// "Restrisiko" section). This check must run after every other RCPT verdict above (unknown
+			// recipient, ACL unavailable, authenticated-source mismatch) so those keep their own, more
+			// specific codes, and it must run *before* recordMatchedRecipient so a rejected recipient
+			// never enters `rcptTo`/`matchedRecipients`/`matchedChainScopeIds` -- the transaction stays
+			// assigned to exactly one chain even after a rejection (asserted in this file's tests).
+			if (
+				this.matchedChainScopeIds.size > 0 &&
+				!this.matchedChainScopeIds.has(decision.chainScopeId)
+			) {
+				this.logger.error(
+					{
+						remoteAddress: this.socket.remoteAddress,
+						rejectedAddress: parsed.address,
+						rejectedSourceId: decision.sourceId,
+						rejectedChainScopeId: decision.chainScopeId,
+						matchedRecipients: this.matchedRecipients.map((r) => ({ ...r })),
+					},
+					'smtp-ingress: rejecting RCPT TO with 452 4.5.3 -- this transaction already ' +
+						'matched a different journal chain (ADR-027: a transaction stays assigned to ' +
+						'exactly one chain; the sending MTA is expected to resend this recipient in its ' +
+						'own transaction)'
+				);
+				this.writeResponse(
+					452,
+					'4.5.3',
+					'Too many recipients: recipient belongs to a different journal chain than a ' +
+						'previously accepted recipient in this transaction'
+				);
+				this.armCommandTimer();
+				return;
+			}
 			this.recordMatchedRecipient(parsed.address, decision.sourceId, decision.chainScopeId);
 		}
 		// No recipientAclEvaluator configured: every syntactically valid recipient is accepted --
@@ -1774,40 +1817,20 @@ class SmtpConnection {
 	}
 
 	/**
-	 * Record one recipient the ACL matched to a source/chain, and flag -- loudly, never silently --
-	 * the one case `JR-4-05b` does not resolve on its own: this transaction now addresses journal
-	 * recipients belonging to **more than one** chain (e.g. two `RCPT TO` for two different active
-	 * sources). Skill section 5/ADR-007: one transaction produces one receipt in one chain, so this
-	 * is genuinely ambiguous -- three resolutions are possible (reject the second recipient outright,
-	 * "first recipient wins" for chain assignment, or one receipt per affected chain against a single
-	 * spooled object), and picking one here, silently, by construction (e.g. overwriting a single
-	 * `chainScopeId` field with the latest match) would be exactly the "last write wins" this task
-	 * was told not to build. So this method only **records** every match (`matchedRecipients`) and
-	 * **logs** the very first time a second distinct chain appears -- it does not reject, does not
-	 * pick one, and does not change `rcptTo`'s or `matchedRecipients`' ordinary per-recipient `250`.
-	 * `JR-4-06` reads `matchedRecipients` when it wires `completeTransfer()`; which of the three
-	 * resolutions it implements is the Product Owner's decision, recorded as an ADR before that task
-	 * starts (see this slice's report).
+	 * Record one recipient the recipient ACL matched to a source/chain. By the time this runs,
+	 * `handleRcpt`'s `ADR-027` guard has already rejected -- with `452 4.5.3`, before reaching here --
+	 * any recipient that would add a *second*, distinct `chainScopeId` to this transaction, so every
+	 * call here only ever adds the transaction's first chain or repeats one already matched (the same
+	 * recipient again, or another recipient of the same source). `matchedChainScopeIds` stays a `Set`
+	 * for exactly that reason: it is the source of truth `handleRcpt` reads to tell "this
+	 * transaction's chain" from "a different chain", not just a bookkeeping detail.
 	 *
-	 * A duplicate recipient, or a second recipient of a source already matched, adds no new element
-	 * to {@link matchedChainScopeIds} and therefore never logs -- both are unambiguous and need no
-	 * decision (see the module doc comment's "Recipient ACL" section).
+	 * `JR-4-06` reads `matchedRecipients` when it wires `completeTransfer()` into
+	 * `JournalAcceptance.accept()`.
 	 */
 	private recordMatchedRecipient(address: string, sourceId: string, chainScopeId: string): void {
-		const sizeBefore = this.matchedChainScopeIds.size;
 		this.matchedChainScopeIds.add(chainScopeId);
 		this.matchedRecipients.push({ address, sourceId, chainScopeId });
-		if (this.matchedChainScopeIds.size > sizeBefore && this.matchedChainScopeIds.size > 1) {
-			this.logger.error(
-				{
-					remoteAddress: this.socket.remoteAddress,
-					matchedRecipients: this.matchedRecipients.map((r) => ({ ...r })),
-				},
-				'smtp-ingress: this transaction addresses journal recipients belonging to more than ' +
-					'one chain -- unresolved (JR-4-05b), the Product Owner decides the resolution by ADR ' +
-					'before JR-4-06 wires acceptance'
-			);
-		}
 	}
 
 	private handleDataCommand(): void {

@@ -24,9 +24,10 @@ import { smtpServerConfigSchema } from '../../src/ingress/smtp-config';
  *
  * A hand-written `RecipientAclEvaluator` fake stands in for `SourceAclCache`, the same substitution
  * `smtp-source-acl-protocol.test.ts` makes for the source ACL -- this file's job is the wiring
- * inside `SmtpConnection.handleRcpt` (which code for which decision, and the multi-chain
- * bookkeeping in `recordMatchedRecipient`), not the cache's own refresh/staleness/case-folding
- * logic, which is `source-acl-cache.test.ts`'s and `recipient-address.test.ts`'s job.
+ * inside `SmtpConnection.handleRcpt` (which code for which decision, `ADR-027`'s cross-chain
+ * rejection, and the bookkeeping in `recordMatchedRecipient`), not the cache's own
+ * refresh/staleness/case-folding logic, which is `source-acl-cache.test.ts`'s and
+ * `recipient-address.test.ts`'s job.
  */
 
 const openServers: EsmtpServer[] = [];
@@ -205,7 +206,7 @@ suite('ci', 'EsmtpServer recipient ACL gate over the wire (JR-4-05b)', () => {
 		expect(line).toMatch(/^250 2\.1\.5/);
 	});
 
-	it('two recipients resolving to different chains: both still get their own 250, and the ambiguity is logged exactly once -- never silently resolved (JR-4-05b point 4)', async () => {
+	it("ADR-027 (JR-4-17): a second RCPT TO for a different journal chain is rejected 452 4.5.3; the first recipient keeps its 250, and the rejection is logged with only the transaction's one committed chain in matchedRecipients", async () => {
 		const { logger, errors } = recordingLogger();
 		const { port } = await startServer({
 			logger,
@@ -219,19 +220,67 @@ suite('ci', 'EsmtpServer recipient ACL gate over the wire (JR-4-05b)', () => {
 		await mailFrom(socket, reader);
 
 		const first = await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>');
-		const second = await send(socket, reader, 'RCPT TO:<journal-b@journaling.example.com>');
 		expect(first).toMatch(/^250 2\.1\.5/);
-		expect(second).toMatch(/^250 2\.1\.5/);
+		const second = await send(socket, reader, 'RCPT TO:<journal-b@journaling.example.com>');
+		expect(second).toMatch(/^452 4\.5\.3/);
 
-		const ambiguityLogs = errors.filter((call) =>
-			String(call[1]).includes('more than one chain')
+		// The rejection is still logged (skill/ADR-027 requirement: visible, not silently dropped --
+		// full operator visibility is E10's job, but the log must not disappear because it is now
+		// rejected). The logged state proves the rejected recipient never entered the transaction:
+		// `matchedRecipients` at the moment of rejection holds only the first, accepted chain.
+		const rejectionLogs = errors.filter((call) =>
+			String(call[1]).includes('matched a different journal chain')
 		);
-		expect(ambiguityLogs).toHaveLength(1);
-		const fields = ambiguityLogs[0]![0] as { matchedRecipients: unknown[] };
-		expect(fields.matchedRecipients).toHaveLength(2);
+		expect(rejectionLogs).toHaveLength(1);
+		const fields = rejectionLogs[0]![0] as {
+			rejectedAddress: string;
+			rejectedSourceId: string;
+			rejectedChainScopeId: string;
+			matchedRecipients: { address: string; sourceId: string; chainScopeId: string }[];
+		};
+		expect(fields.rejectedAddress).toBe('journal-b@journaling.example.com');
+		expect(fields.rejectedSourceId).toBe('source-b');
+		expect(fields.rejectedChainScopeId).toBe('archive-b');
+		expect(fields.matchedRecipients).toHaveLength(1);
+		expect(fields.matchedRecipients[0]).toMatchObject({
+			address: 'journal-a@journaling.example.com',
+			chainScopeId: 'archive-a',
+		});
+
+		// The transaction stays assigned to exactly one chain, not corrupted by the rejected
+		// attempt: a further recipient of the *first* chain still succeeds and does not re-trigger
+		// the rejection log -- it would if the rejected chain had, after all, been recorded.
+		const third = await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>');
+		expect(third).toMatch(/^250 2\.1\.5/);
+		expect(
+			errors.filter((call) => String(call[1]).includes('matched a different journal chain'))
+		).toHaveLength(1);
 	});
 
-	it('the same recipient twice, or two recipients of the same source, do not log the ambiguity -- unproblematic, resolved by construction (a Set of distinct chains)', async () => {
+	it('RSET frees the connection after a 452 rejection: a recipient of the previously rejected chain is accepted in the next transaction', async () => {
+		const { port } = await startServer({
+			recipientAclEvaluator: fakeRecipientEvaluator((address) =>
+				address === 'journal-a@journaling.example.com'
+					? { kind: 'allowed', sourceId: 'source-a', chainScopeId: 'archive-a' }
+					: { kind: 'allowed', sourceId: 'source-b', chainScopeId: 'archive-b' }
+			),
+		});
+		const { socket, reader } = await connectAndGreet(port);
+		await mailFrom(socket, reader);
+		expect(await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>')).toMatch(
+			/^250 2\.1\.5/
+		);
+		expect(await send(socket, reader, 'RCPT TO:<journal-b@journaling.example.com>')).toMatch(
+			/^452 4\.5\.3/
+		);
+
+		expect(await send(socket, reader, 'RSET')).toMatch(/^250/);
+		await mailFrom(socket, reader);
+		const afterReset = await send(socket, reader, 'RCPT TO:<journal-b@journaling.example.com>');
+		expect(afterReset).toMatch(/^250 2\.1\.5/);
+	});
+
+	it('two recipients of the same source, or the same recipient twice, both stay ordinary 250s -- no rejection, no ambiguity log (ADR-027 only concerns a *different* chain)', async () => {
 		const { logger, errors } = recordingLogger();
 		const { port } = await startServer({
 			logger,
@@ -244,14 +293,20 @@ suite('ci', 'EsmtpServer recipient ACL gate over the wire (JR-4-05b)', () => {
 		const { socket, reader } = await connectAndGreet(port);
 		await mailFrom(socket, reader);
 
-		await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>');
-		await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>');
-		const third = await send(socket, reader, 'RCPT TO:<other-recipient@journaling.example.com>');
+		const first = await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>');
+		const second = await send(socket, reader, 'RCPT TO:<journal-a@journaling.example.com>');
+		const third = await send(
+			socket,
+			reader,
+			'RCPT TO:<other-recipient@journaling.example.com>'
+		);
+		expect(first).toMatch(/^250 2\.1\.5/);
+		expect(second).toMatch(/^250 2\.1\.5/);
 		expect(third).toMatch(/^250 2\.1\.5/);
 
-		const ambiguityLogs = errors.filter((call) =>
-			String(call[1]).includes('more than one chain')
+		const rejectionLogs = errors.filter((call) =>
+			String(call[1]).includes('matched a different journal chain')
 		);
-		expect(ambiguityLogs).toHaveLength(0);
+		expect(rejectionLogs).toHaveLength(0);
 	});
 });

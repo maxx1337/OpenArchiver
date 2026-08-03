@@ -336,7 +336,17 @@ export const SUITES: readonly SuiteSpec[] = [
 		// source addressing its own recipient is unaffected, an authenticated source addressing a
 		// different source's recipient is refused 550 5.7.1, and an unauthenticated connection is
 		// unaffected by the source-conflict check).
-		expectedTests: { ci: 669, nightly: 2, manual: 0 },
+		// 670 ci after JR-4-17 (ADR-027 -- a second RCPT TO for a different chain is rejected, not
+		// merely logged): the pre-existing "two recipients resolving to different chains" case in
+		// tests/unit/smtp-recipient-acl-protocol.test.ts was rewritten in place (not counted again) to
+		// assert the new 452 4.5.3 for the second recipient, the first recipient's 250 unaffected, and
+		// the rejection log naming the rejected recipient while `matchedRecipients` holds only the
+		// transaction's one committed chain -- plus a further recipient of that same chain still
+		// succeeding, unlogged. Net +2 new tests: RSET after a 452 rejection frees the connection so the
+		// previously rejected chain is accepted in the next transaction, and an explicit check that two
+		// recipients of the same source and the same recipient twice both stay 250 with no rejection log
+		// (the pre-existing "does not log" case, made to assert response codes too, not counted again).
+		expectedTests: { ci: 670, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',
