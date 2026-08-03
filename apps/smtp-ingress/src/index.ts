@@ -11,6 +11,7 @@ import {
 	PostgresSourceAclLookup,
 	SourceAclCache,
 } from '@open-archiver/journaling';
+import { createBcryptPasswordVerifier } from './bcrypt-password-verifier';
 import { readIngressConfigInput } from './config-from-env';
 import { createLedgerQuery } from './postgres-query';
 
@@ -94,10 +95,14 @@ async function main(): Promise<void> {
 		tls: config.tls,
 		logger,
 		sourceAclEvaluator: sourceAclCache,
-		// JR-4-05b: the same SourceAclCache instance -- one refresh cycle serves both the source-IP
-		// ACL and the recipient ACL, see that class's doc comment for why this is deliberately not a
-		// second cache.
+		// JR-4-05b/JR-4-05c: the same SourceAclCache instance for both the recipient ACL and the AUTH
+		// credential lookup -- one refresh cycle serves all three ACLs, see that class's doc comment
+		// for why this is deliberately not a second (or third) cache.
 		recipientAclEvaluator: sourceAclCache,
+		authCredentialEvaluator: sourceAclCache,
+		// JR-4-05c: bcrypt lives here, not in packages/journaling -- see PasswordVerifier's doc
+		// comment.
+		passwordVerifier: createBcryptPasswordVerifier(),
 		requireTlsResolver: createSourceAclRequireTlsResolver(
 			sourceAclCache,
 			config.tls.requireTls

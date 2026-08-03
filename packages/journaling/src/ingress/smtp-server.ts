@@ -175,6 +175,68 @@ import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
  * (`packages/journaling/src/spool/acceptance.ts`) already has `tlsVersion`/`tlsCipher` fields to
  * receive exactly these two values. Until that wiring lands, this task's job is only to have the
  * measured values sitting ready at that handover point, which is what is done and tested here.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `AUTH` PLAIN/LOGIN, TLS-only (`JR-4-05c`)
+ * ---------------------------------------------------------------------------------------------
+ * `AUTH` is an **additional**, optional proof of identity for a non-Exchange sender (Exchange
+ * Online's journal rule cannot authenticate at all, `00-rfc.md`'s own `AUTH` note) -- the *primary*
+ * access control stays the connect-time source ACL (`JR-4-05a`). Credentials come from
+ * `journaling_sources.smtp_username`/`smtp_password_hash`, read and cached by the *same*
+ * `SourceAclCache` refresh cycle `JR-4-05a`/`JR-4-05b` already built (`./source-acl-cache.ts`'s
+ * `authIndex`/`lookupCredential()`) -- no second database connection, no second polling loop.
+ *
+ * 1. **"Over plaintext is impossible" is structural, both directions.** `buildEhloResponseLines`'s
+ *    new fourth argument only ever adds the `AUTH` extension line when `tls.active` is already
+ *    true -- it can never be advertised before a handshake (the same "never lie about what is on
+ *    offer" posture `STARTTLS`'s own advertisement already has). Independently, and regardless of
+ *    what `EHLO` advertised or what `require_tls` is configured to, {@link SmtpConnection.handleAuthCommand}
+ *    itself refuses a bare `AUTH` on a connection where `this.tlsActive` is still `false` with
+ *    `538 5.7.11` (RFC 4954 section 4's dedicated code for exactly this) -- a client that never saw
+ *    `AUTH` offered can still attempt it blindly, and is still refused. This is deliberately a
+ *    *second*, independent gate from `TLS_MANDATED_VERBS`'s pre-existing `530 5.7.0` (which only
+ *    fires when `require_tls` is configured `true`; `AUTH` needs encryption unconditionally, even in
+ *    a deployment that never mandates TLS for `MAIL`/`RCPT`/`DATA` at all).
+ * 2. **An authenticated source addressing a *different* source's recipient is refused, not merged.**
+ *    `JR-4-05b` established that the *recipient* determines the chain (ADR-007); `AUTH` adds a
+ *    second identity to the same transaction, and the two can disagree (source A authenticates, then
+ *    sends `RCPT TO` a `routing_address` belonging to source B). Silently accepting that would let an
+ *    authenticated sender write into a chain its own credentials say nothing about -- so
+ *    {@link SmtpConnection.handleRcpt} rejects the recipient with `550 5.7.1` whenever
+ *    `this.authenticatedSourceId` is set and differs from the recipient ACL's matched `sourceId`,
+ *    while every recipient of the authenticated source's *own* chain is unaffected. See this slice's
+ *    report for why `5.7.1` ("delivery not authorized") rather than `5.1.1` ("no such user") is the
+ *    correct enhanced code here -- the recipient is a real, configured address; this authenticated
+ *    session simply is not the one allowed to deliver to it.
+ * 3. **Authentication persists for the whole connection, across `EHLO`/`RSET`.** Unlike the envelope
+ *    (`mailFrom`/`rcptTo`/`matchedRecipients`), `authenticatedSourceId` is **not** cleared by
+ *    {@link SmtpConnection.resetEnvelope} -- RFC 4954 section 4's "a second `AUTH` on an
+ *    already-authenticated connection is `503`" only makes sense if authentication outlives the
+ *    transactions sent under it, exactly the way a real MTA's multi-message connection expects.
+ * 4. **Mechanisms, ports, and where bcrypt lives.** `PLAIN` (RFC 4616, either as `AUTH PLAIN
+ *    <initial-response>` or as the answer to an empty `334` challenge) and `LOGIN` (the de facto
+ *    two-step `334`-prompted dialogue) are both implemented; parsing (`parseAuthArguments`,
+ *    `decodeSaslBase64`, `decodeSaslPlain`) is pure and tested without any bcrypt dependency at all.
+ *    The actual comparison goes through the injected {@link PasswordVerifier} port -- this package
+ *    depends on nothing but `@open-archiver/types`/`zod` (architecture section 2), so bcrypt itself
+ *    is `apps/smtp-ingress`'s concern (`bcryptjs`, the same library `packages/backend`'s
+ *    `AuthService`/`UserService` already use), the same "port in the package, implementation in the
+ *    app" split `JR-4-05a` already established for `SourceAclLookup` and `JR-4-02` for `IngressLogger`.
+ * 5. **Timing and information disclosure.** {@link AUTH_DUMMY_PASSWORD_HASH} is compared against on
+ *    every `'not_found'` username lookup (see {@link SmtpConnection.verifyCredentials}) so an
+ *    unknown username costs the same wall-clock time as a known one with a wrong password -- the
+ *    *absence* of a bcrypt call would itself be a timing oracle. Both failure classes -- unknown
+ *    username and wrong password for a real one -- answer with the exact same `535 5.7.8`, never a
+ *    distinguishing code or wording.
+ * 6. **`MAX_AUTH_ATTEMPTS_PER_CONNECTION`** bounds failed attempts on one already-open connection;
+ *    once exceeded, the *next* failure's own response code is replaced with `421` and the connection
+ *    is closed -- see that constant's doc comment for the chosen number and why `421`, never a `5xx`
+ *    (skill section 1: a local policy decision to stop this connection is not the same thing as a
+ *    permanent rejection of the sender).
+ * 7. **Nothing secret reaches the logger.** No log call in this `AUTH` implementation is ever passed
+ *    a password, a raw base64 SASL response, or a bcrypt hash; only usernames, source ids, and
+ *    outcome/enhanced-status-code fields are logged, the same posture `IngressLogger`'s own module
+ *    doc comment already holds every other log call in this file to.
  */
 
 /** Injected structured-logging port -- see this module's "Where `logLevel` actually gets used"
@@ -231,8 +293,48 @@ const TIMEOUT_ENHANCED_CODE = '4.4.2';
 
 /** Verbs `530 5.7.0` applies to when TLS is mandated and not yet active (`JR-4-04`) -- see
  * {@link SmtpConnection.processCommandLine}'s call site for the RFC 3207 citation and the reasoning
- * behind each inclusion/exclusion. */
+ * behind each inclusion/exclusion. `AUTH` is included since `JR-4-02`/`JR-4-04` in anticipation of
+ * this task; since `JR-4-05c` it is a recognised verb, gated *twice* -- this set only fires when
+ * `require_tls` is configured `true` (see {@link SmtpConnection.isTlsMandated}), while
+ * {@link SmtpConnection.handleAuthCommand}'s own `538 5.7.11` check fires unconditionally. See the
+ * module doc comment's "AUTH" section, point 1. */
 const TLS_MANDATED_VERBS = new Set(['MAIL', 'RCPT', 'DATA', 'BDAT', 'RSET', 'AUTH']);
+
+/**
+ * RFC 4954's two SASL mechanisms this receiver implements (`JR-4-05c`). Exchange Online's journal
+ * rule cannot authenticate at all (this file's module doc comment, "AUTH" section), so this exists
+ * only for non-Exchange senders such as a Postfix `always_bcc` configuration -- `PLAIN` and `LOGIN`
+ * together cover that case; nothing else (`CRAM-MD5`, `XOAUTH2`, ...) is in scope. Order is the
+ * advertised order in `EHLO`'s `AUTH` line.
+ */
+export const AUTH_MECHANISMS = ['PLAIN', 'LOGIN'] as const;
+
+/**
+ * Per-connection cap on failed `AUTH` attempts (`JR-4-05c`). An unbounded counter turns one already
+ * -open connection into a free credential-stuffing oracle limited only by TCP round-trip time.
+ * Three: generous enough that a legitimate client mistyping a password once or twice is not
+ * disconnected on the first slip, small enough that an automated guesser is cut off within a
+ * handful of round trips on any *single* connection. This is a per-connection backstop only --
+ * `JR-4-08` is what bounds attempts across many connections/IPs; this constant exists purely so one
+ * already-open connection cannot be reused for unlimited guesses regardless of what that broader
+ * limit ends up being.
+ */
+export const MAX_AUTH_ATTEMPTS_PER_CONNECTION = 3;
+
+/**
+ * A syntactically valid bcrypt hash (cost factor 10, matching `packages/backend`'s
+ * `hash(password, 10)` calls -- see `UserService.ts`) of a fixed, randomly generated, never-used
+ * placeholder password. Compared against on every `'not_found'` `AUTH` username lookup (see
+ * {@link SmtpConnection.verifyCredentials}) purely so the wall-clock cost of "unknown username" is
+ * the same as "known username, wrong password" -- skipping the bcrypt call for an unknown username
+ * would itself be a timing oracle revealing which usernames exist, independent of anything RFC 4954
+ * says about credential secrecy. This is not, and must never become, a real credential: no
+ * `journaling_sources` row is ever created with this exact hash by this product's own code (hashes
+ * are always generated from an operator-chosen or random password), and the result of comparing
+ * against it is always discarded -- see the call site.
+ */
+export const AUTH_DUMMY_PASSWORD_HASH =
+	'$2b$10$GyvVBF7BxkO7XFmTtMk.J.vGYQ7qoteJVuQ1GxsJbdZBNhZQbucwm';
 
 /**
  * Build the options {@link SmtpConnection.beginTlsUpgrade} passes to `new tls.TLSSocket(...)`.
@@ -267,9 +369,15 @@ const TLS_NOT_OFFERED: EhloTlsStatus = { available: false, active: false };
 
 /**
  * Build the `EHLO` extension lines: `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE <configured
- * value>`, `CHUNKING` (`JR-4-03`), and -- since `JR-4-04`, only when `tls.available && !tls.active`
- * -- `STARTTLS`. `tls` defaults to "not offered" so every existing call site that predates `JR-4-04`
- * keeps its prior behaviour unchanged.
+ * value>`, `CHUNKING` (`JR-4-03`), -- since `JR-4-04`, only when `tls.available && !tls.active` --
+ * `STARTTLS`, and -- since `JR-4-05c`, only when `authAvailable && tls.active` -- `AUTH PLAIN
+ * LOGIN`. `tls` defaults to "not offered" and `authAvailable` defaults to `false` so every existing
+ * call site that predates `JR-4-04`/`JR-4-05c` keeps its prior behaviour unchanged.
+ *
+ * `AUTH` is deliberately gated on `tls.active`, not merely `tls.available` the way `STARTTLS` is --
+ * see this file's module doc comment, "AUTH" section point 1: advertising an authentication
+ * mechanism this receiver will refuse with `538` the moment it is actually attempted would be
+ * exactly the kind of protocol lie `CHUNKING`/`STARTTLS` were already careful never to make.
  *
  * Pure and socket-free on purpose: the wire-level proof that a real client sees exactly these lines
  * lives in `packages/journaling/tests/unit/smtp-server-protocol.test.ts` (a real client is required
@@ -281,7 +389,8 @@ const TLS_NOT_OFFERED: EhloTlsStatus = { available: false, active: false };
 export function buildEhloResponseLines(
 	hostname: string,
 	sizeLimitBytes: number,
-	tls: EhloTlsStatus = TLS_NOT_OFFERED
+	tls: EhloTlsStatus = TLS_NOT_OFFERED,
+	authAvailable = false
 ): readonly string[] {
 	const lines = [
 		`${hostname} greets you`,
@@ -293,6 +402,9 @@ export function buildEhloResponseLines(
 	];
 	if (tls.available && !tls.active) {
 		lines.push('STARTTLS');
+	}
+	if (authAvailable && tls.active) {
+		lines.push(`AUTH ${AUTH_MECHANISMS.join(' ')}`);
 	}
 	return lines;
 }
@@ -386,6 +498,88 @@ export function parseBdatArguments(rest: string): ParsedBdat | null {
 		return null;
 	}
 	return { chunkSize, last: lastToken !== undefined };
+}
+
+/** Parsed `AUTH <mechanism> [initial-response]` (RFC 4954 section 4). `initialResponse` is `null`
+ * when the client did not include one -- the caller must then challenge with a `334` continuation
+ * (see `SmtpConnection.startAuthPlain`/`startAuthLogin`). */
+export interface ParsedAuthCommand {
+	readonly mechanism: string;
+	readonly initialResponse: string | null;
+}
+
+const AUTH_ARGS_PATTERN = /^(\S+)(?:\s+(\S+))?\s*$/;
+
+/**
+ * Parse the argument text following the `AUTH` verb. Returns `null` on a syntax error (a bare
+ * `AUTH` with no mechanism at all) -- the caller maps that to `501 5.5.4`, the same bucket every
+ * other malformed-argument case in this file uses. `mechanism` is upper-cased here so callers never
+ * repeat a case-insensitive comparison (RFC 4954 does not require a client to send it upper-case).
+ */
+export function parseAuthArguments(rest: string): ParsedAuthCommand | null {
+	const match = AUTH_ARGS_PATTERN.exec(rest.trim());
+	if (!match) {
+		return null;
+	}
+	const [, mechanism, initialResponse] = match;
+	return { mechanism: mechanism!.toUpperCase(), initialResponse: initialResponse ?? null };
+}
+
+/**
+ * Strict base64 decode for a SASL continuation response (RFC 4954's `base64` production). Rejects
+ * anything `Buffer.from(_, 'base64')` would otherwise silently tolerate (stray characters, wrong
+ * padding length) -- malformed base64 must produce `501 5.5.2`, never a garbage-but-accepted decode.
+ * The literal token `"="` is RFC 4954's grammar for an explicitly *empty* response (distinct from
+ * simply not sending an initial response at all, which is `null` in {@link ParsedAuthCommand}) and
+ * is special-cased to decode to a zero-length buffer rather than being rejected by the regex below
+ * (a lone `"="` is not valid base64 padding on its own).
+ */
+export function decodeSaslBase64(input: string): Buffer | null {
+	if (input === '=') {
+		return Buffer.alloc(0);
+	}
+	if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input) || input.length % 4 !== 0) {
+		return null;
+	}
+	return Buffer.from(input, 'base64');
+}
+
+/** A decoded SASL PLAIN response (RFC 4616): `authzid`/`authcid`/`password`, NUL-separated in the
+ * wire payload. `authzid` (the authorization identity) is parsed but never used for a decision --
+ * this receiver authenticates against `authcid` (the authentication identity) only, the same
+ * simplification most SASL PLAIN servers make when there is no separate notion of "act as another
+ * identity" to support. */
+export interface DecodedSaslPlain {
+	readonly authzid: string;
+	readonly authcid: string;
+	readonly password: string;
+}
+
+/**
+ * Decode a SASL PLAIN payload into its three NUL-separated fields. Returns `null` if the payload is
+ * not *exactly* three fields -- the caller maps that to `501 5.5.2`, the same code a malformed
+ * base64 envelope gets: a best-effort guess at which bytes are the username versus the password
+ * would be exactly the kind of silent misinterpretation this project's parsers avoid elsewhere
+ * (`parseBdatArguments`, `parseRcptToArguments`).
+ */
+export function decodeSaslPlain(payload: Buffer): DecodedSaslPlain | null {
+	const parts: Buffer[] = [];
+	let start = 0;
+	for (let i = 0; i < payload.length; i++) {
+		if (payload[i] === 0x00) {
+			parts.push(payload.subarray(start, i));
+			start = i + 1;
+		}
+	}
+	parts.push(payload.subarray(start));
+	if (parts.length !== 3) {
+		return null;
+	}
+	return {
+		authzid: parts[0]!.toString('utf8'),
+		authcid: parts[1]!.toString('utf8'),
+		password: parts[2]!.toString('utf8'),
+	};
 }
 
 /**
@@ -720,6 +914,53 @@ export type RecipientAclDecision =
 	| { readonly kind: 'denied' }
 	| { readonly kind: 'unavailable' };
 
+/**
+ * What {@link EsmtpServer} needs from the `AUTH` credential store (`JR-4-05c`). Implemented by
+ * `SourceAclCache` (`./source-acl-cache.ts`), the same cache and refresh cycle
+ * {@link SourceAclEvaluator}/{@link RecipientAclEvaluator} already use -- see that file's doc
+ * comment for why this is deliberately not a fourth database connection.
+ */
+export interface AuthCredentialEvaluator {
+	lookupCredential(username: string): AuthCredentialLookupResult;
+}
+
+/**
+ * The three outcomes {@link AuthCredentialEvaluator.lookupCredential} can report -- deliberately the
+ * same three-shape family as {@link SourceAclDecision}/{@link RecipientAclDecision}:
+ *
+ *  - `'found'`: `username` matched an active source's `smtp_username`. Carries that source's
+ *    identity, `chainScopeId`, and the stored bcrypt hash for the caller to compare the supplied
+ *    password against via {@link PasswordVerifier}.
+ *  - `'not_found'`: the ACL is known and no active source's `smtp_username` matches -- covers both
+ *    a genuinely unknown username and a real source that simply has no `AUTH` credentials
+ *    configured (see `./source-acl-cache.ts`'s `lookupCredential` doc comment for why the two are
+ *    not distinguished). Always a proven authentication failure (`535 5.7.8`), never a local one.
+ *  - `'unavailable'`: the ACL is not currently known (no snapshot ever loaded, or the last one is
+ *    stale) -- a local failure, never `535` (`454 4.7.0` instead; skill section 1).
+ */
+export type AuthCredentialLookupResult =
+	| {
+			readonly kind: 'found';
+			readonly sourceId: string;
+			readonly chainScopeId: string;
+			readonly passwordHash: string;
+	  }
+	| { readonly kind: 'not_found' }
+	| { readonly kind: 'unavailable' };
+
+/**
+ * Verify a plaintext password against a stored bcrypt hash (`JR-4-05c`). The only reason this port
+ * exists at all: `packages/journaling` depends on nothing but `@open-archiver/types`/`zod`
+ * (architecture section 2), so bcrypt itself cannot be imported here -- `apps/smtp-ingress` supplies
+ * the real implementation over `bcryptjs`, the same library `packages/backend`'s `AuthService`
+ * already uses. A test supplies a trivial fake instead (see `smtp-server.test.ts`/
+ * `tests/unit/smtp-auth-protocol.test.ts`), so none of this file's own tests need a real bcrypt
+ * comparison to run.
+ */
+export interface PasswordVerifier {
+	compare(password: string, hash: string): Promise<boolean>;
+}
+
 /** Everything {@link RequireTlsResolver} needs to decide (`JR-4-04`, extended by `JR-4-05`). */
 export interface RequireTlsContext {
 	readonly remoteIp: string | null;
@@ -787,6 +1028,43 @@ class SmtpConnection {
 	/** The negotiated cipher suite name (e.g. `'TLS_AES_256_GCM_SHA384'`), same source and same
 	 * consumer as {@link tlsVersion}. */
 	private tlsCipher: string | null = null;
+	/** `null` until a successful `AUTH` (`JR-4-05c`); the authenticated source's identity from then
+	 * on. **Not** cleared by {@link resetEnvelope} -- see the module doc comment's "AUTH" section,
+	 * point 3: authentication persists for the whole connection, across `EHLO`/`RSET`, exactly what
+	 * makes "a second AUTH is 503" (RFC 4954 section 4) a meaningful check at all. */
+	private authenticatedSourceId: string | null = null;
+	/** The authenticated source's `chainScopeId`, same lifetime as {@link authenticatedSourceId}. Not
+	 * read by anything in this task -- `JR-4-06` is the eventual consumer, the same "value sits ready
+	 * at the handover point" pattern `tlsVersion`/`tlsCipher` already follow. */
+	private authenticatedChainScopeId: string | null = null;
+	/** Failed `AUTH` attempts so far this connection (`JR-4-05c`) -- never reset except by a
+	 * *successful* `AUTH` (see {@link verifyCredentials}). Compared against
+	 * {@link MAX_AUTH_ATTEMPTS_PER_CONNECTION} in {@link rejectAuthAttempt}. */
+	private authFailureCount = 0;
+	/** Set while a `LOGIN` dialogue has sent the username prompt and is waiting for the client's
+	 * base64-encoded username response; cleared once that response has been read (whether it
+	 * decodes successfully or not). `null` at every other time, including while `PLAIN`'s single
+	 * continuation is pending -- that path never needs to remember a partial credential. */
+	private authLoginUsername: string | null = null;
+	/**
+	 * Redirects the *next* CRLF-terminated line {@link drainCommandCarry} reads to an `AUTH`
+	 * continuation handler instead of {@link processCommandLine} -- a SASL continuation response is
+	 * not an SMTP command and must never be parsed as one (unlike `DATA`/`BDAT`'s raw-byte phases,
+	 * which need their own byte-counting state, a continuation response is just an ordinary line, so
+	 * this reuses the same line-splitting loop rather than adding a second one). Set by
+	 * {@link startAuthPlain}/{@link startAuthLogin}/{@link continueAuthLoginUsername}, consumed
+	 * (read and cleared) exactly once by {@link drainCommandCarry}.
+	 */
+	private authContinuation: ((line: string) => void) | null = null;
+	/**
+	 * `true` while {@link verifyCredentials}'s bcrypt comparison is in flight -- the one place this
+	 * connection does asynchronous work mid-command. {@link drainCommandCarry} stops pulling further
+	 * lines out of `commandCarry` while this is `true` (any bytes a pipelining client already sent
+	 * stay buffered) so a second command can never be processed, and its reply written, ahead of the
+	 * `AUTH` verdict still being computed. Reset in {@link verifyCredentials}'s `finally`, which then
+	 * resumes {@link drainCommandCarry} itself so nothing buffered during verification is stranded.
+	 */
+	private commandProcessingSuspended = false;
 
 	constructor(
 		private socket: net.Socket,
@@ -804,7 +1082,19 @@ class SmtpConnection {
 		 * `tlsSecureContext`/`sourceAclEvaluator` already established, so every pre-existing test that
 		 * does not care about the recipient ACL keeps constructing a bare `EsmtpServer`). Production
 		 * always supplies a `SourceAclCache`. */
-		private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined
+		private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined,
+		/** `undefined` disables `AUTH` entirely -- the verb is never advertised (see
+		 * {@link buildEhloResponseLines}'s `authAvailable` argument) and a bare `AUTH` command falls
+		 * through to the ordinary "not recognised" `500`, the same convention every other optional
+		 * evaluator in this constructor already established. Production always supplies the same
+		 * `SourceAclCache` instance passed as `recipientAclEvaluator` (`JR-4-05c`, one refresh cycle
+		 * serving a third ACL). */
+		private readonly authCredentialEvaluator: AuthCredentialEvaluator | undefined,
+		/** `undefined` alongside `authCredentialEvaluator` -- both are set together in production
+		 * (`apps/smtp-ingress`'s `createBcryptPasswordVerifier()`) or both left `undefined` to
+		 * disable `AUTH`. See {@link PasswordVerifier}'s doc comment for why this is a separate
+		 * injected port rather than a dependency of this package. */
+		private readonly passwordVerifier: PasswordVerifier | undefined
 	) {
 		// Connection-level backstop, independent of protocol state: Node re-arms this internally on
 		// any read *or* write activity on the socket, so it fires only on genuine idleness --
@@ -829,7 +1119,10 @@ class SmtpConnection {
 		socket.on('data', (chunk: Buffer) => this.onData(chunk));
 		socket.on('close', () => this.disarmProtocolTimer());
 		socket.on('error', (err) => {
-			this.logger.warn({ err, remoteAddress: socket.remoteAddress }, 'smtp-ingress: socket error');
+			this.logger.warn(
+				{ err, remoteAddress: socket.remoteAddress },
+				'smtp-ingress: socket error'
+			);
 		});
 	}
 
@@ -855,7 +1148,11 @@ class SmtpConnection {
 	 */
 	private drainCommandCarry(): void {
 		for (;;) {
-			if (this.socket.destroyed) {
+			if (this.socket.destroyed || this.commandProcessingSuspended) {
+				// `commandProcessingSuspended` (`JR-4-05c`): a bcrypt comparison is in flight for the
+				// line just read -- see that field's doc comment. Any further bytes already sitting in
+				// `commandCarry` stay put; `verifyCredentials`'s `finally` re-enters this loop once the
+				// comparison resolves.
 				return;
 			}
 			const idx = this.commandCarry.indexOf(CRLF);
@@ -868,7 +1165,16 @@ class SmtpConnection {
 			}
 			const lineBuf = this.commandCarry.subarray(0, idx);
 			this.commandCarry = this.commandCarry.subarray(idx + 2);
-			this.processCommandLine(lineBuf.toString('utf8'));
+			if (this.authContinuation) {
+				// A pending SASL continuation response (`JR-4-05c`) -- not an SMTP command, see
+				// `authContinuation`'s own doc comment for why this line-splitting loop is reused rather
+				// than parsing it through `processCommandLine`.
+				const continuation = this.authContinuation;
+				this.authContinuation = null;
+				continuation(lineBuf.toString('utf8'));
+			} else {
+				this.processCommandLine(lineBuf.toString('utf8'));
+			}
 			if (this.socket.destroyed) {
 				return;
 			}
@@ -917,11 +1223,12 @@ class SmtpConnection {
 		// grouped with `EHLO` (the Product Owner's instruction: a client that cannot even see
 		// `STARTTLS` advertised under a plain `HELO` reply must still be able to attempt it blindly),
 		// and `RSET` is deliberately gated -- the RFC's exempt list does not include it, and nothing
-		// about resetting the envelope requires plaintext. `AUTH` is listed for when `JR-4-05`
-		// implements it; today it always falls through to the `default` 500 case below regardless of
-		// this check, since it is not yet a recognised verb. Checked once, before the switch, so it
-		// applies uniformly and cannot be bypassed by whatever envelope state a handler would
-		// otherwise accept.
+		// about resetting the envelope requires plaintext. `AUTH` is included too, but only fires this
+		// gate when `require_tls` is configured `true` (`isTlsMandated()`) -- `handleAuthCommand`'s own
+		// `538 5.7.11` check (module doc comment, "AUTH" section point 1) is what makes AUTH-over-
+		// plaintext impossible unconditionally, independent of that configuration. Checked once, before
+		// the switch, so it applies uniformly and cannot be bypassed by whatever envelope state a
+		// handler would otherwise accept.
 		if (!this.tlsActive && TLS_MANDATED_VERBS.has(verb) && this.isTlsMandated()) {
 			this.writeResponse(530, '5.7.0', 'Must issue a STARTTLS command first');
 			this.armCommandTimer();
@@ -936,10 +1243,15 @@ class SmtpConnection {
 				this.socket.write(
 					formatMultilineResponse(
 						250,
-						buildEhloResponseLines(this.smtp.hostname, this.smtp.sizeLimitBytes, {
-							available: this.tlsSecureContext !== null,
-							active: this.tlsActive,
-						})
+						buildEhloResponseLines(
+							this.smtp.hostname,
+							this.smtp.sizeLimitBytes,
+							{
+								available: this.tlsSecureContext !== null,
+								active: this.tlsActive,
+							},
+							this.authCredentialEvaluator !== undefined
+						)
 					)
 				);
 				this.armCommandTimer();
@@ -968,6 +1280,9 @@ class SmtpConnection {
 				return;
 			case 'STARTTLS':
 				this.handleStarttlsCommand(rest);
+				return;
+			case 'AUTH':
+				this.handleAuthCommand(rest);
 				return;
 			case 'MAIL':
 				this.handleMail(rest);
@@ -1110,6 +1425,252 @@ class SmtpConnection {
 		this.armCommandTimer();
 	}
 
+	/**
+	 * `AUTH <mechanism> [initial-response]` (RFC 4954 section 4, `JR-4-05c`). See the module doc
+	 * comment's "AUTH" section for the full design; this method is the entry gate -- every rejection
+	 * that does not depend on which mechanism was requested lives here, in the order the RFC and the
+	 * skill's response table both put local/structural failures ahead of anything mechanism-specific.
+	 */
+	private handleAuthCommand(rest: string): void {
+		if (this.authCredentialEvaluator === undefined || this.passwordVerifier === undefined) {
+			// AUTH is not configured for this deployment at all -- never advertised in EHLO either
+			// (see buildEhloResponseLines's authAvailable argument), so a client that attempts it
+			// unprompted gets exactly what an actually-unrecognised verb gets.
+			this.writeResponse(500, '5.5.1', 'Command not recognized');
+			this.armCommandTimer();
+			return;
+		}
+		if (this.authenticatedSourceId !== null) {
+			// RFC 4954 section 4: a client MUST NOT attempt AUTH a second time once authenticated.
+			this.writeResponse(503, '5.5.1', 'Already authenticated');
+			this.armCommandTimer();
+			return;
+		}
+		if (this.mailFrom !== null) {
+			// RFC 4954 section 4: AUTH is not permitted once a mail transaction is in progress.
+			this.writeResponse(503, '5.5.1', 'Bad sequence of commands');
+			this.armCommandTimer();
+			return;
+		}
+		if (!this.tlsActive) {
+			// Unconditional -- independent of `require_tls`/`requireTlsResolver` (see the module doc
+			// comment's "AUTH" section, point 1, and TLS_MANDATED_VERBS's updated comment for how this
+			// differs from the pre-existing 530 gate). RFC 4954 section 4's dedicated code for exactly
+			// this condition.
+			this.writeResponse(
+				538,
+				'5.7.11',
+				'Encryption required for requested authentication mechanism'
+			);
+			this.armCommandTimer();
+			return;
+		}
+		const parsed = parseAuthArguments(rest);
+		if (!parsed) {
+			this.writeResponse(501, '5.5.4', 'Syntax error in AUTH command');
+			this.armCommandTimer();
+			return;
+		}
+		if (parsed.mechanism === 'PLAIN') {
+			this.startAuthPlain(parsed.initialResponse);
+			return;
+		}
+		if (parsed.mechanism === 'LOGIN') {
+			this.startAuthLogin(parsed.initialResponse);
+			return;
+		}
+		// RFC 4954 section 5's own example uses this exact wording for an unsupported mechanism.
+		this.writeResponse(504, '5.5.4', 'Unrecognized authentication type');
+		this.armCommandTimer();
+	}
+
+	/** `AUTH PLAIN` (RFC 4616 payload, RFC 4954 framing). Two forms, both handled here: the
+	 * initial-response form (`initialResponse` non-`null`, decoded immediately) and the
+	 * empty-challenge form (`null`: a `334` continuation is sent and the next line is the whole
+	 * SASL-PLAIN blob, read back through {@link authContinuation}). */
+	private startAuthPlain(initialResponse: string | null): void {
+		if (initialResponse === null) {
+			this.authContinuation = (line) => this.continueAuthPlain(line);
+			this.writeContinuation('');
+			this.armCommandTimer();
+			return;
+		}
+		this.continueAuthPlain(initialResponse);
+	}
+
+	private continueAuthPlain(responseText: string): void {
+		if (responseText.trim() === '*') {
+			// RFC 4954 section 4: the client may cancel by sending a lone "*"; the server MUST reject
+			// the AUTH command with 501. No enhanced code is given in the RFC text itself -- 5.7.0 is
+			// the wording Postfix/Exim use for this exact case, the same "well-known real-world
+			// precedent, cited" posture handleStarttlsCommand's 454 4.7.0 already follows.
+			this.rejectAuthAttempt(501, '5.7.0', 'Authentication cancelled');
+			return;
+		}
+		const decoded = decodeSaslBase64(responseText);
+		if (decoded === null) {
+			this.rejectAuthAttempt(501, '5.5.2', 'Cannot Base64-decode response');
+			return;
+		}
+		const plain = decodeSaslPlain(decoded);
+		if (plain === null) {
+			this.rejectAuthAttempt(501, '5.5.2', 'Cannot Base64-decode response');
+			return;
+		}
+		this.verifyCredentials(plain.authcid, plain.password);
+	}
+
+	/** `AUTH LOGIN` -- the de facto two-step `334`-prompted dialogue (not itself defined by RFC 4954,
+	 * which only standardises the `AUTH` framing and `PLAIN`; `LOGIN` is the near-universal
+	 * convention every major mail client and server also implements). An `initialResponse` is
+	 * accepted too (some real clients send `AUTH LOGIN <base64-username>`), skipping straight to the
+	 * password prompt. */
+	private startAuthLogin(initialResponse: string | null): void {
+		if (initialResponse !== null) {
+			this.continueAuthLoginUsername(initialResponse);
+			return;
+		}
+		this.authContinuation = (line) => this.continueAuthLoginUsername(line);
+		this.writeContinuation(Buffer.from('Username:', 'utf8').toString('base64'));
+		this.armCommandTimer();
+	}
+
+	private continueAuthLoginUsername(responseText: string): void {
+		if (responseText.trim() === '*') {
+			this.rejectAuthAttempt(501, '5.7.0', 'Authentication cancelled');
+			return;
+		}
+		const decoded = decodeSaslBase64(responseText);
+		if (decoded === null) {
+			this.rejectAuthAttempt(501, '5.5.2', 'Cannot Base64-decode response');
+			return;
+		}
+		this.authLoginUsername = decoded.toString('utf8');
+		this.authContinuation = (line) => this.continueAuthLoginPassword(line);
+		this.writeContinuation(Buffer.from('Password:', 'utf8').toString('base64'));
+		this.armCommandTimer();
+	}
+
+	private continueAuthLoginPassword(responseText: string): void {
+		const username = this.authLoginUsername;
+		this.authLoginUsername = null;
+		if (responseText.trim() === '*') {
+			this.rejectAuthAttempt(501, '5.7.0', 'Authentication cancelled');
+			return;
+		}
+		const decoded = decodeSaslBase64(responseText);
+		if (decoded === null) {
+			this.rejectAuthAttempt(501, '5.5.2', 'Cannot Base64-decode response');
+			return;
+		}
+		this.verifyCredentials(username ?? '', decoded.toString('utf8'));
+	}
+
+	/**
+	 * The credential check both mechanisms converge on. Looks up `username` synchronously (the
+	 * cache, like every other ACL lookup in this file), then runs the actual bcrypt comparison
+	 * through {@link passwordVerifier} -- the one asynchronous step in this connection's whole
+	 * command path, guarded by {@link commandProcessingSuspended} (see that field's doc comment).
+	 *
+	 * **Timing and information disclosure** (module doc comment "AUTH" section, point 5): when
+	 * `lookup.kind === 'not_found'`, the comparison still runs, against
+	 * {@link AUTH_DUMMY_PASSWORD_HASH} instead of a real hash, and its result is unconditionally
+	 * discarded -- `matches` is only ever consulted when `lookup.kind === 'found'`. Skipping the
+	 * bcrypt call for an unknown username would make the *absence* of that call itself a timing
+	 * oracle; running it against a fixed dummy hash keeps the wall-clock cost indistinguishable from
+	 * a real, wrong-password comparison. Both failure classes converge on the exact same `535 5.7.8`,
+	 * with no wording that could tell a caller which one occurred.
+	 */
+	private verifyCredentials(username: string, password: string): void {
+		const lookup = this.authCredentialEvaluator!.lookupCredential(username);
+		if (lookup.kind === 'unavailable') {
+			// The cache is not currently known -- a local failure (skill section 1), never 535.
+			this.writeResponse(454, '4.7.0', 'Temporary authentication failure');
+			this.armCommandTimer();
+			return;
+		}
+		this.commandProcessingSuspended = true;
+		const hashToCompare =
+			lookup.kind === 'found' ? lookup.passwordHash : AUTH_DUMMY_PASSWORD_HASH;
+		this.passwordVerifier!.compare(password, hashToCompare)
+			.then(
+				(matches) => {
+					if (lookup.kind === 'found' && matches) {
+						this.authenticatedSourceId = lookup.sourceId;
+						this.authenticatedChainScopeId = lookup.chainScopeId;
+						this.authFailureCount = 0;
+						this.writeResponse(235, '2.7.0', 'Authentication successful');
+						this.armCommandTimer();
+					} else {
+						// `lookup.kind === 'not_found'` always lands here regardless of `matches` -- see
+						// this method's own doc comment.
+						this.rejectAuthAttempt(535, '5.7.8', 'Authentication credentials invalid');
+					}
+				},
+				(err: unknown) => {
+					// The verifier itself failed (e.g. a corrupt stored hash) -- a local/environment
+					// problem, not a proven-wrong credential: it does not count against
+					// MAX_AUTH_ATTEMPTS_PER_CONNECTION and gets skill section 1's "never a 5xx for a
+					// local failure" code, not 535.
+					this.logger.error(
+						{ err },
+						'smtp-ingress: password verifier failed during AUTH'
+					);
+					this.writeResponse(454, '4.7.0', 'Temporary authentication failure');
+					this.armCommandTimer();
+				}
+			)
+			.finally(() => {
+				this.commandProcessingSuspended = false;
+				if (!this.socket.destroyed) {
+					this.drainCommandCarry();
+				}
+			});
+	}
+
+	/**
+	 * Common failure path for every rejected `AUTH` attempt except an unrecognised mechanism (`504`
+	 * is a different rejection class, handled directly in {@link handleAuthCommand} without counting
+	 * against the limit -- naming a mechanism this server never implements is not a credential
+	 * guess). Counts the failure against {@link MAX_AUTH_ATTEMPTS_PER_CONNECTION}; once exceeded, this
+	 * attempt's own response code is replaced with `421` and the connection is closed instead -- see
+	 * that constant's doc comment for the chosen number and why `421`, never a `5xx`.
+	 */
+	private rejectAuthAttempt(code: number, enhancedCode: string, message: string): void {
+		this.authFailureCount += 1;
+		this.authLoginUsername = null;
+		this.authContinuation = null;
+		if (this.authFailureCount > MAX_AUTH_ATTEMPTS_PER_CONNECTION) {
+			this.writeResponse(
+				421,
+				'4.7.0',
+				`${this.smtp.hostname} Error: too many authentication failures`
+			);
+			this.disarmProtocolTimer();
+			this.socket.end();
+			// Mirrors onTimeout's forced close: a peer that stopped reading may never acknowledge the
+			// FIN.
+			const forceClose = setTimeout(() => {
+				if (!this.socket.destroyed) {
+					this.socket.destroy();
+				}
+			}, 1_000);
+			forceClose.unref();
+			return;
+		}
+		this.writeResponse(code, enhancedCode, message);
+		this.armCommandTimer();
+	}
+
+	/** `334 <base64>` continuation prompt (RFC 4954's `continue-req` grammar). Never carries an
+	 * enhanced status code -- the same rule {@link formatMultilineResponse}'s doc comment already
+	 * states for `EHLO` extension lines. */
+	private writeContinuation(base64Text: string): void {
+		if (!this.socket.destroyed) {
+			this.socket.write(`334 ${base64Text}\r\n`);
+		}
+	}
+
 	private handleMail(rest: string): void {
 		if (this.state !== 'ready') {
 			this.writeResponse(503, '5.5.1', 'Bad sequence of commands');
@@ -1172,7 +1733,33 @@ class SmtpConnection {
 				// connect-time gate (421, closes the whole connection because nothing at all can be
 				// decided yet), this keeps the session open: RCPT is a per-command reply, and the
 				// client may retry it or the sending MTA may requeue just this recipient.
-				this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
+				this.writeResponse(
+					451,
+					'4.3.0',
+					'Requested action aborted: local error in processing'
+				);
+				this.armCommandTimer();
+				return;
+			}
+			// `JR-4-05c`, module doc comment "AUTH" section point 2: an authenticated source
+			// addressing a *different* source's routing_address. The recipient ACL matched a real,
+			// configured address (so this is not "no such user", `5.1.1`) -- but this authenticated
+			// session's own credentials say nothing about that source's chain, so delivering into it
+			// would let one authenticated identity write into another's archive. `550 5.7.1`
+			// ("delivery not authorized") is a permanent rejection, correct here the same way every
+			// other `'denied'`-shaped case in this file is: this is the sender's own doing (it chose
+			// to authenticate as one source and address another's recipient), not a transient
+			// condition. Recipients of the authenticated source's *own* chain are unaffected -- only a
+			// mismatch is rejected, never every RCPT on an authenticated connection.
+			if (
+				this.authenticatedSourceId !== null &&
+				decision.sourceId !== this.authenticatedSourceId
+			) {
+				this.writeResponse(
+					550,
+					'5.7.1',
+					'Recipient address rejected: not authorized for this authenticated session'
+				);
 				this.armCommandTimer();
 				return;
 			}
@@ -1537,6 +2124,21 @@ export interface EsmtpServerOptions {
 	 * (see `./source-acl-cache.ts`'s doc comment for why this is the same cache, not a second one).
 	 */
 	readonly recipientAclEvaluator?: RecipientAclEvaluator;
+	/**
+	 * `AUTH` credential lookup (`JR-4-05c`). `undefined` (the default, together with
+	 * `passwordVerifier` left `undefined` too) disables `AUTH` entirely -- never advertised in
+	 * `EHLO`, and a bare `AUTH` command falls through to the ordinary `500`, the same convention
+	 * `sourceAclEvaluator`/`recipientAclEvaluator` already established. Production always supplies
+	 * the same `SourceAclCache` instance passed as those two (one refresh cycle, three ACLs -- see
+	 * `./source-acl-cache.ts`'s doc comment).
+	 */
+	readonly authCredentialEvaluator?: AuthCredentialEvaluator;
+	/**
+	 * Bcrypt comparison port for `AUTH` (`JR-4-05c`). `apps/smtp-ingress/src/index.ts` passes
+	 * `createBcryptPasswordVerifier()`'s result here in production -- see {@link PasswordVerifier}'s
+	 * doc comment for why this package cannot depend on bcrypt itself.
+	 */
+	readonly passwordVerifier?: PasswordVerifier;
 }
 
 /**
@@ -1556,6 +2158,8 @@ export class EsmtpServer {
 	private readonly requireTlsResolver: RequireTlsResolver;
 	private readonly sourceAclEvaluator: SourceAclEvaluator | undefined;
 	private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined;
+	private readonly authCredentialEvaluator: AuthCredentialEvaluator | undefined;
+	private readonly passwordVerifier: PasswordVerifier | undefined;
 
 	constructor(options: EsmtpServerOptions) {
 		this.smtp = options.smtp;
@@ -1568,6 +2172,8 @@ export class EsmtpServer {
 		this.requireTlsResolver = options.requireTlsResolver ?? (() => processRequireTls);
 		this.sourceAclEvaluator = options.sourceAclEvaluator;
 		this.recipientAclEvaluator = options.recipientAclEvaluator;
+		this.authCredentialEvaluator = options.authCredentialEvaluator;
+		this.passwordVerifier = options.passwordVerifier;
 		this.server = net.createServer((socket) => this.handleConnection(socket));
 	}
 
@@ -1641,7 +2247,9 @@ export class EsmtpServer {
 			this.logger,
 			this.tlsSecureContext,
 			this.requireTlsResolver,
-			this.recipientAclEvaluator
+			this.recipientAclEvaluator,
+			this.authCredentialEvaluator,
+			this.passwordVerifier
 		);
 	}
 }

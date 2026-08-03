@@ -37,6 +37,8 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					allowed_ips: ['192.0.2.0/24', '2001:db8::/32'],
 					require_tls: true,
 					routing_address: 'journal-1@journaling.test.invalid',
+					smtp_username: 'journal-1',
+					smtp_password_hash: '$2b$10$abcdefghijklmnopqrstuv',
 				},
 			]);
 			const lookup = new PostgresSourceAclLookup(query);
@@ -49,8 +51,29 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					allowedIps: ['192.0.2.0/24', '2001:db8::/32'],
 					requireTls: true,
 					routingAddress: 'journal-1@journaling.test.invalid',
+					smtpUsername: 'journal-1',
+					smtpPasswordHash: '$2b$10$abcdefghijklmnopqrstuv',
 				},
 			]);
+		});
+
+		it('maps smtp_username/smtp_password_hash through as null when AUTH is not configured for a source (JR-4-05c)', async () => {
+			const { query } = fakeQuery([
+				{
+					id: 'source-1b',
+					ingestion_source_id: 'archive-1b',
+					allowed_ips: [],
+					require_tls: false,
+					routing_address: 'journal-1b@journaling.test.invalid',
+					smtp_username: null,
+					smtp_password_hash: null,
+				},
+			]);
+			const lookup = new PostgresSourceAclLookup(query);
+			const rows = await lookup.listActiveSources();
+
+			expect(rows[0]!.smtpUsername).toBeNull();
+			expect(rows[0]!.smtpPasswordHash).toBeNull();
 		});
 
 		it('decodes allowed_ips when it arrives as JSON text rather than a decoded array', async () => {

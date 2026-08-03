@@ -3,6 +3,8 @@ import { matchesCidr, parseCidr, type ParsedCidr } from './cidr';
 import { normalizeJournalRecipient } from './recipient-address';
 import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-port';
 import type {
+	AuthCredentialEvaluator,
+	AuthCredentialLookupResult,
 	IngressLogger,
 	RecipientAclDecision,
 	RecipientAclEvaluator,
@@ -26,7 +28,7 @@ import type {
  * call is a pure in-memory lookup against the last successfully loaded snapshot.
  *
  * ---------------------------------------------------------------------------------------------
- * One cache, one refresh cycle, two ACLs (`JR-4-05b`)
+ * One cache, one refresh cycle, three ACLs (`JR-4-05b`, `JR-4-05c`)
  * ---------------------------------------------------------------------------------------------
  * The Product Owner's instruction for this slice was explicit: reuse this cache and its refresh
  * cycle for the recipient ACL rather than open a second polling loop against `journaling_sources`.
@@ -38,6 +40,12 @@ import type {
  * and a source-IP ACL change become visible on exactly the same schedule, and an outage that makes
  * `evaluate()` report `'unavailable'` makes `evaluateRecipient()` report the same, at the same
  * moment, for the same reason.
+ *
+ * `JR-4-05c` repeats the exact same instruction a third time, for `AUTH`: `smtpUsername`/
+ * `smtpPasswordHash` are carried onto {@link CompiledSourceAcl} and indexed into `authIndex` in the
+ * same `doRefresh()` pass -- see `buildAuthIndex` below. A source with no `AUTH` credentials
+ * configured (both columns `null`) is simply absent from `authIndex`; `lookupCredential()` reports
+ * `'not_found'` for its username the same way it would for any other unrecognised one.
  *
  * ---------------------------------------------------------------------------------------------
  * The three questions the Product Owner's task asked this design to answer
@@ -107,6 +115,14 @@ export interface CompiledSourceAcl {
 	 * rules. Never re-derived at match time -- `evaluateRecipient()` folds the incoming `RCPT TO`
 	 * address the same way and compares normalised-to-normalised. */
 	readonly routingAddress: string;
+	/** `journaling_sources.smtp_username` (`JR-4-05c`), unnormalised -- unlike `routingAddress`,
+	 * `AUTH` usernames are compared byte-for-byte, the same posture as the password itself (see
+	 * `./smtp-server.ts`'s "AUTH" module doc comment section). `null` when this source has no `AUTH`
+	 * credentials configured. */
+	readonly smtpUsername: string | null;
+	/** `journaling_sources.smtp_password_hash` (`JR-4-05c`), a bcrypt hash, `null` in lockstep with
+	 * `smtpUsername`. */
+	readonly smtpPasswordHash: string | null;
 }
 
 /**
@@ -154,6 +170,8 @@ export function compileSourceAcl(
 		requireTls: entry.requireTls,
 		cidrs,
 		routingAddress: normalizeJournalRecipient(entry.routingAddress),
+		smtpUsername: entry.smtpUsername,
+		smtpPasswordHash: entry.smtpPasswordHash,
 	};
 }
 
@@ -210,6 +228,48 @@ export function buildRecipientIndex(
 	return index;
 }
 
+/**
+ * Build the `AUTH` credential index (`JR-4-05c`) from one refresh's already-`compileSourceAcl`'d
+ * rows, the same pattern {@link buildRecipientIndex} already establishes: a pure function, no cache
+ * state, so a test can call it directly against a handful of fixtures.
+ *
+ * A source with `smtpUsername === null` (no `AUTH` credentials configured -- the ordinary case, see
+ * this module's doc comment) contributes nothing to the index; it is not an error. **Two active
+ * sources sharing the same `smtp_username`** is handled exactly like a duplicate `routing_address`
+ * in {@link buildRecipientIndex}: keeping both is not an option (`lookupCredential()` must return
+ * exactly one source per username), rejecting every login for that username would deny a working
+ * source too, so the first row wins -- deterministic because `PostgresSourceAclLookup` orders by
+ * `id` -- and every later row for the same username is dropped with a `logger.error` naming both
+ * source ids, so the conflict is visible on every refresh rather than silently costing one source
+ * its `AUTH` access.
+ */
+export function buildAuthIndex(
+	compiled: readonly CompiledSourceAcl[],
+	logger: IngressLogger
+): ReadonlyMap<string, CompiledSourceAcl> {
+	const index = new Map<string, CompiledSourceAcl>();
+	for (const one of compiled) {
+		if (one.smtpUsername === null || one.smtpPasswordHash === null || one.smtpUsername === '') {
+			continue;
+		}
+		const existing = index.get(one.smtpUsername);
+		if (existing) {
+			logger.error(
+				{
+					smtpUsername: one.smtpUsername,
+					keptSourceId: existing.sourceId,
+					ignoredSourceId: one.sourceId,
+				},
+				'smtp-ingress: two active journaling sources share the same smtp_username -- keeping ' +
+					'the first (lowest id) and ignoring the second until the operator fixes the duplicate'
+			);
+			continue;
+		}
+		index.set(one.smtpUsername, one);
+	}
+	return index;
+}
+
 export interface SourceAclCacheOptions {
 	readonly lookup: SourceAclLookup;
 	/** Milliseconds between polls of `journaling_sources`. */
@@ -223,12 +283,18 @@ export interface SourceAclCacheOptions {
 	readonly now?: () => number;
 }
 
-export class SourceAclCache implements SourceAclEvaluator, RecipientAclEvaluator {
+export class SourceAclCache
+	implements SourceAclEvaluator, RecipientAclEvaluator, AuthCredentialEvaluator
+{
 	private snapshot: readonly CompiledSourceAcl[] = [];
 	/** Recipient ACL index (`JR-4-05b`), keyed by normalised `routing_address` -- rebuilt in the same
 	 * `doRefresh()` pass as `snapshot`, from the same rows. See {@link doRefresh} for how a duplicate
 	 * `routing_address` across two active sources is handled. */
 	private recipientIndex: ReadonlyMap<string, CompiledSourceAcl> = new Map();
+	/** `AUTH` credential index (`JR-4-05c`), keyed by `smtp_username` -- rebuilt in the same
+	 * `doRefresh()` pass as `snapshot`/`recipientIndex`. See {@link buildAuthIndex} for how a
+	 * duplicate `smtp_username` across two active sources is handled. */
+	private authIndex: ReadonlyMap<string, CompiledSourceAcl> = new Map();
 	private lastSuccessAt: number | null = null;
 	private timer: ReturnType<typeof setInterval> | null = null;
 	private refreshInFlight: Promise<void> | null = null;
@@ -288,6 +354,7 @@ export class SourceAclCache implements SourceAclEvaluator, RecipientAclEvaluator
 			}
 			this.snapshot = compiled;
 			this.recipientIndex = buildRecipientIndex(compiled, this.logger);
+			this.authIndex = buildAuthIndex(compiled, this.logger);
 			this.lastSuccessAt = this.now();
 		} catch (err) {
 			// Deliberately keep the previous snapshot and lastSuccessAt -- see the class doc
@@ -354,7 +421,39 @@ export class SourceAclCache implements SourceAclEvaluator, RecipientAclEvaluator
 		return { kind: 'allowed', sourceId: match.sourceId, chainScopeId: match.chainScopeId };
 	}
 
-	/** Shared by {@link evaluate} and {@link evaluateRecipient}: no snapshot has ever loaded
+	/**
+	 * Look up `AUTH` credentials for `username` (`JR-4-05c`). Follows the same fail-closed shape as
+	 * {@link evaluate}/{@link evaluateRecipient}: `'unavailable'` before the first successful refresh
+	 * or once staleness is crossed (never `'not_found'` for that case -- an unknown ACL state must
+	 * not be indistinguishable from a proven-wrong username to the caller, since `./smtp-server.ts`
+	 * maps the two to different response codes, `454` vs. `535`). `'not_found'` covers both "no such
+	 * username" and "this username's source has no `AUTH` credentials configured" -- there is nothing
+	 * for a caller to usefully tell apart between those two, and conflating them is exactly what
+	 * keeps an unconfigured source from leaking "this username at least exists" through a different
+	 * response than a genuinely absent one.
+	 *
+	 * Never throws, and never runs a password comparison itself -- this method only decides *which*
+	 * hash (if any) a caller should compare against; the comparison itself (real or, for `'not_found'`,
+	 * the timing-parity dummy hash) is `./smtp-server.ts`'s `SmtpConnection.verifyCredentials`'s job,
+	 * through the injected `PasswordVerifier` port.
+	 */
+	lookupCredential(username: string): AuthCredentialLookupResult {
+		if (this.isSnapshotUnavailable()) {
+			return { kind: 'unavailable' };
+		}
+		const match = this.authIndex.get(username);
+		if (!match) {
+			return { kind: 'not_found' };
+		}
+		return {
+			kind: 'found',
+			sourceId: match.sourceId,
+			chainScopeId: match.chainScopeId,
+			passwordHash: match.smtpPasswordHash!,
+		};
+	}
+
+	/** Shared by {@link evaluate}/{@link evaluateRecipient}/{@link lookupCredential}: no snapshot has ever loaded
 	 * successfully, or the last successful load is older than `staleAfterMs`. See the class doc
 	 * comment's "Fail-closed is still the default" section. */
 	private isSnapshotUnavailable(): boolean {

@@ -1,6 +1,7 @@
 /**
  * The database port for the SMTP ingress source ACL (`JR-4-05a`, ADR-002), extended by `JR-4-05b`
- * to also carry `routing_address` for the recipient ACL.
+ * to also carry `routing_address` for the recipient ACL, and by `JR-4-05c` to carry
+ * `smtp_username`/`smtp_password_hash` for `AUTH`.
  *
  * ---------------------------------------------------------------------------------------------
  * Why this is a separate port, following `../ledger/ledger-lookup-port.ts`'s pattern
@@ -33,6 +34,19 @@
  * `journaling_sources`. `routingAddress` is therefore read here, in the same `SELECT`, rather than
  * through a second port -- `./source-acl-cache.ts`'s `CompiledSourceAcl` carries it alongside the
  * CIDR list, and one refresh keeps both the IP-based and the recipient-based ACLs current.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `smtpUsername`/`smtpPasswordHash` -- `AUTH`, the same load path again (`JR-4-05c`)
+ * ---------------------------------------------------------------------------------------------
+ * The Product Owner's instruction for this slice was the same one already applied twice above:
+ * reuse this cache and its refresh cycle rather than open a third polling loop against
+ * `journaling_sources`. Both columns are nullable in the schema (`packages/backend/src/database/
+ * schema/journaling-sources.ts`) -- a source with no `AUTH` credentials configured is a normal,
+ * supported state, not a misconfiguration (`AUTH` is optional; the source ACL from `JR-4-05a` is
+ * the primary access control). `smtpPasswordHash` is handed back exactly as stored -- a bcrypt hash,
+ * never a plaintext password -- and is only ever compared through the injected `PasswordVerifier`
+ * port in `./smtp-server.ts`; this port does not depend on bcrypt any more than it depends on the
+ * CIDR or SASL-PLAIN parsing performed elsewhere.
  */
 
 /** One active journaling source's ACL-relevant columns. */
@@ -55,6 +69,15 @@ export interface JournalingSourceAclEntry {
 	 * (unnormalised) the same way `allowedIps` is -- comparison-shape decisions (case folding etc.)
 	 * are `./recipient-address.ts`'s job, not this port's. */
 	readonly routingAddress: string;
+	/** `journaling_sources.smtp_username` (`JR-4-05c`), nullable -- `null` means this source has no
+	 * `AUTH` credentials configured at all (a supported, ordinary state, not a misconfiguration; see
+	 * the module doc comment). */
+	readonly smtpUsername: string | null;
+	/** `journaling_sources.smtp_password_hash` (`JR-4-05c`), a bcrypt hash, nullable in lockstep with
+	 * `smtpUsername` (both set or both unset, though this port does not itself enforce that -- see
+	 * `./source-acl-cache.ts`'s `buildAuthIndex` for how a source with only one of the two set is
+	 * handled). Never a plaintext password. */
+	readonly smtpPasswordHash: string | null;
 }
 
 /**

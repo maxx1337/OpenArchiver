@@ -3,6 +3,7 @@ import { suite } from '@oa-test/classification';
 import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-port';
 import type { IngressLogger } from './smtp-server';
 import {
+	buildAuthIndex,
 	buildRecipientIndex,
 	compileSourceAcl,
 	createSourceAclRequireTlsResolver,
@@ -40,6 +41,8 @@ function entry(overrides: Partial<JournalingSourceAclEntry> = {}): JournalingSou
 		allowedIps: ['192.0.2.0/24'],
 		requireTls: false,
 		routingAddress: 'journal-1@journaling.test.invalid',
+		smtpUsername: null,
+		smtpPasswordHash: null,
 		...overrides,
 	};
 }
@@ -144,6 +147,64 @@ suite('ci', 'compileSourceAcl / SourceAclCache (JR-4-05a)', () => {
 			expect(index.size).toBe(1);
 			expect(errors).toHaveLength(1);
 			expect(errors[0]![1]).toMatch(/empty after/);
+		});
+	});
+
+	describe('buildAuthIndex (JR-4-05c)', () => {
+		it('indexes each compiled source with AUTH credentials configured by its smtp_username', () => {
+			const { logger } = recordingLogger();
+			const a = compileSourceAcl(
+				entry({ id: 's-a', smtpUsername: 'journal-a', smtpPasswordHash: '$2b$10$hash-a' }),
+				logger
+			)!;
+			const index = buildAuthIndex([a], logger);
+			expect(index.get('journal-a')).toBe(a);
+			expect(index.size).toBe(1);
+		});
+
+		it('excludes a source with no AUTH credentials configured -- the ordinary case, not an error', () => {
+			const { logger, errors, warnings } = recordingLogger();
+			const noAuth = compileSourceAcl(entry({ id: 's-no-auth' }), logger)!;
+			const index = buildAuthIndex([noAuth], logger);
+			expect(index.size).toBe(0);
+			expect(errors).toHaveLength(0);
+			expect(warnings).toHaveLength(0);
+		});
+
+		it('excludes a source with only smtp_username set (smtp_password_hash still null)', () => {
+			const { logger } = recordingLogger();
+			const half = compileSourceAcl(
+				entry({ id: 's-half', smtpUsername: 'journal-half', smtpPasswordHash: null }),
+				logger
+			)!;
+			const index = buildAuthIndex([half], logger);
+			expect(index.size).toBe(0);
+		});
+
+		it('keeps the first source and logs an error naming both ids when two active sources share an smtp_username', () => {
+			const { logger, errors } = recordingLogger();
+			const first = compileSourceAcl(
+				entry({ id: 's-first', smtpUsername: 'shared-user', smtpPasswordHash: '$2b$10$a' }),
+				logger
+			)!;
+			const second = compileSourceAcl(
+				entry({
+					id: 's-second',
+					smtpUsername: 'shared-user',
+					smtpPasswordHash: '$2b$10$b',
+				}),
+				logger
+			)!;
+			const index = buildAuthIndex([first, second], logger);
+
+			expect(index.get('shared-user')).toBe(first);
+			expect(index.size).toBe(1);
+			expect(errors).toHaveLength(1);
+			expect(errors[0]![1]).toMatch(/share the same smtp_username/);
+			expect(errors[0]![0]).toMatchObject({
+				keptSourceId: 's-first',
+				ignoredSourceId: 's-second',
+			});
 		});
 	});
 
@@ -371,6 +432,100 @@ suite('ci', 'compileSourceAcl / SourceAclCache (JR-4-05a)', () => {
 			expect(
 				errors.some((call) => String(call[1]).includes('share the same routing_address'))
 			).toBe(true);
+		});
+	});
+
+	describe('SourceAclCache.lookupCredential (JR-4-05c)', () => {
+		it("reports 'unavailable' before the first successful refresh", () => {
+			const lookup = new FakeLookup();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			expect(cache.lookupCredential('journal-a')).toEqual({ kind: 'unavailable' });
+		});
+
+		it("reports 'found' with the matched source's identity and stored hash once the ACL is known", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [
+				entry({
+					id: 's-a',
+					chainScopeId: 'arch-a',
+					smtpUsername: 'journal-a',
+					smtpPasswordHash: '$2b$10$stored-hash',
+				}),
+			];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.lookupCredential('journal-a')).toEqual({
+				kind: 'found',
+				sourceId: 's-a',
+				chainScopeId: 'arch-a',
+				passwordHash: '$2b$10$stored-hash',
+			});
+		});
+
+		it("reports 'not_found' for an unknown username once the ACL is known", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ smtpUsername: 'journal-a', smtpPasswordHash: '$2b$10$x' })];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.lookupCredential('no-such-user')).toEqual({ kind: 'not_found' });
+		});
+
+		it("reports 'not_found', never 'found', for a real source that has no AUTH credentials configured", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ id: 's-no-auth' })];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.lookupCredential('s-no-auth')).toEqual({ kind: 'not_found' });
+		});
+
+		it('is case-sensitive, unlike the recipient ACL -- AUTH usernames are compared byte-for-byte', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ smtpUsername: 'Journal-A', smtpPasswordHash: '$2b$10$x' })];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.lookupCredential('journal-a')).toEqual({ kind: 'not_found' });
+			expect(cache.lookupCredential('Journal-A').kind).toBe('found');
+		});
+
+		it("fails closed to 'unavailable' once a stalled refresh exceeds staleAfterMs, never 'not_found'", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ smtpUsername: 'journal-a', smtpPasswordHash: '$2b$10$x' })];
+			let clock = 0;
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5_000,
+				now: () => clock,
+			});
+			await cache.refreshNow();
+			expect(cache.lookupCredential('journal-a').kind).toBe('found');
+
+			clock += 10_000;
+			expect(cache.lookupCredential('journal-a')).toEqual({ kind: 'unavailable' });
 		});
 	});
 

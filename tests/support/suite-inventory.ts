@@ -144,7 +144,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// with the connection kept open, the ordinary 250 when allowed or when no evaluator is
 		// wired, and the cross-chain ambiguity logged exactly once for two recipients of different
 		// sources but never for a duplicate or same-source recipient).
-		expectedFiles: 38,
+		// 39 after JR-4-05c (AUTH) added tests/unit/smtp-auth-protocol.test.ts (the AUTH dialogue
+		// proven over a real loopback TCP+TLS socket).
+		expectedFiles: 39,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -300,7 +302,41 @@ export const SUITES: readonly SuiteSpec[] = [
 		// when allowed or when no evaluator is wired, two recipients resolving to different chains
 		// both get their 250 with the ambiguity logged exactly once, and a duplicate/same-source
 		// recipient never logs it).
-		expectedTests: { ci: 618, nightly: 2, manual: 0 },
+		// 669 ci after JR-4-05c (AUTH): +1 added to the pre-existing ingress/source-acl.test.ts
+		// (smtp_username/smtp_password_hash mapped through as null when AUTH is not configured) + 10
+		// in the pre-existing ingress/source-acl-cache.test.ts (buildAuthIndex x4: indexes by
+		// smtp_username, excludes a source with no AUTH configured without logging, excludes a source
+		// with only smtp_username set, keeps the first of two sources sharing an smtp_username and
+		// logs the conflict naming both ids; SourceAclCache.lookupCredential x6: 'unavailable' before
+		// the first refresh, 'found' with the matched source's identity and stored hash, 'not_found'
+		// for an unknown username, 'not_found' -- never 'found' -- for a real source with no AUTH
+		// configured, case-sensitive comparison unlike the recipient ACL, fails closed to
+		// 'unavailable' once stale rather than 'not_found') + 19 in the pre-existing
+		// ingress/smtp-server.test.ts (buildEhloResponseLines' AUTH-advertisement x4: omitted by
+		// default, withheld pre-handshake even when configured, withheld when TLS is active but AUTH
+		// is not configured, advertised as "AUTH PLAIN LOGIN" once both are true; parseAuthArguments
+		// x5: bare mechanism, mechanism plus initial response, case-insensitive mechanism parsing, a
+		// bare AUTH with no mechanism at all rejected, surrounding whitespace tolerated; decodeSaslBase64
+		// x5: ordinary base64, the literal "=" empty-response marker, invalid-alphabet input rejected,
+		// wrong-length input rejected, an empty string decodes to an empty buffer; decodeSaslPlain x5:
+		// authzid/authcid/password split correctly, a non-empty authzid, too few fields rejected, too
+		// many fields rejected, an empty password allowed) + 21 in the new
+		// tests/unit/smtp-auth-protocol.test.ts (the AUTH dialogue proven over a real loopback TCP+TLS
+		// socket: AUTH withheld from EHLO pre-handshake even when configured and advertised once TLS is
+		// active, a bare AUTH over plaintext refused 538 5.7.11 unconditionally, AUTH not configured
+		// falls through to the ordinary 500, PLAIN with an initial response and PLAIN with an empty
+		// challenge both succeed 235 2.7.0, LOGIN's two-step Username:/Password: dialogue succeeds, a
+		// wrong password and an unknown username both answer the exact same 535 5.7.8 -- the unknown-
+		// username case additionally asserts the dummy-hash comparison actually ran, an unrecognised
+		// mechanism is 504 5.5.4, malformed base64 in an initial response and in a continuation are both
+		// 501 5.5.2, a malformed SASL-PLAIN field count is 501 5.5.2, client cancellation with "*" is
+		// 501, a second AUTH once authenticated is 503 5.5.1, AUTH after MAIL FROM is 503 5.5.1, an
+		// 'unavailable' credential store answers 454 4.7.0 never 535, exceeding
+		// MAX_AUTH_ATTEMPTS_PER_CONNECTION closes the connection with 421 never a 5xx, an authenticated
+		// source addressing its own recipient is unaffected, an authenticated source addressing a
+		// different source's recipient is refused 550 5.7.1, and an unauthenticated connection is
+		// unaffected by the source-conflict check).
+		expectedTests: { ci: 669, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -334,7 +370,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// an active source's CIDR list/require_tls round-trip correctly, a paused source is excluded,
 		// an empty allowed_ips array round-trips, and require_tls: false is read correctly rather than
 		// merely "not true".
-		expectedTests: { ci: 101, nightly: 0, manual: 0 },
+		// 103 after JR-4-05c added 2 more to source-acl-lookup.int.test.ts: smtp_username/
+		// smtp_password_hash round-trip when AUTH is configured for a source, and read back as null
+		// for the ordinary source with no AUTH configured.
+		expectedTests: { ci: 103, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

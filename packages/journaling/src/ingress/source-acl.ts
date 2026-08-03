@@ -17,6 +17,10 @@ import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-por
  * against) are deduplicated the same way on every refresh -- see
  * `./source-acl-cache.ts`'s `doRefresh` for what "deduplicated" means and why the choice is
  * "first row wins, logged loudly" rather than an arbitrary one.
+ *
+ * `smtp_username`/`smtp_password_hash` (`JR-4-05c`): read alongside everything else in the same
+ * `SELECT`, the same reuse the module doc comment describes for `routing_address` -- one refresh
+ * keeps the source ACL, the recipient ACL, and the `AUTH` credential lookup all current together.
  */
 export class PostgresSourceAclLookup implements SourceAclLookup {
 	constructor(private readonly db: LedgerQuery) {}
@@ -28,8 +32,11 @@ export class PostgresSourceAclLookup implements SourceAclLookup {
 			allowed_ips: unknown;
 			require_tls: boolean;
 			routing_address: string;
+			smtp_username: string | null;
+			smtp_password_hash: string | null;
 		}>(
-			`SELECT id, ingestion_source_id, allowed_ips, require_tls, routing_address
+			`SELECT id, ingestion_source_id, allowed_ips, require_tls, routing_address,
+			        smtp_username, smtp_password_hash
 			   FROM journaling_sources
 			  WHERE status = 'active'
 			  ORDER BY id`
@@ -40,6 +47,8 @@ export class PostgresSourceAclLookup implements SourceAclLookup {
 			allowedIps: decodeAllowedIps(row.allowed_ips, row.id),
 			requireTls: row.require_tls,
 			routingAddress: row.routing_address,
+			smtpUsername: row.smtp_username,
+			smtpPasswordHash: row.smtp_password_hash,
 		}));
 	}
 }

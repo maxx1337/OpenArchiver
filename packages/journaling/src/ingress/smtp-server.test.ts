@@ -6,7 +6,10 @@ import {
 	buildEhloResponseLines,
 	buildTlsSocketOptions,
 	DataScanner,
+	decodeSaslBase64,
+	decodeSaslPlain,
 	formatMultilineResponse,
+	parseAuthArguments,
 	parseBdatArguments,
 	parseMailFromArguments,
 	parseRcptToArguments,
@@ -507,6 +510,150 @@ suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 			expect(dataResult.equals(logicalBody)).toBe(true);
 			expect(bdatResult.equals(logicalBody)).toBe(true);
 			expect(dataResult.equals(bdatResult)).toBe(true);
+		});
+	});
+
+	describe('buildEhloResponseLines AUTH advertisement (JR-4-05c)', () => {
+		it('does not advertise AUTH when authAvailable is omitted (every pre-JR-4-05c call site)', () => {
+			const lines = buildEhloResponseLines('host', 1000, { available: true, active: true });
+			expect(lines.join(' ')).not.toContain('AUTH');
+		});
+
+		it('does not advertise AUTH when authAvailable is true but TLS is not yet active', () => {
+			const lines = buildEhloResponseLines(
+				'host',
+				1000,
+				{ available: true, active: false },
+				true
+			);
+			expect(lines.join(' ')).not.toContain('AUTH');
+		});
+
+		it('does not advertise AUTH when TLS is active but authAvailable is false', () => {
+			const lines = buildEhloResponseLines(
+				'host',
+				1000,
+				{ available: true, active: true },
+				false
+			);
+			expect(lines.join(' ')).not.toContain('AUTH');
+		});
+
+		it('advertises "AUTH PLAIN LOGIN" once TLS is active and authAvailable is true', () => {
+			const lines = buildEhloResponseLines(
+				'host',
+				1000,
+				{ available: true, active: true },
+				true
+			);
+			expect(lines).toContain('AUTH PLAIN LOGIN');
+		});
+	});
+
+	describe('parseAuthArguments (JR-4-05c)', () => {
+		it('parses a bare mechanism with no initial response', () => {
+			expect(parseAuthArguments('PLAIN')).toEqual({
+				mechanism: 'PLAIN',
+				initialResponse: null,
+			});
+		});
+
+		it('parses a mechanism plus an initial response', () => {
+			expect(parseAuthArguments('PLAIN AGpvaG4AcGFzcw==')).toEqual({
+				mechanism: 'PLAIN',
+				initialResponse: 'AGpvaG4AcGFzcw==',
+			});
+		});
+
+		it('upper-cases the mechanism regardless of how the client sent it', () => {
+			expect(parseAuthArguments('login')?.mechanism).toBe('LOGIN');
+			expect(parseAuthArguments('Login')?.mechanism).toBe('LOGIN');
+		});
+
+		it('returns null for a bare AUTH with no mechanism at all', () => {
+			expect(parseAuthArguments('')).toBeNull();
+			expect(parseAuthArguments('   ')).toBeNull();
+		});
+
+		it('tolerates surrounding whitespace', () => {
+			expect(parseAuthArguments('  PLAIN   AGpvaG4AcGFzcw==  ')).toEqual({
+				mechanism: 'PLAIN',
+				initialResponse: 'AGpvaG4AcGFzcw==',
+			});
+		});
+	});
+
+	describe('decodeSaslBase64 (JR-4-05c)', () => {
+		it('decodes ordinary valid base64', () => {
+			const decoded = decodeSaslBase64(Buffer.from('hello').toString('base64'));
+			expect(decoded?.toString('utf8')).toBe('hello');
+		});
+
+		it('decodes the literal "=" token to an empty buffer (RFC 4954 empty-response marker)', () => {
+			const decoded = decodeSaslBase64('=');
+			expect(decoded).not.toBeNull();
+			expect(decoded!.length).toBe(0);
+		});
+
+		it('returns null for a string containing characters outside the base64 alphabet', () => {
+			expect(decodeSaslBase64('not valid base64!!')).toBeNull();
+		});
+
+		it('returns null for a length that is not a multiple of 4', () => {
+			expect(decodeSaslBase64('QQ')).toBeNull();
+		});
+
+		it('decodes an empty string to an empty buffer', () => {
+			const decoded = decodeSaslBase64('');
+			expect(decoded).not.toBeNull();
+			expect(decoded!.length).toBe(0);
+		});
+	});
+
+	describe('decodeSaslPlain (JR-4-05c)', () => {
+		function saslPlainPayload(authzid: string, authcid: string, password: string): Buffer {
+			return Buffer.concat([
+				Buffer.from(authzid, 'utf8'),
+				Buffer.from([0]),
+				Buffer.from(authcid, 'utf8'),
+				Buffer.from([0]),
+				Buffer.from(password, 'utf8'),
+			]);
+		}
+
+		it('decodes authzid/authcid/password from a well-formed payload', () => {
+			const payload = saslPlainPayload('', 'john', 'secret');
+			expect(decodeSaslPlain(payload)).toEqual({
+				authzid: '',
+				authcid: 'john',
+				password: 'secret',
+			});
+		});
+
+		it('decodes a non-empty authzid too', () => {
+			const payload = saslPlainPayload('admin', 'john', 'secret');
+			expect(decodeSaslPlain(payload)).toEqual({
+				authzid: 'admin',
+				authcid: 'john',
+				password: 'secret',
+			});
+		});
+
+		it('returns null for a payload with fewer than three NUL-separated fields', () => {
+			expect(decodeSaslPlain(Buffer.from('john\x00secret'))).toBeNull();
+		});
+
+		it('returns null for a payload with more than three NUL-separated fields', () => {
+			expect(decodeSaslPlain(Buffer.from('a\x00b\x00c\x00d'))).toBeNull();
+		});
+
+		it('allows an empty password (three fields, last one empty)', () => {
+			const payload = saslPlainPayload('', 'john', '');
+			expect(decodeSaslPlain(payload)).toEqual({
+				authzid: '',
+				authcid: 'john',
+				password: '',
+			});
 		});
 	});
 });

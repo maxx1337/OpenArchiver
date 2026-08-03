@@ -10,6 +10,7 @@
 	},
 	"dependencies": {
 		"@open-archiver/journaling": "workspace:*",
+		"bcryptjs": "^3.0.2",
 		"dotenv": "^17.2.0",
 		"pino": "^9.7.0",
 		"postgres": "^3.4.7"

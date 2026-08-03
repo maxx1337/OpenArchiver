@@ -132,16 +132,27 @@ export {
 } from './ingress/smtp-config';
 
 export {
+	AUTH_DUMMY_PASSWORD_HASH,
+	AUTH_MECHANISMS,
 	buildEhloResponseLines,
 	DataScanner,
+	decodeSaslBase64,
+	decodeSaslPlain,
 	EsmtpServer,
 	formatMultilineResponse,
+	MAX_AUTH_ATTEMPTS_PER_CONNECTION,
 	noopIngressLogger,
+	parseAuthArguments,
 	parseMailFromArguments,
 	parseRcptToArguments,
+	type AuthCredentialEvaluator,
+	type AuthCredentialLookupResult,
+	type DecodedSaslPlain,
 	type EsmtpServerOptions,
 	type IngressLogger,
+	type ParsedAuthCommand,
 	type ParsedMailFrom,
+	type PasswordVerifier,
 	type RecipientAclDecision,
 	type RecipientAclEvaluator,
 	type RequireTlsContext,
@@ -158,6 +169,8 @@ export type { JournalingSourceAclEntry, SourceAclLookup } from './ingress/source
 export { PostgresSourceAclLookup } from './ingress/source-acl';
 
 export {
+	buildAuthIndex,
+	buildRecipientIndex,
 	compileSourceAcl,
 	createSourceAclRequireTlsResolver,
 	SourceAclCache,

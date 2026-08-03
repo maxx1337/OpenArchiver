@@ -30,7 +30,10 @@ import { seedIngestionSource, seedJournalingSource } from '../support/iam-seed';
  * correct against the real schema: `status = 'active'` actually excludes a paused source, `jsonb`
  * `allowed_ips` round-trips (including an empty array) through a client `drizzle` never touched, and
  * `ingestion_source_id` comes back as the `chainScopeId` a caller needs. Since `JR-4-05b`: the same
- * is true of `routing_address`, the column the recipient ACL reads through this same port.
+ * is true of `routing_address`, the column the recipient ACL reads through this same port. Since
+ * `JR-4-05c`: the same is true of `smtp_username`/`smtp_password_hash`, the columns the `AUTH`
+ * credential lookup reads through this same port -- both directions (a source with credentials
+ * configured, and the ordinary case of a source with neither column set).
  */
 
 const postgresProbe = await probePostgres();
@@ -119,6 +122,40 @@ suiteRequiring(
 
 			const found = rows.find((row) => row.id === source.id);
 			expect(found!.requireTls).toBe(false);
+		});
+
+		it('reads smtp_username/smtp_password_hash when AUTH is configured for a source (JR-4-05c)', async () => {
+			const archive = await seedIngestionSource(harness!.db);
+			const source = await seedJournalingSource(harness!.db, {
+				ingestionSourceId: archive.id,
+				smtpUsername: 'journal-auth-user',
+				smtpPasswordHash: '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV',
+			});
+
+			const lookup = new PostgresSourceAclLookup(bareQuery());
+			const rows = await lookup.listActiveSources();
+
+			const found = rows.find((row) => row.id === source.id);
+			expect(found).toBeDefined();
+			expect(found!.smtpUsername).toBe('journal-auth-user');
+			expect(found!.smtpPasswordHash).toBe(
+				'$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV'
+			);
+		});
+
+		it('reads smtp_username/smtp_password_hash as null for the ordinary source with no AUTH configured (JR-4-05c)', async () => {
+			const archive = await seedIngestionSource(harness!.db);
+			const source = await seedJournalingSource(harness!.db, {
+				ingestionSourceId: archive.id,
+			});
+
+			const lookup = new PostgresSourceAclLookup(bareQuery());
+			const rows = await lookup.listActiveSources();
+
+			const found = rows.find((row) => row.id === source.id);
+			expect(found).toBeDefined();
+			expect(found!.smtpUsername).toBeNull();
+			expect(found!.smtpPasswordHash).toBeNull();
 		});
 	}
 );
