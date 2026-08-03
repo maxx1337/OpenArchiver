@@ -137,7 +137,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/smtp-source-acl-protocol.test.ts (the connect-time gate proven over a real
 		// loopback socket: 554 5.7.1 denied with no 220 ever sent, 421 4.3.2 when the ACL is not
 		// currently known, the ordinary 220 unaffected when allowed or when no evaluator is wired).
-		expectedFiles: 36,
+		// 38 after JR-4-05b (recipient ACL): ingress/recipient-address.test.ts
+		// (normalizeJournalRecipient's case-folding/trim rules, including postmaster and the
+		// angle-bracket-comment edge case) and tests/unit/smtp-recipient-acl-protocol.test.ts (the
+		// RCPT TO gate proven over a real loopback socket: 550 5.1.1 denied, 451 4.3.0 unavailable
+		// with the connection kept open, the ordinary 250 when allowed or when no evaluator is
+		// wired, and the cross-chain ambiguity logged exactly once for two recipients of different
+		// sources but never for a duplicate or same-source recipient).
+		expectedFiles: 38,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -276,7 +283,24 @@ export const SUITES: readonly SuiteSpec[] = [
 		// (sourceAcl is a required key like smtp/tls but, unlike them, {} does not satisfy it; rejects
 		// an empty databaseUrl; refreshIntervalMs/staleAfterMs default; an explicit override embeds
 		// rather than replacing; staleAfterMs below refreshIntervalMs is rejected).
-		expectedTests: { ci: 597, nightly: 2, manual: 0 },
+		// 618 ci after JR-4-05b (recipient ACL): +7 in the new ingress/recipient-address.test.ts
+		// (normalizeJournalRecipient: lower-cases the domain, lower-cases the local part too (the
+		// deliberate RFC 5321 section 2.4 deviation), trims whitespace, an empty/blank address
+		// normalises to the empty string never a wildcard, postmaster is not special-cased, a
+		// parenthesised comment is compared verbatim, idempotent) + 7 added to the pre-existing
+		// ingress/source-acl-cache.test.ts (buildRecipientIndex x3: indexes by normalised address,
+		// keeps the first of two sources sharing a routing_address and logs the conflict naming both
+		// ids, excludes a source whose routing address is empty after normalisation and logs it
+		// without affecting other sources; SourceAclCache.evaluateRecipient x4: 'unavailable' before
+		// the first refresh, 'allowed' with a case-folded/trimmed match, 'denied' for a known-but-
+		// non-matching address, the same first-wins dedup reflected end to end) + 1 added to the
+		// pre-existing ingress/source-acl.test.ts (routing_address read and ORDER BY id asserted in
+		// the query text) + 6 in the new tests/unit/smtp-recipient-acl-protocol.test.ts (550 5.1.1
+		// denied, 451 4.3.0 unavailable with the connection kept open and retryable, the ordinary 250
+		// when allowed or when no evaluator is wired, two recipients resolving to different chains
+		// both get their 250 with the ambiguity logged exactly once, and a duplicate/same-source
+		// recipient never logs it).
+		expectedTests: { ci: 618, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',

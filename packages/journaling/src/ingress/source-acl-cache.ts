@@ -174,7 +174,7 @@ export function compileSourceAcl(
  * `logger.error` naming both source ids, so the operator sees the conflict on every refresh until
  * it is fixed rather than silently losing one source's mail.
  */
-function buildRecipientIndex(
+export function buildRecipientIndex(
 	compiled: readonly CompiledSourceAcl[],
 	logger: IngressLogger
 ): ReadonlyMap<string, CompiledSourceAcl> {

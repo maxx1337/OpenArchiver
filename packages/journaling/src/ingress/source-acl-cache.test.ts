@@ -3,6 +3,7 @@ import { suite } from '@oa-test/classification';
 import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-port';
 import type { IngressLogger } from './smtp-server';
 import {
+	buildRecipientIndex,
 	compileSourceAcl,
 	createSourceAclRequireTlsResolver,
 	SourceAclCache,
@@ -89,6 +90,60 @@ suite('ci', 'compileSourceAcl / SourceAclCache (JR-4-05a)', () => {
 			expect(compiled).not.toBeNull();
 			expect(warnings).toHaveLength(1);
 			expect(warnings[0]![1]).toMatch(/catch-all|prefix length 0/);
+		});
+	});
+
+	describe('buildRecipientIndex (JR-4-05b)', () => {
+		it('indexes each compiled source by its normalised routing address', () => {
+			const { logger } = recordingLogger();
+			const a = compileSourceAcl(
+				entry({ id: 's-a', routingAddress: 'Journal-A@Journaling.Example.Com' }),
+				logger
+			)!;
+			const index = buildRecipientIndex([a], logger);
+			expect(index.get('journal-a@journaling.example.com')).toBe(a);
+			expect(index.size).toBe(1);
+		});
+
+		it('keeps the first source and logs an error naming both ids when two active sources share a routing address', () => {
+			const { logger, errors } = recordingLogger();
+			const first = compileSourceAcl(
+				entry({ id: 's-first', routingAddress: 'shared@journaling.example.com' }),
+				logger
+			)!;
+			const second = compileSourceAcl(
+				entry({ id: 's-second', routingAddress: 'shared@journaling.example.com' }),
+				logger
+			)!;
+			const index = buildRecipientIndex([first, second], logger);
+
+			expect(index.get('shared@journaling.example.com')).toBe(first);
+			expect(index.size).toBe(1);
+			expect(errors).toHaveLength(1);
+			expect(errors[0]![1]).toMatch(/share the same routing_address/);
+			expect(errors[0]![0]).toMatchObject({
+				keptSourceId: 's-first',
+				ignoredSourceId: 's-second',
+			});
+		});
+
+		it('excludes a source whose routing address is empty after normalisation, logs an error, and leaves other sources unaffected', () => {
+			const { logger, errors } = recordingLogger();
+			const empty = compileSourceAcl(
+				entry({ id: 's-empty', routingAddress: '   ' }),
+				logger
+			)!;
+			const ok = compileSourceAcl(
+				entry({ id: 's-ok', routingAddress: 'journal-ok@journaling.example.com' }),
+				logger
+			)!;
+			const index = buildRecipientIndex([empty, ok], logger);
+
+			expect(index.has('')).toBe(false);
+			expect(index.get('journal-ok@journaling.example.com')).toBe(ok);
+			expect(index.size).toBe(1);
+			expect(errors).toHaveLength(1);
+			expect(errors[0]![1]).toMatch(/empty after/);
 		});
 	});
 
@@ -231,6 +286,91 @@ suite('ci', 'compileSourceAcl / SourceAclCache (JR-4-05a)', () => {
 			} finally {
 				vi.useRealTimers();
 			}
+		});
+	});
+
+	describe('SourceAclCache.evaluateRecipient (JR-4-05b)', () => {
+		it("reports 'unavailable' before the first successful refresh", () => {
+			const lookup = new FakeLookup();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			expect(cache.evaluateRecipient('journal-1@journaling.test.invalid')).toEqual({
+				kind: 'unavailable',
+			});
+		});
+
+		it("reports 'allowed' with the matched source's identity and chainScopeId, case-folded and trimmed the same way as recipient-address.ts", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [
+				entry({
+					id: 's-a',
+					chainScopeId: 'arch-a',
+					routingAddress: 'journal-a@journaling.example.com',
+				}),
+			];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.evaluateRecipient('  Journal-A@Journaling.Example.Com  ')).toEqual({
+				kind: 'allowed',
+				sourceId: 's-a',
+				chainScopeId: 'arch-a',
+			});
+		});
+
+		it("reports 'denied' for an address matching no active source's routing_address once the ACL is known", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry()];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.evaluateRecipient('unknown@journaling.example.com')).toEqual({
+				kind: 'denied',
+			});
+		});
+
+		it('resolves a shared routing address to the first (lowest-id) source, the same dedup buildRecipientIndex performs, and logs the conflict', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [
+				entry({
+					id: 's-first',
+					chainScopeId: 'arch-first',
+					routingAddress: 'shared@journaling.example.com',
+				}),
+				entry({
+					id: 's-second',
+					chainScopeId: 'arch-second',
+					routingAddress: 'shared@journaling.example.com',
+				}),
+			];
+			const { logger, errors } = recordingLogger();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+				logger,
+			});
+			await cache.refreshNow();
+
+			expect(cache.evaluateRecipient('shared@journaling.example.com')).toEqual({
+				kind: 'allowed',
+				sourceId: 's-first',
+				chainScopeId: 'arch-first',
+			});
+			expect(
+				errors.some((call) => String(call[1]).includes('share the same routing_address'))
+			).toBe(true);
 		});
 	});
 
