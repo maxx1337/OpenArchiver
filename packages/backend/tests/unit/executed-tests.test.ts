@@ -193,7 +193,10 @@ suite('ci', 'executed-test guard: classes, selection and applicability (JR-1-05c
 			judgeExecutedTests(withExecuted(nightly, 'adversarial', 'nightly', 0)).violations.join(
 				'\n'
 			)
-		).toContain(`Suite "adversarial", class "nightly": 0 test(s) executed, 1 expected`);
+		).toContain(
+			`Suite "adversarial", class "nightly": 0 test(s) executed, ` +
+				`${expectedTests('adversarial').nightly} expected`
+		);
 	});
 
 	it('a narrowed run verifies nothing, and says so instead of passing quietly', () => {

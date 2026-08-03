@@ -61,57 +61,58 @@ mitgeführt. Sie ersetzt das Lesen der Datei nicht, sie ersetzt das **Durchblät
 Volltexte stehen unverändert darunter, und wer nur wissen will, ob eine Nummer offen ist,
 findet es hier.
 
-| Nr.      | Befund                                                                                         | Schwere | Status    |
-| -------- | ---------------------------------------------------------------------------------------------- | ------- | --------- |
-| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                       | hoch    | behoben   |
-| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                               | mittel  | offen     |
-| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                        | mittel  | behoben   |
-| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                | mittel  | offen     |
-| **F5 **  | { field: null } wird zu "field" = NULL                                                         | niedrig | offen     |
-| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                           | niedrig | behoben   |
-| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                       | hoch    | behoben   |
-| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                  | mittel  | behoben   |
-| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                      | niedrig | offen     |
-| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                        | niedrig | offen     |
-| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                | mittel  | behoben   |
-| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen               | mittel  | behoben   |
-| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft        | niedrig | offen     |
-| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                              | mittel  | behoben   |
-| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                        | niedrig | behoben   |
-| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                  | niedrig | behoben   |
-| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt         | mittel  | behoben   |
-| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                      | niedrig | offen     |
-| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                      | mittel  | behoben   |
-| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                         | mittel  | behoben   |
-| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                 | niedrig | —         |
-| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                        | niedrig | behoben   |
-| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig        | niedrig | offen     |
-| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                   | niedrig | behoben   |
-| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch     | niedrig | behoben   |
-| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                     | mittel  | behoben   |
-| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic… | mittel  | behoben   |
-| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                         | niedrig | behoben   |
-| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig            | niedrig | behoben   |
-| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem… | mittel  | behoben   |
-| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde              | mittel  | offen     |
-| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                          | niedrig | offen     |
-| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                    | niedrig | offen     |
-| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                     | niedrig | offen     |
-| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                     | mittel  | offen     |
-| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                    | keine   | widerlegt |
-| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S… | mittel  | offen     |
-| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g… | hoch    | behoben   |
-| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was … | niedrig | —         |
-| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität… | mittel  | offen     |
-| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                 | niedrig | offen     |
-| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt   | niedrig | offen     |
-| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                         | mittel  | offen     |
-| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos           | hoch    | behoben   |
-| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE… | mittel  | behoben   |
-| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche … | hoch    | behoben   |
-| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                | mittel  | offen     |
-| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt             | hoch    | behoben   |
-| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot          | mittel  | behoben   |
+| Nr.      | Befund                                                                                                                                          | Schwere | Status    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------- |
+| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                                                                        | hoch    | behoben   |
+| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                                                                                | mittel  | offen     |
+| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                                                                         | mittel  | behoben   |
+| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                                                                 | mittel  | offen     |
+| **F5 **  | { field: null } wird zu "field" = NULL                                                                                                          | niedrig | offen     |
+| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                                                                            | niedrig | behoben   |
+| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                                                                        | hoch    | behoben   |
+| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                                                                   | mittel  | behoben   |
+| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                                                                       | niedrig | offen     |
+| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                                                                         | niedrig | offen     |
+| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                                                                 | mittel  | behoben   |
+| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen                                                                | mittel  | behoben   |
+| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft                                                         | niedrig | offen     |
+| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                                                                               | mittel  | behoben   |
+| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                                                                         | niedrig | behoben   |
+| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                                                                   | niedrig | behoben   |
+| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt                                                          | mittel  | behoben   |
+| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                                                                       | niedrig | offen     |
+| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                                                                       | mittel  | behoben   |
+| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                                                                          | mittel  | behoben   |
+| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                                                                  | niedrig | —         |
+| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                                                                         | niedrig | behoben   |
+| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig                                                         | niedrig | offen     |
+| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                                                                    | niedrig | behoben   |
+| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch                                                      | niedrig | behoben   |
+| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                                                                      | mittel  | behoben   |
+| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic…                                                  | mittel  | behoben   |
+| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                                                                          | niedrig | behoben   |
+| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig                                                             | niedrig | behoben   |
+| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem…                                                  | mittel  | behoben   |
+| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde                                                               | mittel  | offen     |
+| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                           | niedrig | offen     |
+| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                     | niedrig | offen     |
+| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                      | niedrig | offen     |
+| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                      | mittel  | offen     |
+| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                     | keine   | widerlegt |
+| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                  | mittel  | offen     |
+| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                  | hoch    | behoben   |
+| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was …                                                  | niedrig | —         |
+| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität…                                                  | mittel  | offen     |
+| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                                                                  | niedrig | offen     |
+| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt                                                    | niedrig | offen     |
+| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                                                                          | mittel  | offen     |
+| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                            | hoch    | behoben   |
+| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                  | mittel  | behoben   |
+| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                  | hoch    | behoben   |
+| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                 | mittel  | offen     |
+| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                              | hoch    | behoben   |
+| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                           | mittel  | behoben   |
+| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße | mittel  | offen     |
 
 ---
 
@@ -2407,3 +2408,96 @@ das ist von Pufferung unabhängig. **Offen als kleine Betriebsunschönheit:** di
 „listening" vor „scan complete" zeigen, obwohl die Ereignisse anders lagen. Wer das schließen will, legt
 beide Zeilen auf **einen** synchronen Schreibpfad (`pino.destination({ dest: 1, sync: true })`, `console.log`
 durch `logger.info` ersetzt); Nutzen ist hier nur die Lesbarkeit des Logs, kein Test hängt mehr davon ab.
+
+## F50 — der `DATA`-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert: Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Performance · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`DataScanner.scan()`, ruft `onContent` einmal je
+gefundener CRLF-terminierter Zeile auf), `packages/journaling/src/ingress/spool-write-bridge.ts`
+(`SpoolWriteBridge.push()`, ein Objekt je Aufruf, keine Zusammenfassung), `packages/journaling/src/spool/durable-write.ts:160`
+(`for await (const chunk of chunks) { await handle.write(chunk); }` — ein `fs`-Write-Aufruf je
+Objekt) · **Gefunden:** von TEST am 2026-08-04 beim Bau der `JR-4-10`-Kill-Tests, als ein 20-Runden-
+Smoke-Lauf nach zehn Minuten nicht fertig war · **Status:** offen, nicht behoben (kein
+Produktionscode-Fix ohne Rückfrage)
+
+### Was gemessen wurde
+
+Derselbe reale, kompilierte `apps/smtp-ingress`-Prozess, dieselbe 50-MB-`DATA`-Übertragung über einen
+echten Loopback-Socket, nur die **Zeilenlänge** des Nachrichteninhalts verändert (Zeilen exakt an
+CRLF-Grenzen ausgerichtet, damit der Terminator sauber erkannt wird):
+
+| Zeileninhalt                                | Zeilen (bei 50 MB) | Schreibdauer | Durchsatz  |
+| ------------------------------------------- | ------------------ | ------------ | ---------- |
+| 60 Byte                                     | 845 626            | 53 816 ms    | 0,93 MB/s  |
+| 998 Byte (RFC-Maximum, RFC 5321 §4.5.3.1.6) | 52 429             | 4 288 ms     | 11,66 MB/s |
+
+Derselbe Effekt, kleinerer Maßstab (5 MB, drei Zeilenlängen, zur Bestätigung dass es an der
+**Zeilenzahl** und nicht an der absoluten Nachrichtengröße hängt):
+
+| Zeileninhalt | Zeilen (bei 5 MB) | Schreibdauer |
+| ------------ | ----------------- | ------------ |
+| 60 Byte      | 84 563            | 3 105 ms     |
+| 200 Byte     | 25 955            | 1 059 ms     |
+| 998 Byte     | 5 243             | 281 ms       |
+
+Der Durchsatz ist **umgekehrt proportional zur Zeilenzahl, nicht zur Bytezahl** — der Faktor 12,5
+zwischen den beiden 50-MB-Zeilen entspricht fast genau dem Verhältnis der Zeilenzahlen (16,1). Das
+ist die Signatur eines **konstanten Overheads je Zeile**, nicht eines Effekts, der mit der
+Nachrichtengröße selbst skaliert.
+
+### Warum, mechanisch
+
+`DataScanner.scan()` ruft `this.onContent(Buffer.concat([contentLine, CRLF]))` **einmal je in `carry`
+gefundener Zeile** auf (`smtp-server.ts` Zeile ~797), unabhängig davon, wie viele Zeilen ein einzelner
+Socket-„data"-Event geliefert hat. Jeder Aufruf geht über `SpoolWriteBridge.push()` als **ein**
+Objekt in einen `objectMode`-`Readable` (`spool-write-bridge.ts`), und `writeDurableSpoolFile()`s
+`for await`-Schleife (`durable-write.ts:160`) ruft für **jedes** Objekt einzeln
+`await handle.write(chunk)` — ein echter `fs.promises.FileHandle.write()`-Aufruf je SMTP-Zeile, egal
+wie kurz die Zeile ist. Die Kommentare in `durable-write.ts` und `spool-write-bridge.ts` begründen das
+Streaming-Design ausdrücklich mit der Vermeidung von Vollpufferung im Heap (JR-3-02, der berechtigte
+Grund) — aber Streaming pro Zeile ist nicht dieselbe Entscheidung wie Streaming pro Socket-Chunk. Ein
+Socket-„data"-Event liefert typischerweise zehn bis mehrere hundert Kilobyte auf einmal; wird das in
+Hunderttausende Ein-Zeilen-Schreibaufrufe zerlegt, dominiert der Aufrufoverhead (Promise-Erzeugung,
+Systemaufruf, auf Windows zusätzlich der bekannt teurere Datei-I/O-Pfad) vollständig über die
+tatsächliche Bytezahl.
+
+### Warum das mehr als eine Marginalie ist
+
+1. **RFC-Ausgangslage widerspricht sich selbst mit diesem Befund.** `docs/dev/journaling/00-rfc.md`
+   verlangt ausdrücklich Nachrichten bis 150 MB (Exchange-Online-Journal-Reports wickeln die gesamte
+   MIME-Struktur ein zweites Mal ein) — und genau solche Nachrichten bestehen zu einem erheblichen
+   Teil aus **kurzen** Zeilen: Base64-kodierte Anhänge brechen bei 76 Zeichen um (RFC 2045 §6.8), viel
+   häufiger als die 998-Byte-Obergrenze. Eine 50-MB-Nachricht mit überwiegend Base64-Inhalt hat in der
+   Größenordnung von 650 000 Zeilen — näher am langsamen Ende dieser Tabelle als am schnellen.
+2. **Das trifft `JR-4-10` unmittelbar.** Ein 500-Runden-Nightly-Soak mit dem in diesem Befund
+   gemessenen langsamen Zeilenprofil (60 Byte) hätte, grob gerechnet, im Mittel weit über zehn Sekunden
+   je Runde allein für den Schreibanteil gebraucht — bei 500 Runden mehrere Stunden zusätzlich, nur für
+   dieses eine Testfeld. Der 20-Runden-`ci`-Smoke-Test aus diesem Befund lief deshalb über zehn Minuten,
+   ohne fertig zu werden. **Die konkrete Abhilfe in `JR-4-10`s eigenem Test:** Zeilen am RFC-Maximum
+   (998 Byte Inhalt), dokumentiert in `smtp-ingress-kill-during-data.adv.test.ts`s eigenem Kommentar,
+   mit Verweis hierher — der Test bleibt eine ehrliche 50-MB-`DATA`-Übertragung, wählt aber bewusst die
+   Zeilenform, die dieses Problem nicht auslöst, statt es stillschweigend zu umgehen.
+3. **Nicht ausgeschlossen, aber auch nicht gemessen: eine Verstärkung auf diesem Windows-Host.**
+   `fs.promises`-Aufrufe sind auf Windows über den Threadpool spürbar teurer als auf Linux
+   (`libuv`s Windows-Backend hat keinen echten asynchronen Datei-I/O-Pfad für alle Operationen). Der
+   Faktor könnte auf Linux kleiner ausfallen — aber selbst dort bleibt die Architektur **O(Zeilenzahl)**
+   statt **O(Chunkzahl)**, und die relative Verlangsamung durch kurze Zeilen (der Faktor ~12,5 in der
+   eigenen Messung) ist eine Eigenschaft des Codes, nicht der Plattform.
+
+### Was nicht behauptet wird
+
+Kein Datenverlust, keine Verletzung des Acceptance-Contracts — jede einzelne Zeile wird korrekt
+geschrieben, nur langsam. Auch keine unbegrenzte Verzögerung: die Schleife terminiert, sie ist nur
+teuer. Nicht geprüft: ob ein Absender-seitiger SMTP-`DATA`-Timeout (bei Exchange Online oder einem
+anderen MTA) bei einer hinreichend zeilenreichen 150-MB-Nachricht auf einem produktiven Linux-Host
+tatsächlich vor Abschluss der Übertragung feuert — das wäre der Nachweis, der aus dieser Beobachtung
+eine **hohe** statt einer **mittleren** Einstufung machen würde, und er braucht eine reale Zielumgebung,
+keinen Entwicklerhost.
+
+### Vorschlag, nicht umgesetzt
+
+`SpoolWriteBridge`/`writeDurableSpoolFile()` auf Byte- statt Objektschwelle umstellen: mehrere kurze
+`onContent`-Zeilen vor der Weitergabe an `handle.write()` in einen Zwischenpuffer bis zu einer festen
+Zielgröße (z. B. 64–256 KiB) sammeln, ohne die Streaming-Eigenschaft (weiterhin O(1) Speicher
+gegenüber der Nachrichtengröße) aufzugeben. Eine Entscheidung darüber liegt beim PO; dieser Befund
+legt nur die Messung vor.

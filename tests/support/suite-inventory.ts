@@ -168,7 +168,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// bootstrap, driven through tryNow() rather than a slept-out timer) and
 		// tests/unit/smtp-acceptance-promotion.test.ts (the same open connection going 451 -> 250 at the
 		// wire, plus the mid-transaction stability of the per-transaction resolution).
-		expectedFiles: 55,
+		// 56 after JR-4-10 added tests/unit/kill-during-data-invariant.test.ts -- calibration of
+		// checkNeverPartial(), the pure checker the real kill-during-DATA adversarial test uses.
+		expectedFiles: 56,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -460,7 +462,17 @@ export const SUITES: readonly SuiteSpec[] = [
 		// one unbroken connection; never 250 while unwired; a promotion mid-transfer not changing the
 		// running transaction, and the reverse direction; BDAT 0 LAST; a throwing provider degrading to
 		// 451; the plain value form still working through the constructor's lift).
-		expectedTests: { ci: 811, nightly: 3, manual: 0 },
+		// 818 after JR-4-10 added tests/unit/kill-during-data-invariant.test.ts (7): calibration of
+		// checkNeverPartial() (tests/support/kill-during-data-invariant.ts) against seven hand-built
+		// observations, independently of the real kill test -- three that must stay clean (250 seen
+		// with a fully matching row, no 250 and no row, no 250 but a fully correct row -- the
+		// response-lost-in-the-kill race, not a defect) and four that must be reported (250 seen with
+		// no row at all, a row with no spool file, a row whose spool file is truncated, a row that
+		// belongs to a different payload entirely). This is the calibration
+		// `smtp-ingress-kill-during-data.adv.test.ts` itself cannot provide on this host: F48 means
+		// every real iteration there resolves to 451, so no real iteration can ever produce a
+		// violation for the checker to catch.
+		expectedTests: { ci: 818, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -541,8 +553,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 1 until JR-2-08/JR-2-09; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
 		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 5 after JR-3-06/JR-3-07
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
-		// spool-disk-full.adv.test.ts.
-		expectedFiles: 5,
+		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
+		expectedFiles: 6,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -560,7 +572,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// cases) gated on a real size-limited volume via OA_TEST_SPOOL_DISKFULL_ROOT -- it is
 		// environment-gated rather than class-gated, so it contributes 0 executed tests on this host
 		// under every class selection, including `OA_TEST_CLASSES=manual`; manual stays 1.
-		expectedTests: { ci: 37, nightly: 1, manual: 1 },
+		// 38 ci / 2 nightly after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts: one `ci` test
+		// (20 real SIGKILLs during a 50 MB DATA transfer, judged from the client) and one `nightly` test
+		// (the same, 500 iterations) -- see that file's own doc comment for F48: on this Windows host
+		// every iteration in both variants resolves to 451, never 250, so the client-saw-250-implies-
+		// durable half of the invariant is unverified locally by construction; only Linux CI exercises
+		// it. The checker itself (checkNeverPartial(), tests/support/kill-during-data-invariant.ts) is
+		// calibrated independently in the `unit` suite's kill-during-data-invariant.test.ts.
+		expectedTests: { ci: 38, nightly: 2, manual: 1 },
 	},
 ];
 
