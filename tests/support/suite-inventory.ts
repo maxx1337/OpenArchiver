@@ -466,7 +466,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// genuinely blocking on pg_advisory_xact_lock and proceeding once released, two different
 		// spoolRoots not serialising against each other) and
 		// smtp-ingress-crash-recovery-boot.int.test.ts (the same scan wired into the actual compiled
-		// process: the scan's log line precedes "listening on port", two processes started at once
+		// process: the port refuses connections while the scan is held on its advisory lock and
+		// answers 220 once it is released (reworked in F49 -- it used to compare two stdout log
+		// lines' byte offsets, which was flaky), two processes started at once
 		// against the same spool/ledger quarantine the same orphan file exactly once and both still
 		// bind their ports, and a scan that itself fails -- journal_ledger dropped, deployment_identity
 		// still readable -- leaves the process bound but answering never-250 to DATA).

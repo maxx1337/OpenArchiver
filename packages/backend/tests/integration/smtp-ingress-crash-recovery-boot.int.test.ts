@@ -8,8 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { isClassSelected, suiteRequiring } from '@oa-test/classification';
 import { probePostgres } from '@oa-test/infra';
-import type { Sql } from 'postgres';
+import postgres, { type Sql } from 'postgres';
 import {
+	crashRecoveryScanLockKey,
 	ensureIncomingShardDir,
 	generateTxId,
 	incomingFilePath,
@@ -32,11 +33,23 @@ import { seedIngestionSource, seedJournalingSource } from '../support/iam-seed';
  * ---------------------------------------------------------------------------------------------
  * The three things this file measures, one test each
  * ---------------------------------------------------------------------------------------------
- *  1. **Before, not after.** The scan's own "crash-recovery scan complete" log line appears in this
- *     process's stdout strictly before its "listening on port" line -- read off the actual byte
- *     offsets in the captured stream, not inferred from reading `index.ts`. A never-acknowledged file
- *     seeded on disk before the process starts is quarantined by the time the port is bound; a
- *     ledgered one is left exactly where it was.
+ *  1. **Before, not after -- measured at the port, not in the log (F49).** The scan is held still from
+ *     the outside (this test takes the very advisory lock `runExclusiveCrashRecoveryScan()` needs, see
+ *     `crashRecoveryScanLockKey`), and while the child process is *provably* stuck on it -- read out of
+ *     `pg_locks` as an ungranted waiter on that exact key, not inferred from a sleep -- the port is
+ *     asked for a connection and must refuse it. Releasing the lock then lets the same port answer a
+ *     `220` banner, which is what makes the refusal above evidence of ordering rather than of a
+ *     mis-set port. A never-acknowledged file seeded on disk before the process starts is quarantined
+ *     by the time the port is bound; a ledgered one is left exactly where it was.
+ *
+ *     **This replaces a byte-offset comparison of two stdout log lines, which was flaky (F49).** That
+ *     instrument compared a `pino` line ("crash-recovery scan complete") against a `console.log` line
+ *     ("listening on port") -- two independent write paths onto the same file descriptor, whose
+ *     relative buffering is a platform and configuration detail, not an ordering guarantee. It was
+ *     green in CI run `30822606272` and red in `30824258066` with **byte-identical** production and
+ *     test code (only documentation changed between those commits), which proves the instrument, not
+ *     the invariant, was at fault. Nothing here depends on log ordering any more: the two log lines
+ *     are still waited *for*, never compared *against each other*.
  *  2. **Two processes contending for the same spool and the same ledger database do not race each
  *     other.** Both are started at once; the pre-seeded orphan file is quarantined exactly once
  *     (never twice, never by both), and both processes still reach "listening on port" -- the lock
@@ -119,6 +132,79 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<v
 	}
 }
 
+/** `waitUntil` for a predicate that has to ask the database. */
+async function waitUntilAsync(
+	predicate: () => Promise<boolean>,
+	timeoutMs: number,
+	what: string
+): Promise<void> {
+	const start = Date.now();
+	while (!(await predicate())) {
+		if (Date.now() - start > timeoutMs) {
+			throw new Error(`${what}: condition not met within ${timeoutMs}ms`);
+		}
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+}
+
+/**
+ * How many backends are *waiting* for the advisory lock `lockKey` (F49's observation point). Postgres
+ * splits a 64-bit advisory key across `pg_locks.classid` (high 32 bits) and `objid` (low 32 bits) with
+ * `objsubid = 1`; the split is done here rather than in SQL because the key is signed in JavaScript and
+ * unsigned in those two `oid` columns -- `BigInt.asUintN` is the conversion, and doing it in SQL would
+ * need shift arithmetic that is wrong for exactly the negative half of the key space.
+ *
+ * `pg_locks` is cluster-wide, but the key is derived from this test's own freshly-created temporary
+ * spool directory, so no other run can contend for it.
+ */
+async function advisoryLockWaiters(sql: Sql, lockKey: bigint): Promise<number> {
+	const unsigned = BigInt.asUintN(64, lockKey);
+	const classid = Number(unsigned >> 32n);
+	const objid = Number(unsigned & 0xffffffffn);
+	const rows = await sql<{ waiting: number }[]>`
+		select count(*)::int as waiting
+		from pg_locks
+		where locktype = 'advisory'
+		  and classid = ${classid}
+		  and objid = ${objid}
+		  and objsubid = 1
+		  and not granted
+	`;
+	return rows[0]?.waiting ?? 0;
+}
+
+/**
+ * Ask `port` for a TCP connection and report what happened, without throwing. `refused` is the answer
+ * that carries F49's claim (nothing is listening yet); `connected` is the one that would break it.
+ */
+async function probeConnect(
+	port: number,
+	timeoutMs = 2_000
+): Promise<{ kind: 'connected' | 'refused' | 'timeout' | 'error'; detail?: string }> {
+	return new Promise((resolve) => {
+		const socket = connectTcp({ port, host: '127.0.0.1' });
+		const settle = (result: {
+			kind: 'connected' | 'refused' | 'timeout' | 'error';
+			detail?: string;
+		}): void => {
+			socket.destroy();
+			resolve(result);
+		};
+		const timer = setTimeout(() => settle({ kind: 'timeout' }), timeoutMs);
+		socket.once('connect', () => {
+			clearTimeout(timer);
+			settle({ kind: 'connected' });
+		});
+		socket.once('error', (err: NodeJS.ErrnoException) => {
+			clearTimeout(timer);
+			settle({
+				kind: err.code === 'ECONNREFUSED' ? 'refused' : 'error',
+				detail: err.code ?? err.message,
+			});
+		});
+	});
+}
+
 /** Minimal SMTP client -- send a line, read one (possibly multiline) reply, write raw bytes. */
 class TestSmtpClient {
 	private raw = '';
@@ -180,6 +266,16 @@ const enabled = isClassSelected('ci') && postgresProbe.available;
 const harness = enabled ? await acquireTestDatabase('crash-recovery-boot') : undefined;
 const failHarness = enabled ? await acquireTestDatabase('crash-recovery-boot-fail') : undefined;
 
+/**
+ * A client of this test's own, used only to hold the crash-recovery advisory lock open across an
+ * `await` (F49). Deliberately not `harness.sql`: holding a transaction open there would occupy one of
+ * the pooled connections the rest of this file queries through, including the `pg_locks` lookup that
+ * has to observe the child process *while* this transaction is still holding the lock.
+ */
+const lockClient = harness
+	? postgres(harness.url, { max: 2, connect_timeout: 10, onnotice: () => {} })
+	: undefined;
+
 async function deploymentId(sql: Sql): Promise<string> {
 	const rows = await sql<{ deployment_id: string }[]>`
 		select deployment_id from deployment_identity
@@ -221,6 +317,7 @@ afterAll(async () => {
 	for (const child of runningChildren.splice(0)) {
 		if (!child.killed) child.kill();
 	}
+	await lockClient?.end({ timeout: 10 }).catch(() => undefined);
 	if (scratchDir) {
 		rmSync(scratchDir, { recursive: true, force: true });
 	}
@@ -243,7 +340,7 @@ suiteRequiring(
 	'apps/smtp-ingress crash-recovery scan at boot, against real Postgres (JR-4-18)',
 	postgresProbe,
 	() => {
-		it('runs before listen(): the log line precedes "listening", a ledgered file is requeued, an orphan is quarantined', async () => {
+		it('does not bind its port until the scan is done: while the scan is held on its lock the port refuses connections, and answers 220 once released (F49)', async () => {
 			const deployment = await deploymentId(harness!.sql);
 			const source = await seedIngestionSource(harness!.db);
 			const journalingSource = await seedJournalingSource(harness!.db, {
@@ -273,6 +370,23 @@ suiteRequiring(
 			await writer.append(request(source.id, ledgeredTxId));
 
 			const port = await getFreePort();
+
+			// Take the scan's own lock before the process starts, so its scan cannot get past
+			// `pg_advisory_xact_lock` until this test says so. Held across an `await` inside a
+			// transaction, exactly the way `journal-crash-recovery-lock.int.test.ts` holds it.
+			const lockKey = crashRecoveryScanLockKey(spoolRoot);
+			let releaseLock: () => void = () => {};
+			const lockHeld = new Promise<void>((resolve) => {
+				releaseLock = resolve;
+			});
+			let lockAcquired = false;
+			const lockDone = lockClient!.begin(async (tx) => {
+				await tx.unsafe('SELECT pg_advisory_xact_lock($1)', [lockKey as unknown as never]);
+				lockAcquired = true;
+				await lockHeld;
+			});
+			await waitUntil(() => lockAcquired, 10_000);
+
 			const { child, output } = spawnIngress(
 				{
 					SMTP_INGRESS_PORT: String(port),
@@ -289,15 +403,51 @@ suiteRequiring(
 			});
 
 			try {
-				await waitUntil(() => output.stdout().includes('listening on port'), 15_000);
+				// The process is now provably *inside* its crash-recovery scan and not past it: it has
+				// asked for this exact advisory key and has not been granted it. No sleep, no log line
+				// -- a state read out of the server.
+				await waitUntilAsync(
+					async () => (await advisoryLockWaiters(harness!.sql, lockKey)) >= 1,
+					20_000,
+					'the ingress process never reached the crash-recovery scan lock'
+				);
 				expect(exited).toBe(false);
 
-				const stdout = output.stdout();
-				const scanIdx = stdout.indexOf('crash-recovery scan complete');
-				const listenIdx = stdout.indexOf('listening on port');
-				expect(scanIdx).toBeGreaterThanOrEqual(0);
-				expect(listenIdx).toBeGreaterThan(scanIdx);
+				// The claim: nothing is listening while the scan is unfinished.
+				const duringScan = await probeConnect(port);
+				expect(duringScan.kind).toBe('refused');
 
+				// And the scan really has not run yet -- the orphan is still where it was seeded.
+				await expect(
+					readFile(incomingFilePath(spoolRoot, orphanTxId), 'utf8')
+				).resolves.toBe('orphan');
+				expect(output.stdout()).not.toContain('listening on port');
+
+				// Let the scan finish. The counter-proof to the refusal above: the *same* port, the
+				// *same* process, now speaks SMTP -- so the refusal was about ordering, not about an
+				// unreachable port or a process that had already died.
+				releaseLock();
+				await lockDone;
+
+				await waitUntil(() => output.stdout().includes('listening on port'), 20_000);
+				expect(exited).toBe(false);
+				const afterScan = await probeConnect(port);
+				expect(afterScan.kind).toBe('connected');
+
+				const socket = connectTcp(port, '127.0.0.1');
+				try {
+					await new Promise<void>((resolve, reject) => {
+						socket.once('connect', () => resolve());
+						socket.once('error', reject);
+					});
+					const banner = await new TestSmtpClient(socket).nextReply();
+					expect(banner[0]).toMatch(/^220 /);
+				} finally {
+					if (!socket.destroyed) socket.destroy();
+				}
+
+				// The scan did its work before any of that became possible.
+				expect(output.stdout()).toContain('crash-recovery scan complete');
 				await expect(
 					readFile(incomingFilePath(spoolRoot, ledgeredTxId), 'utf8')
 				).resolves.toBe('ledgered');
@@ -310,10 +460,12 @@ suiteRequiring(
 
 				expect(journalingSource.routingAddress).toBeTruthy();
 			} finally {
+				releaseLock();
+				await lockDone.catch(() => undefined);
 				if (!exited) child.kill();
 				await waitUntil(() => exited, 10_000).catch(() => undefined);
 			}
-		}, 30_000);
+		}, 60_000);
 
 		it('two processes starting at once against the same spool and ledger do not race: the orphan is quarantined exactly once, both still bind their ports', async () => {
 			const cwd = mkdtempSync(path.join(scratchDir, 'exclusivity-'));

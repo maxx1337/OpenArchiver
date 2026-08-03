@@ -359,13 +359,15 @@ Rests:
 - **Bewusst hingenommen:** pausiert ein Sender beim Shutdown exakt zwischen zwei `BDAT`-Chunks, läuft
   der Drain in den regulären Idle-Timeout statt sofort abzuschließen. Kein Datenverlust, nur langsamer.
 
-> **Zuerst, vor jeder neuen Scheibe: `F49`.** Der Reihenfolgetest aus `JR-4-18` („Scan vor
-> `listen()`") ist **flaky** — grün im CI-Lauf `30822606272`, rot in `30824258066`, und zwischen
-> diesen beiden Commits ist **ausschließlich Dokumentation** geändert worden. Solange er das tut, ist
-> die Zusicherung nicht belegt **und** die CI rauscht. Die Frage in dieser Reihenfolge: hält die
-> Invariante überhaupt (kann der Port gebunden sein, bevor der Scan fertig ist?) — und erst danach:
-> taugt ein Offset-Vergleich in einem gepufferten Stream als Instrument? Der Befund steht in
-> `09-befunde-bestandscode.md` mit Vorschlägen.
+> **~~Zuerst, vor jeder neuen Scheibe: `F49`~~ — erledigt am 2026-08-03.** Die Invariante **hält**
+> (gerade `async`-Sequenz in `main()`: `await`-Scan vor `await server.listen()`); untauglich war nur
+> das Instrument. Der Test hält den Scan jetzt **von außen** an — er nimmt selbst
+> `pg_advisory_xact_lock(crashRecoveryScanLockKey(spoolRoot))` — und messt am **Port** statt am Log:
+> ungewährter Waiter in `pg_locks` ⇒ `ECONNREFUSED`, nach Freigabe `220` auf demselben Port. Gegen
+> eine nicht-`await`ete Scan-Variante kalibriert (`expected 'connected' to be 'refused'`). Kein
+> Produktionscode geändert, Testzahl unverändert. Details in `09-befunde-bestandscode.md` unter F49,
+> inklusive der einen bewusst offen gelassenen Kleinigkeit (`pino` und `console.log` schreiben
+> weiterhin auf denselben Dateideskriptor — kein Test hängt mehr daran).
 
 **Drei Dinge, die beim Weiterarbeiten zählen:**
 

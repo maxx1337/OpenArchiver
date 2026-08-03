@@ -111,7 +111,7 @@ findet es hier.
 | **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche … | hoch    | behoben   |
 | **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                | mittel  | offen     |
 | **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt             | hoch    | behoben   |
-| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot          | mittel  | offen     |
+| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot          | mittel  | behoben   |
 
 ---
 
@@ -2332,7 +2332,7 @@ Verhalten ist F13s bekannter Bereich und arbeitet hier korrekt. Ein Typfehler in
 `packages/backend/tests/integration/smtp-ingress-crash-recovery-boot.int.test.ts`, der Fall
 „runs before listen(): the log line precedes »listening«, a ledgered file is requeued, an orphan is
 quarantined" (`JR-4-18`) · **Gefunden:** vom PO am 2026-08-03 beim CI-Lauf der Doku-Diät ·
-**Status:** **offen**
+**Status:** **behoben am 2026-08-03** (Rolle DEV, siehe „Behoben" unten)
 
 Der Test belegt eine tragende Zusicherung aus `02-architektur.md` §5: der Crash-Recovery-Scan läuft
 **vor** dem Binden des Ports. Er tut das über die Byte-Offsets zweier Log-Zeilen in `stdout` des echten
@@ -2370,3 +2370,40 @@ schreibt.
 > **Der Fund ist ein Nebenprodukt der neuen Regel** (F48): weil der PO seit heute nach jedem Push den
 > CI-Lauf prüft, ist ein Fehlschlag aufgefallen, der bei einem reinen Dokumentations-Commit sonst
 > niemandem aufgefallen wäre — und der gerade deshalb so gut beweisbar war.
+
+### Behoben am 2026-08-03: die Invariante hält, das Instrument war falsch
+
+**Die Reihenfolge stimmt, und zwar strukturell.** `main()` in `apps/smtp-ingress/src/index.ts` ist eine
+gerade `async`-Sequenz: `await buildJournalAcceptance(...)` — darin `await runExclusiveCrashRecoveryScan(...)`
+— steht **vor** `await server.listen(...)`. Es gibt keinen Pfad, auf dem der Port bindet, bevor der Scan
+zurückgekehrt ist. Der Befund betraf nie das Verhalten, nur seinen Nachweis.
+
+**Der Nachweis hängt jetzt am Port statt am Log.** Der Testfall (neuer Name: „does not bind its port until
+the scan is done …") hält den Scan **von außen** an — er nimmt selbst
+`pg_advisory_xact_lock(crashRecoveryScanLockKey(spoolRoot))`, denselben Schlüssel, den
+`runExclusiveCrashRecoveryScan()` braucht — und messt in diesem Zustand:
+
+1. der Kindprozess ist **beweisbar im Scan**: er steht in `pg_locks` als **ungewährter** Waiter auf genau
+   diesem Schlüssel (kein `sleep`, keine Logzeile — ein Zustand, aus dem Server gelesen);
+2. ein TCP-Connect auf den Port wird **abgelehnt** (`ECONNREFUSED`), und die Orphan-Datei liegt noch
+   unangetastet in `incoming/`;
+3. nach der Freigabe des Locks antwortet **derselbe** Port mit einem `220`-Banner. Das ist die Gegenprobe,
+   die (2) erst zu einem Beleg über die **Reihenfolge** macht statt über einen falschen Port oder einen
+   abgestürzten Prozess.
+
+**Kalibriert, nicht nur grün gesehen.** Mit einer absichtlich eingebauten Regression — derselbe Scan, aber
+nicht mehr `await`ed, sodass der Port bindet, während er läuft — schlägt der Fall mit
+`expected 'connected' to be 'refused'` fehl (und die beiden anderen Fälle der Datei ebenfalls). Ohne diese
+Gegenprobe wäre auch der neue Test nur eine Behauptung. Danach viermal in Folge grün, Volllauf
+`927 passed | 7 skipped` bei 75 Dateien.
+
+**Was bewusst nicht angefasst wurde: die gemischten Schreibpfade selbst.** `index.ts` schreibt seine
+Scan-Zeile über `pino` und seine „listening"-Zeile über `console.log` — zwei unabhängige Puffer auf
+demselben Dateideskriptor. **Welche** der beiden Seiten im roten CI-Lauf nachhing, ist **nicht gemessen**;
+auf diesem Windows-Host ließ sich die Umkehrung in 3 × 60 Läufen einer Nachbildung nicht reproduzieren
+(Node behandelt Pipes auf Windows asynchron, auf Linux synchron — der rote Lauf war Linux). Für den Fix ist
+es gleichgültig: der Test vergleicht keine Logzeilen mehr, er **wartet** nur noch auf ihr Vorhandensein, und
+das ist von Pufferung unabhängig. **Offen als kleine Betriebsunschönheit:** die Ausgabe eines Laufs kann
+„listening" vor „scan complete" zeigen, obwohl die Ereignisse anders lagen. Wer das schließen will, legt
+beide Zeilen auf **einen** synchronen Schreibpfad (`pino.destination({ dest: 1, sync: true })`, `console.log`
+durch `logger.info` ersetzt); Nutzen ist hier nur die Lesbarkeit des Logs, kein Test hängt mehr davon ab.
