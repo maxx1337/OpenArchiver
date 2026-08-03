@@ -22,7 +22,7 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34      |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                         |
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                              |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45               |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46          |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -2084,3 +2084,41 @@ wie die Vollständigkeit der Stelle, die den Typ setzt. Wer einen `try`-Block um
 legt und eine fremde, **injizierte** Quelle daneben laufen lässt, hat einen zweiten Fehlerpfad, den
 niemand sieht — solange keine Quelle wirft. Dasselbe Muster wie F41 (das Testnetz deckte vier von
 sieben Operationen ab) und F44 (die Probe traf den Fall nicht): der ungeprüfte Rand, nicht die Mitte.
+
+---
+
+## F46 — zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche Sache
+
+**Schwere:** **hoch** · **Kategorie:** Neuer Code · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`RecipientAclEvaluator` / `SourceAclEvaluator`),
+`packages/journaling/src/ingress/source-acl-cache.ts`, verdrahtet in
+`apps/smtp-ingress/src/index.ts` · **Gefunden:** `JR-4-18` (2026-08-03, Rolle DEV), gemeldet und
+**nicht** behoben · **Status:** **offen**, Behebung als `JR-4-20`
+
+`RecipientAclEvaluator.evaluate` und `SourceAclEvaluator.evaluate` tragen denselben Methodennamen.
+TypeScript typisiert **strukturell**, also erfüllt `SourceAclCache` beide Schnittstellen über seine
+**eine** `evaluate(remoteIp)`-Methode — die CIDR-Prüfung. Die eigentlich zuständige
+`evaluateRecipient(rcptToAddress)` wird nie aufgerufen.
+
+**Wirkung in Produktion:** `apps/smtp-ingress/src/index.ts` übergibt den Cache als
+`recipientAclEvaluator`, also läuft jeder `RCPT TO` gegen die IP-Allowlist. `normalizeRemoteIp()`
+wirft bei einer E-Mail-Adresse, das Ergebnis wird zu `'unavailable'`, und der Server antwortet
+**immer `451 4.3.0`** — nie `550`, nie `250`, unabhängig vom Inhalt von `journaling_sources`.
+**Der empfängerbasierte Empfang ist damit vollständig funktionsunfähig**, sobald `apps/smtp-ingress`
+echt läuft.
+
+### Warum weder Compiler noch Testsuite es gesehen haben
+
+Der Compiler **kann** es nicht sehen: strukturelle Kompatibilität ist hier gewollte Sprachsemantik,
+kein Fehler. Und die Suite konnte es nicht sehen, weil **jeder** Test seine eigene, korrekte
+Verdrahtung mitbringt statt der produktiven: `smtp-recipient-acl-protocol.test.ts` benutzt ein
+handgeschriebenes Fake und sagt das in einem eigenen Kommentar, `journal-smtp-accept-e2e.int.test.ts`
+ein Inline-Objekt. Aufgefallen ist es erst, als `JR-4-18` zum ersten Mal den **echten** Prozess mit
+dem **echten** Cache startete.
+
+**Das ist der eigentliche Befund, und er ist größer als die Namenskollision:** die Stelle, an der
+dieser Prozess seine Objekte zusammensteckt, wird von keinem Test durchlaufen. Jeder Test prüft eine
+Nachbildung der Verdrahtung, nie die Verdrahtung. Eine Namenskollision ist nur die erste Art von
+Fehler, die dort unbemerkt bleibt — ein vergessener Parameter, ein vertauschtes Argument oder ein
+nicht gestarteter Cache wären genauso unsichtbar. `JR-4-20` behebt deshalb beides: die Kollision
+strukturell, **und** die untestete Verdrahtung.
