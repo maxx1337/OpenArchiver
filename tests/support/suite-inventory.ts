@@ -170,7 +170,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// wire, plus the mid-transaction stability of the per-transaction resolution).
 		// 56 after JR-4-10 added tests/unit/kill-during-data-invariant.test.ts -- calibration of
 		// checkNeverPartial(), the pure checker the real kill-during-DATA adversarial test uses.
-		expectedFiles: 56,
+		// 57 after JR-4-11 added tests/unit/bdat-data-byte-fidelity.test.ts.
+		expectedFiles: 57,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -472,7 +473,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// `smtp-ingress-kill-during-data.adv.test.ts` itself cannot provide on this host: F48 means
 		// every real iteration there resolves to 451, so no real iteration can ever produce a
 		// violation for the checker to catch.
-		expectedTests: { ci: 818, nightly: 3, manual: 0 },
+		// 826 after JR-4-11 added tests/unit/bdat-data-byte-fidelity.test.ts (8): 4 real cases --
+		// single-chunk, multi-chunk, BDAT 0 LAST, and a chunk boundary landing mid-line, each proven by
+		// comparing the BDAT-stored spool object directly against the DATA-stored one (not against a
+		// hand-built expectation) -- plus 4 calibration cases for expectStoredBytesIdentical() itself
+		// (an untouched copy stays clean; a flipped byte, a truncated byte, and an extra trailing byte
+		// must each be caught).
+		expectedTests: { ci: 826, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
