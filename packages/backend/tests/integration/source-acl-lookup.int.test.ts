@@ -29,7 +29,8 @@ import { seedIngestionSource, seedJournalingSource } from '../support/iam-seed';
  * The unit test asserts the statement shape against a recording fake. This file proves the query is
  * correct against the real schema: `status = 'active'` actually excludes a paused source, `jsonb`
  * `allowed_ips` round-trips (including an empty array) through a client `drizzle` never touched, and
- * `ingestion_source_id` comes back as the `chainScopeId` a caller needs.
+ * `ingestion_source_id` comes back as the `chainScopeId` a caller needs. Since `JR-4-05b`: the same
+ * is true of `routing_address`, the column the recipient ACL reads through this same port.
  */
 
 const postgresProbe = await probePostgres();
@@ -75,6 +76,7 @@ suiteRequiring(
 			expect(found!.chainScopeId).toBe(archive.id);
 			expect(found!.allowedIps).toEqual(['192.0.2.0/24', '2001:db8::/32']);
 			expect(found!.requireTls).toBe(true);
+			expect(found!.routingAddress).toBe(source.routingAddress);
 		});
 
 		it('excludes a paused source', async () => {

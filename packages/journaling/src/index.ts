@@ -142,6 +142,8 @@ export {
 	type EsmtpServerOptions,
 	type IngressLogger,
 	type ParsedMailFrom,
+	type RecipientAclDecision,
+	type RecipientAclEvaluator,
 	type RequireTlsContext,
 	type RequireTlsResolver,
 	type SourceAclDecision,
@@ -149,6 +151,8 @@ export {
 } from './ingress/smtp-server';
 
 export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
+
+export { normalizeJournalRecipient } from './ingress/recipient-address';
 
 export type { JournalingSourceAclEntry, SourceAclLookup } from './ingress/source-acl-port';
 export { PostgresSourceAclLookup } from './ingress/source-acl';

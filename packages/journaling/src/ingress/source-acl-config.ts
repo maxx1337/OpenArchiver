@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
 /**
- * Configuration for the source ACL's database connection and cache refresh (`JR-4-05a`), a sibling
- * schema to `./smtp-config.ts`/`./tls-config.ts`: this task owns it, `./config.ts` embeds it rather
- * than duplicating it.
+ * Configuration for the source ACL's database connection and cache refresh (`JR-4-05a`, reused
+ * verbatim by the recipient ACL in `JR-4-05b` -- see `./source-acl-cache.ts`'s doc comment for why
+ * one connection and one refresh cycle serve both), a sibling schema to
+ * `./smtp-config.ts`/`./tls-config.ts`: this task owns it, `./config.ts` embeds it rather than
+ * duplicating it.
  *
  * ---------------------------------------------------------------------------------------------
  * Why `databaseUrl` has no default and is not optional

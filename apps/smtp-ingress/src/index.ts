@@ -94,6 +94,10 @@ async function main(): Promise<void> {
 		tls: config.tls,
 		logger,
 		sourceAclEvaluator: sourceAclCache,
+		// JR-4-05b: the same SourceAclCache instance -- one refresh cycle serves both the source-IP
+		// ACL and the recipient ACL, see that class's doc comment for why this is deliberately not a
+		// second cache.
+		recipientAclEvaluator: sourceAclCache,
 		requireTlsResolver: createSourceAclRequireTlsResolver(
 			sourceAclCache,
 			config.tls.requireTls

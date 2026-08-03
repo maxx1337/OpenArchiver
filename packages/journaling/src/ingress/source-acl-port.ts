@@ -1,5 +1,6 @@
 /**
- * The database port for the SMTP ingress source ACL (`JR-4-05a`, ADR-002).
+ * The database port for the SMTP ingress source ACL (`JR-4-05a`, ADR-002), extended by `JR-4-05b`
+ * to also carry `routing_address` for the recipient ACL.
  *
  * ---------------------------------------------------------------------------------------------
  * Why this is a separate port, following `../ledger/ledger-lookup-port.ts`'s pattern
@@ -20,7 +21,18 @@
  * A `paused` journaling source has deliberately stopped receiving mail -- its `allowed_ips` should
  * not go on admitting connections while it is paused. Filtering in the query means a paused
  * source's IPs stop being honoured the moment the next refresh runs, with no special case in
- * `./source-acl-cache.ts` to remember.
+ * `./source-acl-cache.ts` to remember. The same reasoning now covers `routingAddress` too
+ * (`JR-4-05b`): a paused source's recipient address must stop being a valid `RCPT TO` target the
+ * moment it is paused, not just its IPs.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `routingAddress` -- one recipient ACL, the same load path as the source ACL (`JR-4-05b`)
+ * ---------------------------------------------------------------------------------------------
+ * The Product Owner's instruction for this slice was explicit: reuse `SourceAclCache`'s refresh
+ * cycle and database connection rather than opening a second polling loop against
+ * `journaling_sources`. `routingAddress` is therefore read here, in the same `SELECT`, rather than
+ * through a second port -- `./source-acl-cache.ts`'s `CompiledSourceAcl` carries it alongside the
+ * CIDR list, and one refresh keeps both the IP-based and the recipient-based ACLs current.
  */
 
 /** One active journaling source's ACL-relevant columns. */
@@ -38,6 +50,11 @@ export interface JournalingSourceAclEntry {
 	readonly allowedIps: readonly string[];
 	/** `journaling_sources.require_tls`. */
 	readonly requireTls: boolean;
+	/** `journaling_sources.routing_address` -- the `RCPT TO` address this source's mail arrives at
+	 * (`JR-4-05b`). Persisted, generated at creation time, `NOT NULL` in the schema; handed back raw
+	 * (unnormalised) the same way `allowedIps` is -- comparison-shape decisions (case folding etc.)
+	 * are `./recipient-address.ts`'s job, not this port's. */
+	readonly routingAddress: string;
 }
 
 /**

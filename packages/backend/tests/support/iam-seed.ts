@@ -103,10 +103,12 @@ export async function seedIngestionSource(
 export interface SeededJournalingSource {
 	id: string;
 	ingestionSourceId: string;
+	routingAddress: string;
 }
 
 /**
- * Seed a `journaling_sources` row (`JR-4-05a`). `ingestionSourceId` must already exist (see
+ * Seed a `journaling_sources` row (`JR-4-05a`, `routingAddress` override added by `JR-4-05b` for
+ * the recipient-ACL tests). `ingestionSourceId` must already exist (see
  * {@link seedIngestionSource}) -- `journaling_sources.ingestion_source_id` is `notNull` with no
  * `onDelete: 'set null'`.
  */
@@ -118,6 +120,9 @@ export async function seedJournalingSource(
 		requireTls?: boolean;
 		status?: 'active' | 'paused';
 		name?: string;
+		/** Overrides the generated `journal-<suffix>@journaling.test.invalid` default -- needed by
+		 * the recipient-ACL tests to seed two sources with a *chosen*, colliding routing address. */
+		routingAddress?: string;
 	}
 ): Promise<SeededJournalingSource> {
 	const suffix = randomUUID().slice(0, 8);
@@ -129,10 +134,14 @@ export async function seedJournalingSource(
 			requireTls: options.requireTls ?? false,
 			status: options.status ?? 'active',
 			ingestionSourceId: options.ingestionSourceId,
-			routingAddress: `journal-${suffix}@journaling.test.invalid`,
+			routingAddress: options.routingAddress ?? `journal-${suffix}@journaling.test.invalid`,
 		})
 		.returning();
-	return { id: source!.id, ingestionSourceId: source!.ingestionSourceId };
+	return {
+		id: source!.id,
+		ingestionSourceId: source!.ingestionSourceId,
+		routingAddress: source!.routingAddress,
+	};
 }
 
 export async function seedArchivedEmail(

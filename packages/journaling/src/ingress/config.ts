@@ -16,10 +16,12 @@ import { sourceAclConfigSchema } from './source-acl-config';
  * `JR-4-01`'s acceptance criteria were about the process boundary only (starts standalone, no
  * forbidden imports, a clear message on bad configuration) -- not the SMTP protocol itself, so
  * `JR-4-01` deliberately left out every field the protocol engine needs. `JR-4-02` is the task that
- * consumes `smtp` below; recipient ACLs (`JR-4-05b`), `AUTH` (`JR-4-05c`) and rate limits
- * (`JR-4-08`) still are not here, for the same reason `JR-4-01`'s note gave: none of them is read
- * by anything built so far, and adding them now would be the same speculative configuration the
- * Product Owner asked not to carry. They join this schema in the tasks that consume them.
+ * consumes `smtp` below; `AUTH` (`JR-4-05c`) and rate limits (`JR-4-08`) still are not here, for the
+ * same reason `JR-4-01`'s note gave: neither is read by anything built so far, and adding them now
+ * would be the same speculative configuration the Product Owner asked not to carry. They join this
+ * schema in the tasks that consume them. Recipient ACLs (`JR-4-05b`) needed **no** new field here --
+ * it reuses `sourceAcl` below verbatim (same database connection, same refresh/staleness knobs); see
+ * `./source-acl-cache.ts`'s doc comment for why that is one cache serving two ACLs, not two caches.
  *
  * Five fields, one added by each of `JR-4-01`, `JR-4-02`, `JR-4-04` and `JR-4-05a`:
  *  - `smtpPort`: the port the ESMTP listener binds (`JR-4-02`'s `EsmtpServer`, replacing `JR-4-01`'s

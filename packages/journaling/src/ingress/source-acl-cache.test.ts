@@ -38,6 +38,7 @@ function entry(overrides: Partial<JournalingSourceAclEntry> = {}): JournalingSou
 		chainScopeId: 'archive-1',
 		allowedIps: ['192.0.2.0/24'],
 		requireTls: false,
+		routingAddress: 'journal-1@journaling.test.invalid',
 		...overrides,
 	};
 }

@@ -1,8 +1,11 @@
 import { normalizeRemoteIp } from '../ledger/canonical-encoding';
 import { matchesCidr, parseCidr, type ParsedCidr } from './cidr';
+import { normalizeJournalRecipient } from './recipient-address';
 import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-port';
 import type {
 	IngressLogger,
+	RecipientAclDecision,
+	RecipientAclEvaluator,
 	RequireTlsContext,
 	RequireTlsResolver,
 	SourceAclDecision,
@@ -10,7 +13,8 @@ import type {
 } from './smtp-server';
 
 /**
- * `SourceAclCache` -- the periodically-refreshed, connect-time source ACL (`JR-4-05a`).
+ * `SourceAclCache` -- the periodically-refreshed, connect-time source ACL (`JR-4-05a`), extended by
+ * `JR-4-05b` to also serve the recipient ACL from the same snapshot.
  *
  * ---------------------------------------------------------------------------------------------
  * Why a cache, not a query per connection
@@ -18,8 +22,22 @@ import type {
  * A `SELECT` on every accepted TCP connection would make Postgres a hard dependency of the receive
  * path's availability -- exactly the coupling `docs/dev/journaling/02-architektur.md` section 3
  * already argues against for Phase B ("Object store unreachable ⇒ still `250`"). This cache polls
- * `journaling_sources` on a timer (`refreshIntervalMs`) and every `evaluate()` call is a pure
- * in-memory lookup against the last successfully loaded snapshot.
+ * `journaling_sources` on a timer (`refreshIntervalMs`) and every `evaluate()`/`evaluateRecipient()`
+ * call is a pure in-memory lookup against the last successfully loaded snapshot.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * One cache, one refresh cycle, two ACLs (`JR-4-05b`)
+ * ---------------------------------------------------------------------------------------------
+ * The Product Owner's instruction for this slice was explicit: reuse this cache and its refresh
+ * cycle for the recipient ACL rather than open a second polling loop against `journaling_sources`.
+ * `listActiveSources()` already reads the whole row (`./source-acl-port.ts`, `JR-4-05a`); this task
+ * only adds `routingAddress` to {@link CompiledSourceAcl} and a second index
+ * (`recipientIndex`, keyed by the normalised routing address -- see `./recipient-address.ts`) built
+ * from the *same* `doRefresh()` pass that already builds the CIDR-matching `snapshot`. There is no
+ * second `SourceAclLookup`, no second timer, and no second staleness clock: a recipient ACL change
+ * and a source-IP ACL change become visible on exactly the same schedule, and an outage that makes
+ * `evaluate()` report `'unavailable'` makes `evaluateRecipient()` report the same, at the same
+ * moment, for the same reason.
  *
  * ---------------------------------------------------------------------------------------------
  * The three questions the Product Owner's task asked this design to answer
@@ -41,7 +59,33 @@ import type {
  * ---------------------------------------------------------------------------------------------
  * Before the *first* successful refresh ever completes, `evaluate()` reports `'unavailable'` for
  * every IP -- "ACL unknown" never means "admit everyone" (ADR-002), it means "we cannot say yet,
- * try again shortly" (`421`, never a silent allow and never `554`).
+ * try again shortly" (`421`, never a silent allow and never `554`). `evaluateRecipient()` follows the
+ * identical rule for `RCPT TO` (`421`'s per-command sibling is `451`, see `./smtp-server.ts`'s
+ * `handleRcpt`): before the first successful refresh, or once staleness is crossed, every recipient
+ * reports `'unavailable'`, never `'allowed'`.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * No catch-all is reachable through this cache, for any of the three ways it could sneak in
+ * ---------------------------------------------------------------------------------------------
+ * `journal-ledger` skill section 10's prohibition is structural here, not disciplinary:
+ *
+ *  1. **A wildcard routing-address string.** There is no wildcard syntax this cache or
+ *     `./recipient-address.ts` interprets -- `evaluateRecipient()` does one thing, an exact
+ *     (normalised) string-equality lookup in `recipientIndex`. A literal `"*"` stored in
+ *     `routing_address` would simply never equal any real `RCPT TO` address; it could not
+ *     accidentally match everything the way an unescaped wildcard in a regex or glob might.
+ *  2. **An empty recipient set.** No `journaling_sources` rows, or every row failing to compile
+ *     (see `compileSourceAcl` below), yields an empty `recipientIndex` -- `evaluateRecipient()`
+ *     then reports `'denied'` for every address once the cache has successfully loaded (or
+ *     `'unavailable'` before it has), never `'allowed'`. There is no default-permit branch anywhere
+ *     in {@link SourceAclCache.evaluateRecipient}.
+ *  3. **A source with no `routing_address`.** The column is `NOT NULL` in the schema
+ *     (`packages/backend/src/database/schema/journaling-sources.ts`) and generated by this product
+ *     itself at source-creation time -- there is no application code path that creates a source
+ *     with an empty or missing routing address, and even if the column somehow held an empty
+ *     string, `normalizeJournalRecipient('')` is `''`, which cannot equal a real `RCPT TO` address
+ *     (a real one is always non-empty per RFC 5321's `Mailbox` grammar) -- see
+ *     `./recipient-address.ts`'s doc comment for that case.
  */
 
 const noopAclLogger: IngressLogger = {
@@ -51,12 +95,18 @@ const noopAclLogger: IngressLogger = {
 	error: () => {},
 };
 
-/** One source's `allowed_ips`, parsed into {@link ParsedCidr}s, ready for `evaluate()` to scan. */
+/** One source's `allowed_ips`, parsed into {@link ParsedCidr}s, ready for `evaluate()` to scan --
+ * plus, since `JR-4-05b`, its normalised `routing_address`, ready for `evaluateRecipient()` to
+ * index. */
 export interface CompiledSourceAcl {
 	readonly sourceId: string;
 	readonly chainScopeId: string;
 	readonly requireTls: boolean;
 	readonly cidrs: readonly ParsedCidr[];
+	/** `journaling_sources.routing_address`, folded through `./recipient-address.ts`'s comparison
+	 * rules. Never re-derived at match time -- `evaluateRecipient()` folds the incoming `RCPT TO`
+	 * address the same way and compares normalised-to-normalised. */
+	readonly routingAddress: string;
 }
 
 /**
@@ -103,7 +153,61 @@ export function compileSourceAcl(
 		chainScopeId: entry.chainScopeId,
 		requireTls: entry.requireTls,
 		cidrs,
+		routingAddress: normalizeJournalRecipient(entry.routingAddress),
 	};
+}
+
+/**
+ * Build the recipient-ACL index (`JR-4-05b`) from one refresh's already-`compileSourceAcl`'d rows.
+ * Pulled out of `doRefresh()` into its own pure function -- no logger side effects beyond the
+ * `IngressLogger` parameter, no cache state -- for the same reason `compileSourceAcl` is a free
+ * function rather than a private method: a test can call it directly against a handful of
+ * `CompiledSourceAcl` fixtures without spinning up a whole cache and refresh cycle.
+ *
+ * **A duplicate `routing_address` across two active sources is an operator misconfiguration, not a
+ * crash.** `journaling_sources` has no unique constraint on the column, so nothing in the schema
+ * prevents it. Keeping *both* is not an option -- `evaluateRecipient()` must return exactly one
+ * `chainScopeId` per match. Between "reject every recipient for that address" (denies a working
+ * source too) and "keep one, log loudly", the second is chosen: the **first** row encountered wins
+ * -- deterministic because `PostgresSourceAclLookup.listActiveSources()` orders by `id`
+ * (`JR-4-05b`) -- and every subsequent row for the same normalised address is dropped with a
+ * `logger.error` naming both source ids, so the operator sees the conflict on every refresh until
+ * it is fixed rather than silently losing one source's mail.
+ */
+function buildRecipientIndex(
+	compiled: readonly CompiledSourceAcl[],
+	logger: IngressLogger
+): ReadonlyMap<string, CompiledSourceAcl> {
+	const index = new Map<string, CompiledSourceAcl>();
+	for (const one of compiled) {
+		if (one.routingAddress === '') {
+			// Not reachable in practice -- routing_address is NOT NULL and generated by this system --
+			// but this cache never assumes a "cannot happen" case is actually unreachable (the same
+			// posture decodeAllowedIps takes for a corrupt allowed_ips value). Excluded from the
+			// recipient index only; the source's IP-based ACL (./cidr.ts) is unaffected.
+			logger.error(
+				{ sourceId: one.sourceId },
+				'smtp-ingress: journaling_sources.routing_address for this source is empty after ' +
+					'normalisation -- excluding it from the recipient ACL (its source-IP ACL is unaffected)'
+			);
+			continue;
+		}
+		const existing = index.get(one.routingAddress);
+		if (existing) {
+			logger.error(
+				{
+					routingAddress: one.routingAddress,
+					keptSourceId: existing.sourceId,
+					ignoredSourceId: one.sourceId,
+				},
+				'smtp-ingress: two active journaling sources share the same routing_address -- keeping ' +
+					'the first (lowest id) and ignoring the second until the operator fixes the duplicate'
+			);
+			continue;
+		}
+		index.set(one.routingAddress, one);
+	}
+	return index;
 }
 
 export interface SourceAclCacheOptions {
@@ -119,8 +223,12 @@ export interface SourceAclCacheOptions {
 	readonly now?: () => number;
 }
 
-export class SourceAclCache implements SourceAclEvaluator {
+export class SourceAclCache implements SourceAclEvaluator, RecipientAclEvaluator {
 	private snapshot: readonly CompiledSourceAcl[] = [];
+	/** Recipient ACL index (`JR-4-05b`), keyed by normalised `routing_address` -- rebuilt in the same
+	 * `doRefresh()` pass as `snapshot`, from the same rows. See {@link doRefresh} for how a duplicate
+	 * `routing_address` across two active sources is handled. */
+	private recipientIndex: ReadonlyMap<string, CompiledSourceAcl> = new Map();
 	private lastSuccessAt: number | null = null;
 	private timer: ReturnType<typeof setInterval> | null = null;
 	private refreshInFlight: Promise<void> | null = null;
@@ -179,6 +287,7 @@ export class SourceAclCache implements SourceAclEvaluator {
 				}
 			}
 			this.snapshot = compiled;
+			this.recipientIndex = buildRecipientIndex(compiled, this.logger);
 			this.lastSuccessAt = this.now();
 		} catch (err) {
 			// Deliberately keep the previous snapshot and lastSuccessAt -- see the class doc
@@ -198,10 +307,7 @@ export class SourceAclCache implements SourceAclEvaluator {
 	 * rather than crashing the connection handler.
 	 */
 	evaluate(remoteIp: string): SourceAclDecision {
-		if (this.lastSuccessAt === null) {
-			return { kind: 'unavailable' };
-		}
-		if (this.now() - this.lastSuccessAt > this.options.staleAfterMs) {
+		if (this.isSnapshotUnavailable()) {
 			return { kind: 'unavailable' };
 		}
 
@@ -225,6 +331,37 @@ export class SourceAclCache implements SourceAclEvaluator {
 			}
 		}
 		return { kind: 'denied' };
+	}
+
+	/**
+	 * Decide `RCPT TO` admission for `rcptToAddress` (`JR-4-05b`). Follows the exact same
+	 * fail-closed shape as {@link evaluate}: `'unavailable'` before the first successful refresh or
+	 * once staleness is crossed, `'denied'` for a known-but-non-matching address, `'allowed'` with
+	 * the matched source's identity and `chainScopeId` otherwise. See the class doc comment's "No
+	 * catch-all is reachable through this cache" section for why none of the three ways to reach an
+	 * accidental catch-all apply here.
+	 */
+	evaluateRecipient(rcptToAddress: string): RecipientAclDecision {
+		if (this.isSnapshotUnavailable()) {
+			return { kind: 'unavailable' };
+		}
+
+		const normalized = normalizeJournalRecipient(rcptToAddress);
+		const match = this.recipientIndex.get(normalized);
+		if (!match) {
+			return { kind: 'denied' };
+		}
+		return { kind: 'allowed', sourceId: match.sourceId, chainScopeId: match.chainScopeId };
+	}
+
+	/** Shared by {@link evaluate} and {@link evaluateRecipient}: no snapshot has ever loaded
+	 * successfully, or the last successful load is older than `staleAfterMs`. See the class doc
+	 * comment's "Fail-closed is still the default" section. */
+	private isSnapshotUnavailable(): boolean {
+		if (this.lastSuccessAt === null) {
+			return true;
+		}
+		return this.now() - this.lastSuccessAt > this.options.staleAfterMs;
 	}
 }
 

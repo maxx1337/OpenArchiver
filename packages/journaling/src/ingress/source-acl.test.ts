@@ -36,6 +36,7 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					ingestion_source_id: 'archive-1',
 					allowed_ips: ['192.0.2.0/24', '2001:db8::/32'],
 					require_tls: true,
+					routing_address: 'journal-1@journaling.test.invalid',
 				},
 			]);
 			const lookup = new PostgresSourceAclLookup(query);
@@ -47,6 +48,7 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					chainScopeId: 'archive-1',
 					allowedIps: ['192.0.2.0/24', '2001:db8::/32'],
 					requireTls: true,
+					routingAddress: 'journal-1@journaling.test.invalid',
 				},
 			]);
 		});
@@ -58,6 +60,7 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					ingestion_source_id: 'archive-2',
 					allowed_ips: '["10.0.0.0/8"]',
 					require_tls: false,
+					routing_address: 'journal-2@journaling.test.invalid',
 				},
 			]);
 			const lookup = new PostgresSourceAclLookup(query);
@@ -72,6 +75,7 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					ingestion_source_id: 'archive-3',
 					allowed_ips: '{"not":"an array"}',
 					require_tls: false,
+					routing_address: 'journal-3@journaling.test.invalid',
 				},
 			]);
 			const lookup = new PostgresSourceAclLookup(query);
@@ -85,6 +89,7 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 					ingestion_source_id: 'archive-4',
 					allowed_ips: 42,
 					require_tls: false,
+					routing_address: 'journal-4@journaling.test.invalid',
 				},
 			]);
 			const lookup = new PostgresSourceAclLookup(query);
@@ -100,6 +105,14 @@ suite('ci', 'PostgresSourceAclLookup (JR-4-05a)', () => {
 			expect(calls).toHaveLength(1);
 			expect(calls[0]!.text).toMatch(/status\s*=\s*'active'/);
 			expect(calls[0]!.text).toMatch(/journaling_sources/);
+		});
+
+		it('reads routing_address and orders by id (JR-4-05b)', async () => {
+			const { query, calls } = fakeQuery([]);
+			const lookup = new PostgresSourceAclLookup(query);
+			await lookup.listActiveSources();
+			expect(calls[0]!.text).toMatch(/routing_address/);
+			expect(calls[0]!.text).toMatch(/order by id/i);
 		});
 
 		it('returns an empty array when no source is active', async () => {

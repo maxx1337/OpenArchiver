@@ -131,6 +131,38 @@ import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
  * {@link RequireTlsResolver}'s doc comment for the seam that task extends and the rule ("tighten,
  * never loosen") that governs it.
  *
+ * ---------------------------------------------------------------------------------------------
+ * Recipient ACL, no catch-all (`JR-4-05b`)
+ * ---------------------------------------------------------------------------------------------
+ * Every `RCPT TO` is checked against {@link RecipientAclEvaluator} (implemented by
+ * `SourceAclCache`, reusing the *same* database connection and refresh cycle `JR-4-05a` already
+ * built rather than opening a second polling loop against `journaling_sources` -- see
+ * `./source-acl-cache.ts`'s doc comment). `'denied'` -- a syntactically valid address that matches
+ * no active source's `routing_address` -- answers `550 5.1.1` at the `RCPT` command itself, per the
+ * skill's response table; `'unavailable'` -- the ACL is not currently known, the same condition
+ * `SourceAclEvaluator` reports at connect time -- answers `451 4.3.0` instead (skill section 1:
+ * never a `5xx` for a local problem), but unlike the connect-time gate does **not** close the
+ * connection: the client may still retry the command. See `./recipient-address.ts` for how an
+ * address is folded before comparison and the full list of deliberately-unhandled edge cases
+ * (`postmaster`, angle-bracket comments, `SMTPUTF8`).
+ *
+ * **No catch-all is reachable from here, structurally, not just by omission.** `'allowed'` is only
+ * ever returned for an address that matched a real row in `SourceAclCache`'s snapshot -- there is
+ * no code path in this file, `source-acl-cache.ts`, or `source-acl.ts` that can turn "no rows
+ * loaded" or "empty routing_address" into an admit-everyone decision; both fall through to
+ * `'unavailable'`/`'denied'` the same as any other non-match. See this handler's own doc comment
+ * (`handleRcpt`) for the three concrete ways a catch-all could otherwise sneak in and why each is
+ * closed.
+ *
+ * **The recipient determines the chain (ADR-007).** Every accepted `RCPT TO` is recorded together
+ * with the source and `chainScopeId` the ACL matched it to -- see {@link matchedRecipients} --
+ * because `JR-4-06` needs exactly that mapping to fill `JournalTransactionInput.chainScopeId`/
+ * `journalingSourceId` when it wires `completeTransfer()` into `JournalAcceptance.accept()`. A
+ * transaction whose accepted recipients resolve to **more than one** chain is a real, open
+ * question this task does not resolve on its own -- see {@link recordMatchedRecipient}'s doc
+ * comment for what is recorded, what is only logged, and what is deliberately left for the Product
+ * Owner to decide by ADR before `JR-4-06`.
+ *
  * `tlsVersion`/`tlsCipher` (ADR-006 section 1: two of the sixteen hashed ledger fields, added
  * precisely because the RFC's eight-field formula would let them change after the fact without
  * breaking the chain) are read from the real, negotiated {@link tls.TLSSocket} in
@@ -659,6 +691,35 @@ export type SourceAclDecision =
 	| { readonly kind: 'denied' }
 	| { readonly kind: 'unavailable' };
 
+/**
+ * What {@link EsmtpServer} needs from the recipient ACL to gate each `RCPT TO` (`JR-4-05b`, skill
+ * `journal-ledger` section 2 -- "Recipient not a configured journal address" ⇒ `550 5.1.1`).
+ * Implemented by `SourceAclCache` (`./source-acl-cache.ts`) alongside {@link SourceAclEvaluator} --
+ * see that file's doc comment for why this is the *same* cache and refresh cycle, not a second one.
+ */
+export interface RecipientAclEvaluator {
+	evaluate(rcptToAddress: string): RecipientAclDecision;
+}
+
+/**
+ * The three outcomes {@link RecipientAclEvaluator.evaluate} can report -- deliberately the same
+ * shape as {@link SourceAclDecision}, and for the same reasons:
+ *
+ *  - `'allowed'`: `rcptToAddress` (after `./recipient-address.ts`'s comparison rules) matched an
+ *    active source's `routing_address`. Carries that source's identity and `chainScopeId` (ADR-007)
+ *    -- see the module doc comment's "Recipient ACL" section for why a caller needs this per
+ *    recipient, not just a boolean.
+ *  - `'denied'`: the ACL is known and the address matched no source. `550 5.1.1` -- a permanent
+ *    rejection is correct here, the same reasoning `SourceAclDecision`'s `'denied'` case already
+ *    documents: this is the sender's problem (the address does not exist), not a transient one.
+ *  - `'unavailable'`: the ACL is not currently known (no snapshot ever loaded, or the last one is
+ *    stale) -- a local failure, never `550` (`451 4.3.0` instead; skill section 1).
+ */
+export type RecipientAclDecision =
+	| { readonly kind: 'allowed'; readonly sourceId: string; readonly chainScopeId: string }
+	| { readonly kind: 'denied' }
+	| { readonly kind: 'unavailable' };
+
 /** Everything {@link RequireTlsResolver} needs to decide (`JR-4-04`, extended by `JR-4-05`). */
 export interface RequireTlsContext {
 	readonly remoteIp: string | null;
@@ -691,6 +752,16 @@ class SmtpConnection {
 	private ehloName: string | null = null;
 	private mailFrom: string | null = null;
 	private rcptTo: string[] = [];
+	/** Recipients the recipient ACL has matched so far this transaction (`JR-4-05b`), each tagged
+	 * with the source and `chainScopeId` (ADR-007) it resolved to. This is the handover point
+	 * `JR-4-06` reads from when it wires `completeTransfer()` into `JournalAcceptance.accept()` --
+	 * the same role `tlsVersion`/`tlsCipher` already play for TLS, see the module doc comment's "TLS
+	 * / STARTTLS" section. Cleared by {@link resetEnvelope} same as `rcptTo`. */
+	private matchedRecipients: { address: string; sourceId: string; chainScopeId: string }[] = [];
+	/** Distinct `chainScopeId`s matched so far this transaction -- a `Set` specifically so a
+	 * duplicate recipient, or a second recipient of the *same* source, never re-triggers the
+	 * cross-chain warning in {@link recordMatchedRecipient}: both add no new element. */
+	private matchedChainScopeIds: Set<string> = new Set();
 	private dataScanner: DataScanner | null = null;
 	/** Non-`null` for the whole `BDAT` transaction (created on the first `BDAT`, cleared by
 	 * {@link resetEnvelope}), not just the chunk currently being read -- RFC 3030 has one
@@ -727,7 +798,13 @@ class SmtpConnection {
 		 * `tls.createSecureContext()` parses the certificate, and there is no reason to repeat that
 		 * for every accepted socket. */
 		private readonly tlsSecureContext: tls.SecureContext | null,
-		private readonly requireTlsResolver: RequireTlsResolver
+		private readonly requireTlsResolver: RequireTlsResolver,
+		/** `undefined` disables the recipient ACL entirely -- every syntactically valid recipient is
+		 * accepted, exactly this class's behaviour before `JR-4-05b` (the same convention
+		 * `tlsSecureContext`/`sourceAclEvaluator` already established, so every pre-existing test that
+		 * does not care about the recipient ACL keeps constructing a bare `EsmtpServer`). Production
+		 * always supplies a `SourceAclCache`. */
+		private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined
 	) {
 		// Connection-level backstop, independent of protocol state: Node re-arms this internally on
 		// any read *or* write activity on the socket, so it fires only on genuine idleness --
@@ -1079,11 +1156,71 @@ class SmtpConnection {
 			this.armCommandTimer();
 			return;
 		}
-		// No recipient ACL here -- JR-4-05. Every syntactically valid recipient is accepted for now.
+
+		if (this.recipientAclEvaluator) {
+			const decision = this.recipientAclEvaluator.evaluate(parsed.address);
+			if (decision.kind === 'denied') {
+				// JR-4-05b, skill section 2: an address that matches no active source's
+				// routing_address is the sender's problem, not a transient one -- 550, never a 4xx.
+				this.writeResponse(550, '5.1.1', 'Recipient address rejected: user unknown');
+				this.armCommandTimer();
+				return;
+			}
+			if (decision.kind === 'unavailable') {
+				// The recipient ACL is not currently known -- a local failure, not a verdict about
+				// this address (skill section 1: never a 5xx for a local problem). Unlike the
+				// connect-time gate (421, closes the whole connection because nothing at all can be
+				// decided yet), this keeps the session open: RCPT is a per-command reply, and the
+				// client may retry it or the sending MTA may requeue just this recipient.
+				this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
+				this.armCommandTimer();
+				return;
+			}
+			this.recordMatchedRecipient(parsed.address, decision.sourceId, decision.chainScopeId);
+		}
+		// No recipientAclEvaluator configured: every syntactically valid recipient is accepted --
+		// pre-JR-4-05b behaviour, unchanged (see the constructor parameter's doc comment).
 		this.rcptTo.push(parsed.address);
 		this.state = 'rcpt';
 		this.writeResponse(250, '2.1.5', 'Ok');
 		this.armCommandTimer();
+	}
+
+	/**
+	 * Record one recipient the ACL matched to a source/chain, and flag -- loudly, never silently --
+	 * the one case `JR-4-05b` does not resolve on its own: this transaction now addresses journal
+	 * recipients belonging to **more than one** chain (e.g. two `RCPT TO` for two different active
+	 * sources). Skill section 5/ADR-007: one transaction produces one receipt in one chain, so this
+	 * is genuinely ambiguous -- three resolutions are possible (reject the second recipient outright,
+	 * "first recipient wins" for chain assignment, or one receipt per affected chain against a single
+	 * spooled object), and picking one here, silently, by construction (e.g. overwriting a single
+	 * `chainScopeId` field with the latest match) would be exactly the "last write wins" this task
+	 * was told not to build. So this method only **records** every match (`matchedRecipients`) and
+	 * **logs** the very first time a second distinct chain appears -- it does not reject, does not
+	 * pick one, and does not change `rcptTo`'s or `matchedRecipients`' ordinary per-recipient `250`.
+	 * `JR-4-06` reads `matchedRecipients` when it wires `completeTransfer()`; which of the three
+	 * resolutions it implements is the Product Owner's decision, recorded as an ADR before that task
+	 * starts (see this slice's report).
+	 *
+	 * A duplicate recipient, or a second recipient of a source already matched, adds no new element
+	 * to {@link matchedChainScopeIds} and therefore never logs -- both are unambiguous and need no
+	 * decision (see the module doc comment's "Recipient ACL" section).
+	 */
+	private recordMatchedRecipient(address: string, sourceId: string, chainScopeId: string): void {
+		const sizeBefore = this.matchedChainScopeIds.size;
+		this.matchedChainScopeIds.add(chainScopeId);
+		this.matchedRecipients.push({ address, sourceId, chainScopeId });
+		if (this.matchedChainScopeIds.size > sizeBefore && this.matchedChainScopeIds.size > 1) {
+			this.logger.error(
+				{
+					remoteAddress: this.socket.remoteAddress,
+					matchedRecipients: this.matchedRecipients.map((r) => ({ ...r })),
+				},
+				'smtp-ingress: this transaction addresses journal recipients belonging to more than ' +
+					'one chain -- unresolved (JR-4-05b), the Product Owner decides the resolution by ADR ' +
+					'before JR-4-06 wires acceptance'
+			);
+		}
 	}
 
 	private handleDataCommand(): void {
@@ -1295,6 +1432,8 @@ class SmtpConnection {
 	private resetEnvelope(): void {
 		this.mailFrom = null;
 		this.rcptTo = [];
+		this.matchedRecipients = [];
+		this.matchedChainScopeIds = new Set();
 		this.dataScanner = null;
 		this.bdatTracker = null;
 		this.bdatChunkRemaining = null;
@@ -1390,6 +1529,14 @@ export interface EsmtpServerOptions {
 	 * `EsmtpServer`. Production always supplies a `SourceAclCache`.
 	 */
 	readonly sourceAclEvaluator?: SourceAclEvaluator;
+	/**
+	 * Recipient ACL gate (`JR-4-05b`), checked on every `RCPT TO`. `undefined` (the default) disables
+	 * the gate entirely -- every syntactically valid recipient is accepted, exactly this class's
+	 * behaviour before this task, the same convention `sourceAclEvaluator` already established.
+	 * Production always supplies the same `SourceAclCache` instance passed as `sourceAclEvaluator`
+	 * (see `./source-acl-cache.ts`'s doc comment for why this is the same cache, not a second one).
+	 */
+	readonly recipientAclEvaluator?: RecipientAclEvaluator;
 }
 
 /**
@@ -1408,6 +1555,7 @@ export class EsmtpServer {
 	private readonly tlsSecureContext: tls.SecureContext | null;
 	private readonly requireTlsResolver: RequireTlsResolver;
 	private readonly sourceAclEvaluator: SourceAclEvaluator | undefined;
+	private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined;
 
 	constructor(options: EsmtpServerOptions) {
 		this.smtp = options.smtp;
@@ -1419,6 +1567,7 @@ export class EsmtpServer {
 		const processRequireTls = options.tls?.requireTls ?? false;
 		this.requireTlsResolver = options.requireTlsResolver ?? (() => processRequireTls);
 		this.sourceAclEvaluator = options.sourceAclEvaluator;
+		this.recipientAclEvaluator = options.recipientAclEvaluator;
 		this.server = net.createServer((socket) => this.handleConnection(socket));
 	}
 
@@ -1491,7 +1640,8 @@ export class EsmtpServer {
 			this.smtp,
 			this.logger,
 			this.tlsSecureContext,
-			this.requireTlsResolver
+			this.requireTlsResolver,
+			this.recipientAclEvaluator
 		);
 	}
 }

@@ -2,7 +2,8 @@ import type { LedgerQuery } from '../ledger/ledger-port';
 import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-port';
 
 /**
- * `PostgresSourceAclLookup` -- the Postgres implementation of {@link SourceAclLookup} (`JR-4-05a`).
+ * `PostgresSourceAclLookup` -- the Postgres implementation of {@link SourceAclLookup} (`JR-4-05a`,
+ * extended by `JR-4-05b` to also read `routing_address`).
  *
  * Takes a bare {@link LedgerQuery}, the same generic parameterised-query port
  * `PostgresLedgerLookup` takes: a read against `journaling_sources` needs no transaction boundary
@@ -10,6 +11,12 @@ import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-por
  * query does not touch the chain at all. Any connection that can run a parameterised `SELECT`
  * satisfies this, including a plain pooled connection -- the expected case for the periodic
  * refresh `./source-acl-cache.ts` drives.
+ *
+ * `ORDER BY id` (`JR-4-05b`): deterministic row order, so that two active sources with the same
+ * `routing_address` (an operator misconfiguration `journaling_sources` has no unique constraint
+ * against) are deduplicated the same way on every refresh -- see
+ * `./source-acl-cache.ts`'s `doRefresh` for what "deduplicated" means and why the choice is
+ * "first row wins, logged loudly" rather than an arbitrary one.
  */
 export class PostgresSourceAclLookup implements SourceAclLookup {
 	constructor(private readonly db: LedgerQuery) {}
@@ -20,16 +27,19 @@ export class PostgresSourceAclLookup implements SourceAclLookup {
 			ingestion_source_id: string;
 			allowed_ips: unknown;
 			require_tls: boolean;
+			routing_address: string;
 		}>(
-			`SELECT id, ingestion_source_id, allowed_ips, require_tls
+			`SELECT id, ingestion_source_id, allowed_ips, require_tls, routing_address
 			   FROM journaling_sources
-			  WHERE status = 'active'`
+			  WHERE status = 'active'
+			  ORDER BY id`
 		);
 		return rows.map((row) => ({
 			id: row.id,
 			chainScopeId: row.ingestion_source_id,
 			allowedIps: decodeAllowedIps(row.allowed_ips, row.id),
 			requireTls: row.require_tls,
+			routingAddress: row.routing_address,
 		}));
 	}
 }
