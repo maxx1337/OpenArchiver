@@ -125,7 +125,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/smtp-server-protocol.test.ts (the protocol proven over a real loopback socket --
 		// same "unit despite a real socket" classification `ingress-process-boot.test.ts` established
 		// one task earlier, see that file's own doc comment for the precedent this one follows).
-		expectedFiles: 29,
+		// 31 after JR-4-04 added ingress/tls-config.test.ts (the TLS configuration zod schema) and
+		// tests/unit/smtp-starttls-protocol.test.ts (STARTTLS/require_tls/session-reset proven over a
+		// real TCP+TLS loopback connection).
+		expectedFiles: 31,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -212,7 +215,30 @@ export const SUITES: readonly SuiteSpec[] = [
 		// an oversize body read through to the real terminator gets exactly one 552 and the connection
 		// is realigned afterward; an oversize sender that never sends a terminator still times out via
 		// the pre-existing data timeout, proving discarding opened no new exhaustion gap).
-		expectedTests: { ci: 494, nightly: 2, manual: 0 },
+		// 538 ci after JR-4-04 (STARTTLS/require_tls/TLS >= 1.2 floor): +8 in ingress/smtp-server.test.ts
+		// (buildEhloResponseLines' five STARTTLS-advertisement cases -- omitted, unavailable,
+		// available-and-inactive, active-already, plus the renamed "includes CHUNKING" case -- and
+		// buildTlsSocketOptions x3: the fixed TLS_MIN_VERSION floor, isServer/secureContext forwarded
+		// unchanged, maxVersion left unset) +
+		// 10 in the new ingress/tls-config.test.ts (the fixed-floor constant, defaults on an empty
+		// object and an explicit requireTls: false, string "true" coercion, cert/key must both be set
+		// or both unset x4, requireTls: true rejected with no certificate and accepted with one) + 21
+		// in the new tests/unit/smtp-starttls-protocol.test.ts, a real loopback TCP+TLS suite gated by
+		// `suiteRequiring` on a working `openssl` CLI (see that file's own doc comment for why TLS 1.1
+		// rejection is proven at the `minVersion` option level in smtp-server.test.ts instead of
+		// end-to-end -- this environment's client tooling cannot construct a TLS 1.1 ClientHello at
+		// all, the F43 lesson applied rather than a test that would be green for the wrong reason):
+		// STARTTLS not advertised with no certificate, bare STARTTLS 454 4.7.0 with none configured,
+		// STARTTLS advertised then withheld post-handshake, STARTTLS-with-parameters 501 5.5.4, a
+		// second STARTTLS after a completed handshake 503, the negotiated version/cipher read from the
+		// real socket and logged; the require_tls gate x11 (MAIL 530 alone, RCPT/DATA/BDAT/RSET/AUTH
+		// 530 x5 via it.each, EHLO/HELO/NOOP/STARTTLS still work x4 via it.each, QUIT still works, TLS
+		// active lets MAIL/RCPT/DATA through to the usual 451, a JR-4-05-shaped tightening resolver
+		// requires TLS even with the process default false); the session reset x1 (MAIL right after the
+		// handshake with no fresh EHLO is 503, proving state did not survive); the STARTTLS
+		// command-injection companion to F44 x1 (bytes pipelined in the same segment as STARTTLS are
+		// discarded, never answered, before or after the handshake).
+		expectedTests: { ci: 538, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',
