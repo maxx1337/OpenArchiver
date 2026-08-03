@@ -721,5 +721,14 @@ Typprüfung transpiliert. Behoben: `JournalTransactionInput` kommt aus `spool/ac
 `smtp-server.ts` (das ihn nur importiert), und der Fake liefert alle Felder von
 `AcceptedJournalTransaction` statt eines `as never`-Casts — der hätte genau diesen Fehler verdeckt.
 
+**Der zweite Push war ebenfalls rot, und diesmal hat der Testharness selbst zugeschlagen:** alle 966
+Tests grün, aber `The run ended with 1 test database(s) still acquired … an afterAll teardown did not
+run` (F16/F24). Ursache: der zweite Integrationsfall rief `acquireTestDatabase()` **innerhalb** von
+`it()` auf, während der Teardown des Harness **je Datei** registriert wird — `CLAUDE.md` §5.1 verlangt
+Modulscope, und genau dafür ist der Rückstandswächter gebaut. Behoben, indem die zweite Datenbank wie
+die erste im Modulscope liegt. **Lokal wäre das nie aufgefallen**: der Wächter meldet Rückstände am
+Ende eines **vollen** Laufs, und der lief hier zwar, aber die Datei war beim ersten Volllauf noch nicht
+in dieser Form dabei.
+
 **Nächster Schritt:** die TEST-Scheiben `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme
 `JR-4-13` in eigener Sitzung.

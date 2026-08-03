@@ -176,6 +176,13 @@ class TestSmtpClient {
 const postgresProbe = await probePostgres();
 const enabled = isClassSelected('ci') && postgresProbe.available;
 const harness = enabled ? await acquireTestDatabase('ledger-recovery') : undefined;
+/** The second case needs a database whose `deployment_identity` stays away for good. Acquired here,
+ * in **module scope**, not inside the test: the harness's own teardown is registered per file, so an
+ * `acquireTestDatabase()` inside an `it()` leaves the database acquired at the end of the run -- which
+ * a full run reports as residue (F16/F24), and which is exactly how this was caught. */
+const stuckHarness = enabled
+	? await acquireTestDatabase('ledger-recovery-stays-broken')
+	: undefined;
 
 let scratchDir: string;
 const runningChildren: ChildProcess[] = [];
@@ -354,13 +361,13 @@ suiteRequiring(
 		it('does not claim to be wired while the database stays unusable, however many retries elapse', async () => {
 			// The counter-direction: a bootstrap that "promoted" without a working build would make the
 			// test above green for the wrong reason.
-			const failHarness = await acquireTestDatabase('ledger-recovery-stays-broken');
-			const source = await seedIngestionSource(failHarness.db);
-			const journalingSource = await seedJournalingSource(failHarness.db, {
+			const source = await seedIngestionSource(stuckHarness!.db);
+			const journalingSource = await seedJournalingSource(stuckHarness!.db, {
 				ingestionSourceId: source.id,
 				allowedIps: ['127.0.0.1/32', '::1/128'],
 			});
-			await failHarness.sql`alter table deployment_identity rename to deployment_identity_hidden`;
+			await stuckHarness!
+				.sql`alter table deployment_identity rename to deployment_identity_hidden`;
 
 			const cwd = mkdtempSync(path.join(scratchDir, 'stays-broken-'));
 			const spoolRoot = path.join(cwd, 'spool');
@@ -370,8 +377,8 @@ suiteRequiring(
 					SMTP_INGRESS_PORT: String(port),
 					SMTP_INGRESS_SPOOL_ROOT_PATH: spoolRoot,
 					SMTP_INGRESS_SPOOL_HIGH_WATER_BYTES: '1000000000',
-					SMTP_INGRESS_DATABASE_URL: failHarness.url,
-					SMTP_INGRESS_LEDGER_DATABASE_URL: failHarness.url,
+					SMTP_INGRESS_DATABASE_URL: stuckHarness!.url,
+					SMTP_INGRESS_LEDGER_DATABASE_URL: stuckHarness!.url,
 					SMTP_INGRESS_LEDGER_RETRY_INTERVAL_MS: '300',
 				},
 				cwd
