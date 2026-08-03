@@ -51,8 +51,8 @@ import {
  * ---------------------------------------------------------------------------------------------
  * `deriveKillOffsetBytes()` draws from `seededRng()` (`@oa-test/seed`): the seed is resolved once per
  * suite, printed, and replayable via `OA_TEST_SEED`. Roughly a fifth of iterations send the full 50 MB
- * plus the terminator and then race the kill against the reply (`replyWaitMs`, drawn wide -- 100 to
- * ~3100 ms -- specifically so some of these iterations give a real `fsync`+hash+ledger-append cycle
+ * plus the terminator and then race the kill against the reply (`replyWaitMs`, drawn wide -- 200 to
+ * ~8200 ms -- specifically so some of these iterations give a real `fsync`+hash+ledger-append cycle
  * enough time to finish on a working host): this is the only offset at which the server could
  * plausibly have already answered before the kill lands, and therefore the only one that can exercise
  * the `250`-durability half of the invariant at all. An earlier version of this file raced with a
@@ -262,10 +262,29 @@ function deriveKillOffsetBytes(rng: ReturnType<typeof seededRng>, totalBytes: nu
  * them is a bare `.`, so the body's last line is always properly CRLF-terminated (no iteration needs
  * dot-stuffing, and a "." terminator appended after the body is never ambiguous with the preceding
  * content -- see the F50 note in this file's own header comment for why that alignment matters). */
-const FILLER_LINE_CONTENT = 'the quick brown fox jumps over the lazy dog. '
-	.repeat(21)
-	.slice(0, LINE_CONTENT_BYTES);
+const FILLER_PHRASE = 'the quick brown fox jumps over the lazy dog. ';
+// `.repeat(n)` must overflow LINE_CONTENT_BYTES *before* the `.slice()` below, or the result is
+// silently shorter than LINE_CONTENT_BYTES instead of padded to it -- exactly the bug an earlier
+// version of this file had (`.repeat(21)` produces only 945 of the 998 bytes this needs, so
+// Buffer.concat's totalLength padded the shortfall with zero bytes at the very end of every
+// iteration's body instead of more filler content, which broke line alignment invisibly: the
+// "completion race" branch's terminator landed after a zero-padded tail rather than a real
+// CRLF-terminated line, so DATA never actually completed on **any** iteration, on any platform --
+// indistinguishable from F48 by symptom alone, since both present as "no reply, then killed").
+const FILLER_LINE_CONTENT = FILLER_PHRASE.repeat(
+	Math.ceil(LINE_CONTENT_BYTES / FILLER_PHRASE.length) + 1
+).slice(0, LINE_CONTENT_BYTES);
+if (FILLER_LINE_CONTENT.length !== LINE_CONTENT_BYTES) {
+	// Fail at module load, loudly, rather than silently sending a misaligned body -- see the comment
+	// above for exactly the bug this guards against.
+	throw new Error(
+		`FILLER_LINE_CONTENT is ${FILLER_LINE_CONTENT.length} bytes, expected exactly ${LINE_CONTENT_BYTES}.`
+	);
+}
 const fillerLine = Buffer.from(`${FILLER_LINE_CONTENT}\r\n`, 'utf8');
+if (fillerLine.length !== LINE_BYTES) {
+	throw new Error(`fillerLine is ${fillerLine.length} bytes, expected exactly ${LINE_BYTES}.`);
+}
 const filler = Buffer.concat(Array.from({ length: LINE_COUNT - 1 }, () => fillerLine));
 
 /** Build this iteration's exact `TOTAL_BODY_BYTES` body: one unique header **line** (padded to
@@ -276,10 +295,26 @@ const filler = Buffer.concat(Array.from({ length: LINE_COUNT - 1 }, () => filler
 function buildIterationBody(globalIndex: number, nonceHex: string): Buffer {
 	const headerText = `kill-test iter=${String(globalIndex).padStart(8, '0')} nonce=${nonceHex}`;
 	const headerLine = Buffer.from(`${headerText.padEnd(LINE_CONTENT_BYTES, ' ')}\r\n`, 'utf8');
-	return Buffer.concat([headerLine, filler], TOTAL_BODY_BYTES);
+	if (headerLine.length !== LINE_BYTES) {
+		throw new Error(
+			`headerLine for iteration ${globalIndex} is ${headerLine.length} bytes, expected exactly ` +
+				`${LINE_BYTES} -- headerText was longer than LINE_CONTENT_BYTES and padEnd() could not ` +
+				'shorten it.'
+		);
+	}
+	const body = Buffer.concat([headerLine, filler]);
+	if (body.length !== TOTAL_BODY_BYTES) {
+		throw new Error(`body is ${body.length} bytes, expected exactly ${TOTAL_BODY_BYTES}.`);
+	}
+	return body;
 }
 
 interface IterationResult {
+	/** Whether this iteration drew the "send everything, race the reply against the kill" branch at
+	 * all -- see `deriveKillOffsetBytes()`. Reported separately from `clientSaw250` so a run that saw
+	 * zero 250s can say *why*: either no iteration drew this branch (a seed/probability artifact,
+	 * harmless) or several did and none produced a reply in time (worth investigating further). */
+	readonly completionAttempt: boolean;
 	readonly clientSaw250: boolean;
 	readonly ledgerRowFound: boolean;
 	readonly violations: string[];
@@ -302,12 +337,14 @@ async function runOneIteration(ctx: RunContext, globalIndex: number): Promise<It
 	const body = buildIterationBody(globalIndex, nonceHex);
 	const killOffsetBytes = deriveKillOffsetBytes(ctx.rng, TOTAL_BODY_BYTES);
 	// Only used once the full body (plus terminator) has been sent -- see the "completion race"
-	// branch below. Wide on purpose (100..3099 ms): narrow enough that some iterations still kill
+	// branch below. Wide on purpose (200..8199 ms): narrow enough that some iterations still kill
 	// before accept() finishes (a genuine mid-processing kill, no 250 possible), wide enough that
 	// most iterations give a real fsync+hash+ledger-append cycle time to finish first on a working
-	// host, so the client-saw-250-implies-durable half of the invariant actually gets exercised
-	// somewhere in this run rather than being structurally unreachable by construction.
-	const replyWaitMs = 100 + ctx.rng.int(3000);
+	// host -- F50 means that cycle's cost is dominated by ~52 000 individual line writes, so this
+	// needs real headroom, not a token few hundred milliseconds -- so the client-saw-250-implies-
+	// durable half of the invariant actually gets exercised somewhere in this run rather than being
+	// structurally unreachable by construction.
+	const replyWaitMs = 200 + ctx.rng.int(8000);
 
 	const port = await getFreePort();
 	const child = spawn(process.execPath, [ENTRY_JS], {
@@ -423,7 +460,12 @@ async function runOneIteration(ctx: RunContext, globalIndex: number): Promise<It
 			`iteration ${globalIndex} (killOffsetBytes=${killOffsetBytes}, ${ctx.rng.context({ globalIndex })}): ${v}`
 	);
 
-	return { clientSaw250, ledgerRowFound, violations };
+	return {
+		completionAttempt: killOffsetBytes >= TOTAL_BODY_BYTES,
+		clientSaw250,
+		ledgerRowFound,
+		violations,
+	};
 }
 
 async function runKillDuringDataSuite(opts: {
@@ -470,10 +512,12 @@ async function runKillDuringDataSuite(opts: {
 		};
 
 		const allViolations: string[] = [];
+		let completionAttemptCount = 0;
 		let clientSaw250Count = 0;
 		let ledgerRowFoundCount = 0;
 		for (let i = 0; i < opts.iterations; i += 1) {
 			const result = await runOneIteration(ctx, i);
+			if (result.completionAttempt) completionAttemptCount += 1;
 			if (result.clientSaw250) clientSaw250Count += 1;
 			if (result.ledgerRowFound) ledgerRowFoundCount += 1;
 			allViolations.push(...result.violations);
@@ -481,13 +525,19 @@ async function runKillDuringDataSuite(opts: {
 
 		coverageNotice(
 			`JR-4-10 (${opts.label}): ${opts.iterations} iteration(s), seed ${seed}. ` +
-				`${clientSaw250Count} iteration(s) had the client observe 250; ${ledgerRowFoundCount} ` +
-				`iteration(s) produced a matching journal_ledger row. ` +
+				`${completionAttemptCount} iteration(s) sent the full body and raced the kill against ` +
+				`the reply; ${clientSaw250Count} of those saw 250; ${ledgerRowFoundCount} iteration(s) ` +
+				`overall produced a matching journal_ledger row. ` +
 				(ledgerRowFoundCount === 0
-					? "ZERO ledger rows were produced on this host -- see this file's own doc comment " +
-						'on F48 (directory-fsync EPERM on Windows): the client-saw-250-implies-durable ' +
-						'half of the invariant is UNVERIFIED on this run. Only a Linux CI run, where ' +
-						'directory-fsync succeeds, can exercise it.'
+					? completionAttemptCount === 0
+						? 'No iteration in this run drew the completion-race branch at all (a seed/' +
+							'probability artifact, not a defect) -- the client-saw-250-implies-durable half ' +
+							'of the invariant was not exercised this run for that reason alone.'
+						: `${completionAttemptCount} iteration(s) raced the kill against the reply and ` +
+							'NONE produced 250 or a ledger row -- on Windows this is expected (F48, ' +
+							"directory-fsync EPERM); see this file's own doc comment. On a host where " +
+							'directory-fsync succeeds, this instead means replyWaitMs was not wide enough ' +
+							'for a real accept() cycle to finish, and is worth widening further.'
 					: 'the client-saw-250-implies-durable half of the invariant was genuinely exercised ' +
 						`${clientSaw250Count} time(s) on this run.`)
 		);
