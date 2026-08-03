@@ -655,5 +655,8 @@ still weiten — die Richtung, um die es RFC §4.3 geht.
 adversarial ci 37/37`; `test:types` grün, beide Builds grün, Prettier über LF-normalisierte Kopien
 grün. CI-Lauf nach dem Push zu prüfen (Pflicht seit F48).
 
+**CI-Nachtrag:** Lauf `30830897752` auf `1bea369` ist **success** (2m34s) — 77 Dateien, Zählwerke wie
+oben. Damit sind beide Scheiben dieser Sitzung auf der CI-Plattform belegt.
+
 **Nächster Schritt:** `JR-4-19` (Ledger-Verbindung erholt sich nicht), dann die TEST-Scheiben
 `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme `JR-4-13` in eigener Sitzung.
