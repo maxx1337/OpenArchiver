@@ -115,6 +115,12 @@ export {
 } from './spool/crash-recovery';
 
 export {
+	crashRecoveryScanLockKey,
+	runExclusiveCrashRecoveryScan,
+	type ExclusiveCrashRecoveryScanOptions,
+} from './spool/crash-recovery-lock';
+
+export {
 	formatIngressConfigError,
 	ingressConfigSchema,
 	parseIngressConfig,

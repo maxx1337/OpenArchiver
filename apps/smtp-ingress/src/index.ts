@@ -9,8 +9,10 @@ import {
 	JournalAcceptance,
 	NodeSpoolFileSystem,
 	parseIngressConfig,
+	PostgresLedgerLookup,
 	PostgresLedgerWriter,
 	PostgresSourceAclLookup,
+	runExclusiveCrashRecoveryScan,
 	SourceAclCache,
 	type JournalAcceptancePort,
 	type QuarantineAlertSink,
@@ -91,6 +93,33 @@ import { postgresTransactor } from './postgres-transactor';
  * durably but has a typo'd or briefly-down ledger database at the moment this process starts will
  * not crash-loop -- it will bind the port and answer every transaction `451` until the *next*
  * restart, which is a real, current limitation rather than an oversight.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * The crash-recovery scan runs here, before the port ever binds (`JR-4-18`)
+ * ---------------------------------------------------------------------------------------------
+ * `runCrashRecoveryScan()` (`JR-3-05`) was built, tested, and accepted with E3 -- and had no caller
+ * anywhere in this repository until now (found by the Product Owner, not by any E4 task naming it).
+ * `buildJournalAcceptance()` below calls `runExclusiveCrashRecoveryScan()`
+ * (`@open-archiver/journaling`'s `crash-recovery-lock.ts`) immediately after the `deployment_identity`
+ * read succeeds and before `PostgresLedgerWriter`/`JournalAcceptance` are constructed -- still inside
+ * `main()`'s straight-line `async` sequence, so it always completes before `server.listen()` a few
+ * lines down. See that module's doc comment for why the lock is transaction-scoped
+ * (`pg_advisory_xact_lock`, matching `ledger-writer.ts`'s own reasoning for the per-chain append lock)
+ * and for the binding rule it leaves the not-yet-built `journal-inbound` worker (E6): call the same
+ * exclusive function, against the same database and `spoolRoot`, or its scan can race this process's
+ * live acceptance.
+ *
+ * **A scan failure is not fatal either, and folds into the same fallback as an unreachable ledger
+ * database.** It runs inside the same `try` block as the `deployment_identity` read, so a scan that
+ * throws (a spool the process cannot read, a database that becomes unreachable between the identity
+ * read and the scan's own queries) is caught by the same `catch` and produces the same outcome:
+ * `journalAcceptance` stays `undefined`, the failure is logged loudly, and the process still binds the
+ * port but -- per `smtp-server.ts`'s own "`JournalAcceptance.accept()` is wired in" section --
+ * `journalAcceptance === undefined` means *every* `DATA`/`BDAT ... LAST` unconditionally answers
+ * `451 4.3.0`, forever, until the next restart. That is what "a failed scan does not silently let the
+ * process start" means here: not a crash loop, but a process that binds the port and demonstrably
+ * accepts nothing, which `ingress-crash-recovery-boot.int.test.ts` measures directly rather than
+ * inferring from the code.
  */
 
 dotenv.config();
@@ -140,10 +169,30 @@ async function buildJournalAcceptance(
 			throw new Error('deployment_identity has no row -- has this database been migrated?');
 		}
 
-		const backend = new PostgresLedgerWriter({
-			deploymentId,
-			transactor: postgresTransactor(ledgerSql),
+		const transactor = postgresTransactor(ledgerSql);
+
+		// JR-4-18: reconcile the spool against the ledger before this process ever binds its port --
+		// see this file's module doc comment, "The crash-recovery scan runs here", for why this sits
+		// inside the same try/catch as the deployment-identity read above, and
+		// crash-recovery-lock.ts's own doc comment for the exclusivity this holds across processes.
+		const scanResult = await runExclusiveCrashRecoveryScan({
+			fs: new NodeSpoolFileSystem(),
+			ledgerLookup: new PostgresLedgerLookup(createLedgerQuery(ledgerSql)),
+			spoolRoot: config.spool.rootPath,
+			alertSink: pinoAlertSink(logger),
+			transactor,
 		});
+		logger.info(
+			{
+				incomingFilesScanned: scanResult.incomingFilesScanned,
+				requeued: scanResult.requeue.length,
+				quarantined: scanResult.quarantined.length,
+				preexistingQuarantineFiles: scanResult.preexistingQuarantineFiles,
+			},
+			'smtp-ingress: crash-recovery scan complete'
+		);
+
+		const backend = new PostgresLedgerWriter({ deploymentId, transactor });
 		const journalAcceptance = new JournalAcceptance({
 			fs: new NodeSpoolFileSystem(),
 			backend,
@@ -154,9 +203,9 @@ async function buildJournalAcceptance(
 	} catch (err) {
 		logger.error(
 			{ err },
-			'smtp-ingress: could not initialize the ledger database connection at startup -- ' +
-				'accepting connections, but every transaction will answer 451 (acceptance not wired) ' +
-				'until this is fixed and the process is restarted'
+			'smtp-ingress: could not initialize the ledger database connection, or the crash-recovery ' +
+				'scan failed, at startup -- accepting connections, but every transaction will answer ' +
+				'451 (acceptance not wired) until this is fixed and the process is restarted'
 		);
 		return { journalAcceptance: undefined, ledgerSql };
 	}

@@ -151,8 +151,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/smtp-acceptance-wiring.test.ts (`JournalAcceptance.accept()` wired into
 		// `completeTransfer()`: the response-code mapping, the oversize-abort override to `552` with
 		// nothing left in `incoming/`, an abandoned mid-`BDAT` transaction on `RSET`, and the
-		// calibrated streaming-memory proof).
-		expectedFiles: 41,
+		// calibrated streaming-memory proof). 42 after JR-4-18 added
+		// spool/crash-recovery-lock.test.ts (runExclusiveCrashRecoveryScan(): the cross-process
+		// exclusivity runCrashRecoveryScan() itself does not provide, wiring the previously uncalled
+		// JR-3-05 scan's lock into the caller).
+		expectedFiles: 42,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -358,7 +361,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// mapping table, the oversize override with the crash-recovery-clean proof, and the
 		// RSET-mid-BDAT abandon proof). 3 nightly after JR-4-06a added
 		// smtp-acceptance-wiring.test.ts's calibrated 150 MB streaming-memory proof.
-		expectedTests: { ci: 690, nightly: 3, manual: 0 },
+		// 695 ci after JR-4-18 added spool/crash-recovery-lock.test.ts (5: crashRecoveryScanLockKey's
+		// determinism and its reuse of advisoryLockKey, the lock acquired strictly before the scan's
+		// own ledger lookup, the requeue/quarantine result passed through unchanged, a scan failure
+		// propagated -- not swallowed -- only after the lock was taken, and a fake modelling real
+		// pg_advisory_xact_lock semantics proving two scans on the same spoolRoot serialise while two
+		// on different spoolRoots do not).
+		expectedTests: { ci: 695, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -380,8 +389,17 @@ export const SUITES: readonly SuiteSpec[] = [
 		// this file constructs itself and never hands to drizzle() (F38's rule). 16 after JR-4-06a
 		// added journal-smtp-accept-e2e.int.test.ts -- the 250 proof: a real SMTP client over a real
 		// socket, a real EsmtpServer wired to a real JournalAcceptance (real disk, real Postgres
-		// through apps/smtp-ingress's own production bare-client transactor).
-		expectedFiles: 16,
+		// through apps/smtp-ingress's own production bare-client transactor). 18 after JR-4-18 added
+		// journal-crash-recovery-lock.int.test.ts (runExclusiveCrashRecoveryScan() against real
+		// Postgres and real disk: requeue/quarantine against a real ledger row, a second connection
+		// genuinely blocking on pg_advisory_xact_lock and proceeding once released, two different
+		// spoolRoots not serialising against each other) and
+		// smtp-ingress-crash-recovery-boot.int.test.ts (the same scan wired into the actual compiled
+		// process: the scan's log line precedes "listening on port", two processes started at once
+		// against the same spool/ledger quarantine the same orphan file exactly once and both still
+		// bind their ports, and a scan that itself fails -- journal_ledger dropped, deployment_identity
+		// still readable -- leaves the process bound but answering never-250 to DATA).
+		expectedFiles: 18,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -401,7 +419,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// journal-smtp-accept-e2e.int.test.ts: the 250-with-seq round trip (spool file and ledger row
 		// re-verified independently, byte-for-byte) and a second transaction on the same chain getting
 		// seq + 1 while a denied recipient never reaches accept() at all.
-		expectedTests: { ci: 105, nightly: 0, manual: 0 },
+		// 111 after JR-4-18 added 3 to journal-crash-recovery-lock.int.test.ts (requeue/quarantine
+		// against a real ledger row and real disk, a second connection blocking on the real advisory
+		// lock and proceeding once released, two spoolRoots not serialising against each other) and 3
+		// to smtp-ingress-crash-recovery-boot.int.test.ts (scan-before-listen ordering with
+		// requeue/quarantine observed at real process boot, two concurrently-starting processes not
+		// racing each other's scan, a failed scan leaving the process bound but accepting nothing).
+		expectedTests: { ci: 111, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
