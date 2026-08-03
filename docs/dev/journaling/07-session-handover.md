@@ -359,6 +359,14 @@ Rests:
 - **Bewusst hingenommen:** pausiert ein Sender beim Shutdown exakt zwischen zwei `BDAT`-Chunks, läuft
   der Drain in den regulären Idle-Timeout statt sofort abzuschließen. Kein Datenverlust, nur langsamer.
 
+> **Zuerst, vor jeder neuen Scheibe: `F49`.** Der Reihenfolgetest aus `JR-4-18` („Scan vor
+> `listen()`") ist **flaky** — grün im CI-Lauf `30822606272`, rot in `30824258066`, und zwischen
+> diesen beiden Commits ist **ausschließlich Dokumentation** geändert worden. Solange er das tut, ist
+> die Zusicherung nicht belegt **und** die CI rauscht. Die Frage in dieser Reihenfolge: hält die
+> Invariante überhaupt (kann der Port gebunden sein, bevor der Scan fertig ist?) — und erst danach:
+> taugt ein Offset-Vergleich in einem gepufferten Stream als Instrument? Der Befund steht in
+> `09-befunde-bestandscode.md` mit Vorschlägen.
+
 **Drei Dinge, die beim Weiterarbeiten zählen:**
 
 1. **Der CI-Lauf ist Teil des Belegs, nicht Nachsorge** (F48). `fsyncDirectory()` scheitert auf diesem

@@ -14,15 +14,15 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde                                    |
-| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------ |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29            |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22                         |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43, F47, F48 |
-| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                |
-| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                   |
-| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                        |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46                    |
+| Kategorie                  | Bedeutung                                                                              | Befunde                                         |
+| -------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29                 |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22                              |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43, F47, F48, F49 |
+| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                     |
+| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                        |
+| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                             |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46                         |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -111,6 +111,7 @@ findet es hier.
 | **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche … | hoch    | behoben   |
 | **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                | mittel  | offen     |
 | **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt             | hoch    | behoben   |
+| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot          | mittel  | offen     |
 
 ---
 
@@ -2322,3 +2323,50 @@ Verhalten ist F13s bekannter Bereich und arbeitet hier korrekt. Ein Typfehler in
 > **Voller Lauf:** `846 passed | 7 skipped`, 67 Dateien (vorher `843 passed | 7 skipped`, 65 Dateien);
 > `unit: ci 698/698`, `integration: ci 111/111`, `adversarial: ci 37/37` — exakt, keine Verletzung der
 > Suite-Inventur.
+
+---
+
+## F49 — der Reihenfolgetest „Scan vor `listen()`" ist flaky, und der Beweis dafür ist billig
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:**
+`packages/backend/tests/integration/smtp-ingress-crash-recovery-boot.int.test.ts`, der Fall
+„runs before listen(): the log line precedes »listening«, a ledgered file is requeued, an orphan is
+quarantined" (`JR-4-18`) · **Gefunden:** vom PO am 2026-08-03 beim CI-Lauf der Doku-Diät ·
+**Status:** **offen**
+
+Der Test belegt eine tragende Zusicherung aus `02-architektur.md` §5: der Crash-Recovery-Scan läuft
+**vor** dem Binden des Ports. Er tut das über die Byte-Offsets zweier Log-Zeilen in `stdout` des echten
+Kindprozesses — und scheitert reproduzierbar **nicht** reproduzierbar:
+
+```
+× runs before listen(): the log line precedes "listening", …
+  → expected 581 to be greater than 853
+```
+
+**Der Beleg, dass es Flakiness ist und keine Regression, kostet nichts:** derselbe Test war im Lauf
+`30822606272` (`4795688`) **grün** und im Lauf `30824258066` (`552d234`) **rot** — und zwischen diesen
+beiden Commits ist **ausschließlich Dokumentation** geändert worden (die Doku-Diät). Der
+Produktionscode und der Testcode sind byteidentisch. Ein Test, der bei identischem Code beides liefert,
+misst etwas anderes als das, was er zu messen vorgibt.
+
+**Die wahrscheinliche Ursache, nicht gemessen:** die beiden Zeilen entstehen über `pino` und landen
+über die `stdout`-Pipe eines Kindprozesses. Reihenfolge **im Puffer** ist nicht dasselbe wie
+Reihenfolge **der Ereignisse** — Pufferungsgrenzen, Schreibvorgänge in verschiedenen Ticks und die
+Frage, ob `pino` synchron oder über einen Transport schreibt, kommen alle in Betracht.
+
+**Warum das mehr ist als ein nerviger Test:** solange er flaky ist, ist die Zusicherung „Scan vor
+`listen()`" **nicht** belastbar belegt — jeder grüne Lauf kann Zufall sein, so wie jeder rote.
+Und ein flakiger Test in der CI kostet mehr als seine Aussage wert ist, weil er die nächste Abnahme
+mit einem Rauschen belastet, das niemand mehr von einem echten Fehlschlag unterscheidet
+(`tester.md`: „a flaky adversarial test is useless because nobody will trust its failures").
+
+**Was zu tun ist, in dieser Reihenfolge:** erst herausfinden, **ob die Invariante hält** (kann der Port
+gebunden sein, bevor der Scan fertig ist?) — das ist die Frage, die zählt. Erst danach den Nachweis
+reparieren. Ein Offset-Vergleich in einem gepufferten Stream ist wahrscheinlich das falsche Instrument;
+belastbar wäre eine Beobachtung, die nicht von Pufferung abhängt, etwa ein Verbindungsversuch **während**
+des Scans, der abgewiesen werden muss, oder eine Sequenznummer, die der Prozess selbst in beide Zeilen
+schreibt.
+
+> **Der Fund ist ein Nebenprodukt der neuen Regel** (F48): weil der PO seit heute nach jedem Push den
+> CI-Lauf prüft, ist ein Fehlschlag aufgefallen, der bei einem reinen Dokumentations-Commit sonst
+> niemandem aufgefallen wäre — und der gerade deshalb so gut beweisbar war.
