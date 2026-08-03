@@ -14,15 +14,15 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde                          |
-| -------------------------- | -------------------------------------------------------------------------------------- | -------------------------------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29  |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22               |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43 |
-| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34      |
-| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                         |
-| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                              |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46          |
+| Kategorie                  | Bedeutung                                                                              | Befunde                                    |
+| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------ |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29            |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22                         |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43, F47, F48 |
+| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                |
+| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                   |
+| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                        |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46                    |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -2156,12 +2156,54 @@ Zwei Teile, und der zweite erklärt den ersten:
    nicht typgeprüft.
 
 **Warum das mehr ist als ein Typfehler:** der Wächter deckt die Stelle nicht ab, an der dieses
-Projekt inzwischen den größten Teil seines Codes schreibt. Ein Typfehler in einer
-`packages/journaling`-Testdatei fällt niemandem auf, solange ihn nicht zufällig ein Agent beim
-Arbeiten sieht — hier haben es zwei unabhängig voneinander gemeldet, und beide haben ihn korrekt als
-nicht ihren eingeordnet und liegen gelassen. Dieselbe Klasse wie F14/F15 (der Wächter zählte
-Dateien statt Tests) und wie F35s Nebenwirkung: **ein grüner Lauf, dessen Grün eine Lücke im
-Messbereich ist.**
+Projekt inzwischen den größten Teil seines Codes schreibt.
+
+---
+
+## F48 — **jeder** CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt
+
+**Schwere:** **hoch** · **Kategorie:** Testharness / Verfahren · **Gefunden:** vom PO am 2026-08-03,
+nachdem `JR-4-07`s Bericht die Windows-`EPERM`-Grenze beim Verzeichnis-fsync beschrieb ·
+**Status:** **Ursache behoben** (`1fc7de4`), **Verfahrenslücke offen** — siehe unten
+
+**Alle zwölf CI-Läufe zwischen `JR-4-17` (07:22) und `JR-4-07` (11:08) sind fehlgeschlagen**, jeder
+nach etwa einer Minute, jeder am **Lint**-Schritt: `prettier --check .` meldete **fünf** Dateien mit
+echten Formatierungsverstößen (`06-status.md`, `smtp-ingress-crash-recovery-boot.int.test.ts`,
+`source-acl-cache.ts`, `smtp-acceptance-wiring.test.ts`, `smtp-starttls-protocol.test.ts`). Das ist
+**nicht** F35: in der CI ist der Checkout LF, und es waren fünf Dateien, nicht 388.
+
+**Der Schaden ist nicht die Formatierung, sondern was dahinter nicht mehr lief.** Lint ist Schritt 7
+von 14; Build, `svelte-check`, `test:types` und die **gesamte Testsuite** sind in der CI seit dem
+2026-08-03 07:22 **überhaupt nicht ausgeführt worden**.
+
+**Und genau dort liegt der einzige Beleg für die Kernaussage dieses Epics.**
+`NodeSpoolFileSystem.fsyncDirectory()` scheitert auf diesem Windows-Host mit `EPERM`, und
+`JournalAcceptance.accept()` ruft `backend.append()` **erst nach** erfolgreichem Verzeichnis-fsync auf
+(`JR-4-07` hat das ausdrücklich beschrieben, `JR-4-06a` hatte es schon behandelt). Auf diesem Host
+erreicht also **kein** Lauf den Ledger-Append. Die Aussage „`250` erst nach fsync von Spool **und**
+Ledger" — der Kern des ganzen Projekts — ist damit **lokal nicht prüfbar** und war zugleich in der CI
+nicht geprüft. Vierzehn Scheiben wurden auf Zahlen abgenommen, die diesen Pfad nicht enthalten.
+
+### Zwei Ursachen, und die zweite ist die eigentliche
+
+1. **Technisch:** die Per-Datei-Prettier-Prüfung der Scheiben lief über LF-normalisierte Kopien, um
+   F35 zu umgehen — und eine Umgehung, die zu viel normalisiert, verdeckt einen echten Verstoß. Behoben
+   in `1fc7de4` (Formatierung über die Prettier-API mit erhaltenen Zeilenenden, danach erneut geprüft).
+2. **Verfahren:** **der PO hat nach keinem einzigen Push den CI-Lauf angesehen.** Der Auftrag „zitiere
+   die Zahlen, nicht das Wort grün" war an die DEV-Rolle gerichtet und wurde dort befolgt — aber
+   niemand hat gefragt, ob dieselben Zahlen auch auf der Plattform entstehen, auf der sie zählen. Als
+   Gegenmaßnahme steht in `.claude/agents/senior-dev.md` jetzt die Pflicht, nach dem Push den CI-Lauf
+   zu prüfen und seine Schlussfolgerung neben den lokalen Zahlen zu berichten; **der PO prüft ihn ab
+   sofort selbst, bevor er eine Scheibe für erledigt erklärt.**
+
+> **Die Lehre ist dieselbe wie in F14/F15 und Fallstrick 6, eine Ebene höher:** eine grüne Zahl belegt
+> nur das, was der Lauf ausgeführt hat. Bisher war die Frage „ist die Suite gelaufen?" — jetzt lautet
+> sie „**ist sie dort gelaufen, wo der Pfad existiert?**" Ein Typfehler in einer
+> `packages/journaling`-Testdatei fällt niemandem auf, solange ihn nicht zufällig ein Agent beim
+> Arbeiten sieht — hier haben es zwei unabhängig voneinander gemeldet, und beide haben ihn korrekt als
+> nicht ihren eingeordnet und liegen gelassen. Dieselbe Klasse wie F14/F15 (der Wächter zählte
+> Dateien statt Tests) und wie F35s Nebenwirkung: **ein grüner Lauf, dessen Grün eine Lücke im
+> Messbereich ist.**
 
 > **Behoben (`JR-4-20`).** Beide Hälften, wie im Befund gefordert:
 >

@@ -52,6 +52,21 @@ executed. Four DEV runs in E4 ended early, two of them exactly in that state.
 per-suite counts), never the word "green". A narrowed run (`-t`, file filter, `--project`, `--shard`)
 prints `verified NOTHING` and checks no counts, so it proves nothing about the suite.
 
+**A local run on this host is not the same run CI does, and the difference is load-bearing.**
+`NodeSpoolFileSystem.fsyncDirectory()` fails with `EPERM` on Windows, and
+`JournalAcceptance.accept()` calls `backend.append()` **only after** a successful directory fsync — so
+on this host **no run ever reaches the ledger append**, and the epic's central claim (`250` only after
+both fsyncs) is exercised in CI and nowhere else. Two duties follow:
+
+1. **After pushing, check the CI run** (`gh run list --branch <branch> --limit 1`, and
+   `gh run view <id> --log-failed` if it failed). Report its conclusion in your report next to the
+   local numbers. Between 2026-08-03 07:22 and 11:20 **every** run on the E4 branch failed at the
+   Lint step and nobody noticed for fourteen slices, so build, typecheck and the entire suite had not
+   run in CI at all.
+2. **A per-file Prettier check through an LF-normalised copy can hide a real violation** — that is how
+   those five files got through. After formatting, re-check the file **as it will be committed**, and
+   if you are unsure, let CI be the arbiter and look at what it says.
+
 **Two measurement rules this project learned the hard way.** (1) A measuring instrument that does not
 go red on a deliberately introduced regression does not measure the property it claims to — calibrate
 it (finding **F43**: `heapUsed` cannot see Node `Buffer` contents; use `arrayBuffers`). (2) A mutation
