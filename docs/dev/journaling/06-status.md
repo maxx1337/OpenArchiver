@@ -711,7 +711,15 @@ den Wortlaut der alten Fehlermeldung, die „bis zur Neustart"-Aussage enthielt 
 Der Anspruch des Tests selbst ist unberührt.
 
 **Volllauf lokal:** `966 passed | 7 skipped`, 80 Dateien, `unit ci 811/811 · integration ci 118/118 ·
-adversarial ci 37/37`; `test:types` und beide Builds grün. CI-Lauf nach dem Push zu prüfen (F48).
+adversarial ci 37/37`; beide `test:types` und beide Builds grün.
+
+**Der erste Push war rot — und daraus ist Fallstrick 35 geworden.** Schritt `Typecheck journaling test
+files`, zwei Typfehler in `smtp-acceptance-promotion.test.ts`. Ursache: es gibt **zwei**
+`test:types`-Schritte in der CI (`@open-archiver/backend` **und** `@open-archiver/journaling`), lokal
+war nur der erste gefahren — und ein grüner Volllauf prüft **keinen** von beiden, weil `vitest` ohne
+Typprüfung transpiliert. Behoben: `JournalTransactionInput` kommt aus `spool/acceptance.ts` statt aus
+`smtp-server.ts` (das ihn nur importiert), und der Fake liefert alle Felder von
+`AcceptedJournalTransaction` statt eines `as never`-Casts — der hätte genau diesen Fehler verdeckt.
 
 **Nächster Schritt:** die TEST-Scheiben `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme
 `JR-4-13` in eigener Sitzung.

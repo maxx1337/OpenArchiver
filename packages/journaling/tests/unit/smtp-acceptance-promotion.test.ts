@@ -6,9 +6,10 @@ import type {
 	EsmtpServerOptions,
 	IngressLogger,
 	JournalAcceptancePort,
-	JournalTransactionInput,
 	RecipientAclEvaluator,
 } from '../../src/ingress/smtp-server';
+// `smtp-server.ts` imports this type rather than re-exporting it -- take it from where it is declared.
+import type { JournalTransactionInput } from '../../src/spool/acceptance';
 import { smtpServerConfigSchema } from '../../src/ingress/smtp-config';
 
 /**
@@ -94,7 +95,15 @@ function recordingAcceptance(): {
 				}
 				bodyBytes.push(bytes);
 				seq += 1n;
-				return { kind: 'accepted', seq, duplicateOf: null };
+				return {
+					kind: 'accepted',
+					// The real acceptance generates this; a fake only has to return something shaped
+					// right, since nothing in this file reads it back.
+					spoolTxId: `fake-tx-${seq}`,
+					seq,
+					chainHash: new Uint8Array(32),
+					duplicateOf: null,
+				};
 			},
 		},
 	};

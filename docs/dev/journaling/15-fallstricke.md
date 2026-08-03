@@ -261,4 +261,16 @@ vollständig — er sucht darin.
     Compose-Dienste haben **absichtlich keine Port-Mappings**; der Override dafür gehört **außerhalb** des
     Repositorys, sonst veröffentlicht eine Produktionsinstallation plötzlich ihre Datenbank.
 
+35. **Es gibt zwei `test:types`-Schritte in der CI, und ein grüner Volllauf prüft keinen von beiden.**
+    `pnpm --filter @open-archiver/backend test:types` **und** `pnpm --filter @open-archiver/journaling
+test:types` (`.github/workflows/ci.yml`, zwei getrennte Schritte). `vitest` transpiliert ohne
+    Typprüfung, ein Volllauf sagt über Typen also nichts. In `JR-4-19` am 2026-08-03 genau so
+    passiert: Volllauf grün, `backend test:types` grün, **CI rot** an zwei Typfehlern in einer neuen
+    Datei unter `packages/journaling/tests/unit/` — ein Typ, den `smtp-server.ts` nur **importiert**
+    statt zu re-exportieren (`JournalTransactionInput` gehört `spool/acceptance.ts`), und ein
+    Fake-Rückgabewert, dem zwei Felder fehlten. **Vor jedem Push beide Filter fahren**, wenn Dateien
+    in beiden Paketen berührt wurden. Verwandt: **F47** (derselbe Schritt fehlte in der CI ganz).
+    Und: ein `as never` im Test hätte den zweiten Fehler verdeckt — Fakes richtig typisieren, nicht
+    wegcasten.
+
 ---

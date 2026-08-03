@@ -12,8 +12,16 @@ import type { IngressLogger, JournalAcceptancePort } from './smtp-server';
  * was about.
  */
 
+/** Never actually called here -- this file is about the bootstrap, not about accepting. Typed
+ * properly rather than cast through `never`: a cast would hide a real signature change. */
 const acceptance: JournalAcceptancePort = {
-	accept: async () => ({ kind: 'accepted', seq: 1n, duplicateOf: null }) as never,
+	accept: async () => ({
+		kind: 'accepted',
+		spoolTxId: 'fake-tx',
+		seq: 1n,
+		chainHash: new Uint8Array(32),
+		duplicateOf: null,
+	}),
 };
 
 interface CapturedLog {
