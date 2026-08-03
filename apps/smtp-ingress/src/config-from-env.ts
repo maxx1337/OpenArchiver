@@ -75,7 +75,8 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 		// rule every other optional field here follows.
 		rateLimit: {
 			maxConnectionsPerSource: env.SMTP_INGRESS_MAX_CONNECTIONS_PER_SOURCE,
-			maxTransactionsPerSourcePerWindow: env.SMTP_INGRESS_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW,
+			maxTransactionsPerSourcePerWindow:
+				env.SMTP_INGRESS_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW,
 			rateLimitWindowMs: env.SMTP_INGRESS_RATE_LIMIT_WINDOW_MS,
 		},
 		logLevel: env.SMTP_INGRESS_LOG_LEVEL,

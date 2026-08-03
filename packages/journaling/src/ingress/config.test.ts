@@ -199,7 +199,9 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 
 		it('defaults every field of rateLimit (JR-4-08) when rateLimit is an empty object', () => {
 			const config = parseIngressConfig(validInput);
-			expect(config.rateLimit.maxConnectionsPerSource).toBe(DEFAULT_MAX_CONNECTIONS_PER_SOURCE);
+			expect(config.rateLimit.maxConnectionsPerSource).toBe(
+				DEFAULT_MAX_CONNECTIONS_PER_SOURCE
+			);
 			expect(config.rateLimit.maxTransactionsPerSourcePerWindow).toBe(
 				DEFAULT_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW
 			);

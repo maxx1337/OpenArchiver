@@ -264,7 +264,9 @@ async function main(): Promise<void> {
 	// connection-rate-limiter.ts for why that is safe: keyed by sourceId, which is itself bounded by
 	// the number of active journaling_sources rows, and only ever reachable for a connection the
 	// source ACL already resolved to 'allowed').
-	const connectionLimiter = new PerSourceConnectionLimiter(config.rateLimit.maxConnectionsPerSource);
+	const connectionLimiter = new PerSourceConnectionLimiter(
+		config.rateLimit.maxConnectionsPerSource
+	);
 	const transactionRateLimiter = new PerSourceTransactionRateLimiter(
 		config.rateLimit.maxTransactionsPerSourcePerWindow,
 		config.rateLimit.rateLimitWindowMs
