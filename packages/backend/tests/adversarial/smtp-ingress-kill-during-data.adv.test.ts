@@ -50,15 +50,20 @@ import {
  * The kill point: a byte offset in the message body, derived from the seed
  * ---------------------------------------------------------------------------------------------
  * `deriveKillOffsetBytes()` draws from `seededRng()` (`@oa-test/seed`): the seed is resolved once per
- * suite, printed, and replayable via `OA_TEST_SEED`. Roughly a fifth of iterations kill exactly at the
- * full 50 MB plus a short random jitter -- the one race that actually exercises the `250`-durability
- * half of the invariant, because it is the only offset at which the server could plausibly have
- * already answered before the kill lands. Every other iteration kills at a uniformly random point
- * strictly inside the transfer, where the server cannot yet have committed anything (`DATA` has not
- * been terminated), so those iterations are expected to resolve to "the client never saw `250`, and
- * there may or may not be an orphaned, unledgered spool file" -- exactly the crash-recovery scenario
- * `JR-3-05`/`JR-4-18` already test the *recovery* of. This file's own claim is narrower and does not
- * depend on crash-recovery running at all: whatever a ledger row says happened, it must be true.
+ * suite, printed, and replayable via `OA_TEST_SEED`. Roughly a fifth of iterations send the full 50 MB
+ * plus the terminator and then race the kill against the reply (`replyWaitMs`, drawn wide -- 100 to
+ * ~3100 ms -- specifically so some of these iterations give a real `fsync`+hash+ledger-append cycle
+ * enough time to finish on a working host): this is the only offset at which the server could
+ * plausibly have already answered before the kill lands, and therefore the only one that can exercise
+ * the `250`-durability half of the invariant at all. An earlier version of this file raced with a
+ * fixed, short window instead and always killed before the server could finish, on every platform
+ * including Linux CI -- the wide, seed-derived window is the fix. Every other iteration kills at a
+ * uniformly random point strictly inside the transfer, where the server cannot yet have committed
+ * anything (`DATA` has not been terminated), so those iterations are expected to resolve to "the
+ * client never saw `250`, and there may or may not be an orphaned, unledgered spool file" -- exactly
+ * the crash-recovery scenario `JR-3-05`/`JR-4-18` already test the *recovery* of. This file's own claim
+ * is narrower and does not depend on crash-recovery running at all: whatever a ledger row says
+ * happened, it must be true.
  *
  * ---------------------------------------------------------------------------------------------
  * F48, unavoidable on this host, and why the file still has to exist
@@ -168,10 +173,6 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<v
 		}
 		await new Promise((resolve) => setTimeout(resolve, 15));
 	}
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Minimal SMTP client -- send a line, read one (possibly multiline) reply. Same shape as the other
@@ -300,7 +301,13 @@ async function runOneIteration(ctx: RunContext, globalIndex: number): Promise<It
 	const nonceHex = Buffer.from(Array.from({ length: 8 }, () => ctx.rng.int(256))).toString('hex');
 	const body = buildIterationBody(globalIndex, nonceHex);
 	const killOffsetBytes = deriveKillOffsetBytes(ctx.rng, TOTAL_BODY_BYTES);
-	const jitterMs = ctx.rng.int(50);
+	// Only used once the full body (plus terminator) has been sent -- see the "completion race"
+	// branch below. Wide on purpose (100..3099 ms): narrow enough that some iterations still kill
+	// before accept() finishes (a genuine mid-processing kill, no 250 possible), wide enough that
+	// most iterations give a real fsync+hash+ledger-append cycle time to finish first on a working
+	// host, so the client-saw-250-implies-durable half of the invariant actually gets exercised
+	// somewhere in this run rather than being structurally unreachable by construction.
+	const replyWaitMs = 100 + ctx.rng.int(3000);
 
 	const port = await getFreePort();
 	const child = spawn(process.execPath, [ENTRY_JS], {
@@ -348,17 +355,25 @@ async function runOneIteration(ctx: RunContext, globalIndex: number): Promise<It
 		client.send('DATA');
 		await client.nextReply(); // 354
 
-		const replyRace = client.nextReply(500).catch(() => null);
 		if (killOffsetBytes >= TOTAL_BODY_BYTES) {
+			// The completion race: send everything, including the terminator, then wait for *either*
+			// the reply to arrive *or* replyWaitMs to elapse -- whichever comes first is exactly when
+			// the kill lands. That is what makes this a race rather than "always kill before the
+			// server could possibly have finished" (an earlier, fixed-short-timeout version of this
+			// test did exactly that and always killed too early, on every platform including Linux
+			// CI -- see this file's own doc comment on why replyWaitMs is wide).
 			await writeUpTo(connectedSocket, body, TOTAL_BODY_BYTES);
 			connectedSocket.write('.\r\n');
-			await delay(jitterMs);
+			const reply = await client.nextReply(replyWaitMs).catch(() => null);
+			child.kill('SIGKILL');
+			clientSaw250 = !!reply && /^250 /.test(reply[0] ?? '');
 		} else {
+			// A genuine mid-transfer kill: DATA has not been terminated, so no 250 is structurally
+			// possible regardless of timing -- kill as soon as killOffsetBytes have been sent.
 			await writeUpTo(connectedSocket, body, killOffsetBytes);
+			child.kill('SIGKILL');
+			clientSaw250 = false;
 		}
-		child.kill('SIGKILL');
-		const reply = await replyRace;
-		clientSaw250 = !!reply && /^250 /.test(reply[0] ?? '');
 	} finally {
 		if (socket && !socket.destroyed) socket.destroy();
 		if (!exited) child.kill('SIGKILL');
