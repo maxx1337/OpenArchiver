@@ -1859,6 +1859,79 @@ in die App" hat sich aufgelöst, statt entschieden zu werden. Die Protokollierun
 der App und wird über den Port `IngressLogger` injiziert, wie `SpoolFileSystem`, `LedgerBackend` und
 `QuarantineAlertSink`.
 
+## ADR-027 — Eine Transaktion, die Journal-Empfänger mehrerer Ketten adressiert
+
+**Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-05b` hat den Fall
+erkannt und ausdrücklich **nicht** gelöst, wie beauftragt · **Umsetzung:** `JR-4-17` (neu), **vor
+`JR-4-06`** · **Berührt:** ADR-007 (eine Kette je Archiv), Skill `journal-ledger` §5 (eine Receipt je
+Transaktion)
+
+**Entschieden: der zweite und jeder weitere `RCPT TO`, der eine _andere_ Kette einführen würde, wird
+mit `452 4.5.3` abgewiesen.** Eine SMTP-Transaktion bleibt damit eindeutig **einer** Kette zugeordnet.
+Mehrere Empfänger **derselben** Quelle und ein doppelt genannter Empfänger bleiben unproblematisch und
+werden angenommen.
+
+### Der Fall
+
+`journaling_sources.routing_address` bestimmt die Quelle, deren `ingestion_source_id` die
+`chain_scope_id` **ist** (ADR-007). Adressiert eine Transaktion zwei gültige Journal-Adressen
+verschiedener Quellen, ist die Kettenzuordnung ambig — eine Transaktion erzeugt aber genau eine
+Receipt in genau einer Kette. Praktisch tritt das ein, wenn ein Endkunde mehrere Archive auf einer
+Installation betreibt und eine Nachricht in zwei Journalregeln fällt.
+
+### Die drei Wege, und warum zwei ausfallen
+
+**Verworfen: „der erste Empfänger gewinnt".** Der Sender hätte für **beide** Empfänger ein `250`
+bekommen, während nur eine Kette einen Eintrag hat. Das ist keine Ungenauigkeit, sondern ein direkter
+Bruch des Acceptance-Contracts: `250` ist die Zusage, dass **diese** Nachricht durabel liegt, und für
+den zweiten Mandanten wäre sie unwahr. Ein stiller Verlust in genau dem Archiv, dessen
+Vollständigkeit bewiesen werden soll.
+
+**Verworfen für v1: „eine Receipt je betroffener Kette, ein Spool-Objekt".** Inhaltlich die sauberste
+Variante — verlustfrei, und jede Mandantenkette bliebe für sich vollständig, was ADR-007 anstrebt.
+Sie scheitert an einer **gemessenen** Eigenschaft des bestehenden Kerns, nicht an einer Vermutung:
+
+- `LedgerLookup.findBySpoolTxIds()` (`packages/journaling/src/ledger/ledger-lookup-port.ts`) liefert
+  eine `ReadonlyMap<string, LedgerEntryByTxId>` — **genau einen** Eintrag je `spool_txid`. Zwei
+  Receipts unter derselben Transaktions-ID würden die Crash-Recovery blind dafür machen, dass ein
+  zweiter Eintrag fehlt: sie sähe „Ledger vorhanden" und reihte Phase B nach, während eine Kette
+  lückenhaft bliebe. Das ist ein Eingriff in `JR-3-05`, den **abgenommenen** kritischsten Pfad.
+- Der Ausweg wäre ein **atomarer Append über mehrere Ketten** — beide Einträge in einer
+  Datenbanktransaktion, damit „einer da ⇒ alle da" gilt. `PostgresLedgerWriter.append()` nimmt aber
+  einen Advisory-Lock **je Kette**; zwei Locks in einer Transaktion brauchen eine erzwungene
+  Sperrreihenfolge, sonst gibt es Deadlocks zwischen zwei Transaktionen mit vertauschten Ketten.
+- Der Index auf `spool_txid` ist **nicht** unique (`0041_even_scream.sql`), eine Migration wäre also
+  nicht nötig — das ist der einzige Teil, der billig wäre.
+
+**Für einen Randfall ist das zu viel Risiko am Kern.** Die Variante bleibt als Ausbaupfad benannt,
+mit dieser Kostenliste.
+
+### Warum `452 4.5.3` und nicht `550`
+
+`452 4.5.3` („too many recipients") ist der Code, für den sendende MTAs **bereits** eine
+Empfänger-Aufspaltung implementiert haben — er ist die übliche Antwort auf ein Empfängerlimit, und
+ein Sender reicht die abgelehnten Empfänger in einer **eigenen** Transaktion nach. Genau das löst den
+Fall: getrennt gesendet ist jede Transaktion wieder eindeutig. Ein `550` wäre endgültig und würde die
+zweite Kette verlieren.
+
+### Das Restrisiko, ausdrücklich benannt
+
+**Diese Entscheidung hängt an fremdem Verhalten.** Spaltet ein Sender nicht auf, verzögert er die
+Zustellung an die zweite Adresse und erzeugt am Ende einen NDR. Das ist hinzunehmen, weil es die
+**sichtbare** Fehlerart ist: ein NDR landet bei einem Menschen, eine fehlende Ledger-Zeile bei
+niemandem. Das Projekt existiert, weil die Pull-Ingestion Lücken erzeugt, **die man nicht bemerkt**
+(`README.md`); eine Lücke, die einen NDR erzeugt, ist die zulässige Sorte.
+
+Drei Auflagen daraus:
+
+1. **`JR-4-17`** setzt die Abweisung um. Heute **protokolliert** `recordMatchedRecipient()` den Fall
+   nur — richtig so, aber es ist noch keine Entscheidung im Code.
+2. **Der Fall muss in E10 (Monitoring) sichtbar werden**, nicht nur im Prozessprotokoll. Ein
+   Betreiber, dessen Sender nicht aufspaltet, muss es erfahren, ohne Logs zu lesen.
+3. **`JR-12-08`** (echter Exchange-Online-Tenant) messe, ob Exchange tatsächlich aufspaltet. Fällt
+   die Messung negativ aus, ist der oben benannte Ausbaupfad zu bauen — dann mit dem vollen Preis für
+   Recovery und Sperrreihenfolge.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill
