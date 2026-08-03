@@ -85,89 +85,73 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-03 (**E4 ist in Arbeit**, nicht abgenommen) · **Branch:**
-`claude/journaling-e4-smtp-ingress` (Epic-Branch mit **eigenem** Upstream, siehe Kasten unten) ·
-Volllauf gegen das Docker-Postgres **672 passed | 6 skipped** bei 50 Dateien, Exit 0,
-`unit ci 538 · integration ci 97 · adversarial ci 37`
+**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 15 von 20 Tasks, nicht abgenommen) · **Branch:**
+`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf **lokal und in der CI bestätigt**:
+**927 Tests** bei 75 Dateien — `unit ci 779 · integration ci 111 · adversarial ci 37`, CI-Lauf
+`30822606272` auf `4795688` **success**
 
-> **E3 ist abgenommen (`JR-3-08`, 21/21, unabhängig) und am 2026-08-02 zurückgemergt** (`185e9bd`,
-> `--no-ff`). Der Spool, der Acceptance-Contract und die Crash-Recovery stehen damit. Was E3 sonst
-> hinterlassen hat: **F40** (Quarantäne-Aufräumung, halb behoben in `JR-3-09`, zweite Hälfte gehört
-> E10/E12) und **F41** (Testnetz-Löcher, niedrig, offen). Der Verlauf von E3 steht in `06-status.md`.
+> **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
 ### Der Stand in einem Satz
 
-**Der SMTP-Empfangspfad existiert erstmals — und nimmt bewusst noch nichts an.** `apps/smtp-ingress`
-läuft als eigener Prozess, spricht ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`
-und `STARTTLS`, und beantwortet das Ende von `DATA` bzw. `BDAT … LAST` mit **`451 4.3.0`**. Das ist
-keine Baustelle, sondern eine Auflage des PO: `JournalAcceptance.accept()` wird erst in **`JR-4-06`**
-verdrahtet, und bis dahin darf kein `250` über die Leitung gehen — ein Sender kann ein
-Zwischenstands-`250` nicht von einem echten unterscheiden, und ein echtes ist ein Versprechen, das
-dieser Code noch nicht halten kann. `completeTransfer()` in `smtp-server.ts` ist der **eine**
-Anschlusspunkt, an dem `JR-4-06` das ändert.
+**Der SMTP-Empfangspfad steht und nimmt an.** `apps/smtp-ingress` spricht ESMTP mit `PIPELINING`,
+`8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`, `STARTTLS` und `AUTH`, prüft Quell- und Empfänger-ACL gegen
+`journaling_sources`, fährt beim Start den Crash-Recovery-Scan, und antwortet auf das Ende von `DATA`
+bzw. `BDAT … LAST` mit **`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append
+durch sind. Offen sind noch der M365-Range-Helper, die Ledger-Erholung nach Startfehler, die vier
+TEST-Scheiben und die Abnahme.
 
 ### Was diese Session gemacht hat
 
-> 1. **`JR-4-01`** — `apps/smtp-ingress` als eigener Prozess, Konfiguration mit zod im Paket
->    (`packages/journaling/src/ingress/config.ts`), App liest nur `process.env`. Die beiden
->    nicht-offensichtlichen Kriterien sind **zweifach** belegt: ein transitiver Import-Graph-Walk
->    (`tests/unit/ingress-import-graph.test.ts`) und ein echter Prozess-Spawn. Der Graph-Test hat eine
->    Selbstprüfung, damit er nicht vakuos grün wird.
-> 2. **`JR-4-02`** — der ESMTP-Server, **und mit ihm `ADR-026`**: der Server ist **selbst gebaut**, auf
->    `node:net`/`node:tls`, ohne Fremdbibliothek. Kein Node-SMTP-Server der Registry beherrscht `BDAT`
->    (`smtp-server` 3.19.2: 17 Kommando-Handler, keiner davon `BDAT`; `haraka` ebenso nicht, plus
->    volles `outbound/`; `simplesmtp` tot seit 2015). Vom PO unabhängig nachgemessen.
-> 3. **`JR-4-03`** — `CHUNKING`/`BDAT` vollständig. Der Kern ist eine einzige Eigenschaft: `BDAT` kennt
->    kein Dot-Stuffing, `DATA` schon — also müssen Nachrichten mit einer Zeile aus einem einzelnen
->    Punkt über **beide** Wege dieselben Bytes ergeben. Mit Mutationsproben in beide Fehlerrichtungen
->    belegt. RFC 3030 zur `DATA`/`BDAT`-Mischung am Text geprüft, nicht aus dem Gedächtnis.
-> 4. **`JR-4-16`** (neu angelegt) — **F44 behoben**, siehe unten. Der `DATA`-Pfad liest nach einem
->    `552` bis zum Terminator weiter und verwirft, statt den Zustand mitten im Rumpf zurückzusetzen.
-> 5. **`JR-4-04`** — STARTTLS, `require_tls` (`530 5.7.0`), TLS-Boden 1.2, Version und Cipher aus der
->    echten Sitzung gelesen. **Diese Scheibe wurde zweimal angesetzt:** der erste Anlauf endete am
->    Nutzungslimit mit **755 Zeilen uncommitted**; der PO hat sie als `397c842` („wip … partial")
->    gesichert und ausdrücklich vermerkt, dass **nichts davon je ausgeführt worden war** (das Inventar
->    war nicht gezogen, `globalSetup` brach jeden Lauf ab). Der zweite Anlauf hat den Code als
->    ungeprüfte Fremdarbeit behandelt, das Inventar gezogen und den ersten grünen Lauf erzeugt.
-> 6. **`ADR-026` hat einen Nachtrag bekommen, weil der Auftraggeber die Entscheidung angezweifelt hat**
->    — zu Recht, und sie ist dadurch besser geworden: die Begründung im RFC („Exchange Online uses
->    BDAT. Not optional.") **hielt nicht**. RFC 3030 verlangt, dass ein Server mit `BDAT` weiterhin
->    `DATA` unterstützt, und ein Sender fällt auf `DATA` zurück, wenn `CHUNKING` fehlt. Die **tragende**
->    Begründung ist eine andere: Microsoft 365 entfernt keine „bare line feeds" mehr, und eine
->    Nachricht mit einem `LF` ohne `CR` ist über `DATA` **nicht übertragbar** — ohne `BDAT` fehlen also
->    genau diejenigen Journal-Reports, deren Original ein Bare-LF enthält. Eine Lücke, die an der
->    Byte-Zusammensetzung der Mail hängt, ist unsystematisch und unauffällig — die schlimmste Art in
->    einem System, dessen Zweck beweisbare Vollständigkeit ist.
-> 7. **`JR-4-05` ist nach ADR-021 in drei Scheiben zerlegt** (`a` Quell-ACL und erste
->    Datenbankanbindung, `b` Empfänger-ACL, `c` `AUTH`), weil die Task drei Fehlerklassen trug.
-> 8. **Drei neue Befunde: F42, F43, F44.** Zwei davon sind mehr als Notizen — siehe nächster Abschnitt.
-
-### Die drei Befunde dieser Session, und warum zwei davon zählen
-
-**F44 (hoch, behoben in `JR-4-16`)** — nach einem `552` im `DATA`-Pfad las der Server den
-Nachrichtenrumpf als SMTP-Kommandos. Gemessen: drei Rumpfzeilen mit `250 2.1.0` / `250 2.1.5` /
-`250 2.0.0` beantwortet, also ein `MAIL FROM` des Angreifers aus Nachrichteninhalt angenommen. Heute
-folgenlos, **weil noch nichts archiviert wird** — mit `JR-4-06` wäre daraus ein falscher Ledger-Eintrag
-geworden, und `envelope_from` ist eines der 16 gehashten Felder aus ADR-006. Deshalb sofort behoben
-statt nach `JR-4-14` verschoben.
-
-> **Die Methodenlehre daraus ist wichtiger als der Befund.** Die **erste** Probe des PO war
-> **negativ** — sie sendete Rumpf und Kommandos in **einem** `write`, und der Rest desselben Chunks
-> wird verworfen. Erst mit einem eigenen TCP-Segment trat der Fall ein. **Eine Probe, die den Fall
-> verfehlt, ist kein Beleg für seine Abwesenheit** — dieselbe Lehre wie in F41s Nachtrag, hier
-> innerhalb einer Stunde ein zweites Mal. Wer in E4 weiterarbeitet: die Gegenstelle kontrolliert die
-> Segmentierung, also muss ein Protokolltest sie kontrollieren.
-
-**F43 (mittel, offen)** — `heapUsed` sieht Node-`Buffer`-Inhalte **nicht**. `JR-4-03` hat zur
-Kalibrierung absichtlich eine Vollpufferung eingebaut: `heapUsed` blieb flach bei 13–17 MB, während
-150 MB gepuffert wurden; `arrayBuffers` trennt die Zustände (166 MB gegen unter 40 MB). Das setzt ein
-Fragezeichen hinter **`JR-3-02`s abgenommene Zusicherung** „150-MB-Nachricht ohne proportionalen
-Heap-Anstieg" aus dem bereits gemergten E3. **Zu prüfen ist der Nachweis, nicht der Code.** Die
-allgemeine Regel: ein Messinstrument, das eine absichtlich eingebaute Regression nicht rot macht,
-misst die Eigenschaft nicht, die es zu messen vorgibt.
-
-**F42 (niedrig, offen)** — `tsconfig.build.json` kennt weder `packages/journaling` noch `apps/*` und
-wird von keinem Skript benutzt.
+> **Neun Scheiben abgeschlossen:** `JR-4-01` (Prozessskelett, zod-Config, Import-Graph-Nachweis),
+> `JR-4-02` (ESMTP-Server — **und ADR-026**), `JR-4-03` (`CHUNKING`/`BDAT`), `JR-4-16` (F44),
+> `JR-4-04` (STARTTLS/TLS), `JR-4-05a`/`b`/`c` (Quell-ACL und erste Datenbankanbindung,
+> Empfänger-ACL, `AUTH` über TLS), `JR-4-17` (ADR-027), `JR-4-06a` (`accept()` verdrahtet, erstes
+> `250`), `JR-4-18` (Crash-Recovery-Scan verdrahtet), `JR-4-20` (F46), `JR-4-06b` (ganze Codetabelle,
+> Graceful Drain), `JR-4-07` (kein Relaying, Byte-Treue), `JR-4-08` (Verbindungs- und Ratengrenzen).
+>
+> **Zwei ADRs:** **ADR-026** — der SMTP-Server ist **selbst gebaut**, weil kein Node-Paket `BDAT`
+> beherrscht; der Auftraggeber hat die Entscheidung zu Recht angezweifelt, und der **Nachtrag** hat
+> die Begründung ausgetauscht: „Exchange benutzt BDAT" trägt nicht (RFC 3030 verlangt `DATA`-Fallback),
+> tragend ist, dass Microsoft **bare line feeds** nicht mehr entfernt und solche Nachrichten über
+> `DATA` **nicht übertragbar** sind. **ADR-027** — eine Transaktion bleibt genau **einer** Kette
+> zugeordnet; ein zweiter `RCPT TO` für eine andere Kette bekommt `452 4.5.3`.
+>
+> **Sieben Befunde: F42–F48.** Die vier, die zählen:
+>
+> - **F44** (hoch, behoben in `JR-4-16`): nach einem `552` las der Server den Nachrichtenrumpf als
+>   SMTP-Kommandos — gemessen, drei Rumpfzeilen mit `250` beantwortet. Mit `JR-4-06` wäre daraus ein
+>   falscher Ledger-Eintrag geworden, denn `envelope_from` ist ein gehashtes Feld.
+> - **F46** (hoch, behoben in `JR-4-20`): `RecipientAclEvaluator.evaluate` und
+>   `SourceAclEvaluator.evaluate` hießen gleich, TypeScript typisiert strukturell — jeder `RCPT TO`
+>   lief gegen die IP-Allowlist, der Empfang war **funktionsunfähig**. Kein Test sah es, weil **jeder**
+>   ein Fake statt der produktiven Verdrahtung benutzte.
+> - **F48** (hoch, aufgelöst): **alle zwölf CI-Läufe zwischen 07:22 und 11:08 sind fehlgeschlagen**,
+>   am Lint-Schritt, vierzehn Scheiben lang unbemerkt — und damit lief in der CI **weder Build noch
+>   Suite**. Das wog schwer, weil `fsyncDirectory()` auf diesem Windows-Host mit `EPERM` scheitert und
+>   `accept()` den Ledger erst danach anfasst: **lokal erreicht kein Lauf den Append.** Der Kern des
+>   Projekts war lokal unprüfbar und in der CI ungeprüft. Beides ist zu.
+> - **F43** (mittel, offen): `heapUsed` sieht Node-`Buffer` nicht — ein Speichernachweis muss über
+>   `arrayBuffers` laufen und **kalibriert** sein. Setzt ein Fragezeichen hinter `JR-3-02`s
+>   abgenommene Zusicherung; zu prüfen ist der **Nachweis**, nicht der Code.
+>
+> **Vier neue Tasks aus diesen Funden:** `JR-4-16` (F44), `JR-4-17` (ADR-027), `JR-4-18`
+> (Crash-Recovery-Scan — war gebaut, getestet, abgenommen und **von niemandem aufgerufen**),
+> `JR-4-19` (Ledger-Verbindung erholt sich nach Startfehler nicht), `JR-4-20` (F46). E4 hat damit
+> **20** Tasks, das Projekt 117.
+>
+> **Verfahren geändert (Entscheidung des Auftraggebers, Kostenprüfung):** die wiederkehrende
+> Auftrags-Boilerplate steht jetzt in `.claude/agents/senior-dev.md` und `tester.md` statt in jedem
+> Auftrag (~40 % jedes Prompts), das Berichtsformat ist eine feste Struktur, und **nach jedem Push
+> wird der CI-Lauf geprüft**. Dabei zwei veraltete Rollenanweisungen korrigiert — `tester.md` behauptete
+> „zero tests and no test runner", seit E1 falsch, und `senior-dev.md` verlangte `pnpm lint`, das auf
+> diesem Host nicht grün werden kann.
+>
+> **Vereinbart, aber nicht begonnen: die Doku-Diät.** Die Pflichtlektüre (README + Status + Handover +
+> Backlog + Skill) ist auf **689.000 Zeichen ≈ 170.000 Tokens** gewachsen; einzelne
+> Sessionprotokollzeilen in `06-status.md` sind bis 8.531 Zeichen lang. Sie soll **nach der
+> E4-Abnahme** auf unter 40.000 Tokens gebracht werden: Protokolle abgeschlossener Epics ins Archiv,
+> Statuseinträge als Felder statt Prosa.
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -345,64 +329,62 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — E4 weiterbauen, Reihenfolge steht fest
+### Nächster konkreter Schritt — die letzten fünf E4-Scheiben, dann die Abnahme
 
-**E4 steht bei 5 von 16 Tasks** (`JR-4-01`…`JR-4-04`, `JR-4-16`). Die Zählung ist auf 16 gewachsen,
-weil `ADR-026` zwei Auflagen erzeugt hat und F44 eine Fix-Task. Reihenfolge:
+**E4 steht bei 15 von 20.** Erledigt: `JR-4-01`…`JR-4-08` und `JR-4-16`…`JR-4-20`. Reihenfolge des
+Rests:
 
-| Als Nächstes         | Was                                                                                          | Warum in dieser Reihenfolge                                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `JR-4-05a`           | Quell-ACL (CIDR, `554 5.7.1` bei Connect) **und die erste Datenbankanbindung des Prozesses** | ACL steht in `journaling_sources`; ohne Datenbankanbindung geht `b` und `c` auch nicht                   |
-| `JR-4-05b`           | Empfänger-ACL, kein Catch-all (`550 5.1.1`)                                                  | braucht die geladenen Quellen aus `a`                                                                    |
-| `JR-4-05c`           | `AUTH` PLAIN/LOGIN nur über TLS, bcrypt gegen `smtpPasswordHash`                             | braucht `a` (Quellen) und `JR-4-04` (TLS)                                                                |
-| **`JR-4-06`**        | **Response-Code-Mapping vollständig — und hier wird `accept()` verdrahtet**                  | die Scheibe, in der zum ersten Mal ein `250` erlaubt ist. **`JR-4-16` musste davor fertig sein** (F44)   |
-| `JR-4-07`            | Kein Relaying, keine Byte-Transformation — strukturell                                       | ADR-026 hat die halbe Arbeit schon getan: es gibt keinen ausgehenden Code, den man erst entfernen müsste |
-| `JR-4-08`            | Per-Source Connection- und Rate-Limits                                                       | braucht die Quellen                                                                                      |
-| `JR-4-09`            | M365-IP-Range-Refresh-Helper (nur Diff, ändert nichts selbst)                                | unabhängig, kann jederzeit                                                                               |
-| `JR-4-10`–`JR-4-12`  | TEST: Kill-during-DATA, BDAT-Pfad, Oversize-Grenzmatrix                                      | brauchen den fertigen Empfangspfad inklusive `JR-4-06`                                                   |
-| `JR-4-14`, `JR-4-15` | TEST: adversariale Protokollrobustheit, Sicherheitsdurchsicht — **ADR-026s Auflagen**        | ohne beide ist E4 **nicht abnehmbar**                                                                    |
-| `JR-4-13`            | Abnahme E4, **unabhängige Sitzung**                                                          | ADR-014/ADR-021                                                                                          |
+| Als Nächstes         | Was                                                                                       | Warum hier                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `JR-4-09`            | M365-IP-Range-Refresh-Helper: holt die Liste, erzeugt einen **Diff**, wendet nichts an    | unabhängig von allem anderen, kann sofort                                          |
+| `JR-4-19`            | Ledger-Verbindung erholt sich nach einem gescheiterten Start nicht                        | Betriebsdefekt, den `JR-4-06a` offengelegt hat; kein Blocker für die TEST-Scheiben |
+| `JR-4-10`            | TEST: `SIGKILL` an randomisierten Punkten während 50 MB, 500 Runden, **aus Client-Sicht** | braucht den fertigen Annahmepfad — der steht seit `JR-4-06a`                       |
+| `JR-4-11`, `JR-4-12` | TEST: BDAT-Pfad explizit, Oversize-Grenzmatrix (am Limit / ein Byte drüber / weit drüber) | dito                                                                               |
+| `JR-4-14`, `JR-4-15` | TEST: adversariale Protokollrobustheit und Sicherheitsdurchsicht — **ADR-026s Auflagen**  | ohne beide ist E4 **nicht abnehmbar**                                              |
+| `JR-4-13`            | **Abnahme E4 — eigene, frische Sitzung**                                                  | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen)        |
 
-**Drei Dinge, die beim Weiterbauen zählen — in der Reihenfolge, in der man darüber stolpert:**
+**Was `JR-4-13` an Material mitbekommt, das nicht im Backlog steht:**
 
-- **`JR-4-06` ist die Scheibe mit dem Vertrag.** Bis dahin antwortet der Server `451`; danach ist er
-  ein Journaling-Ziel, das Zusagen macht. Der Anschlusspunkt ist `completeTransfer()` — **einer**, für
-  `DATA` und `BDAT` gemeinsam, das ist Absicht (`JR-4-03`). Was dort einzuspeisen ist, steht in
-  `JournalTransactionInput` (`packages/journaling/src/spool/acceptance.ts`): `tlsVersion`/`tlsCipher`
-  liegen seit `JR-4-04` an der Verbindung bereit und sind dort noch **ungenutzt**. Und: der
-  **Postgres-Transactor** liegt weiterhin unter `packages/backend/tests/support/postgres-transactor.ts`
-  — sein Umzug nach `src/` ist zweimal begründet auf `JR-4-06` datiert worden.
-- **Zwei Kriterien sind aus ihren Scheiben herausgewandert und dürfen nicht verloren gehen.** (1) „Version
-  und Cipher stehen **im Ledger-Eintrag**" (`JR-4-04`) ist nur zur Hälfte erfüllbar gewesen; die
-  Ledger-Seite prüft `JR-4-13` gegen `JR-4-06`. (2) „**TLS 1.1 wird abgelehnt**" (`JR-4-04`) ist **offen**
-  und an `JR-4-14` übergegangen: in dieser Umgebung erzeugt weder Nodes `tls.connect()` noch
-  `openssl s_client -tls1_1` noch ein TLS-1.1-`ClientHello`, auch gegen einen absichtlich gesenkten
-  Server-`minVersion` gemessen. Belegt ist nur `minVersion: 'TLSv1.2'` plus TLS 1.2/1.3 Ende-zu-Ende.
-  Der echte Nachweis braucht einen von Hand gebauten `ClientHello` auf Byte-Ebene.
-- **Der selbst gebaute Server erbt keine Härtung, und das ist eingeplant, nicht vergessen.**
-  `JR-4-14`/`JR-4-15` sind die Auflagen aus ADR-026. Material dafür liegt schon bereit: die fehlende
-  proaktive Größenprüfung bei absurd großer `BDAT`-Länge, die TLS-1.1-Probe, Garbage während des
-  STARTTLS-Handshakes, mehrfach gepipelinete `STARTTLS`-Versuche, überlange `ClientHello`s — und
-  `scanDiscard()`s O(1)-Verwerfungsdisziplin aus `JR-4-16` als Schablone.
+- **Zwei Kriterien sind aus ihren Scheiben herausgewandert.** „Version und Cipher stehen **im
+  Ledger-Eintrag**" (`JR-4-04`) ist nur zur Hälfte erfüllt gewesen — die Ledger-Seite prüft `JR-4-13`
+  gegen `JR-4-06a`. Und „**TLS 1.1 wird abgelehnt**" ist **offen** und an `JR-4-14` übergegangen: in
+  dieser Umgebung erzeugt weder Nodes `tls.connect()` noch `openssl s_client -tls1_1` ein
+  TLS-1.1-`ClientHello`; belegt ist nur `minVersion: 'TLSv1.2'` plus TLS 1.2/1.3 Ende-zu-Ende.
+- **Vom PO ausdrücklich nicht nachgemessen** (steht auch im Statuseintrag zu `JR-4-05b`): die drei
+  Wege, über die ein Catch-all doch konfigurierbar sein könnte, die Adressvergleichs-Entscheidung
+  samt Sonderfällen und die bewusste `postmaster`-Abweichung von RFC 5321 §4.5.1.
+- **Vom PO entschieden und nicht als Lücke zu werten:** „Object-Store nicht erreichbar ⇒ `250`" ist
+  **strukturell** belegt (kein Codepfad) statt per Fehlerinjektion. Das ist der stärkere Nachweis — eine
+  Injektion würde einen Ausfall simulieren, den es in diesem Prozess nicht geben kann.
+- **Bewusst hingenommen:** pausiert ein Sender beim Shutdown exakt zwischen zwei `BDAT`-Chunks, läuft
+  der Drain in den regulären Idle-Timeout statt sofort abzuschließen. Kein Datenverlust, nur langsamer.
+
+**Drei Dinge, die beim Weiterarbeiten zählen:**
+
+1. **Der CI-Lauf ist Teil des Belegs, nicht Nachsorge** (F48). `fsyncDirectory()` scheitert auf diesem
+   Windows-Host mit `EPERM`, und `accept()` schreibt den Ledger erst danach — **lokal erreicht kein Lauf
+   den Append.** Ein Ergebnis ohne grünen CI-Lauf sagt über den Acceptance-Contract nichts. Nach jedem
+   Push: `gh run list --branch <branch> --limit 1`, bei Rot `gh run view <id> --log-failed`.
+2. **Die zwei Lint-Ausfälle heute hatten dieselbe Ursache** und werden wiederkommen: die
+   Per-Datei-Prettier-Prüfung läuft über LF-normalisierte Kopien (F35-Umgehung), und wer zu viel
+   normalisiert, verdeckt einen echten Verstoß. `scratchpad/lintfix.cjs` formatiert über die
+   Prettier-API und **erhält die Zeilenenden** — das ist der verlässliche Weg.
+3. **Das Nutzungslimit hat in diesem Epic sechs Runden getroffen**, zwei davon mit erheblicher
+   uncommitteter Arbeit. Deshalb steht in der Rollendatei: **Inventar ziehen und committen, sobald die
+   erste Testdatei steht.** Ein Zwischenstand mit gezogenem Inventar ist lauffähig und prüfbar; einer
+   ohne ist wertlos, egal wie viel Code darin liegt.
 
 **Der Einstiegsprompt für die nächste Session:**
 
 ```
 Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
-und arbeite E4 weiter ab — als Nächstes JR-4-05a ff. aus 03-backlog.md.
+und arbeite E4 weiter ab — als Nächstes JR-4-09 und JR-4-19, dann die TEST-Scheiben.
 ```
 
-> **Der Epic-Branch hat seinen eigenen Upstream, und das muss so bleiben.** `git push` aus
-> `claude/journaling-e4-smtp-ingress` landet auf diesem Branch, nicht auf dem Integrationsbranch — in
-> E3 war das anders und elf Commits standen vorzeitig auf der Integrationslinie. Beim nächsten Epic
-> wieder `git push -u origin <epic>` **direkt nach** dem `checkout -b`.
-
-> **Was in diesem Epic zweimal passiert ist und wieder passieren wird: das Nutzungslimit trifft eine
-> Scheibe mitten in der Arbeit.** Einmal folgenlos (der Agent hatte noch keine Datei angefasst),
-> einmal mit 755 uncommitteten Zeilen. Deshalb steht in jedem Auftrag jetzt „**in Etappen committen**",
-> und wenn es doch passiert: den Stand als `wip(journaling)`-Commit sichern und in der Commit-Message
-> **ausdrücklich schreiben, was nicht belegt ist** — `397c842` ist das Muster dafür. Ein WIP-Commit,
-> der so aussieht wie fertige Arbeit, ist schlimmer als keiner.
+> **Für die Abnahme `JR-4-13` eine eigene Sitzung starten**, mit dem Prompt: „Nimm E4 unabhängig ab —
+> Rolle Tester, Kriterien aus `03-backlog.md`." Die Sitzung, die gebaut hat, kann nicht abnehmen; in E2
+> hat der Auftraggeber genau darauf bestanden, und die erzwungene zweite Runde hat zwei echte Lücken und
+> einen weiteren Befund gefunden.
 
 ### Was davor passiert ist — die Historie steht in `06-status.md`
 
