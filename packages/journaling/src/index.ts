@@ -174,6 +174,18 @@ export { SpoolWriteBridge, type SpoolWriteBridgeCallbacks } from './ingress/spoo
 
 export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
 
+export {
+	diffM365Ranges,
+	formatM365RangeDiff,
+	M365_ENDPOINTS_BASE_URL,
+	M365EndpointFeedError,
+	parseM365SmtpRanges,
+	type InvalidRange,
+	type M365RangeDiff,
+	type M365SmtpRangeSet,
+	type UnmatchedConfiguredRange,
+} from './ingress/m365-ip-ranges';
+
 export { normalizeJournalRecipient } from './ingress/recipient-address';
 
 export type { JournalingSourceAclEntry, SourceAclLookup } from './ingress/source-acl-port';

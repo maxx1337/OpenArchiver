@@ -265,7 +265,7 @@ eingeschoben (siehe `03-backlog.md`).
 | 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                                                                                                            | 9 / 9 + 8 / 8 Nacharbeit                                                                                                                                                                        |
 | 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                                                                                                    | 11 / 11                                                                                                                                                                                         |
 | 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                                                                                                        | 9 / 9                                                                                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | in Arbeit (`JR-4-01`…`JR-4-08` und `JR-4-16`…`JR-4-18`, `JR-4-20` erledigt, DEV; dazu **F49 behoben**; nur `JR-4-05a`/`JR-4-05b` vom PO mit eigenem Volllauf geprüft, der Rest noch ungeprüft) | 15 / 20 (`JR-4-05a`–`c` als eine vollständige `JR-4-05`-Scheibe gezählt; `JR-4-06` per ADR-021 in `JR-4-06a` und `JR-4-06b` (beide erledigt) gesplittet; offen: `JR-4-09`–`JR-4-15`, `JR-4-19`) |
+| 5           | E4   | `smtp-ingress`-Service             | in Arbeit (`JR-4-01`…`JR-4-09` und `JR-4-16`…`JR-4-18`, `JR-4-20` erledigt, DEV; dazu **F49 behoben**; nur `JR-4-05a`/`JR-4-05b` vom PO mit eigenem Volllauf geprüft, der Rest noch ungeprüft) | 16 / 20 (`JR-4-05a`–`c` als eine vollständige `JR-4-05`-Scheibe gezählt; `JR-4-06` per ADR-021 in `JR-4-06a` und `JR-4-06b` (beide erledigt) gesplittet; offen: `JR-4-10`–`JR-4-15`, `JR-4-19`) |
 | 6           | E5   | Journal-Report-Parser              | offen                                                                                                                                                                                          | 0 / 9                                                                                                                                                                                           |
 | 7           | E6   | Phase-B-Worker                     | offen                                                                                                                                                                                          | 0 / 8                                                                                                                                                                                           |
 | 8           | E7   | WORM-Storage                       | offen                                                                                                                                                                                          | 0 / 6                                                                                                                                                                                           |
@@ -613,3 +613,47 @@ Windows asynchron, auf Linux synchron, und der rote Lauf war Linux). Für den Fi
 Logreihenfolge mehr geprüft wird. Als kleine Betriebsunschönheit offen in F49 dokumentiert.
 
 **Nächster Schritt:** `JR-4-09` und `JR-4-19`, dann die TEST-Scheiben; CI-Lauf dieses Pushes prüfen (F48).
+
+**CI-Nachtrag:** Lauf `30827457559` auf `670b65f` ist **success** (2m25s) — damit ist F49 auf der
+Plattform belegt, auf der der rote Lauf auftrat (Linux), nicht nur lokal.
+
+#### 2026-08-03 — `JR-4-09` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): der M365-Range-Helfer
+
+**Neu:** `packages/journaling/src/ingress/m365-ip-ranges.ts` (reine Logik: Feed lesen, Diff, Bericht),
+`apps/smtp-ingress/src/refresh-m365-ranges.ts` (Entrypoint, `refresh-m365-ranges`-Skript),
+Betreiberabschnitt in `docs/enterprise/journaling/guide.md`. **Tests:**
+`ingress/m365-ip-ranges.test.ts` (18, `unit`), `m365-range-refresh-cli.int.test.ts` (5,
+`integration`) — Inventar auf `unit` 53 Dateien / `ci 797` und `integration` 19 / `ci 116` gezogen.
+
+**Die Entscheidung, die diese Scheibe geprägt hat:** der erste Entwurf holte die Liste per `fetch` —
+und `JR-4-07`s Wächter `no-outbound-mail-path.test.ts` meldete das **zu Recht rot** (er verbietet
+jeden ausgehenden Aufruf im Quelltext von `apps/smtp-ingress/src`, `fetch` ausdrücklich). Drei
+Auswege wurden dem PO vorgelegt (Ausnahme im Wächter / eigenes Workspace-Paket / nicht holen);
+**gewählt: nicht holen.** Der Wächter bleibt unangetastet, und der Mail-Host braucht keinen
+ausgehenden Internetzugang — in einer Compliance-Umgebung ist er dort meist ohnehin gesperrt. Der
+Download ist ein dokumentierter `curl`-Schritt; `M365_ENDPOINTS_BASE_URL` ist die einzige Stelle, an
+der die URL steht (Usage-Text und Betreiberdoku zitieren sie).
+
+**Zwei fachliche Festlegungen, beide sicherheitsrelevant:** (a) es werden **nur** Exchange-Einträge
+mit **Port 25** übernommen — die Web-Frontends (80/443) würden die ACL um eine Größenordnung
+weiten, ohne je Mail zu liefern (eigener Test); (b) ein ACL-Eintrag, den die offizielle Liste nicht
+kennt, wird **nie** als Löschvorschlag gemeldet, nur als Rückfrage — ein On-Prem-Connector oder
+Smart Host gehört legitim dorthin. Verglichen wird **bitweise** über `parseCidr` (dasselbe Parser
+wie die Live-ACL), nicht textuell.
+
+**Kalibriert:** mit einem absichtlich eingebauten `update journaling_sources` (die „hilfreiche"
+Auto-Anwendung, die RFC §4.3 verbietet) schlägt der Integrationstest genau an der
+`allowed_ips`-Gleichheit fehl; Regression zurückgenommen, danach grün. Exit-Codes sind Teil des
+Vertrags: `0` nichts zu tun, `2` handeln, `1` Helfer konnte nicht arbeiten — eine unlesbare Liste
+wird **nie** als „ACL ist in Ordnung" gemeldet.
+
+**Benannte Grenze:** Abdeckung wird gegen **einzelne** Einträge geprüft; zwei `/17`, die zusammen ein
+`/16` abdecken, führen zu einer Übermeldung („fehlt"). Das kostet einen Blick und kann die ACL nie
+still weiten — die Richtung, um die es RFC §4.3 geht.
+
+**Volllauf lokal:** `950 passed | 7 skipped`, 77 Dateien, `unit ci 797/797 · integration ci 116/116 ·
+adversarial ci 37/37`; `test:types` grün, beide Builds grün, Prettier über LF-normalisierte Kopien
+grün. CI-Lauf nach dem Push zu prüfen (Pflicht seit F48).
+
+**Nächster Schritt:** `JR-4-19` (Ledger-Verbindung erholt sich nicht), dann die TEST-Scheiben
+`JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme `JR-4-13` in eigener Sitzung.

@@ -162,7 +162,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// see expectedTests below for what each proves.
 		// 52 after JR-4-08 added ingress/rate-limit-config.test.ts, ingress/connection-rate-limiter.test.ts
 		// and tests/unit/smtp-rate-limit-protocol.test.ts -- see expectedTests below for what each proves.
-		expectedFiles: 52,
+		// 53 after JR-4-09 added ingress/m365-ip-ranges.test.ts (the range refresh helper's diff logic,
+		// against a fixture of the endpoint feed -- no network access anywhere in it).
+		expectedFiles: 53,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -438,7 +440,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// (rateLimit is a required key like smtp/tls/ledger but, like them, {} satisfies it and every
 		// field defaults on its own; an explicit override embeds rather than replacing; the missing-key
 		// case and one rejection per non-positive numeric field).
-		expectedTests: { ci: 779, nightly: 3, manual: 0 },
+		// 797 after JR-4-09 added 18 in ingress/m365-ip-ranges.test.ts: 7 on reading the official feed
+		// (the port-25 filter keeping the Exchange *web* front end out of the ACL is the
+		// security-relevant one, plus a port range, unknown fields, deduplication, and a malformed
+		// feed throwing rather than looking empty), 8 on the diff (network-not-string comparison, a
+		// wider ACL entry covering an official range, an unmatched entry never becoming a removal
+		// recommendation, `containedIn` for a narrower one, family confusion, unparseable entries on
+		// either side, and the documented union-coverage over-report), 3 on the operator report
+		// (every rendering says nothing was changed).
+		expectedTests: { ci: 797, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -472,7 +482,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// against the same spool/ledger quarantine the same orphan file exactly once and both still
 		// bind their ports, and a scan that itself fails -- journal_ledger dropped, deployment_identity
 		// still readable -- leaves the process bound but answering never-250 to DATA).
-		expectedFiles: 18,
+		// 19 after JR-4-09 added m365-range-refresh-cli.int.test.ts (the compiled range refresh helper
+		// against a real database and a local fixture feed -- no internet access).
+		expectedFiles: 19,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -498,7 +510,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// to smtp-ingress-crash-recovery-boot.int.test.ts (scan-before-listen ordering with
 		// requeue/quarantine observed at real process boot, two concurrently-starting processes not
 		// racing each other's scan, a failed scan leaving the process bound but accepting nothing).
-		expectedTests: { ci: 111, nightly: 0, manual: 0 },
+		// 116 after JR-4-09 added 5 to m365-range-refresh-cli.int.test.ts -- the compiled helper run
+		// against a real database and a local fixture feed: the missing range reported and
+		// allowed_ips byte-identical afterwards (the security claim of RFC section 4.3), the feed
+		// asked with a clientRequestId, exit 0 when everything is covered, exit 1 (never 0) when the
+		// feed cannot be read, exit 1 without a database URL.
+		expectedTests: { ci: 116, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

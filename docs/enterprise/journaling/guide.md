@@ -197,6 +197,61 @@ Google Workspace does not have a native journaling feature like Exchange. Instea
     - **Scope**: Select "All messages" or scope to specific users/groups.
 3. Ensure your Exchange connector allows outbound SMTP to the Open Archiver server on port `2525`.
 
+#### Keeping the Microsoft 365 IP ranges current
+
+Microsoft changes the IP ranges Exchange Online sends from. When a range is added and your source's
+IP allow-list does not have it, journal reports from those hosts are refused with `554 5.7.1` — and
+Exchange eventually gives up and generates NDRs.
+
+The `refresh-m365-ranges` helper compares the official Microsoft endpoint list against every
+journaling source's allow-list and prints what is missing. **It never changes anything**: a silently
+widened allow-list would be a security regression, so applying a suggestion is always your decision.
+It does not download the list either — you do, which means the mail-receiving host needs no outbound
+internet access:
+
+```bash
+# 1. Fetch the official list. clientRequestId must be a GUID you generate.
+curl -s 'https://endpoints.office.com/endpoints/worldwide?clientRequestId=b10c5ed1-bad1-445f-b386-b919946339a7' \
+    > m365-endpoints.json
+
+# 2. Compare it against the configured sources (reads the database, writes nothing).
+pnpm --filter smtp-ingress-app refresh-m365-ranges m365-endpoints.json
+
+# The list can also be piped in:
+curl -s 'https://endpoints.office.com/endpoints/worldwide?clientRequestId=<GUID>' \
+    | pnpm --filter smtp-ingress-app refresh-m365-ranges
+```
+
+Only Exchange entries that actually serve **port 25** are considered. The Exchange web front ends
+(ports 80/443) are deliberately ignored — copying them in would widen your allow-list by an order of
+magnitude for hosts that never deliver mail to you.
+
+Sample output:
+
+```
+journaling source: Contoso <journal-abc12345@journal.example.com> (7f3c…)
+official feed: 1 Exchange/port-25 entry (id 10) of 78 in the feed
+missing from allowed_ips (1) -- mail from these would be
+refused with 554 5.7.1:
+  + 40.107.0.0/16
+in allowed_ips but not in the official list (1) -- NOT a removal
+recommendation: an on-premises connector, test relay or smart host belongs here and
+this helper cannot know about it:
+  ? 192.0.2.0/24
+
+Nothing was changed. This helper only reads; apply additions yourself after review.
+```
+
+Entries the official list does not contain are reported with `?`, never as something to delete: an
+on-premises connector, a test relay or a regional smart host legitimately belongs in the allow-list
+and the helper cannot know about it. Add missing ranges through **Dashboard → Ingestions →
+Journaling** after reviewing them.
+
+Exit codes make this usable as a scheduled check: `0` — nothing to do; `2` — at least one source is
+missing a range (open a change ticket); `1` — the helper could not do its job (unreadable list,
+database unreachable, no `SMTP_INGRESS_DATABASE_URL`). An unreadable list is never reported as "your
+allow-list is fine".
+
 ### On-Premises Exchange
 
 1. Open the Exchange Management Shell.

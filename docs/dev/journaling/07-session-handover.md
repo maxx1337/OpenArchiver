@@ -85,10 +85,10 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 15 von 20 Tasks, nicht abgenommen) · **Branch:**
-`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf **lokal und in der CI bestätigt**:
-**927 Tests** bei 75 Dateien — `unit ci 779 · integration ci 111 · adversarial ci 37`, CI-Lauf
-`30822606272` auf `4795688` **success**
+**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 16 von 20 Tasks, nicht abgenommen) · **Branch:**
+`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **950 Tests** bei 77
+Dateien — `unit ci 797 · integration ci 116 · adversarial ci 37`; letzter bestätigter CI-Lauf
+`30827457559` auf `670b65f` **success** (F49), der Lauf zu `JR-4-09` steht im Statuseintrag
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
@@ -329,14 +329,13 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — die letzten fünf E4-Scheiben, dann die Abnahme
+### Nächster konkreter Schritt — die letzten vier E4-Scheiben, dann die Abnahme
 
-**E4 steht bei 15 von 20.** Erledigt: `JR-4-01`…`JR-4-08` und `JR-4-16`…`JR-4-20`. Reihenfolge des
-Rests:
+**E4 steht bei 16 von 20.** Erledigt: `JR-4-01`…`JR-4-09` und `JR-4-16`…`JR-4-20`, dazu **F49
+behoben**. Reihenfolge des Rests:
 
 | Als Nächstes         | Was                                                                                       | Warum hier                                                                         |
 | -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `JR-4-09`            | M365-IP-Range-Refresh-Helper: holt die Liste, erzeugt einen **Diff**, wendet nichts an    | unabhängig von allem anderen, kann sofort                                          |
 | `JR-4-19`            | Ledger-Verbindung erholt sich nach einem gescheiterten Start nicht                        | Betriebsdefekt, den `JR-4-06a` offengelegt hat; kein Blocker für die TEST-Scheiben |
 | `JR-4-10`            | TEST: `SIGKILL` an randomisierten Punkten während 50 MB, 500 Runden, **aus Client-Sicht** | braucht den fertigen Annahmepfad — der steht seit `JR-4-06a`                       |
 | `JR-4-11`, `JR-4-12` | TEST: BDAT-Pfad explizit, Oversize-Grenzmatrix (am Limit / ein Byte drüber / weit drüber) | dito                                                                               |
@@ -384,11 +383,20 @@ Rests:
    erste Testdatei steht.** Ein Zwischenstand mit gezogenem Inventar ist lauffähig und prüfbar; einer
    ohne ist wertlos, egal wie viel Code darin liegt.
 
+> **`JR-4-09` ist erledigt (2026-08-03) — und eine Entscheidung daraus gilt weiter.** Der Helfer
+> **holt** die Endpunktliste nicht: sie kommt als Datei oder über `stdin`, der Download ist ein
+> dokumentierter `curl`-Schritt in der Betreiberdoku. Grund: der erste Entwurf benutzte `fetch` und
+> wurde von `JR-4-07`s Wächter „kein ausgehender Aufruf im Empfängerquelltext" zu Recht rot gemeldet.
+> Von drei Auswegen (Ausnahme im Wächter, eigenes Workspace-Paket, nicht holen) hat der Auftraggeber
+> **„nicht holen"** gewählt — der Wächter bleibt unangetastet und der Mail-Host braucht keinen
+> ausgehenden Internetzugang. **Wer diesen Wächter künftig rot sieht, weicht ihn nicht auf**, sondern
+> legt die Alternativen vor.
+
 **Der Einstiegsprompt für die nächste Session:**
 
 ```
 Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
-und arbeite E4 weiter ab — als Nächstes JR-4-09 und JR-4-19, dann die TEST-Scheiben.
+und arbeite E4 weiter ab — als Nächstes JR-4-19, dann die TEST-Scheiben.
 ```
 
 > **Für die Abnahme `JR-4-13` eine eigene Sitzung starten**, mit dem Prompt: „Nimm E4 unabhängig ab —
