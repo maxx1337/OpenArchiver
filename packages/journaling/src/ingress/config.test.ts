@@ -27,6 +27,10 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 			// itself optional and defaults on its own -- `{}` is exactly what
 			// `config-from-env.ts` produces when none of the SMTP_INGRESS_* smtp env vars are set.
 			smtp: {},
+			// JR-4-04: `tls` is required the same way, and `{}` means "no certificate, TLS not
+			// required" -- exactly what `config-from-env.ts` produces when no SMTP_INGRESS_TLS_*/
+			// SMTP_INGRESS_REQUIRE_TLS env var is set.
+			tls: {},
 		};
 
 		it('accepts a fully specified, valid configuration', () => {
@@ -65,6 +69,37 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 		it('rejects a configuration with the smtp key missing entirely', () => {
 			const { smtp: _smtp, ...rest } = validInput;
 			expect(() => parseIngressConfig(rest)).toThrow();
+		});
+
+		it('defaults every field of tls (JR-4-04) when tls is an empty object', () => {
+			const config = parseIngressConfig(validInput);
+			expect(config.tls.cert).toBeUndefined();
+			expect(config.tls.key).toBeUndefined();
+			expect(config.tls.requireTls).toBe(false);
+		});
+
+		it('embeds an explicit tls override rather than replacing it with defaults', () => {
+			const config = parseIngressConfig({
+				...validInput,
+				tls: { cert: 'CERT', key: 'KEY', requireTls: true },
+			});
+			expect(config.tls.requireTls).toBe(true);
+			expect(config.tls.cert).toBe('CERT');
+		});
+
+		it('rejects a configuration with the tls key missing entirely', () => {
+			const { tls: _tls, ...rest } = validInput;
+			expect(() => parseIngressConfig(rest)).toThrow();
+		});
+
+		it('rejects tls.requireTls: true with no certificate configured', () => {
+			expect(() =>
+				parseIngressConfig({ ...validInput, tls: { requireTls: true } })
+			).toThrow();
+		});
+
+		it('rejects tls.cert without a matching tls.key', () => {
+			expect(() => parseIngressConfig({ ...validInput, tls: { cert: 'CERT' } })).toThrow();
 		});
 
 		it('rejects a missing smtpPort', () => {

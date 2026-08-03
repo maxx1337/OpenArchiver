@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 /**
  * Map environment variables into the shape `parseIngressConfig()` (`@open-archiver/journaling`)
  * validates.
@@ -14,6 +16,18 @@
  *
  * Takes an env-like record rather than reaching for `process.env` itself so the same function can
  * be pointed at a synthetic environment in a test without mutating the real one.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `tls.cert`/`tls.key` (`JR-4-04`): the one place this "no decision, no I/O" mapping does I/O
+ * ---------------------------------------------------------------------------------------------
+ * `packages/journaling/src/ingress/tls-config.ts` validates PEM **content**, never a path -- the
+ * Product Owner's explicit instruction was that reading certificate/key paths and loading the files
+ * they name is app work, not package work. `readOptionalFile()` below is that loading step. Unlike
+ * every other field here, it can throw (a configured path that does not exist or is not readable
+ * raises `ENOENT`/`EACCES`) -- deliberately not caught here: `formatIngressConfigError()` in the
+ * package already has a fallback branch for exactly "not a `ZodError`", so an unreadable certificate
+ * file surfaces as a clear one-line startup failure the same way any other misconfiguration does,
+ * with no new plumbing needed in `index.ts`'s `main().catch(...)`.
  */
 export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 	return {
@@ -32,6 +46,23 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 			commandTimeoutMs: env.SMTP_INGRESS_COMMAND_TIMEOUT_MS,
 			dataTimeoutMs: env.SMTP_INGRESS_DATA_TIMEOUT_MS,
 		},
+		// JR-4-04: cert/key are loaded here, from the paths the operator configured -- see this
+		// function's doc comment. requireTls passes through as a string, the same coercion pattern
+		// smtp-config.ts's numeric fields already rely on (zod's z.coerce.boolean()).
+		tls: {
+			cert: readOptionalFile(env.SMTP_INGRESS_TLS_CERT_PATH),
+			key: readOptionalFile(env.SMTP_INGRESS_TLS_KEY_PATH),
+			requireTls: env.SMTP_INGRESS_REQUIRE_TLS,
+		},
 		logLevel: env.SMTP_INGRESS_LOG_LEVEL,
 	};
+}
+
+/** Read a PEM file if a path was configured; `undefined` (never an empty string) when it was not,
+ * matching every other optional field's "unset env var maps to `undefined`" rule above. */
+function readOptionalFile(path: string | undefined): string | undefined {
+	if (path === undefined || path.trim() === '') {
+		return undefined;
+	}
+	return readFileSync(path, 'utf8');
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { spoolConfigSchema } from '../spool/config';
 import { smtpServerConfigSchema } from './smtp-config';
+import { ingressTlsConfigSchema } from './tls-config';
 
 /**
  * `apps/smtp-ingress` process configuration (`JR-4-01`, extended by `JR-4-02`), validated with
@@ -19,7 +20,7 @@ import { smtpServerConfigSchema } from './smtp-config';
  * far, and adding them now would be the same speculative configuration the Product Owner asked not
  * to carry. They join this schema in the tasks that consume them.
  *
- * Three fields, one added by each of `JR-4-01` and `JR-4-02`:
+ * Four fields, one added by each of `JR-4-01`, `JR-4-02` and `JR-4-04`:
  *  - `smtpPort`: the port the ESMTP listener binds (`JR-4-02`'s `EsmtpServer`, replacing `JR-4-01`'s
  *    bare `net.createServer()` placeholder).
  *  - `spool`: the process owns the spool per the privilege-separation table in
@@ -27,6 +28,9 @@ import { smtpServerConfigSchema } from './smtp-config';
  *    directory structure exists before anything is ever written to it.
  *  - `smtp` (`JR-4-02`): `EsmtpServerOptions.smtp` -- hostname, `SIZE` limit, and the three
  *    timeouts. See `./smtp-config.ts` for every field and its default.
+ *  - `tls` (`JR-4-04`): `EsmtpServerOptions.tls` -- certificate/key PEM content and the process-wide
+ *    `requireTls` default. See `./tls-config.ts` for every field, its default and the
+ *    tighten-never-loosen extension point `JR-4-05` uses.
  *
  * ---------------------------------------------------------------------------------------------
  * Why this package validates the shaped object, not `process.env` (`JR-4-01`)
@@ -35,7 +39,9 @@ import { smtpServerConfigSchema } from './smtp-config';
  * `apps/smtp-ingress`'s job, not this package's -- `docs/dev/journaling/02-architektur.md` section 2
  * requires configuration to be **injected**, never read by this package from ambient environment
  * state. `apps/smtp-ingress/src/config-from-env.ts` does that mapping and is the only place that
- * reads `process.env` for this process.
+ * reads `process.env` for this process -- `tls.cert`/`tls.key` are the one exception to "no I/O in
+ * that mapping" (see that file's doc comment): loading the certificate/key **files** the operator
+ * points at is app work, per the Product Owner's explicit instruction for `JR-4-04`.
  */
 export const ingressConfigSchema = z.object({
 	/** TCP port the SMTP listener binds. `JR-4-02` replaces the placeholder listener this binds. */
@@ -49,6 +55,12 @@ export const ingressConfigSchema = z.object({
 	 * `config-from-env.ts`, an object of all-`undefined` leaves) is a valid value.
 	 */
 	smtp: smtpServerConfigSchema,
+	/**
+	 * TLS configuration (`./tls-config.ts`, `JR-4-04`): certificate/key PEM content (both optional,
+	 * both-or-neither) and `requireTls`. Required as a key, same shape as `smtp`/`spool` above --
+	 * `{}` is a valid value and means "no certificate configured, TLS not required".
+	 */
+	tls: ingressTlsConfigSchema,
 	/**
 	 * Log verbosity. Optional -- a missing value is not a configuration error. Read for real since
 	 * `JR-4-02`: `apps/smtp-ingress/src/index.ts` builds a `pino` instance with `level: logLevel`

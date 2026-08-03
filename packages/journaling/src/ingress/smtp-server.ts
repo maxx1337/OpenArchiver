@@ -1,5 +1,7 @@
 import * as net from 'node:net';
+import * as tls from 'node:tls';
 import type { SmtpServerConfig } from './smtp-config';
+import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
 
 /**
  * The ESMTP protocol engine (`JR-4-02`).
@@ -39,8 +41,8 @@ import type { SmtpServerConfig } from './smtp-config';
  * ---------------------------------------------------------------------------------------------
  * `EHLO`/`HELO`, `MAIL`/`RCPT`/`DATA` far enough to reach and terminate a `DATA` transfer,
  * `PIPELINING`/`8BITMIME`/`SMTPUTF8`/`SIZE` (RFC 1870's `MAIL FROM ... SIZE=` parameter included),
- * and the three timeouts. Deliberately **not** here: TLS/`STARTTLS` (`JR-4-04`), source/recipient
- * ACLs (`JR-4-05`), and wiring `JournalAcceptance.accept()` (`JR-4-06`). End-of-`DATA` always
+ * and the three timeouts. Deliberately **not** here (this task added TLS/`STARTTLS`, see below):
+ * source/recipient ACLs (`JR-4-05`), and wiring `JournalAcceptance.accept()` (`JR-4-06`). End-of-`DATA` always
  * answers `451 4.3.0` until that wiring lands -- see {@link SmtpConnection.finishData}'s doc
  * comment for why that is not a shortcut but the Product Owner's explicit instruction for this
  * slice.
@@ -78,6 +80,69 @@ import type { SmtpServerConfig } from './smtp-config';
  * own retained state stays O(1) regardless of how much more the sender transmits before either the
  * terminator arrives or {@link SmtpConnection.armDataTimer}'s existing per-chunk timer resets --
  * unchanged, and still the only bound on a sender that never sends a terminator at all.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * TLS / `STARTTLS` (`JR-4-04`)
+ * ---------------------------------------------------------------------------------------------
+ * `EHLO` now advertises `STARTTLS` whenever a certificate/key is configured and the connection is
+ * not already secure (never after a successful handshake, and never at all if this deployment has
+ * no certificate -- see {@link buildEhloResponseLines}). `STARTTLS` itself, the upgrade, and the
+ * `require_tls` gate live in {@link SmtpConnection.handleStarttlsCommand}/
+ * {@link SmtpConnection.beginTlsUpgrade}/{@link SmtpConnection.onTlsHandshakeComplete} and the check
+ * at the top of {@link SmtpConnection.processCommandLine}.
+ *
+ * Three things this task had to get right, in order of how easy each is to get wrong silently:
+ *
+ * 1. **Which commands `530 5.7.0` applies to.** RFC 3207 section 4 is specific, not "everything":
+ *    "...SHOULD return the reply code: 530 Must issue a STARTTLS command first ... to every command
+ *    other than NOOP, EHLO, STARTTLS, or QUIT". `HELO` is not literally named by the RFC (it predates
+ *    ESMTP's extension mechanism) but the Product Owner's instruction for this slice groups it with
+ *    `EHLO` for the obvious reason: a client that cannot see `STARTTLS` advertised (no `EHLO`
+ *    response has extension lines under `HELO`) must still be able to attempt it blindly, and must
+ *    still be able to leave via `QUIT`. `RSET` is deliberately **included** in the gated set --
+ *    RFC 3207's list above does not exempt it, and nothing about resetting the envelope requires
+ *    plaintext. The gate runs once, before the command switch, so it applies uniformly and cannot be
+ *    bypassed by a state the individual command handlers do not otherwise check.
+ * 2. **The session resets completely after a successful handshake**, not just "now encrypted".
+ *    RFC 3207 section 4.2: "Upon completion of the TLS handshake, the SMTP protocol is reset to the
+ *    initial state (the state in SMTP after a server issues a 220 service ready greeting)." A client
+ *    is required to re-issue `EHLO`; this server enforces the server-side half of that by discarding
+ *    `ehloName` and the whole envelope and returning `state` to `'initial'` --
+ *    {@link SmtpConnection.onTlsHandshakeComplete}, reusing {@link SmtpConnection.resetEnvelope} the
+ *    same way every other envelope-clearing command already does.
+ * 3. **Bytes sent immediately after `STARTTLS\r\n`, before the handshake, are discarded -- never
+ *    executed, before or after the handshake.** This is the STARTTLS "command injection" class of
+ *    bug (widely documented against Postfix/Exim/Dovecot implementations around 2011, and structurally
+ *    the same defect this project already found and fixed once this slice, one layer down: F44,
+ *    `JR-4-16`, where message-body bytes shaped like commands were read as commands after a rejected
+ *    `DATA` transfer). RFC 2920 forbids a client from pipelining anything after `STARTTLS` precisely
+ *    because it cannot know in advance whether the handshake will succeed -- bytes present in
+ *    `commandCarry` at that point are therefore either a non-conformant client or bytes an on-path
+ *    attacker smuggled ahead of the encrypted session. {@link SmtpConnection.handleStarttlsCommand}
+ *    unconditionally empties `commandCarry` (logging a warning if it was non-empty) **before** the
+ *    `220` reply and the handshake begin, so those bytes are never fed to
+ *    {@link SmtpConnection.processCommandLine} either as a stray plaintext command or, worse, as if
+ *    the newly-authenticated encrypted client had sent them. This is the companion half of point 2:
+ *    point 2 discards what the server *learned*; this discards what the client *sent but the server
+ *    never acted on yet*.
+ *
+ * `require_tls` (`JR-4-04`) is process configuration for this task, not per-source -- the source is
+ * not known at connect time, only once `JR-4-05` loads it by IP or recipient. See
+ * {@link RequireTlsResolver}'s doc comment for the seam that task extends and the rule ("tighten,
+ * never loosen") that governs it.
+ *
+ * `tlsVersion`/`tlsCipher` (ADR-006 section 1: two of the sixteen hashed ledger fields, added
+ * precisely because the RFC's eight-field formula would let them change after the fact without
+ * breaking the chain) are read from the real, negotiated {@link tls.TLSSocket} in
+ * {@link SmtpConnection.onTlsHandshakeComplete} -- never from configuration, never guessed. They sit
+ * on the connection (`this.tlsVersion`/`this.tlsCipher`) exactly where
+ * {@link SmtpConnection.completeTransfer}'s doc comment already says `JR-4-06` will read
+ * `remoteIp`/`ehloName`/`mailFrom`/`rcptTo` from -- see that method's doc comment for the updated list.
+ * **The ledger side of this task's acceptance criterion is not implemented here**: `JR-4-06` is what
+ * wires `completeTransfer()` into `JournalAcceptance.accept()`, whose `JournalTransactionInput`
+ * (`packages/journaling/src/spool/acceptance.ts`) already has `tlsVersion`/`tlsCipher` fields to
+ * receive exactly these two values. Until that wiring lands, this task's job is only to have the
+ * measured values sitting ready at that handover point, which is what is done and tested here.
  */
 
 /** Injected structured-logging port -- see this module's "Where `logLevel` actually gets used"
@@ -132,12 +197,47 @@ const MAX_COMMAND_LINE_BYTES = 512;
  * retry" -- never `5xx` (skill section 1, "why 4xx and never 5xx for local failures"). */
 const TIMEOUT_ENHANCED_CODE = '4.4.2';
 
+/** Verbs `530 5.7.0` applies to when TLS is mandated and not yet active (`JR-4-04`) -- see
+ * {@link SmtpConnection.processCommandLine}'s call site for the RFC 3207 citation and the reasoning
+ * behind each inclusion/exclusion. */
+const TLS_MANDATED_VERBS = new Set(['MAIL', 'RCPT', 'DATA', 'BDAT', 'RSET', 'AUTH']);
+
+/**
+ * Build the options {@link SmtpConnection.beginTlsUpgrade} passes to `new tls.TLSSocket(...)`.
+ * Pulled out into its own pure, socket-free function for exactly the reason `buildEhloResponseLines`
+ * already is: a test can assert `minVersion === TLS_MIN_VERSION` directly against this function's
+ * return value, without spying on or re-implementing Node's own `tls.TLSSocket` constructor. The
+ * fixed floor itself (`TLS_MIN_VERSION`, `'TLSv1.2'`) is documented in `tls-config.ts`; no `maxVersion`
+ * is set, deliberately, so Node's own default ceiling (currently TLSv1.3) is inherited rather than
+ * pinned in this file too.
+ */
+export function buildTlsSocketOptions(secureContext: tls.SecureContext): tls.TLSSocketOptions {
+	return {
+		isServer: true,
+		secureContext,
+		minVersion: TLS_MIN_VERSION,
+	};
+}
+
+/** Whether to advertise `STARTTLS` in an `EHLO` response (`JR-4-04`). `available` is "this
+ * deployment has a certificate/key configured at all"; `active` is "this connection already
+ * completed a TLS handshake". Both are needed independently: `STARTTLS` must never be advertised
+ * with no certificate behind it (the protocol lie `CHUNKING` was withheld against before `JR-4-03`
+ * implemented it, the same reasoning applied here), and must never be advertised a second time once
+ * already active (RFC 3207 section 4: a server "MUST NOT" announce `STARTTLS` after a TLS handshake
+ * has completed). */
+export interface EhloTlsStatus {
+	readonly available: boolean;
+	readonly active: boolean;
+}
+
+const TLS_NOT_OFFERED: EhloTlsStatus = { available: false, active: false };
+
 /**
  * Build the `EHLO` extension lines: `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE <configured
- * value>`, and -- since `JR-4-03` -- `CHUNKING`. Still deliberately excludes `STARTTLS`
- * (`JR-4-04`): advertising an extension this server cannot yet honour would be a protocol lie a
- * real client (Exchange Online) could act on, exactly the reasoning `CHUNKING` was withheld under
- * before this task implemented it.
+ * value>`, `CHUNKING` (`JR-4-03`), and -- since `JR-4-04`, only when `tls.available && !tls.active`
+ * -- `STARTTLS`. `tls` defaults to "not offered" so every existing call site that predates `JR-4-04`
+ * keeps its prior behaviour unchanged.
  *
  * Pure and socket-free on purpose: the wire-level proof that a real client sees exactly these lines
  * lives in `packages/journaling/tests/unit/smtp-server-protocol.test.ts` (a real client is required
@@ -148,9 +248,10 @@ const TIMEOUT_ENHANCED_CODE = '4.4.2';
  */
 export function buildEhloResponseLines(
 	hostname: string,
-	sizeLimitBytes: number
+	sizeLimitBytes: number,
+	tls: EhloTlsStatus = TLS_NOT_OFFERED
 ): readonly string[] {
-	return [
+	const lines = [
 		`${hostname} greets you`,
 		'PIPELINING',
 		'8BITMIME',
@@ -158,6 +259,10 @@ export function buildEhloResponseLines(
 		`SIZE ${sizeLimitBytes}`,
 		'CHUNKING',
 	];
+	if (tls.available && !tls.active) {
+		lines.push('STARTTLS');
+	}
+	return lines;
 }
 
 /** Format a multiline SMTP reply: `<code>-` on every line but the last, `<code> ` (space) on the
@@ -516,6 +621,28 @@ export class BdatContentTracker {
 	}
 }
 
+/** Everything {@link RequireTlsResolver} needs to decide (`JR-4-04`, extended by `JR-4-05`). */
+export interface RequireTlsContext {
+	readonly remoteIp: string | null;
+	readonly ehloName: string | null;
+	readonly rcptTo: readonly string[];
+}
+
+/**
+ * Decide, per connection and per command, whether TLS is mandatory right now. Defaults to the
+ * process-wide `tls.requireTls` configuration value (`EsmtpServerOptions.tls`), ignoring `context`
+ * entirely -- `JR-4-05` is what gives this a reason to look at `context` at all, once source lookup
+ * by IP or recipient exists.
+ *
+ * **The contract a `JR-4-05` override must keep: tighten, never loosen.** The process-wide default
+ * is a floor a per-source answer can never fall beneath; a source's `require_tls = true` may raise
+ * it, a source's `require_tls = false` must never lower it. Concretely, a correct override composes
+ * with the process default (`(ctx) => processDefault || sourceRequireTls(ctx)`), never replaces it
+ * (`(ctx) => sourceRequireTls(ctx)` alone would let a source with `require_tls = false` reopen a
+ * plaintext path the operator deliberately closed process-wide).
+ */
+export type RequireTlsResolver = (context: RequireTlsContext) => boolean;
+
 type SessionState = 'initial' | 'ready' | 'mail' | 'rcpt' | 'bdat' | 'data';
 type TimeoutKind = 'connection' | 'command' | 'data';
 
@@ -540,29 +667,55 @@ class SmtpConnection {
 	private bdatChunkIsLast = false;
 	private commandCarry: Buffer = Buffer.alloc(0);
 	private protocolTimer: NodeJS.Timeout | null = null;
+	/** `true` from the moment {@link onTlsHandshakeComplete} fires -- never set anywhere else, and
+	 * never cleared once set: a session does not downgrade. */
+	private tlsActive = false;
+	/** The negotiated protocol version (e.g. `'TLSv1.3'`), read from the real
+	 * {@link tls.TLSSocket} in {@link onTlsHandshakeComplete}. `null` until then. This is the value
+	 * `JR-4-06` reads for `JournalTransactionInput.tlsVersion` -- see the module doc comment's
+	 * "TLS / STARTTLS" section. */
+	private tlsVersion: string | null = null;
+	/** The negotiated cipher suite name (e.g. `'TLS_AES_256_GCM_SHA384'`), same source and same
+	 * consumer as {@link tlsVersion}. */
+	private tlsCipher: string | null = null;
 
 	constructor(
-		private readonly socket: net.Socket,
+		private socket: net.Socket,
 		private readonly smtp: SmtpServerConfig,
-		private readonly logger: IngressLogger
+		private readonly logger: IngressLogger,
+		/** `null` when this deployment has no certificate/key configured -- `STARTTLS` is then
+		 * never advertised and the bare command is answered `454 4.7.0` (see
+		 * {@link handleStarttlsCommand}). Built once per {@link EsmtpServer}, not per connection --
+		 * `tls.createSecureContext()` parses the certificate, and there is no reason to repeat that
+		 * for every accepted socket. */
+		private readonly tlsSecureContext: tls.SecureContext | null,
+		private readonly requireTlsResolver: RequireTlsResolver
 	) {
 		// Connection-level backstop, independent of protocol state: Node re-arms this internally on
 		// any read *or* write activity on the socket, so it fires only on genuine idleness --
 		// deliberately given no manual reset code here, unlike the command/data timers below, which
-		// are this project's own timers over and above Node's.
+		// are this project's own timers over and above Node's. Left attached to the underlying raw
+		// socket for the connection's whole lifetime, including across a STARTTLS upgrade: `.setTimeout()`
+		// registers on the transport-level socket object, which `beginTlsUpgrade()` continues to be the
+		// same object underneath the wrapping `tls.TLSSocket` -- see that method's doc comment.
 		this.socket.setTimeout(this.smtp.connectionTimeoutMs, () => this.onTimeout('connection'));
 
-		this.socket.on('data', (chunk: Buffer) => this.onData(chunk));
-		this.socket.on('close', () => this.disarmProtocolTimer());
-		this.socket.on('error', (err) => {
-			this.logger.warn(
-				{ err, remoteAddress: this.socket.remoteAddress },
-				'smtp-ingress: socket error'
-			);
-		});
+		this.attachSocketHandlers(this.socket);
 
 		this.writePlain(220, `${this.smtp.hostname} ESMTP ready`);
 		this.armCommandTimer();
+	}
+
+	/** `data`/`close`/`error` handlers, bound to whichever socket object is currently `this.socket`
+	 * -- the plain one at construction time, the wrapping {@link tls.TLSSocket} after
+	 * {@link beginTlsUpgrade}. Extracted so both call sites attach the exact same three handlers
+	 * rather than risking the two copies drifting apart. */
+	private attachSocketHandlers(socket: net.Socket): void {
+		socket.on('data', (chunk: Buffer) => this.onData(chunk));
+		socket.on('close', () => this.disarmProtocolTimer());
+		socket.on('error', (err) => {
+			this.logger.warn({ err, remoteAddress: socket.remoteAddress }, 'smtp-ingress: socket error');
+		});
 	}
 
 	private onData(chunk: Buffer): void {
@@ -644,6 +797,22 @@ class SmtpConnection {
 		const verb = (spaceIdx === -1 ? line : line.slice(0, spaceIdx)).toUpperCase();
 		const rest = spaceIdx === -1 ? '' : line.slice(spaceIdx + 1);
 
+		// `JR-4-04`, RFC 3207 section 4: "...SHOULD return the reply code: 530 Must issue a STARTTLS
+		// command first ... to every command other than NOOP, EHLO, STARTTLS, or QUIT". `HELO` is
+		// grouped with `EHLO` (the Product Owner's instruction: a client that cannot even see
+		// `STARTTLS` advertised under a plain `HELO` reply must still be able to attempt it blindly),
+		// and `RSET` is deliberately gated -- the RFC's exempt list does not include it, and nothing
+		// about resetting the envelope requires plaintext. `AUTH` is listed for when `JR-4-05`
+		// implements it; today it always falls through to the `default` 500 case below regardless of
+		// this check, since it is not yet a recognised verb. Checked once, before the switch, so it
+		// applies uniformly and cannot be bypassed by whatever envelope state a handler would
+		// otherwise accept.
+		if (!this.tlsActive && TLS_MANDATED_VERBS.has(verb) && this.isTlsMandated()) {
+			this.writeResponse(530, '5.7.0', 'Must issue a STARTTLS command first');
+			this.armCommandTimer();
+			return;
+		}
+
 		switch (verb) {
 			case 'EHLO':
 				this.ehloName = rest.trim() || null;
@@ -652,7 +821,10 @@ class SmtpConnection {
 				this.socket.write(
 					formatMultilineResponse(
 						250,
-						buildEhloResponseLines(this.smtp.hostname, this.smtp.sizeLimitBytes)
+						buildEhloResponseLines(this.smtp.hostname, this.smtp.sizeLimitBytes, {
+							available: this.tlsSecureContext !== null,
+							active: this.tlsActive,
+						})
 					)
 				);
 				this.armCommandTimer();
@@ -679,6 +851,9 @@ class SmtpConnection {
 				this.disarmProtocolTimer();
 				this.socket.end();
 				return;
+			case 'STARTTLS':
+				this.handleStarttlsCommand(rest);
+				return;
 			case 'MAIL':
 				this.handleMail(rest);
 				return;
@@ -696,6 +871,128 @@ class SmtpConnection {
 				this.armCommandTimer();
 				return;
 		}
+	}
+
+	/** Whether {@link requireTlsResolver} says TLS is mandatory for this connection right now. Reads
+	 * `remoteAddress` fresh from whichever socket object is currently `this.socket`, so it reflects
+	 * reality even if that ever differs from the address the connection was accepted on. */
+	private isTlsMandated(): boolean {
+		return this.requireTlsResolver({
+			remoteIp: this.socket.remoteAddress ?? null,
+			ehloName: this.ehloName,
+			rcptTo: this.rcptTo,
+		});
+	}
+
+	/**
+	 * `STARTTLS` (RFC 3207 section 4). Three rejections before the upgrade is even attempted, then
+	 * the upgrade itself -- see the module doc comment's "TLS / STARTTLS" section for the full
+	 * rationale, in particular point 3 (discarding whatever the client sent immediately after
+	 * `STARTTLS\r\n`, before this method ever runs its own logic on it).
+	 */
+	private handleStarttlsCommand(rest: string): void {
+		if (this.tlsActive) {
+			// RFC 3207 section 4: a client MUST NOT attempt STARTTLS a second time.
+			this.writeResponse(503, '5.5.1', 'Already using TLS');
+			this.armCommandTimer();
+			return;
+		}
+		if (this.tlsSecureContext === null) {
+			// Reachable only if a client sends STARTTLS unprompted -- EHLO never advertised it (see
+			// buildEhloResponseLines). 454 4.7.0 ("TLS not available due to temporary reason") is what
+			// Postfix and Exim answer for the same case; RFC 3207 defines no dedicated code for it.
+			this.writeResponse(454, '4.7.0', 'TLS not available due to temporary reason');
+			this.armCommandTimer();
+			return;
+		}
+		if (rest.trim().length > 0) {
+			// RFC 3207 section 4: "the STARTTLS command ... has no parameters" -- the same syntax-error
+			// bucket every other verb's malformed-argument case in this file already uses.
+			this.writeResponse(501, '5.5.4', 'Syntax error (no parameters allowed)');
+			this.armCommandTimer();
+			return;
+		}
+
+		// Point 3 of the module doc comment's "TLS / STARTTLS" section: anything the client already
+		// sent in the same TCP segment as "STARTTLS\r\n" is discarded here, unconditionally, before the
+		// 220 reply and the handshake begin -- never executed as a command now, and never fed into the
+		// TLS engine or read as a command once the handshake completes. RFC 2920 forbids a client from
+		// pipelining anything after STARTTLS for exactly this reason (it cannot know in advance whether
+		// the handshake will succeed); bytes here anyway are either a non-conformant client or an
+		// on-path attacker smuggling plaintext ahead of the encrypted session.
+		if (this.commandCarry.length > 0) {
+			this.logger.warn(
+				{
+					remoteAddress: this.socket.remoteAddress,
+					discardedByteLength: this.commandCarry.length,
+				},
+				'smtp-ingress: discarding bytes pipelined immediately after STARTTLS (forbidden by RFC 2920; treated as a possible injection attempt)'
+			);
+			this.commandCarry = Buffer.alloc(0);
+		}
+
+		this.writeResponse(220, '2.0.0', 'Ready to start TLS');
+		this.beginTlsUpgrade();
+	}
+
+	/**
+	 * Upgrade the connection to TLS in place. Detaches completely from the plain socket's own events
+	 * first -- from this point on every byte on the wire is either TLS handshake traffic or
+	 * ciphertext, neither of which this class may read directly -- then wraps it in a
+	 * {@link tls.TLSSocket} and re-attaches the same three handlers {@link attachSocketHandlers}
+	 * already gave the plain socket, this time to the secure one. `this.socket` is reassigned so every
+	 * later `write()`/`remoteAddress`/`destroyed` access transparently goes through the secure layer;
+	 * the connection-level idle timeout from the constructor is untouched (see that field's comment)
+	 * because it was registered on the same underlying transport this still wraps.
+	 */
+	private beginTlsUpgrade(): void {
+		const plainSocket = this.socket;
+		this.disarmProtocolTimer();
+		plainSocket.removeAllListeners('data');
+		plainSocket.removeAllListeners('close');
+		plainSocket.removeAllListeners('error');
+
+		const secureSocket = new tls.TLSSocket(
+			plainSocket,
+			buildTlsSocketOptions(this.tlsSecureContext!)
+		);
+		this.attachSocketHandlers(secureSocket);
+		secureSocket.once('secure', () => this.onTlsHandshakeComplete(secureSocket));
+
+		this.socket = secureSocket;
+	}
+
+	/**
+	 * RFC 3207 section 4.2: "Upon completion of the TLS handshake, the SMTP protocol is reset to the
+	 * initial state (the state in SMTP after a server issues a 220 service ready greeting)." Discards
+	 * the `EHLO` name and the whole envelope the same way every other envelope-clearing command
+	 * already does ({@link resetEnvelope}), and returns `state` to `'initial'` rather than `'ready'` --
+	 * a client is required to re-issue `EHLO`/`HELO` before anything else. This is the companion half
+	 * of {@link handleStarttlsCommand}'s point 3: that discards what the client sent but the server
+	 * never acted on; this discards what the server had already learned before the handshake.
+	 *
+	 * Reads the negotiated version and cipher from the real, now-secure socket -- never from
+	 * configuration -- and stores them on the connection for `JR-4-06` to read out of
+	 * {@link completeTransfer}'s handover point. See the module doc comment's "TLS / STARTTLS" section.
+	 */
+	private onTlsHandshakeComplete(secureSocket: tls.TLSSocket): void {
+		this.tlsActive = true;
+		this.tlsVersion = secureSocket.getProtocol();
+		this.tlsCipher = secureSocket.getCipher()?.name ?? null;
+
+		this.ehloName = null;
+		this.resetEnvelope();
+		this.state = 'initial';
+
+		this.logger.info(
+			{
+				remoteAddress: secureSocket.remoteAddress,
+				tlsVersion: this.tlsVersion,
+				tlsCipher: this.tlsCipher,
+			},
+			'smtp-ingress: TLS handshake complete, session reset'
+		);
+		this.armCommandTimer();
 	}
 
 	private handleMail(rest: string): void {
@@ -907,7 +1204,9 @@ class SmtpConnection {
 	 * real one, and a real one is a promise this file cannot back yet. When `JR-4-06` wires the
 	 * real path, the oversize branch is unaffected and the non-oversize branch is replaced with a
 	 * call into `JournalAcceptance.accept()`, fed by this connection's
-	 * `remoteIp`/`ehloName`/`mailFrom`/`rcptTo` and a bridge from whichever of
+	 * `remoteIp`/`ehloName`/`mailFrom`/`rcptTo`, this task's `tlsVersion`/`tlsCipher` (`null`/`null`
+	 * on a plaintext connection, the real negotiated values once {@link onTlsHandshakeComplete} has
+	 * run -- see the module doc comment's "TLS / STARTTLS" section), and a bridge from whichever of
 	 * `DataScanner`/`BdatContentTracker` produced `contentByteLength` to the
 	 * `AsyncIterable<Uint8Array>` `accept()` expects.
 	 *
@@ -1026,9 +1325,24 @@ class SmtpConnection {
 
 export interface EsmtpServerOptions {
 	readonly smtp: SmtpServerConfig;
+	/**
+	 * TLS configuration (`JR-4-04`). Omitted entirely, or `{}`/all-fields-unset, means this
+	 * deployment has no certificate: `STARTTLS` is never advertised or accepted, and `requireTls`
+	 * behaves as `false` regardless of what was configured (the `IngressTlsConfig` schema already
+	 * refuses to validate `requireTls: true` with no certificate -- see `tls-config.ts` -- so reaching
+	 * this constructor with that combination should not be possible from `apps/smtp-ingress`, but this
+	 * class does not trust that and falls back safely regardless).
+	 */
+	readonly tls?: IngressTlsConfig;
 	/** Structured-logging port. Defaults to {@link noopIngressLogger} -- see this module's
 	 * "Where `logLevel` actually gets used" section for why a caller that cares passes a real one. */
 	readonly logger?: IngressLogger;
+	/**
+	 * Override for {@link RequireTlsResolver}. Omitted in production today -- `JR-4-05` is what
+	 * supplies one, once per-source lookup exists. Exposed here (rather than only internally) so a
+	 * test can exercise the tighten-never-loosen contract without needing a real source lookup.
+	 */
+	readonly requireTlsResolver?: RequireTlsResolver;
 }
 
 /**
@@ -1041,10 +1355,21 @@ export class EsmtpServer {
 	private readonly smtp: SmtpServerConfig;
 	private readonly logger: IngressLogger;
 	private readonly sockets = new Set<net.Socket>();
+	/** `null` when no certificate/key is configured -- see {@link EsmtpServerOptions.tls}. Built once
+	 * here, not per connection; see {@link SmtpConnection}'s constructor parameter of the same name
+	 * for why that matters. */
+	private readonly tlsSecureContext: tls.SecureContext | null;
+	private readonly requireTlsResolver: RequireTlsResolver;
 
 	constructor(options: EsmtpServerOptions) {
 		this.smtp = options.smtp;
 		this.logger = options.logger ?? noopIngressLogger;
+		const cert = options.tls?.cert;
+		const key = options.tls?.key;
+		this.tlsSecureContext =
+			cert !== undefined && key !== undefined ? tls.createSecureContext({ cert, key }) : null;
+		const processRequireTls = options.tls?.requireTls ?? false;
+		this.requireTlsResolver = options.requireTlsResolver ?? (() => processRequireTls);
 		this.server = net.createServer((socket) => this.handleConnection(socket));
 	}
 
@@ -1078,6 +1403,12 @@ export class EsmtpServer {
 	private handleConnection(socket: net.Socket): void {
 		this.sockets.add(socket);
 		socket.on('close', () => this.sockets.delete(socket));
-		new SmtpConnection(socket, this.smtp, this.logger);
+		new SmtpConnection(
+			socket,
+			this.smtp,
+			this.logger,
+			this.tlsSecureContext,
+			this.requireTlsResolver
+		);
 	}
 }

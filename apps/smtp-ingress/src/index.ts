@@ -55,7 +55,7 @@ async function main(): Promise<void> {
 	// here precludes inserting it between this line and the `listen()` call below.
 	await ensureSpoolLayout(new NodeSpoolFileSystem(), config.spool.rootPath);
 
-	const server = new EsmtpServer({ smtp: config.smtp, logger });
+	const server = new EsmtpServer({ smtp: config.smtp, tls: config.tls, logger });
 	await server.listen(config.smtpPort);
 
 	console.log(

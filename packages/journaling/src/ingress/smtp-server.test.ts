@@ -1,14 +1,17 @@
+import * as tls from 'node:tls';
 import { describe, expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import {
 	BdatContentTracker,
 	buildEhloResponseLines,
+	buildTlsSocketOptions,
 	DataScanner,
 	formatMultilineResponse,
 	parseBdatArguments,
 	parseMailFromArguments,
 	parseRcptToArguments,
 } from './smtp-server';
+import { TLS_MIN_VERSION } from './tls-config';
 
 /**
  * `JR-4-02`/`JR-4-03` -- the ESMTP protocol engine's pure, socket-free logic: `EHLO` line
@@ -47,10 +50,55 @@ suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 			expect(lines.some((l) => l.startsWith('SIZE ') && l !== 'SIZE 42')).toBe(false);
 		});
 
-		it('now includes CHUNKING (JR-4-03) but still not STARTTLS (JR-4-04, not yet implemented)', () => {
+		it('includes CHUNKING (JR-4-03)', () => {
 			const lines = buildEhloResponseLines('host', 1000);
 			expect(lines).toContain('CHUNKING');
+		});
+
+		it('does not advertise STARTTLS when the tls argument is omitted (every pre-JR-4-04 call site)', () => {
+			const lines = buildEhloResponseLines('host', 1000);
 			expect(lines.join(' ')).not.toContain('STARTTLS');
+		});
+
+		it('does not advertise STARTTLS when unavailable, even if marked active (a contradictory input)', () => {
+			const lines = buildEhloResponseLines('host', 1000, { available: false, active: true });
+			expect(lines.join(' ')).not.toContain('STARTTLS');
+		});
+
+		it('does not advertise STARTTLS when explicitly marked unavailable and inactive', () => {
+			const lines = buildEhloResponseLines('host', 1000, { available: false, active: false });
+			expect(lines.join(' ')).not.toContain('STARTTLS');
+		});
+
+		it('advertises STARTTLS (JR-4-04) when available and not yet active', () => {
+			const lines = buildEhloResponseLines('host', 1000, { available: true, active: false });
+			expect(lines).toContain('STARTTLS');
+		});
+
+		it('does not advertise STARTTLS once already active, even though a certificate is configured', () => {
+			const lines = buildEhloResponseLines('host', 1000, { available: true, active: true });
+			expect(lines.join(' ')).not.toContain('STARTTLS');
+		});
+	});
+
+	describe('buildTlsSocketOptions (JR-4-04)', () => {
+		it('always passes the fixed TLS_MIN_VERSION floor, never a lower or configurable value', () => {
+			const fakeSecureContext = {} as tls.SecureContext;
+			const options = buildTlsSocketOptions(fakeSecureContext);
+			expect(options.minVersion).toBe(TLS_MIN_VERSION);
+			expect(options.minVersion).toBe('TLSv1.2');
+		});
+
+		it('marks the socket as a server and forwards the given secureContext unchanged', () => {
+			const fakeSecureContext = {} as tls.SecureContext;
+			const options = buildTlsSocketOptions(fakeSecureContext);
+			expect(options.isServer).toBe(true);
+			expect(options.secureContext).toBe(fakeSecureContext);
+		});
+
+		it('never sets maxVersion -- the default ceiling is inherited from Node, not pinned', () => {
+			const options = buildTlsSocketOptions({} as tls.SecureContext);
+			expect(options.maxVersion).toBeUndefined();
 		});
 	});
 
