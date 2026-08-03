@@ -156,8 +156,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// exclusivity runCrashRecoveryScan() itself does not provide, wiring the previously uncalled
 		// JR-3-05 scan's lock into the caller). 44 after JR-4-20 added
 		// tests/unit/acl-evaluator-port-shapes.test.ts and tests/unit/source-acl-cache-wiring.test.ts
-		// (F46 -- see expectedTests below for what each proves).
-		expectedFiles: 47,
+		// (F46 -- see expectedTests below for what each proves). 49 after JR-4-07 added
+		// tests/unit/no-outbound-mail-path.test.ts (the structural "no outbound mail path" scan) and
+		// tests/unit/byte-fidelity-roundtrip.test.ts (the DATA/BDAT byte-fidelity roundtrip corpus) --
+		// see expectedTests below for what each proves.
+		expectedFiles: 49,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -396,8 +399,19 @@ export const SUITES: readonly SuiteSpec[] = [
 		// metadata-DB-unreachable resolved to the same ledger-append-failed row with a
 		// connection-loss-shaped cause, recipient denied, source denied, STARTTLS required but
 		// refused, oversize with the loud oversize-rejected alert reconfirmed end to end, and the
-		// shutdown drain's row-level check).
-		expectedTests: { ci: 719, nightly: 3, manual: 0 },
+		// shutdown drain's row-level check). 742 ci after JR-4-07 added tests/unit/no-outbound-mail-path.test.ts
+		// (5: every forbidden outbound-network pattern's own fixture sample is caught, the legitimate
+		// Postgres-client/inbound-listener sample trips nothing, the file walker reaches a non-trivial
+		// count including the known entry points, no file under packages/journaling/src or
+		// apps/smtp-ingress/src contains an outbound-capable call, and neither package.json declares an
+		// outbound-mail/HTTP-client dependency) and tests/unit/byte-fidelity-roundtrip.test.ts (18: the
+		// 5-entry CRLF-line-oriented corpus sent over both DATA and BDAT -- plain body, a leading-dot
+		// line, a bare "." content line, consecutive blank lines, UTF-8 multibyte content -- 10 tests,
+		// the 7-entry BDAT-only corpus that DATA's line framing cannot carry at all -- bare LF only,
+		// bare CR only, mixed CRLF/LF/CR with no final terminator, a very long line with no line ending,
+		// non-UTF-8 Latin-1 bytes, embedded NUL bytes, arbitrary binary content -- 7 tests, plus one
+		// corpus-not-empty sanity check).
+		expectedTests: { ci: 742, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
