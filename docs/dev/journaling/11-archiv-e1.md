@@ -701,3 +701,101 @@ in ein Test-Epic.
 | Nicht setzen          | keine der `STORAGE_*`-Variablen nötig — die `integration`-Suite berührt `config/storage.ts` nicht                                                                                                 |
 
 ---
+
+---
+
+## Nachtrag 2026-08-03: `JR-1-05c` aus `06-status.md` hierher verschoben
+
+Doku-Diät, unverändert übernommen.
+
+### `JR-1-05c` erledigt (2026-07-30, `b5b2190`) — der Wächter zählt jetzt Tests, nicht Dateien
+
+**Umfang:** F14, F15, F16, F24. Grundlagenarbeit direkt auf dem Integrationsbranch, wie im Handover
+vorgesehen. Kein Produktionscode: der Diff berührt `tests/support/*`, `packages/backend/tests/*`,
+`vitest.config.ts` und `.github/workflows/ci.yml`.
+
+**Was gebaut wurde, und warum in dieser Form**
+
+1. **Ein zweiter Wächter zählt _ausgeführte_ Tests je Suite _und je Klasse_**
+   (`tests/support/executed-tests.ts`), verglichen mit `SUITES[].expectedTests`. Ausgeführt heißt
+   `passed` oder `failed`. **Je Klasse** ist der tragende Teil: die Umetikettierung aus F14 verringert
+   die Gesamtzahl **nicht**, sie verschiebt die Tests in eine Klasse, die die Standardauswahl nicht
+   fährt — also fällt `expectedTests.ci` der Suite auf 0 und nur eine klassenweise Zählung sieht das.
+   Nebeneffekt, der Arbeit spart: dieselbe Tabelle trägt `pnpm test:nightly` mit, ohne eine zweite.
+2. **Gleichheit statt Untergrenze**, auch für die Dateizahl (`minimumFiles` → `expectedFiles`). Das ist
+   wörtlich der in F15 vorgeschlagene Minimalfix. Der Preis ist eine Zahl je Commit, der die Zählung
+   ändert; beide Fehlermeldungen nennen die einzutragende Zahl, damit der ehrliche Weg ein Copy-paste
+   ist und nicht eine Suche.
+3. **Mechanik: Reporter misst, `globalSetup`-Teardown urteilt.** Zählen kann erst nach dem Lauf
+   passieren, und vitest hat dort keinen Assertions-Haken. Die Reihenfolge ist **gemessen**, nicht
+   angenommen (vitest 3.2.7): `globalSetup` → Tests → `onTestRunEnd` → Zusammenfassung → `onFinished` →
+   Teardown, und ein werfender Teardown endet mit **Exit 1**. Die Messdatei wird vor dem Lauf
+   **gelöscht** und danach **verlangt** — wer den Reporter aus `vitest.config.ts` entfernt, macht den
+   Lauf rot statt den Wächter abzuschalten. Dieselbe Positiv-Konstruktion wie beim Inventar-Report.
+4. **Ein verengter Lauf prüft nichts und sagt das.** `-t`, Dateifilter, `--project`, `--shard`: der
+   Lauf bleibt grün und gibt „verified NOTHING" als Coverage-Hinweis aus. Begründung: ein Wächter, der
+   `pnpm test -t` rot macht, ist ein Wächter, den man abzuschalten lernt. Damit das Zugeständnis nicht
+   dort greift, wo die Zusicherung gebraucht wird, verlangt `assert-inventory-report.mjs`, dass die
+   Prüfung **anwendbar** war — in der CI ist die Hintertür also zu.
+5. **Die CI liest das Urteil, statt es nachzurechnen.** Der Teardown schreibt sein Verdikt in die
+   Messdatei zurück. Zwei Implementierungen einer Regel laufen auseinander — das ist **F29**, und der
+   Fehler wird hier nicht wiederholt.
+6. **Der Hauptprozess besitzt den Rückstand dieses Laufs** (`tests/support/harness-ledger.ts` und
+   `harness-residue.ts`). Der Worker trägt jede geholte Datenbank in ein Ledger-Verzeichnis dieses
+   Laufs ein und löscht den Eintrag erst, wenn der Drop stattgefunden hat; der Teardown meldet, was
+   übrig ist, mit Namen, Label und Worker-PID, **droppt** es und macht den Lauf rot, sofern er nicht
+   verengt war. Bewusst **nicht** „alle `oa_test_*` abfragen und die Differenz bilden": das hätte die
+   lebende Datenbank eines fremden, parallelen Laufs für Rückstand halten können, und genau das war
+   **F12**. `acquireTestDatabase()` verweigert den Dienst ohne Ledger-Verzeichnis, **bevor** es etwas
+   anlegt.
+7. **Ein drittes Modul, das nichts importiert** (`tests/support/test-classes.ts`) trägt Klassenliste,
+   Auswahlparser und das `[ci] `-Label. `classification.ts` importiert `vitest` und ist für den
+   Hauptprozess unerreichbar; der Wächter muss dasselbe Label **lesen**, das jener **schreibt**. Die
+   Alternative wäre eine zweite Kopie des Formats gewesen — dieselbe Falle wie F29, siehe Fallstrick 18.
+
+**Zwei Annahmen wurden vorab gemessen, statt sie zu glauben** (beide in einer Wegwerf-Konfiguration,
+danach entfernt): dass ein werfender `globalSetup`-Teardown den Exit-Code auf 1 setzt und **nach**
+`onFinished` läuft, und dass eine in `globalSetup` gesetzte Env-Variable die geforkten Worker erreicht
+(`ppid` des Workers = pid des Hauptprozesses, Variable angekommen). Das Ledger hängt vollständig an der
+zweiten.
+
+**Nachweis. Jeder Angriff wurde zuerst am Elternstand `e09b981` wiederholt**, damit der grüne
+Ausgangszustand belegt ist und nicht aus dem Befundtext übernommen. Umgebung: Wegwerf-Cluster
+PostgreSQL **17.10** (dieselbe Version wie die CI), `OA_TEST_REQUIRE_INFRA=1`.
+
+| Zustand                                           | Elternstand `e09b981`                      | mit `JR-1-05c`                                                               |
+| ------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| legitim                                           | Exit 0, `250 passed \| 2 skipped`          | **Exit 0**, `274 passed \| 2 skipped`, 19 Dateien                            |
+| alle 8 Integrationsdateien `ci` → `nightly`       | **Exit 0**, beide Wächter „verified"       | **Exit 1**, `integration: ci 0/55`, Dateien weiter `8/8`                     |
+| eine Datei nur `it.skip`                          | (F14 (b), im Befund belegt)                | **Exit 1**, `integration: ci 52/55`, Dateien weiter `8/8`                    |
+| `pg-harness.int.test.ts` löschen + Datei addieren | (F15, im Befund belegt)                    | **Exit 1**, `integration: ci 43/55`, Dateien weiter `8/8`                    |
+| `throw` im Modul-Scope nach dem `acquire`         | Rückstand lautlos, **keine** Meldung       | **Exit 1**, Datenbank **namentlich** gemeldet, gedroppt, danach 0 Rückstände |
+| `pnpm test -t "idempotent"`                       | Exit 0, **6** Datenbanken liegen geblieben | **Exit 0**, 6 gemeldet und gedroppt, danach **0**                            |
+| `pnpm test:unit` (`--project`)                    | Exit 0                                     | **Exit 0** plus „verified NOTHING"-Hinweis                                   |
+| `pnpm test:nightly`                               | Exit 0                                     | **Exit 0**, `adversarial: … nightly 1/1`, 1 Skip (manual)                    |
+
+Die Umetikettierung deckte zusätzlich **sechs Rückstände** auf, die vorher lokal lautlos geblieben
+wären — die skippenden Suiten führen ihr `afterAll` nicht aus. Das ist F16 und F24 in einem Lauf.
+
+**Die CI-Klebeschicht ist in beide Richtungen geprüft:** gegen die grünen Reports Exit 0 („Executed-test
+inventory verified for unit, integration, adversarial"), gegen die Messung des `--project`-Laufs Exit 1
+(„CI must run an unnarrowed `pnpm test`"), gegen eine fehlende Messdatei Exit 1.
+
+**Eigene Tests für den Wächter:** `packages/backend/tests/unit/executed-tests.test.ts` (15 Fälle) baut
+die vier Akzeptanzszenarien als **Daten** und prüft das Urteil, dazu Label-Round-trip, nicht gewählte
+Klasse, fehlende Suite, unklassifizierte Tests, unbekanntes Project und die Tabelle selbst;
+`harness-ledger.test.ts` (8 Fälle) prüft die Buchführung samt Verweigerung eines Namens, den der Harness
+nie erzeugt, und samt truncierten Eintrags. Bewusst **keine** vitest-in-vitest-Kindprozesse: das Urteil
+ist genau deshalb eine reine Funktion der Messung. Dass die **Messung** stimmt, ist die andere
+Behauptung, und die trägt die Tabelle oben.
+
+**Zwei Dinge über den Umfang hinaus, benannt statt versteckt:** die Dateizahl ist jetzt ebenfalls eine
+Gleichheit (F15 hatte genau das vorgeschlagen), und die Ausnahme für verengte Läufe war nicht gefordert
+— ohne sie wären `pnpm test:unit` und jeder `-t`-Lauf dauerhaft rot.
+
+**Hygiene:** `pnpm --filter @open-archiver/backend test:types` grün; Prettier für alle 14 berührten
+Dateien grün (über die Prettier-API gegen eine LF-Normalisierung in Node geprüft, wegen **F35** nicht
+über `pnpm lint`); 0 `oa_test_*`-Rückstände am Ende; der Wegwerf-Cluster ist im Scratchpad und wird
+abgebaut.
+
+---

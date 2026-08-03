@@ -54,6 +54,66 @@ zweite Abnahme `JR-2-10a` (F39), 2026-07-30 bis 2026-08-01.
 
 ---
 
+## Alle Befunde auf einen Blick
+
+**Diese Tabelle ist am 2026-08-03 entstanden** (Doku-Diät) und wird bei jedem neuen Befund
+mitgeführt. Sie ersetzt das Lesen der Datei nicht, sie ersetzt das **Durchblättern**: die
+Volltexte stehen unverändert darunter, und wer nur wissen will, ob eine Nummer offen ist,
+findet es hier.
+
+| Nr.      | Befund                                                                                         | Schwere | Status    |
+| -------- | ---------------------------------------------------------------------------------------------- | ------- | --------- |
+| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                       | hoch    | behoben   |
+| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                               | mittel  | offen     |
+| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                        | mittel  | behoben   |
+| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                | mittel  | offen     |
+| **F5 **  | { field: null } wird zu "field" = NULL                                                         | niedrig | offen     |
+| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                           | niedrig | behoben   |
+| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                       | hoch    | behoben   |
+| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                  | mittel  | behoben   |
+| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                      | niedrig | offen     |
+| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                        | niedrig | offen     |
+| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                | mittel  | behoben   |
+| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen               | mittel  | behoben   |
+| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft        | niedrig | offen     |
+| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                              | mittel  | behoben   |
+| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                        | niedrig | behoben   |
+| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                  | niedrig | behoben   |
+| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt         | mittel  | behoben   |
+| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                      | niedrig | offen     |
+| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                      | mittel  | behoben   |
+| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                         | mittel  | behoben   |
+| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                 | niedrig | —         |
+| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                        | niedrig | behoben   |
+| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig        | niedrig | offen     |
+| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                   | niedrig | behoben   |
+| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch     | niedrig | behoben   |
+| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                     | mittel  | behoben   |
+| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic… | mittel  | behoben   |
+| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                         | niedrig | behoben   |
+| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig            | niedrig | behoben   |
+| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem… | mittel  | behoben   |
+| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde              | mittel  | offen     |
+| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                          | niedrig | offen     |
+| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                    | niedrig | offen     |
+| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                     | niedrig | offen     |
+| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                     | mittel  | offen     |
+| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                    | keine   | widerlegt |
+| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S… | mittel  | offen     |
+| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g… | hoch    | behoben   |
+| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was … | niedrig | —         |
+| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität… | mittel  | offen     |
+| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                 | niedrig | offen     |
+| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt   | niedrig | offen     |
+| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                         | mittel  | offen     |
+| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos           | hoch    | behoben   |
+| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE… | mittel  | behoben   |
+| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche … | hoch    | behoben   |
+| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                | mittel  | offen     |
+| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt             | hoch    | behoben   |
+
+---
+
 ## F1 — SQL-Injection über Policy-Condition-Keys
 
 **Schwere:** hoch im Wirkungsgrad, aber **Super-Admin-Rechte als Voraussetzung** ·
