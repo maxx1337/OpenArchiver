@@ -101,7 +101,8 @@ These cause correctness or compliance failures, not just review comments.
 ## Conventions to match
 
 - **TypeScript**: strict, explicit return types on exported functions, `import type` for
-  type-only imports. Tabs, single quotes, trailing commas — Prettier decides; run `pnpm lint`.
+  type-only imports. Tabs, single quotes, trailing commas — Prettier decides; check your own files
+  with `corepack pnpm exec prettier --check <paths>`, **not** repo-wide `lint` (F35, see above).
 - **Shared types go in `packages/types`**, never duplicated in backend and frontend.
 - **Services** are classes in `packages/backend/src/services/`, constructor-injected dependencies,
   no module-level side effects beyond what already exists.

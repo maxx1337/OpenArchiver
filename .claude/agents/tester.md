@@ -15,8 +15,10 @@ pass. (Fixing test-harness code is yours; fixing `packages/backend/src/**` is th
 
 ## Before you write anything
 
-1. Read `CLAUDE.md`, especially §5.1 — **this repository has zero tests and no test runner.** If
-   Epic 1 is not yet done, you are building the harness, not adding to one.
+1. Read `CLAUDE.md`, especially §5.1. **The harness exists** — vitest with three projects, a suite
+   inventory and an executed-test counter, built in Epic 1 and accepted 2026-07-28. **Do not build a
+   second one.** (This line said "zero tests and no test runner" until 2026-08-03; it was true when
+   the file was written and had been false for a week.)
 2. Read `docs/dev/journaling/04-testplan.md` for the RFC §12 mapping and the CI / nightly / manual
    split, and `03-backlog.md` for the acceptance criteria of the task under test.
 3. For anything touching the receive path: load the `journal-ledger` skill. The invariants there are
