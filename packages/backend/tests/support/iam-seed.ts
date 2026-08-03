@@ -8,6 +8,7 @@ import {
 	users,
 	ingestionSources,
 	archivedEmails,
+	journalingSources,
 } from '../../src/database/schema';
 
 /**
@@ -97,6 +98,41 @@ export async function seedIngestionSource(
 		})
 		.returning();
 	return { id: source!.id, name };
+}
+
+export interface SeededJournalingSource {
+	id: string;
+	ingestionSourceId: string;
+}
+
+/**
+ * Seed a `journaling_sources` row (`JR-4-05a`). `ingestionSourceId` must already exist (see
+ * {@link seedIngestionSource}) -- `journaling_sources.ingestion_source_id` is `notNull` with no
+ * `onDelete: 'set null'`.
+ */
+export async function seedJournalingSource(
+	db: SeedDatabase,
+	options: {
+		ingestionSourceId: string;
+		allowedIps?: string[];
+		requireTls?: boolean;
+		status?: 'active' | 'paused';
+		name?: string;
+	}
+): Promise<SeededJournalingSource> {
+	const suffix = randomUUID().slice(0, 8);
+	const [source] = await db
+		.insert(journalingSources)
+		.values({
+			name: options.name ?? `journaling-source-${suffix}`,
+			allowedIps: options.allowedIps ?? [],
+			requireTls: options.requireTls ?? false,
+			status: options.status ?? 'active',
+			ingestionSourceId: options.ingestionSourceId,
+			routingAddress: `journal-${suffix}@journaling.test.invalid`,
+		})
+		.returning();
+	return { id: source!.id, ingestionSourceId: source!.ingestionSourceId };
 }
 
 export async function seedArchivedEmail(

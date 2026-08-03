@@ -142,4 +142,28 @@ export {
 	type EsmtpServerOptions,
 	type IngressLogger,
 	type ParsedMailFrom,
+	type RequireTlsContext,
+	type RequireTlsResolver,
+	type SourceAclDecision,
+	type SourceAclEvaluator,
 } from './ingress/smtp-server';
+
+export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
+
+export type { JournalingSourceAclEntry, SourceAclLookup } from './ingress/source-acl-port';
+export { PostgresSourceAclLookup } from './ingress/source-acl';
+
+export {
+	compileSourceAcl,
+	createSourceAclRequireTlsResolver,
+	SourceAclCache,
+	type CompiledSourceAcl,
+	type SourceAclCacheOptions,
+} from './ingress/source-acl-cache';
+
+export {
+	DEFAULT_SOURCE_ACL_REFRESH_INTERVAL_MS,
+	DEFAULT_SOURCE_ACL_STALE_AFTER_MS,
+	sourceAclConfigSchema,
+	type SourceAclConfig,
+} from './ingress/source-acl-config';

@@ -31,6 +31,11 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 			// required" -- exactly what `config-from-env.ts` produces when no SMTP_INGRESS_TLS_*/
 			// SMTP_INGRESS_REQUIRE_TLS env var is set.
 			tls: {},
+			// JR-4-05a: `sourceAcl` is required and, unlike `smtp`/`tls`, `{}` is *not* valid --
+			// `databaseUrl` has no default (see source-acl-config.ts's doc comment for why).
+			sourceAcl: {
+				databaseUrl: 'postgresql://smtp_ingress_ro:pw@localhost:5432/open_archive',
+			},
 		};
 
 		it('accepts a fully specified, valid configuration', () => {
@@ -100,6 +105,50 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 
 		it('rejects tls.cert without a matching tls.key', () => {
 			expect(() => parseIngressConfig({ ...validInput, tls: { cert: 'CERT' } })).toThrow();
+		});
+
+		it('rejects a configuration with the sourceAcl key missing entirely', () => {
+			const { sourceAcl: _sourceAcl, ...rest } = validInput;
+			expect(() => parseIngressConfig(rest)).toThrow();
+		});
+
+		it('rejects sourceAcl: {} -- unlike smtp/tls, databaseUrl has no default', () => {
+			expect(() => parseIngressConfig({ ...validInput, sourceAcl: {} })).toThrow();
+		});
+
+		it('rejects an empty sourceAcl.databaseUrl', () => {
+			expect(() =>
+				parseIngressConfig({ ...validInput, sourceAcl: { databaseUrl: '' } })
+			).toThrow();
+		});
+
+		it('defaults sourceAcl.refreshIntervalMs/staleAfterMs when only databaseUrl is given', () => {
+			const config = parseIngressConfig(validInput);
+			expect(config.sourceAcl.refreshIntervalMs).toBe(30_000);
+			expect(config.sourceAcl.staleAfterMs).toBe(300_000);
+		});
+
+		it('embeds an explicit sourceAcl override rather than replacing it with defaults', () => {
+			const config = parseIngressConfig({
+				...validInput,
+				sourceAcl: { ...validInput.sourceAcl, refreshIntervalMs: 5_000 },
+			});
+			expect(config.sourceAcl.refreshIntervalMs).toBe(5_000);
+			// staleAfterMs still defaults on its own.
+			expect(config.sourceAcl.staleAfterMs).toBe(300_000);
+		});
+
+		it('rejects sourceAcl.staleAfterMs below sourceAcl.refreshIntervalMs', () => {
+			expect(() =>
+				parseIngressConfig({
+					...validInput,
+					sourceAcl: {
+						...validInput.sourceAcl,
+						refreshIntervalMs: 60_000,
+						staleAfterMs: 1_000,
+					},
+				})
+			).toThrow();
 		});
 
 		it('rejects a missing smtpPort', () => {

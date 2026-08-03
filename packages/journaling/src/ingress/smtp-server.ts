@@ -621,6 +621,44 @@ export class BdatContentTracker {
 	}
 }
 
+/**
+ * What {@link EsmtpServer} needs from the source ACL to gate a connection at accept-time
+ * (`JR-4-05a`, skill `journal-ledger` section 2 -- "Source IP not in ACL" ⇒ `554 5.7.1` at
+ * connect). Implemented by `SourceAclCache` (`./source-acl-cache.ts`); the type lives here, next to
+ * its consumer, the same layering `LedgerBackend`/`LedgerQuery` already use (defined next to the
+ * port's consumer, not next to the concrete class that satisfies it) -- so this file never needs to
+ * import anything from `./source-acl-cache.ts`.
+ */
+export interface SourceAclEvaluator {
+	evaluate(remoteIp: string): SourceAclDecision;
+}
+
+/**
+ * The three outcomes {@link SourceAclEvaluator.evaluate} can report:
+ *
+ *  - `'allowed'`: the connecting IP matched a configured, active source's `allowed_ips`. Carries
+ *    that source's identity and `require_tls` so a caller can compose the tighten-only
+ *    {@link RequireTlsResolver} contract without a second lookup.
+ *  - `'denied'`: the ACL is known (a snapshot has been loaded recently enough) and the IP matched
+ *    no source. `554 5.7.1` (a permanent rejection is correct here: the caller knows who this is
+ *    and has decided they may never send, skill section 1's "local failure ⇒ 4xx" does not apply
+ *    to "you are not on the list").
+ *  - `'unavailable'`: the ACL is *not* known right now -- no snapshot has ever loaded successfully,
+ *    or the last successful load is older than the configured staleness tolerance. This is a local
+ *    failure, not a verdict about the connecting IP, so it must never become `554`
+ *    (`421 4.3.2` instead) -- see `./source-acl-cache.ts`'s doc comment for the fail-closed
+ *    reasoning ("ACL unknown" must not mean "admit everyone" either).
+ */
+export type SourceAclDecision =
+	| {
+			readonly kind: 'allowed';
+			readonly sourceId: string;
+			readonly chainScopeId: string;
+			readonly requireTls: boolean;
+	  }
+	| { readonly kind: 'denied' }
+	| { readonly kind: 'unavailable' };
+
 /** Everything {@link RequireTlsResolver} needs to decide (`JR-4-04`, extended by `JR-4-05`). */
 export interface RequireTlsContext {
 	readonly remoteIp: string | null;
@@ -1338,11 +1376,20 @@ export interface EsmtpServerOptions {
 	 * "Where `logLevel` actually gets used" section for why a caller that cares passes a real one. */
 	readonly logger?: IngressLogger;
 	/**
-	 * Override for {@link RequireTlsResolver}. Omitted in production today -- `JR-4-05` is what
-	 * supplies one, once per-source lookup exists. Exposed here (rather than only internally) so a
-	 * test can exercise the tighten-never-loosen contract without needing a real source lookup.
+	 * Override for {@link RequireTlsResolver}. `apps/smtp-ingress/src/index.ts` passes
+	 * `createSourceAclRequireTlsResolver()`'s result (`./source-acl-cache.ts`, `JR-4-05a`) here in
+	 * production. Exposed here (rather than only internally) so a test can exercise the
+	 * tighten-never-loosen contract without needing a real source lookup.
 	 */
 	readonly requireTlsResolver?: RequireTlsResolver;
+	/**
+	 * Source ACL gate (`JR-4-05a`), checked once per accepted TCP connection, before anything else
+	 * -- including the `220` greeting. `undefined` (the default) disables the gate entirely: every
+	 * connection is accepted, exactly this class's behaviour before this task, which is what lets
+	 * every pre-existing test that does not care about the ACL keep constructing a bare
+	 * `EsmtpServer`. Production always supplies a `SourceAclCache`.
+	 */
+	readonly sourceAclEvaluator?: SourceAclEvaluator;
 }
 
 /**
@@ -1360,6 +1407,7 @@ export class EsmtpServer {
 	 * for why that matters. */
 	private readonly tlsSecureContext: tls.SecureContext | null;
 	private readonly requireTlsResolver: RequireTlsResolver;
+	private readonly sourceAclEvaluator: SourceAclEvaluator | undefined;
 
 	constructor(options: EsmtpServerOptions) {
 		this.smtp = options.smtp;
@@ -1370,6 +1418,7 @@ export class EsmtpServer {
 			cert !== undefined && key !== undefined ? tls.createSecureContext({ cert, key }) : null;
 		const processRequireTls = options.tls?.requireTls ?? false;
 		this.requireTlsResolver = options.requireTlsResolver ?? (() => processRequireTls);
+		this.sourceAclEvaluator = options.sourceAclEvaluator;
 		this.server = net.createServer((socket) => this.handleConnection(socket));
 	}
 
@@ -1400,7 +1449,41 @@ export class EsmtpServer {
 		});
 	}
 
+	/**
+	 * The source ACL gate (`JR-4-05a`) runs here, before anything else -- including the `220`
+	 * greeting {@link SmtpConnection}'s constructor writes immediately. A denied or
+	 * ACL-not-yet-known connection is answered and closed without ever constructing a
+	 * `SmtpConnection`, so no greeting, no `EHLO`, nothing is ever offered to an IP this gate
+	 * refuses. `socket.remoteAddress` can be `undefined` on a socket that is already
+	 * closing -- treated the same as `'unavailable'` (fail closed on "we don't even know who this
+	 * is"), never as an implicit allow.
+	 */
 	private handleConnection(socket: net.Socket): void {
+		if (this.sourceAclEvaluator) {
+			const remoteIp = socket.remoteAddress;
+			const decision: SourceAclDecision =
+				remoteIp !== undefined
+					? this.sourceAclEvaluator.evaluate(remoteIp)
+					: { kind: 'unavailable' };
+			if (decision.kind === 'denied') {
+				this.logger.warn(
+					{ remoteAddress: remoteIp },
+					'smtp-ingress: rejecting connection, source IP not in any active journaling source ACL'
+				);
+				socket.end('554 5.7.1 Access denied\r\n');
+				return;
+			}
+			if (decision.kind === 'unavailable') {
+				this.logger.error(
+					{ remoteAddress: remoteIp },
+					'smtp-ingress: rejecting connection, source ACL is not currently known ' +
+						'(no recent successful refresh) -- failing closed, not open'
+				);
+				socket.end(`421 4.3.2 ${this.smtp.hostname} Service temporarily unavailable\r\n`);
+				return;
+			}
+		}
+
 		this.sockets.add(socket);
 		socket.on('close', () => this.sockets.delete(socket));
 		new SmtpConnection(

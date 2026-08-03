@@ -54,6 +54,14 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 			key: readOptionalFile(env.SMTP_INGRESS_TLS_KEY_PATH),
 			requireTls: env.SMTP_INGRESS_REQUIRE_TLS,
 		},
+		// JR-4-05a: a deliberately *different* variable than packages/backend's DATABASE_URL --
+		// ADR-002 wants a separate, read-only-role connection string for this process's own source
+		// ACL lookup, not the backend's connection reused with different code-level restrictions.
+		sourceAcl: {
+			databaseUrl: env.SMTP_INGRESS_DATABASE_URL,
+			refreshIntervalMs: env.SMTP_INGRESS_SOURCE_ACL_REFRESH_MS,
+			staleAfterMs: env.SMTP_INGRESS_SOURCE_ACL_STALE_AFTER_MS,
+		},
 		logLevel: env.SMTP_INGRESS_LOG_LEVEL,
 	};
 }

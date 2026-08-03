@@ -1,0 +1,286 @@
+import { describe, expect, it, vi } from 'vitest';
+import { suite } from '@oa-test/classification';
+import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-port';
+import type { IngressLogger } from './smtp-server';
+import {
+	compileSourceAcl,
+	createSourceAclRequireTlsResolver,
+	SourceAclCache,
+} from './source-acl-cache';
+
+/**
+ * `JR-4-05a` -- `compileSourceAcl` and `SourceAclCache` against fakes: no database, no real
+ * timers (the refresh loop is driven exclusively through `refreshNow()`/an injected clock).
+ *
+ * The wire-level proof that a real client is actually rejected/admitted/told to retry at connect
+ * time lives in `packages/journaling/tests/unit/smtp-source-acl-protocol.test.ts` -- this file
+ * proves the cache's decision logic in isolation, that file proves the decision reaches the wire.
+ */
+
+function recordingLogger(): { logger: IngressLogger; warnings: unknown[][]; errors: unknown[][] } {
+	const warnings: unknown[][] = [];
+	const errors: unknown[][] = [];
+	return {
+		warnings,
+		errors,
+		logger: {
+			debug: () => {},
+			info: () => {},
+			warn: (...args) => warnings.push(args),
+			error: (...args) => errors.push(args),
+		},
+	};
+}
+
+function entry(overrides: Partial<JournalingSourceAclEntry> = {}): JournalingSourceAclEntry {
+	return {
+		id: 'source-1',
+		chainScopeId: 'archive-1',
+		allowedIps: ['192.0.2.0/24'],
+		requireTls: false,
+		...overrides,
+	};
+}
+
+class FakeLookup implements SourceAclLookup {
+	public rows: readonly JournalingSourceAclEntry[] = [];
+	public failNext = false;
+	public calls = 0;
+
+	async listActiveSources(): Promise<readonly JournalingSourceAclEntry[]> {
+		this.calls += 1;
+		if (this.failNext) {
+			this.failNext = false;
+			throw new Error('simulated database outage');
+		}
+		return this.rows;
+	}
+}
+
+suite('ci', 'compileSourceAcl / SourceAclCache (JR-4-05a)', () => {
+	describe('compileSourceAcl', () => {
+		it('compiles every valid entry into a ParsedCidr', () => {
+			const { logger } = recordingLogger();
+			const compiled = compileSourceAcl(
+				entry({ allowedIps: ['192.0.2.0/24', '2001:db8::/32'] }),
+				logger
+			);
+			expect(compiled).not.toBeNull();
+			expect(compiled!.cidrs).toHaveLength(2);
+			expect(compiled!.sourceId).toBe('source-1');
+			expect(compiled!.chainScopeId).toBe('archive-1');
+		});
+
+		it('returns null and logs an error for a source with any invalid CIDR entry', () => {
+			const { logger, errors } = recordingLogger();
+			const compiled = compileSourceAcl(
+				entry({ allowedIps: ['192.0.2.0/24', 'not-an-address'] }),
+				logger
+			);
+			expect(compiled).toBeNull();
+			expect(errors).toHaveLength(1);
+			expect(errors[0]![1]).toMatch(/unusable/);
+		});
+
+		it('logs a warning, but still compiles, for a /0 catch-all entry', () => {
+			const { logger, warnings } = recordingLogger();
+			const compiled = compileSourceAcl(entry({ allowedIps: ['0.0.0.0/0'] }), logger);
+			expect(compiled).not.toBeNull();
+			expect(warnings).toHaveLength(1);
+			expect(warnings[0]![1]).toMatch(/catch-all|prefix length 0/);
+		});
+	});
+
+	describe('SourceAclCache.evaluate', () => {
+		it("reports 'unavailable' before the first successful refresh", () => {
+			const lookup = new FakeLookup();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			expect(cache.evaluate('192.0.2.1')).toEqual({ kind: 'unavailable' });
+		});
+
+		it("reports 'allowed' with the matched source's identity and requireTls after a refresh", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ id: 's-a', chainScopeId: 'arch-a', requireTls: true })];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.evaluate('192.0.2.200')).toEqual({
+				kind: 'allowed',
+				sourceId: 's-a',
+				chainScopeId: 'arch-a',
+				requireTls: true,
+			});
+		});
+
+		it("reports 'denied' for an IP matching no active source once the ACL is known", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry()];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+
+			expect(cache.evaluate('198.51.100.1')).toEqual({ kind: 'denied' });
+		});
+
+		it('excludes a source with any invalid CIDR entirely -- its other, valid entries do not match either', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ allowedIps: ['192.0.2.0/24', 'garbage'] })];
+			const { logger } = recordingLogger();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+				logger,
+			});
+			await cache.refreshNow();
+
+			expect(cache.evaluate('192.0.2.5')).toEqual({ kind: 'denied' });
+		});
+
+		it('keeps serving the previous snapshot when a refresh fails (availability)', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry()];
+			let clock = 0;
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 60_000,
+				now: () => clock,
+			});
+			await cache.refreshNow();
+			expect(cache.evaluate('192.0.2.5').kind).toBe('allowed');
+
+			clock += 10_000;
+			lookup.failNext = true;
+			await cache.refreshNow();
+
+			// Still within staleAfterMs of the *last successful* refresh -- old snapshot still serves.
+			expect(cache.evaluate('192.0.2.5').kind).toBe('allowed');
+		});
+
+		it("fails closed to 'unavailable' once a stalled refresh exceeds staleAfterMs (security)", async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry()];
+			let clock = 0;
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5_000,
+				now: () => clock,
+			});
+			await cache.refreshNow();
+			expect(cache.evaluate('192.0.2.5').kind).toBe('allowed');
+
+			// Every subsequent refresh keeps failing (simulating an extended outage).
+			clock += 10_000;
+			expect(cache.evaluate('192.0.2.5')).toEqual({ kind: 'unavailable' });
+		});
+
+		it('coalesces concurrent refreshNow() calls into a single lookup', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry()];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await Promise.all([cache.refreshNow(), cache.refreshNow(), cache.refreshNow()]);
+			expect(lookup.calls).toBe(1);
+		});
+
+		it('start() resolves even when the first load fails, leaving the cache unavailable', async () => {
+			const lookup = new FakeLookup();
+			lookup.failNext = true;
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1_000_000,
+				staleAfterMs: 5000,
+			});
+			await expect(cache.start()).resolves.toBeUndefined();
+			expect(cache.evaluate('192.0.2.5')).toEqual({ kind: 'unavailable' });
+			cache.stop();
+		});
+
+		it('stop() clears the timer so no further refresh fires', async () => {
+			vi.useFakeTimers();
+			try {
+				const lookup = new FakeLookup();
+				lookup.rows = [entry()];
+				const cache = new SourceAclCache({
+					lookup,
+					refreshIntervalMs: 100,
+					staleAfterMs: 5000,
+				});
+				await cache.start();
+				const callsAfterStart = lookup.calls;
+				cache.stop();
+				await vi.advanceTimersByTimeAsync(1000);
+				expect(lookup.calls).toBe(callsAfterStart);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
+	describe('createSourceAclRequireTlsResolver', () => {
+		it('always requires TLS when the process default is true, regardless of the ACL', () => {
+			const lookup = new FakeLookup();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			const resolver = createSourceAclRequireTlsResolver(cache, true);
+			expect(resolver({ remoteIp: null, ehloName: null, rcptTo: [] })).toBe(true);
+		});
+
+		it('tightens to true when the matched source requires TLS and the process default does not', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ requireTls: true })];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+			const resolver = createSourceAclRequireTlsResolver(cache, false);
+			expect(resolver({ remoteIp: '192.0.2.5', ehloName: null, rcptTo: [] })).toBe(true);
+		});
+
+		it('stays false when the matched source does not require TLS and neither does the process', async () => {
+			const lookup = new FakeLookup();
+			lookup.rows = [entry({ requireTls: false })];
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			await cache.refreshNow();
+			const resolver = createSourceAclRequireTlsResolver(cache, false);
+			expect(resolver({ remoteIp: '192.0.2.5', ehloName: null, rcptTo: [] })).toBe(false);
+		});
+
+		it('never loosens: an unmatched or null remoteIp contributes false, never blocking the process default', () => {
+			const lookup = new FakeLookup();
+			const cache = new SourceAclCache({
+				lookup,
+				refreshIntervalMs: 1000,
+				staleAfterMs: 5000,
+			});
+			const resolver = createSourceAclRequireTlsResolver(cache, false);
+			expect(resolver({ remoteIp: null, ehloName: null, rcptTo: [] })).toBe(false);
+			expect(resolver({ remoteIp: '198.51.100.1', ehloName: null, rcptTo: [] })).toBe(false);
+		});
+	});
+});

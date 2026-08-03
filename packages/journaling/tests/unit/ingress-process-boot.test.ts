@@ -169,6 +169,14 @@ suite('ci', 'apps/smtp-ingress process boot (JR-4-01)', () => {
 
 	it('with valid configuration: starts, creates the spool layout, and accepts a connection on the configured port', async () => {
 		const port = await getFreePort();
+		// JR-4-05a: SMTP_INGRESS_DATABASE_URL is now required (parseIngressConfig rejects a
+		// configuration missing it -- see source-acl-config.ts's doc comment for why there is no
+		// default that lets the process start without one). Pointing it at a currently-closed local
+		// port is deliberate: the process must still start and bind the SMTP port even though its
+		// very first source ACL refresh fails immediately with ECONNREFUSED -- SourceAclCache.start()
+		// resolves regardless (a database outage at boot must not crash startup), and this is the
+		// unit-test proof of exactly that, without needing a real Postgres in this suite.
+		const dbPort = await getFreePort();
 		const cwd = mkdtempSync(path.join(scratchDir, 'valid-config-'));
 		const spoolRoot = path.join(cwd, 'spool');
 
@@ -179,6 +187,7 @@ suite('ci', 'apps/smtp-ingress process boot (JR-4-01)', () => {
 				SMTP_INGRESS_PORT: String(port),
 				SMTP_INGRESS_SPOOL_ROOT_PATH: spoolRoot,
 				SMTP_INGRESS_SPOOL_HIGH_WATER_BYTES: '1000000000',
+				SMTP_INGRESS_DATABASE_URL: `postgresql://test:test@127.0.0.1:${dbPort}/testdb`,
 			},
 		});
 		const output = collectOutput(child);

@@ -128,7 +128,16 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 31 after JR-4-04 added ingress/tls-config.test.ts (the TLS configuration zod schema) and
 		// tests/unit/smtp-starttls-protocol.test.ts (STARTTLS/require_tls/session-reset proven over a
 		// real TCP+TLS loopback connection).
-		expectedFiles: 31,
+		// 36 after JR-4-05a (source ACL): ingress/cidr.test.ts (CIDR parsing/matching),
+		// ingress/source-acl.test.ts (PostgresSourceAclLookup against a recording fake),
+		// ingress/source-acl-cache.test.ts (compileSourceAcl's fail-closed-per-source handling of an
+		// invalid CIDR, SourceAclCache's availability-then-fail-closed staleness contract, and the
+		// tighten-never-loosen createSourceAclRequireTlsResolver), ingress/source-acl-config.test.ts
+		// (the zod schema for the ACL's own database connection/refresh/staleness config), and
+		// tests/unit/smtp-source-acl-protocol.test.ts (the connect-time gate proven over a real
+		// loopback socket: 554 5.7.1 denied with no 220 ever sent, 421 4.3.2 when the ACL is not
+		// currently known, the ordinary 220 unaffected when allowed or when no evaluator is wired).
+		expectedFiles: 36,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -238,7 +247,36 @@ export const SUITES: readonly SuiteSpec[] = [
 		// handshake with no fresh EHLO is 503, proving state did not survive); the STARTTLS
 		// command-injection companion to F44 x1 (bytes pipelined in the same segment as STARTTLS are
 		// discarded, never answered, before or after the handshake).
-		expectedTests: { ci: 538, nightly: 2, manual: 0 },
+		// 597 ci after JR-4-05a (source ACL): +18 in the new ingress/cidr.test.ts (parseCidr: bare
+		// IPv4/IPv6 address as implicit /32//128, explicit CIDR blocks, /0 flagged isCatchAll for both
+		// families, invalid IPv4/IPv6 prefix length, negative/non-numeric/missing prefix, unparseable
+		// address; matchesCidr: inside/outside an IPv4 block, exact-match /32, inside/outside an IPv6
+		// block, /0 matches everything of its family, never matches across families even a /0, an
+		// IPv4-mapped IPv6 remote normalised then matched against an IPv4 CIDR, a partial-byte /25
+		// prefix boundary) + 6 in the new ingress/source-acl.test.ts (PostgresSourceAclLookup against
+		// a recording fake: maps rows, decodes allowed_ips from either a decoded array or JSON text,
+		// throws rather than defaulting to [] for a non-array/non-string value, asserts status =
+		// 'active' is in the query text, empty result) + 16 in the new
+		// ingress/source-acl-cache.test.ts (compileSourceAcl: compiles every valid entry, excludes a
+		// whole source and logs an error on any invalid CIDR, logs a warning but still compiles a /0
+		// entry; SourceAclCache.evaluate: 'unavailable' before the first refresh, 'allowed' with the
+		// matched source's identity/requireTls, 'denied' for a non-matching IP, a source excluded for
+		// one bad entry matches nothing at all, a failed refresh keeps serving the previous snapshot
+		// (availability) until staleAfterMs elapses then fails closed to 'unavailable' (security),
+		// concurrent refreshNow() calls coalesce into one lookup, start() resolves even when the
+		// first load fails, stop() halts the timer; createSourceAclRequireTlsResolver: process
+		// default true always wins, a matched source's requireTls tightens the default, an
+		// unmatched/null remoteIp never loosens it) + 9 in the new ingress/source-acl-config.test.ts
+		// (the zod schema: accepts/rejects databaseUrl, refreshIntervalMs/staleAfterMs default and
+		// coerce from strings, reject zero/negative values and staleAfterMs below refreshIntervalMs,
+		// accept them equal) + 4 in the new tests/unit/smtp-source-acl-protocol.test.ts (the
+		// connect-time gate over a real loopback socket: 554 5.7.1 denied with no 220 ever sent, 421
+		// 4.3.2 when the ACL is not currently known, the ordinary 220 unaffected when allowed or when
+		// no evaluator is wired) + 6 added directly to the pre-existing ingress/config.test.ts
+		// (sourceAcl is a required key like smtp/tls but, unlike them, {} does not satisfy it; rejects
+		// an empty databaseUrl; refreshIntervalMs/staleAfterMs default; an explicit override embeds
+		// rather than replacing; staleAfterMs below refreshIntervalMs is rejected).
+		expectedTests: { ci: 597, nightly: 2, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -255,8 +293,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// that is never given to drizzle() (F38's rule: anything in packages/journaling that gets its
 		// connection injected needs at least one test writing through a bare client). 14 after JR-3-05
 		// added journal-ledger-lookup.int.test.ts -- PostgresLedgerLookup.findBySpoolTxIds() against a
-		// real database.
-		expectedFiles: 14,
+		// real database. 15 after JR-4-05a added source-acl-lookup.int.test.ts --
+		// PostgresSourceAclLookup.listActiveSources() against a real database, read through a client
+		// this file constructs itself and never hands to drizzle() (F38's rule).
+		expectedFiles: 15,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -265,8 +305,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// of order, through PostgresLedgerWriter.append() on the same bare client). 97 after JR-3-05: a
 		// mixed batch of known/unknown spool_txids resolved correctly against the real schema and index,
 		// an all-unknown batch coming back empty without error, and an empty batch never reaching the
-		// database at all.
-		expectedTests: { ci: 97, nightly: 0, manual: 0 },
+		// database at all. 101 after JR-4-05a added source-acl-lookup.int.test.ts (4 tests, read
+		// through a client this file constructs itself and never hands to drizzle() -- F38's rule):
+		// an active source's CIDR list/require_tls round-trip correctly, a paused source is excluded,
+		// an empty allowed_ips array round-trips, and require_tls: false is read correctly rather than
+		// merely "not true".
+		expectedTests: { ci: 101, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

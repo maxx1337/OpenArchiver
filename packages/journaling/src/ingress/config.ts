@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { spoolConfigSchema } from '../spool/config';
 import { smtpServerConfigSchema } from './smtp-config';
 import { ingressTlsConfigSchema } from './tls-config';
+import { sourceAclConfigSchema } from './source-acl-config';
 
 /**
  * `apps/smtp-ingress` process configuration (`JR-4-01`, extended by `JR-4-02`), validated with
@@ -15,12 +16,12 @@ import { ingressTlsConfigSchema } from './tls-config';
  * `JR-4-01`'s acceptance criteria were about the process boundary only (starts standalone, no
  * forbidden imports, a clear message on bad configuration) -- not the SMTP protocol itself, so
  * `JR-4-01` deliberately left out every field the protocol engine needs. `JR-4-02` is the task that
- * consumes `smtp` below; TLS (`JR-4-04`), ACLs (`JR-4-05`) and rate limits (`JR-4-08`) still are
- * not here, for the same reason `JR-4-01`'s note gave: none of them is read by anything built so
- * far, and adding them now would be the same speculative configuration the Product Owner asked not
- * to carry. They join this schema in the tasks that consume them.
+ * consumes `smtp` below; recipient ACLs (`JR-4-05b`), `AUTH` (`JR-4-05c`) and rate limits
+ * (`JR-4-08`) still are not here, for the same reason `JR-4-01`'s note gave: none of them is read
+ * by anything built so far, and adding them now would be the same speculative configuration the
+ * Product Owner asked not to carry. They join this schema in the tasks that consume them.
  *
- * Four fields, one added by each of `JR-4-01`, `JR-4-02` and `JR-4-04`:
+ * Five fields, one added by each of `JR-4-01`, `JR-4-02`, `JR-4-04` and `JR-4-05a`:
  *  - `smtpPort`: the port the ESMTP listener binds (`JR-4-02`'s `EsmtpServer`, replacing `JR-4-01`'s
  *    bare `net.createServer()` placeholder).
  *  - `spool`: the process owns the spool per the privilege-separation table in
@@ -30,7 +31,11 @@ import { ingressTlsConfigSchema } from './tls-config';
  *    timeouts. See `./smtp-config.ts` for every field and its default.
  *  - `tls` (`JR-4-04`): `EsmtpServerOptions.tls` -- certificate/key PEM content and the process-wide
  *    `requireTls` default. See `./tls-config.ts` for every field, its default and the
- *    tighten-never-loosen extension point `JR-4-05` uses.
+ *    tighten-never-loosen extension point `JR-4-05a` uses.
+ *  - `sourceAcl` (`JR-4-05a`): the read-only-role database connection and cache refresh/staleness
+ *    tuning for the source ACL (`./source-acl-config.ts`, `./source-acl-cache.ts`). Unlike `smtp`
+ *    and `tls`, this key's `databaseUrl` field has **no default** -- see that schema's doc comment
+ *    for why "no database configured" must be a startup error, not a silent allow-everyone.
  *
  * ---------------------------------------------------------------------------------------------
  * Why this package validates the shaped object, not `process.env` (`JR-4-01`)
@@ -61,6 +66,13 @@ export const ingressConfigSchema = z.object({
 	 * `{}` is a valid value and means "no certificate configured, TLS not required".
 	 */
 	tls: ingressTlsConfigSchema,
+	/**
+	 * Source ACL configuration (`./source-acl-config.ts`, `JR-4-05a`): the read-only-role database
+	 * connection string plus cache refresh/staleness tuning. Required as a key, but unlike `smtp`
+	 * and `tls` it is **not** satisfied by `{}` -- `databaseUrl` has no default (see that schema's
+	 * doc comment).
+	 */
+	sourceAcl: sourceAclConfigSchema,
 	/**
 	 * Log verbosity. Optional -- a missing value is not a configuration error. Read for real since
 	 * `JR-4-02`: `apps/smtp-ingress/src/index.ts` builds a `pino` instance with `level: logLevel`
