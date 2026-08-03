@@ -467,7 +467,9 @@ suiteRequiring(
 				// here).
 				client.send('DATA');
 				await client.nextReply(); // 354
-				client.writeRaw('this process accepts nothing while journalAcceptance is unwired\r\n.\r\n');
+				client.writeRaw(
+					'this process accepts nothing while journalAcceptance is unwired\r\n.\r\n'
+				);
 				const dataReply = await client.nextReply();
 				expect(dataReply[0]).toMatch(/^451 4\.3\.0/);
 			} finally {

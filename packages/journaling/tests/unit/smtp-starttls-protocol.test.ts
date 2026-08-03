@@ -10,7 +10,10 @@ import {
 } from '../../src/ingress/smtp-server';
 import { smtpServerConfigSchema } from '../../src/ingress/smtp-config';
 import type { IngressTlsConfig } from '../../src/ingress/tls-config';
-import { generateTestTlsCertificate, probeOpensslAvailable } from '../support/generate-test-tls-cert';
+import {
+	generateTestTlsCertificate,
+	probeOpensslAvailable,
+} from '../support/generate-test-tls-cert';
 
 /**
  * `JR-4-04` -- `STARTTLS`, `require_tls`, the TLS >= 1.2 floor, and the session reset after a
@@ -447,45 +450,42 @@ suiteRequiring('ci', 'EsmtpServer STARTTLS over the wire (JR-4-04)', infraRequir
 		});
 	});
 
-	describe(
-		'STARTTLS pipelined-bytes discard (JR-4-04, the STARTTLS command-injection class, companion to F44/JR-4-16)',
-		() => {
-			it('bytes sent in the same segment as STARTTLS are discarded, never answered, before or after the handshake', async () => {
-				const { cert, key } = generateTestTlsCertificate();
-				const { port } = await startServer({ tls: { cert, key } });
-				const client = await connectClient(port);
-				await client.nextReply();
-				client.send('EHLO client.example.com');
-				await client.nextReply();
+	describe('STARTTLS pipelined-bytes discard (JR-4-04, the STARTTLS command-injection class, companion to F44/JR-4-16)', () => {
+		it('bytes sent in the same segment as STARTTLS are discarded, never answered, before or after the handshake', async () => {
+			const { cert, key } = generateTestTlsCertificate();
+			const { port } = await startServer({ tls: { cert, key } });
+			const client = await connectClient(port);
+			await client.nextReply();
+			client.send('EHLO client.example.com');
+			await client.nextReply();
 
-				// A non-conformant client, or an on-path attacker, sending a command right after
-				// STARTTLS in the very same TCP segment -- RFC 2920 forbids this precisely because the
-				// client cannot know whether the handshake will succeed.
-				client.writeRaw(
-					'STARTTLS\r\nMAIL FROM:<attacker@evil.invalid>\r\nRCPT TO:<j@example.com>\r\n'
-				);
+			// A non-conformant client, or an on-path attacker, sending a command right after
+			// STARTTLS in the very same TCP segment -- RFC 2920 forbids this precisely because the
+			// client cannot know whether the handshake will succeed.
+			client.writeRaw(
+				'STARTTLS\r\nMAIL FROM:<attacker@evil.invalid>\r\nRCPT TO:<j@example.com>\r\n'
+			);
 
-				// Exactly one reply arrives in plaintext -- the 220 for STARTTLS. If the smuggled
-				// MAIL/RCPT had been processed (the pre-fix behaviour this test guards against), a
-				// second plaintext reply would already be sitting here before the handshake even starts.
-				const starttlsReply = await client.nextReply();
-				expect(starttlsReply[0]).toMatch(/^220 /);
-				await expect(client.nextReply(300)).rejects.toThrow(/no SMTP reply/);
+			// Exactly one reply arrives in plaintext -- the 220 for STARTTLS. If the smuggled
+			// MAIL/RCPT had been processed (the pre-fix behaviour this test guards against), a
+			// second plaintext reply would already be sitting here before the handshake even starts.
+			const starttlsReply = await client.nextReply();
+			expect(starttlsReply[0]).toMatch(/^220 /);
+			await expect(client.nextReply(300)).rejects.toThrow(/no SMTP reply/);
 
-				await client.startTls();
+			await client.startTls();
 
-				// No unsolicited reply arrives after the handshake either -- the smuggled bytes were
-				// discarded, not queued up to be answered once the connection became secure.
-				await expect(client.nextReply(300)).rejects.toThrow(/no SMTP reply/);
+			// No unsolicited reply arrives after the handshake either -- the smuggled bytes were
+			// discarded, not queued up to be answered once the connection became secure.
+			await expect(client.nextReply(300)).rejects.toThrow(/no SMTP reply/);
 
-				// The connection is fully usable afterward: a real EHLO/MAIL over the encrypted channel
-				// gets the ordinary replies, proving this was a targeted discard, not a broken connection.
-				client.send('EHLO client.example.com');
-				await client.nextReply();
-				client.send('MAIL FROM:<real@example.com>');
-				const reply = await client.nextReply();
-				expect(reply[0]).toMatch(/^250 2\.1\.0/);
-			});
-		}
-	);
+			// The connection is fully usable afterward: a real EHLO/MAIL over the encrypted channel
+			// gets the ordinary replies, proving this was a targeted discard, not a broken connection.
+			client.send('EHLO client.example.com');
+			await client.nextReply();
+			client.send('MAIL FROM:<real@example.com>');
+			const reply = await client.nextReply();
+			expect(reply[0]).toMatch(/^250 2\.1\.0/);
+		});
+	});
 });

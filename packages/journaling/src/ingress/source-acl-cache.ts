@@ -495,7 +495,10 @@ export function createSourceAclRequireTlsResolver(
  * hand-rolled copy, so this stays in lockstep with `EsmtpServerOptions` itself if a fourth slot is
  * ever added there. */
 export type SourceAclCacheEsmtpBindings = Required<
-	Pick<EsmtpServerOptions, 'sourceAclEvaluator' | 'recipientAclEvaluator' | 'authCredentialEvaluator'>
+	Pick<
+		EsmtpServerOptions,
+		'sourceAclEvaluator' | 'recipientAclEvaluator' | 'authCredentialEvaluator'
+	>
 >;
 
 /**
