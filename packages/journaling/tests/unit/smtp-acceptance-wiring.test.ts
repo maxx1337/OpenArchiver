@@ -81,7 +81,7 @@ const RCPT_ADDRESS = 'journal@example.com';
  * about the recipient ACL itself (`smtp-recipient-acl-protocol.test.ts` already covers that), it
  * only needs a `chainScopeId` for `tryBeginAcceptance()` to read. */
 const fixedRecipientAcl: RecipientAclEvaluator = {
-	evaluate: () => ({ kind: 'allowed', sourceId: SOURCE_ID, chainScopeId: CHAIN_SCOPE_ID }),
+	evaluateRecipient: () => ({ kind: 'allowed', sourceId: SOURCE_ID, chainScopeId: CHAIN_SCOPE_ID }),
 };
 
 interface StartedServer {

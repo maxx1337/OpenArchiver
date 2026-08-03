@@ -2093,7 +2093,7 @@ sieben Operationen ab) und F44 (die Probe traf den Fall nicht): der ungeprüfte 
 `packages/journaling/src/ingress/smtp-server.ts` (`RecipientAclEvaluator` / `SourceAclEvaluator`),
 `packages/journaling/src/ingress/source-acl-cache.ts`, verdrahtet in
 `apps/smtp-ingress/src/index.ts` · **Gefunden:** `JR-4-18` (2026-08-03, Rolle DEV), gemeldet und
-**nicht** behoben · **Status:** **offen**, Behebung als `JR-4-20`
+**nicht** behoben · **Status:** **behoben** in `JR-4-20` (Rolle DEV, 2026-08-03)
 
 `RecipientAclEvaluator.evaluate` und `SourceAclEvaluator.evaluate` tragen denselben Methodennamen.
 TypeScript typisiert **strukturell**, also erfüllt `SourceAclCache` beide Schnittstellen über seine
@@ -2122,3 +2122,37 @@ Nachbildung der Verdrahtung, nie die Verdrahtung. Eine Namenskollision ist nur d
 Fehler, die dort unbemerkt bleibt — ein vergessener Parameter, ein vertauschtes Argument oder ein
 nicht gestarteter Cache wären genauso unsichtbar. `JR-4-20` behebt deshalb beides: die Kollision
 strukturell, **und** die untestete Verdrahtung.
+
+> **Behoben (`JR-4-20`).** Beide Hälften, wie im Befund gefordert:
+>
+> **1. Die Kollision strukturell ausgeschlossen, nicht nur umbenannt.** `RecipientAclEvaluator`
+> (`packages/journaling/src/ingress/smtp-server.ts`) heißt jetzt `evaluateRecipient(rcptToAddress)`
+> statt `evaluate(rcptToAddress)` — der Name, den `SourceAclCache` für diese Rolle bereits **hatte**,
+> nur nie über eine Schnittstelle erreichbar war. `handleRcpt()` ruft jetzt
+> `this.recipientAclEvaluator.evaluateRecipient(parsed.address)`. Der Nachweis, dass ein künftiger
+> Vertauscher nicht mehr kompiliert, ist selbst ein Test, kein Kommentar:
+> `packages/journaling/tests/unit/acl-evaluator-port-shapes.test.ts` weist per `@ts-expect-error`
+> nach, dass ein Objekt, das nur `SourceAclEvaluator` implementiert, `RecipientAclEvaluator` nicht
+> mehr erfüllt (und umgekehrt) — geprüft durch `tsc -p tsconfig.test.json`
+> (`pnpm --filter @open-archiver/journaling test:types`), nicht durch die Laufzeit-Assertion allein.
+> Die übrigen Ports desselben Prozesses (`AuthCredentialEvaluator.lookupCredential`,
+> `PasswordVerifier.compare`, `SourceAclLookup.listActiveSources`, `LedgerBackend.append`,
+> `IngressLogger.{debug,info,warn,error}`) tragen dieselbe Falle **nicht** — jeder Methodenname ist im
+> gesamten Ingress-Prozess einzigartig, mechanisch nachvollzogen durch die Methodennamen aller
+> exportierten Ports in `packages/journaling/src/ingress/` und `packages/journaling/src/ledger/`.
+>
+> **2. Die untestete Verdrahtung geschlossen.** `bindSourceAclCache()` (neu, in
+> `packages/journaling/src/ingress/source-acl-cache.ts`) ist die eine Funktion, die einen
+> `SourceAclCache` auf die drei `EsmtpServerOptions`-Rollen abbildet;
+> `apps/smtp-ingress/src/index.ts` ruft jetzt genau diese Funktion statt drei Objektliteral-Zeilen
+> auszuschreiben. `packages/journaling/tests/unit/source-acl-cache-wiring.test.ts` ruft **dieselbe**
+> Funktion, verdrahtet einen echten `SourceAclCache` in einen echten `EsmtpServer` und fährt über
+> eine echte Loopback-Verbindung — kein Fake mehr an der Stelle, die den Befund verursacht hat.
+> Zusätzlich prüft `smtp-ingress-crash-recovery-boot.int.test.ts`s dritter Fall (`JR-4-18`) jetzt über
+> den echten, kompilierten Prozess: `RCPT TO` einer gesäten Route antwortet `250 2.1.5` (die
+> Regression, die vor diesem Fix `451` war), `DATA` bleibt `451 4.3.0` (das eigentliche Ziel dieses
+> Tests: `journalAcceptance` unverdrahtet nach fehlgeschlagenem Crash-Recovery-Scan).
+>
+> **Voller Lauf:** `846 passed | 7 skipped`, 67 Dateien (vorher `843 passed | 7 skipped`, 65 Dateien);
+> `unit: ci 698/698`, `integration: ci 111/111`, `adversarial: ci 37/37` — exakt, keine Verletzung der
+> Suite-Inventur.

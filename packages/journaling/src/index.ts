@@ -178,12 +178,14 @@ export type { JournalingSourceAclEntry, SourceAclLookup } from './ingress/source
 export { PostgresSourceAclLookup } from './ingress/source-acl';
 
 export {
+	bindSourceAclCache,
 	buildAuthIndex,
 	buildRecipientIndex,
 	compileSourceAcl,
 	createSourceAclRequireTlsResolver,
 	SourceAclCache,
 	type CompiledSourceAcl,
+	type SourceAclCacheEsmtpBindings,
 	type SourceAclCacheOptions,
 } from './ingress/source-acl-cache';
 

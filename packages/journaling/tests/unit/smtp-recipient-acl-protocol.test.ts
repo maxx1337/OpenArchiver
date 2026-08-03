@@ -67,7 +67,7 @@ function recordingLogger(): { logger: IngressLogger; errors: unknown[][] } {
 function fakeRecipientEvaluator(
 	decide: (address: string) => RecipientAclDecision
 ): RecipientAclEvaluator {
-	return { evaluate: decide };
+	return { evaluateRecipient: decide };
 }
 
 /** Buffered, repeatable CRLF-line reader over one socket -- unlike `smtp-source-acl-protocol.test.ts`'s

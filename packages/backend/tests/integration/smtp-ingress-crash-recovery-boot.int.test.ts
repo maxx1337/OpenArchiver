@@ -45,7 +45,13 @@ import { seedIngestionSource, seedJournalingSource } from '../support/iam-seed';
  *     otherwise-migrated database (`deployment_identity` still readable, so this is specifically a
  *     scan failure, not the pre-existing "ledger database unreachable" case), the process still binds
  *     its port -- and a real SMTP transaction against it never receives `250` for `DATA`, proving
- *     "accepts nothing" rather than inferring it from the fallback code path.
+ *     "accepts nothing" rather than inferring it from the fallback code path. Since `JR-4-20` (F46),
+ *     this test also drives the transaction through a seeded, matching recipient, so `RCPT TO` itself
+ *     proves `250` first (the recipient ACL, not just the connect-time source ACL, genuinely gates the
+ *     transaction through `apps/smtp-ingress`'s production wiring) before `DATA` proves `451` --
+ *     before `JR-4-20`, `RCPT TO` never reached `250` at all here, for a reason unrelated to this
+ *     test's own claim (see `bindSourceAclCache`'s doc comment in `packages/journaling`'s
+ *     `source-acl-cache.ts` for the fixed defect).
  */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -382,32 +388,16 @@ suiteRequiring(
 			}
 		}, 30_000);
 
-		it('a scan that itself fails (journal_ledger missing) does not crash the process: it binds the port and never answers 250', async () => {
+		it('a scan that itself fails (journal_ledger missing) does not crash the process: RCPT still gates on the real recipient ACL, and DATA never answers 250', async () => {
 			// deployment_identity stays intact -- this must be specifically a scan failure, not the
 			// pre-existing "ledger database unreachable at all" case that JR-4-06a already covers.
 			await failHarness!.sql`DROP TABLE journal_ledger`;
 
-			// A journaling_sources row is still seeded so the *connect-time* source ACL admits
-			// 127.0.0.1 (otherwise the connection is refused with 554 before EHLO, proving nothing
-			// about the scan failure this test targets). Its routing address is never used, and RCPT
-			// is never expected to reach 250 regardless of what address is sent -- this run also
-			// surfaced an unrelated, previously-undetected defect (reported separately, not fixed
-			// here -- out of this task's scope): `EsmtpServer`'s `recipientAclEvaluator` and
-			// `sourceAclEvaluator` ports both declare a method literally named `evaluate`, and
-			// `SourceAclCache implements` both by structural typing; TypeScript resolves *both*
-			// interface slots to the class's one `evaluate(remoteIp)` method (the CIDR/connect-time
-			// check), never to the class's separate `evaluateRecipient(rcptToAddress)`. Every real
-			// `RCPT TO` therefore has its address run through `normalizeRemoteIp()`, which throws for
-			// an email address and is caught into `{ kind: 'unavailable' }` -- so RCPT always answers
-			// `451`, never `550` or `250`, whenever `apps/smtp-ingress`'s production wiring
-			// (`recipientAclEvaluator: sourceAclCache`, the exact object also used as
-			// `sourceAclEvaluator`) is exercised end-to-end, regardless of what is seeded. That is
-			// sufficient for this test's own claim ("this process accepts nothing") even though it
-			// means DATA can never be reached here to re-prove the already-accepted
-			// `smtp-acceptance-wiring.test.ts` unit case ("`journalAcceptance` undefined -> `DATA`
-			// unconditionally `451`") over the wire a second time.
+			// A journaling_sources row is seeded with a real routing address so the *recipient* ACL
+			// (not just the connect-time source ACL) is genuinely exercised through
+			// `apps/smtp-ingress`'s production wiring below -- see the F46/JR-4-20 note.
 			const source = await seedIngestionSource(failHarness!.db);
-			await seedJournalingSource(failHarness!.db, {
+			const journalingSource = await seedJournalingSource(failHarness!.db, {
 				ingestionSourceId: source.id,
 				allowedIps: ['127.0.0.1/32', '::1/128'],
 			});
@@ -460,13 +450,26 @@ suiteRequiring(
 				await client.nextReply();
 				client.send('MAIL FROM:<sender@example.com>');
 				await client.nextReply();
-				// See the comment above: RCPT never reaches 250 through this process's real wiring,
-				// for a reason unrelated to this test's own claim. Whatever it answers, it must never
-				// be 250 -- proving "this process accepts nothing" at the first command capable of a
-				// message-accepting 250, which is as far as this run can observe it.
-				client.send('RCPT TO:<journal-does-not-matter@journaling.test.invalid>');
+				// Since JR-4-20 (F46 fixed): RCPT TO a *real*, seeded recipient now genuinely reaches
+				// 250 -- the recipient ACL runs through `evaluateRecipient()`, not the connect-time IP
+				// matcher. This is the regression proof for F46 at the full-process level: before the
+				// fix, this exact RCPT TO -- against this exact production wiring -- answered 451,
+				// never 250, regardless of what was seeded.
+				client.send(`RCPT TO:<${journalingSource.routingAddress}>`);
 				const rcptReply = await client.nextReply();
-				expect(rcptReply[0]).not.toMatch(/^250/);
+				expect(rcptReply[0]).toMatch(/^250 2\.1\.5/);
+
+				// DATA is where *this* test's own claim lives: the crash-recovery scan failed, so
+				// `journalAcceptance` stayed `undefined` (see this file's module doc comment) and every
+				// DATA/BDAT...LAST unconditionally answers 451 -- never 250 -- regardless of platform
+				// (unlike the full accept path in `journal-smtp-accept-e2e.int.test.ts`, this reply
+				// never reaches the spool/directory-fsync at all, so there is no Windows-only branch
+				// here).
+				client.send('DATA');
+				await client.nextReply(); // 354
+				client.writeRaw('this process accepts nothing while journalAcceptance is unwired\r\n.\r\n');
+				const dataReply = await client.nextReply();
+				expect(dataReply[0]).toMatch(/^451 4\.3\.0/);
 			} finally {
 				if (socket && !socket.destroyed) socket.destroy();
 				if (!exited) child.kill();

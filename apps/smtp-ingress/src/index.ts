@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 import pino from 'pino';
 import postgres from 'postgres';
 import {
+	bindSourceAclCache,
 	createSourceAclRequireTlsResolver,
 	ensureSpoolLayout,
 	EsmtpServer,
@@ -246,12 +247,13 @@ async function main(): Promise<void> {
 		smtp: config.smtp,
 		tls: config.tls,
 		logger,
-		sourceAclEvaluator: sourceAclCache,
-		// JR-4-05b/JR-4-05c: the same SourceAclCache instance for both the recipient ACL and the AUTH
-		// credential lookup -- one refresh cycle serves all three ACLs, see that class's doc comment
-		// for why this is deliberately not a second (or third) cache.
-		recipientAclEvaluator: sourceAclCache,
-		authCredentialEvaluator: sourceAclCache,
+		// JR-4-05b/JR-4-05c: the same SourceAclCache instance for the source ACL, the recipient ACL,
+		// and the AUTH credential lookup -- one refresh cycle serves all three ACLs, see that class's
+		// doc comment for why this is deliberately not a second (or third) cache. `bindSourceAclCache`
+		// (`JR-4-20`, closing F46) is the one function that maps the cache onto these three
+		// `EsmtpServerOptions` slots -- the same function `source-acl-cache-wiring.test.ts` calls, so
+		// a test proves the real binding rather than a hand-written copy of it.
+		...bindSourceAclCache(sourceAclCache),
 		// JR-4-05c: bcrypt lives here, not in packages/journaling -- see PasswordVerifier's doc
 		// comment.
 		passwordVerifier: createBcryptPasswordVerifier(),

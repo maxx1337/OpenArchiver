@@ -5,6 +5,7 @@ import type { JournalingSourceAclEntry, SourceAclLookup } from './source-acl-por
 import type {
 	AuthCredentialEvaluator,
 	AuthCredentialLookupResult,
+	EsmtpServerOptions,
 	IngressLogger,
 	RecipientAclDecision,
 	RecipientAclEvaluator,
@@ -487,5 +488,43 @@ export function createSourceAclRequireTlsResolver(
 		}
 		const decision = cache.evaluate(context.remoteIp);
 		return decision.kind === 'allowed' && decision.requireTls;
+	};
+}
+
+/** The three {@link EsmtpServerOptions} slots {@link SourceAclCache} fills at once -- `Pick`, not a
+ * hand-rolled copy, so this stays in lockstep with `EsmtpServerOptions` itself if a fourth slot is
+ * ever added there. */
+export type SourceAclCacheEsmtpBindings = Required<
+	Pick<EsmtpServerOptions, 'sourceAclEvaluator' | 'recipientAclEvaluator' | 'authCredentialEvaluator'>
+>;
+
+/**
+ * Bind one {@link SourceAclCache} instance into the three {@link EsmtpServerOptions} slots it fills
+ * (`JR-4-20`, closing F46) -- `apps/smtp-ingress/src/index.ts`'s production wiring calls this
+ * instead of writing out `sourceAclEvaluator: cache, recipientAclEvaluator: cache,
+ * authCredentialEvaluator: cache` inline, and so does
+ * `tests/unit/source-acl-cache-wiring.test.ts` -- **the same function**, not a re-typed copy of the
+ * assignment, wired into a real `EsmtpServer` over a real loopback socket.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Why this function exists at all -- it does nothing a three-line object literal could not
+ * ---------------------------------------------------------------------------------------------
+ * F46 was not a wrong *object* passed to the wrong slot -- passing the same `SourceAclCache` to all
+ * three was, and remains, exactly the intended design (this file's module doc comment, "One cache,
+ * one refresh cycle, three ACLs"). F46 was a method-name collision between two of the *ports*
+ * (`SourceAclEvaluator.evaluate`/`RecipientAclEvaluator.evaluate`, now `evaluateRecipient` --
+ * `./smtp-server.ts`'s `RecipientAclEvaluator` doc comment) that no test caught, because every
+ * existing test constructed its own hand-written fakes for these three roles rather than this
+ * production assembly. Extracting the assembly here, so a test can call the identical function
+ * production calls, is what closes *that* gap: a test built on this function exercises the real
+ * three-role binding, not a reproduction of it, so a future regression in *how the cache is bound*
+ * -- not just in the ports' method names, already covered by
+ * `tests/unit/acl-evaluator-port-shapes.test.ts` -- has a test standing in its way too.
+ */
+export function bindSourceAclCache(cache: SourceAclCache): SourceAclCacheEsmtpBindings {
+	return {
+		sourceAclEvaluator: cache,
+		recipientAclEvaluator: cache,
+		authCredentialEvaluator: cache,
 	};
 }

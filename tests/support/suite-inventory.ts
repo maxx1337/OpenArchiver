@@ -154,8 +154,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// calibrated streaming-memory proof). 42 after JR-4-18 added
 		// spool/crash-recovery-lock.test.ts (runExclusiveCrashRecoveryScan(): the cross-process
 		// exclusivity runCrashRecoveryScan() itself does not provide, wiring the previously uncalled
-		// JR-3-05 scan's lock into the caller).
-		expectedFiles: 42,
+		// JR-3-05 scan's lock into the caller). 44 after JR-4-20 added
+		// tests/unit/acl-evaluator-port-shapes.test.ts and tests/unit/source-acl-cache-wiring.test.ts
+		// (F46 -- see expectedTests below for what each proves).
+		expectedFiles: 44,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -367,7 +369,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// propagated -- not swallowed -- only after the lock was taken, and a fake modelling real
 		// pg_advisory_xact_lock semantics proving two scans on the same spoolRoot serialise while two
 		// on different spoolRoots do not).
-		expectedTests: { ci: 695, nightly: 3, manual: 0 },
+		// 698 ci after JR-4-20 (F46 -- SourceAclEvaluator/RecipientAclEvaluator's shared `evaluate`
+		// method name let SourceAclCache's IP matcher silently stand in for the recipient ACL) added
+		// tests/unit/acl-evaluator-port-shapes.test.ts (2: the type-level proof that swapping either
+		// evaluator for the other no longer compiles, checked by tsc -p tsconfig.test.json, plus the
+		// runtime check that SourceAclCache still satisfies all three roles at once) and
+		// tests/unit/source-acl-cache-wiring.test.ts (1: bindSourceAclCache() -- the same function
+		// apps/smtp-ingress/src/index.ts calls in production -- wired into a real EsmtpServer over a
+		// real loopback socket, RCPT TO a seeded routing address reaching 250 and an unknown one 550).
+		expectedTests: { ci: 698, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',

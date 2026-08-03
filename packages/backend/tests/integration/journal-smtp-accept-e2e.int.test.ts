@@ -174,7 +174,7 @@ suiteRequiring(
 			});
 
 			const recipientAclEvaluator: RecipientAclEvaluator = {
-				evaluate: (address) =>
+				evaluateRecipient: (address) =>
 					address.toLowerCase() === routingAddress.toLowerCase()
 						? { kind: 'allowed', sourceId: source.id, chainScopeId }
 						: { kind: 'denied' },
@@ -302,7 +302,7 @@ suiteRequiring(
 			};
 
 			const recipientAclEvaluator: RecipientAclEvaluator = {
-				evaluate: (address) =>
+				evaluateRecipient: (address) =>
 					address.toLowerCase() === routingAddress.toLowerCase()
 						? { kind: 'allowed', sourceId: source.id, chainScopeId }
 						: { kind: 'denied' },

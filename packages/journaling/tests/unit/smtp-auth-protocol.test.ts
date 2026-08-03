@@ -99,7 +99,7 @@ function fakeRecipientEvaluator(bySourceId: {
 	[address: string]: { sourceId: string; chainScopeId: string };
 }): RecipientAclEvaluator {
 	return {
-		evaluate(address: string): RecipientAclDecision {
+		evaluateRecipient(address: string): RecipientAclDecision {
 			const match = bySourceId[address];
 			if (!match) {
 				return { kind: 'denied' };

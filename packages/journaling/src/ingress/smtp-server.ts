@@ -962,14 +962,32 @@ export type SourceAclDecision =
  * `journal-ledger` section 2 -- "Recipient not a configured journal address" ⇒ `550 5.1.1`).
  * Implemented by `SourceAclCache` (`./source-acl-cache.ts`) alongside {@link SourceAclEvaluator} --
  * see that file's doc comment for why this is the *same* cache and refresh cycle, not a second one.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Why this method is named `evaluateRecipient`, not `evaluate` (F46, `JR-4-20`)
+ * ---------------------------------------------------------------------------------------------
+ * It used to be named `evaluate`, identically to {@link SourceAclEvaluator.evaluate}. Because
+ * {@link SourceAclDecision} and {@link RecipientAclDecision} are structurally the same shape
+ * (`'allowed' | 'denied' | 'unavailable'`, TypeScript's structural typing let a single
+ * `evaluate(remoteIp): SourceAclDecision` method on `SourceAclCache` satisfy *both* interfaces at
+ * once -- the compiler never checked that the method meant to answer `RCPT TO` was the one that
+ * actually ran. `SourceAclCache` already had a separate, correctly-behaving `evaluateRecipient()`
+ * method; it just was never part of any interface, so nothing ever called it. Every real `RCPT TO`
+ * silently ran through the connect-time IP matcher instead, which throws on an email address
+ * (caught into `'unavailable'`) -- production answered `451` to every recipient, never `250` or
+ * `550`. Giving this port its own method name closes the hole structurally: a type implementing
+ * only {@link SourceAclEvaluator} (with `evaluate`, no `evaluateRecipient`) no longer satisfies
+ * `RecipientAclEvaluator`, and vice versa -- see
+ * `packages/journaling/tests/unit/acl-evaluator-port-shapes.test.ts` for the compiled proof that a
+ * future re-collision of the two names does not compile.
  */
 export interface RecipientAclEvaluator {
-	evaluate(rcptToAddress: string): RecipientAclDecision;
+	evaluateRecipient(rcptToAddress: string): RecipientAclDecision;
 }
 
 /**
- * The three outcomes {@link RecipientAclEvaluator.evaluate} can report -- deliberately the same
- * shape as {@link SourceAclDecision}, and for the same reasons:
+ * The three outcomes {@link RecipientAclEvaluator.evaluateRecipient} can report -- deliberately the
+ * same shape as {@link SourceAclDecision}, and for the same reasons:
  *
  *  - `'allowed'`: `rcptToAddress` (after `./recipient-address.ts`'s comparison rules) matched an
  *    active source's `routing_address`. Carries that source's identity and `chainScopeId` (ADR-007)
@@ -1832,7 +1850,7 @@ class SmtpConnection {
 		}
 
 		if (this.recipientAclEvaluator) {
-			const decision = this.recipientAclEvaluator.evaluate(parsed.address);
+			const decision = this.recipientAclEvaluator.evaluateRecipient(parsed.address);
 			if (decision.kind === 'denied') {
 				// JR-4-05b, skill section 2: an address that matches no active source's
 				// routing_address is the sender's problem, not a transient one -- 550, never a 4xx.
