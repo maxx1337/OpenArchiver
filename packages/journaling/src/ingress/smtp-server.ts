@@ -2,6 +2,12 @@ import * as net from 'node:net';
 import * as tls from 'node:tls';
 import type { SmtpServerConfig } from './smtp-config';
 import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
+import { SpoolWriteBridge } from './spool-write-bridge';
+import {
+	isAccepted,
+	type JournalAcceptanceResult,
+	type JournalTransactionInput,
+} from '../spool/acceptance';
 
 /**
  * The ESMTP protocol engine (`JR-4-02`).
@@ -41,11 +47,12 @@ import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
  * ---------------------------------------------------------------------------------------------
  * `EHLO`/`HELO`, `MAIL`/`RCPT`/`DATA` far enough to reach and terminate a `DATA` transfer,
  * `PIPELINING`/`8BITMIME`/`SMTPUTF8`/`SIZE` (RFC 1870's `MAIL FROM ... SIZE=` parameter included),
- * and the three timeouts. Deliberately **not** here (this task added TLS/`STARTTLS`, see below):
- * source/recipient ACLs (`JR-4-05`), and wiring `JournalAcceptance.accept()` (`JR-4-06`). End-of-`DATA` always
- * answers `451 4.3.0` until that wiring lands -- see {@link SmtpConnection.finishData}'s doc
- * comment for why that is not a shortcut but the Product Owner's explicit instruction for this
- * slice.
+ * and the three timeouts. Deliberately **not** here (added by later tasks, see below): TLS/`STARTTLS`,
+ * source/recipient ACLs, and wiring `JournalAcceptance.accept()` -- the last of which is `JR-4-06a`,
+ * see this file's "`JournalAcceptance.accept()` is wired in" section further down. Before that task,
+ * end-of-`DATA` always answered `451 4.3.0`, unconditionally -- the Product Owner's explicit
+ * instruction for every slice before it, so that no intermediate state of this file could ever send a
+ * `250` it could not back.
  *
  * ---------------------------------------------------------------------------------------------
  * `CHUNKING`/`BDAT` (`JR-4-03`)
@@ -240,6 +247,68 @@ import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
  *    a password, a raw base64 SASL response, or a bcrypt hash; only usernames, source ids, and
  *    outcome/enhanced-status-code fields are logged, the same posture `IngressLogger`'s own module
  *    doc comment already holds every other log call in this file to.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `JournalAcceptance.accept()` is wired in (`JR-4-06a`) -- `250` is now possible
+ * ---------------------------------------------------------------------------------------------
+ * Every prior task's doc comment in this file said "`JR-4-06` wires `completeTransfer()` into
+ * `JournalAcceptance.accept()`" as a promise about the future. This is that task -- **the PO
+ * instruction lifting the "always `451`" constraint applies from here on**: `completeTransfer()` now
+ * calls `accept()` whenever {@link EsmtpServerOptions.journalAcceptance} is configured, and only then;
+ * `undefined` (the default, same convention every other optional evaluator in this file already
+ * uses) preserves the exact pre-`JR-4-06a` behaviour, which is what keeps every earlier task's
+ * protocol tests passing unchanged. Production (`apps/smtp-ingress/src/index.ts`) always supplies it
+ * once a ledger database is configured.
+ *
+ *  1. **The bridge, not a buffer.** `accept()` wants an `AsyncIterable<Uint8Array>`;
+ *     `DataScanner`/`BdatContentTracker` deliver content synchronously off socket `data` events, with
+ *     no `await` anywhere in that call stack. Collecting chunks into an array and handing
+ *     `accept()` a generator over it once the message ends would buffer the whole message in this
+ *     process's heap -- exactly what `JR-3-02`'s streaming durable write exists to avoid.
+ *     {@link SpoolWriteBridge} (`./spool-write-bridge.ts`) is the actual bridge: a `node:stream.Readable`
+ *     in object mode that `onContent` pushes into and `accept()`'s internal `for await` pulls out of,
+ *     with real backpressure -- `socket.pause()`/`socket.resume()` are wired to the bridge's own
+ *     `onPause`/`onResume` callbacks in {@link SmtpConnection.tryBeginAcceptance}. See that file's
+ *     module doc comment for the full design and for why a heap-growth proof needs `arrayBuffers`,
+ *     not `heapUsed` (F43).
+ *  2. **`accept()` starts at the first `DATA`/`BDAT`, not at the terminator.** By the time `DATA`
+ *     (state `'rcpt'` -> `'data'`) or the first `BDAT` of a transaction runs, `MAIL`/`RCPT` are
+ *     already frozen (neither command is reachable again until the transaction resets), so every
+ *     field `JournalTransactionInput` needs except the content itself is already known --
+ *     {@link SmtpConnection.tryBeginAcceptance} builds the request and calls `accept()` right there,
+ *     before writing `354`/the first chunk's `250`. `writeDurableSpoolFile()`'s first two
+ *     sub-operations (`mkdir`, `createFile`) already run, in the background, before a single content
+ *     byte exists -- see `durable-write.ts`'s doc comment for why that rules out "wait until we know
+ *     the message is not oversize before starting the write" as an alternative (`finalizeAcceptance`'s
+ *     own doc comment below has the full argument).
+ *  3. **Oversize aborts the in-flight write; `552` always wins.** `JR-4-16`'s discard-scan already
+ *     detects oversize mid-transfer and keeps reading to the real terminator without desyncing the
+ *     connection (F44); this task adds what happens to the *durable write* already in flight for that
+ *     rejected message. See {@link SmtpConnection.finalizeAcceptance}'s doc comment for the full
+ *     argument: the bridge is aborted rather than ended, `durable-write.ts`'s `F45` fix turns that into
+ *     a typed, `accept()`-catchable failure instead of an uncaught exception, and the SMTP layer -- the
+ *     only thing that knows this particular failure was actually an oversize rejection -- overrides
+ *     whatever `accept()` settles to with `552 5.3.4`, unconditionally.
+ *  4. **A transaction abandoned mid-`BDAT` is not leaked.** `RSET`, a fresh `EHLO`/`HELO`, or a
+ *     `STARTTLS` handshake can all fire {@link resetEnvelope} between two `BDAT` chunks, i.e. after
+ *     `tryBeginAcceptance()` already started an `accept()` call that will now never see `BDAT ...
+ *     LAST`. {@link SmtpConnection.abandonInFlightAcceptance}, called from {@link resetEnvelope} every
+ *     time, aborts that bridge the same way an oversize rejection does, so the write does not hang
+ *     forever waiting for chunks that will never arrive.
+ *  5. **A pipelined command must never race the transaction's own reply.** Awaiting `accept()` is the
+ *     first genuinely asynchronous step `DATA`/`BDAT` completion has ever had; a client that
+ *     pipelines the next command right behind `BDAT ... LAST`'s bytes must not have it parsed (against
+ *     a state that has not been reset yet) before this transaction's `250`/`4xx`/`552` reply is
+ *     written. {@link SmtpConnection.runCompleteTransfer} reuses {@link commandProcessingSuspended} --
+ *     the exact mechanism {@link verifyCredentials} already established for its own asynchronous
+ *     bcrypt comparison -- and {@link onData} now checks it before routing a raw byte chunk at all, not
+ *     only before parsing a command line (see that method's own comment for why both DATA/BDAT-content
+ *     routing and command parsing both need the check now, where only the latter did before).
+ *  6. **The mapping (skill `journal-ledger` section 2):** `accepted` -> `250 2.0.0 Ok: queued as
+ *     <seq>`; `high-water-mark-exceeded`/`spool-capacity-exceeded` -> `452 4.3.1`;
+ *     `spool-write-failed`/`ledger-append-failed` -> `451 4.3.0`. See
+ *     {@link SmtpConnection.finalizeAcceptance} for the implementation and for oversize's override of
+ *     all of the above.
  */
 
 /** Injected structured-logging port -- see this module's "Where `logLevel` actually gets used"
@@ -964,6 +1033,18 @@ export interface PasswordVerifier {
 	compare(password: string, hash: string): Promise<boolean>;
 }
 
+/**
+ * What {@link EsmtpServer} needs to durably accept a message (`JR-4-06a`, skill `journal-ledger`
+ * sections 1-2). Implemented by `JournalAcceptance` (`../spool/acceptance.ts`) -- the real class
+ * satisfies this structurally, without importing it here, the same "the type lives here, next to its
+ * consumer" layering `SourceAclEvaluator`/`RecipientAclEvaluator`/`AuthCredentialEvaluator` already
+ * use. A test can supply a trivial fake instead (see this file's own module doc comment's
+ * "`JournalAcceptance.accept()` is wired in" section).
+ */
+export interface JournalAcceptancePort {
+	accept(input: JournalTransactionInput): Promise<JournalAcceptanceResult>;
+}
+
 /** Everything {@link RequireTlsResolver} needs to decide (`JR-4-04`, extended by `JR-4-05`). */
 export interface RequireTlsContext {
 	readonly remoteIp: string | null;
@@ -1068,6 +1149,16 @@ class SmtpConnection {
 	 * resumes {@link drainCommandCarry} itself so nothing buffered during verification is stranded.
 	 */
 	private commandProcessingSuspended = false;
+	/**
+	 * Non-`null` for the whole time an `accept()` call is in flight for the current transaction --
+	 * from {@link tryBeginAcceptance} (the first `DATA`/`BDAT` of the transaction) until
+	 * {@link finalizeAcceptance} or {@link abandonInFlightAcceptance} clears it. `null` at every other
+	 * time, including whenever `journalAcceptance` is not configured at all (`JR-4-06a`).
+	 */
+	private acceptPromise: Promise<JournalAcceptanceResult> | null = null;
+	/** The bridge feeding `acceptPromise`'s `chunks` -- see {@link SpoolWriteBridge}'s own doc
+	 * comment. Same lifetime as {@link acceptPromise}. */
+	private spoolBridge: SpoolWriteBridge | null = null;
 
 	constructor(
 		private socket: net.Socket,
@@ -1097,7 +1188,14 @@ class SmtpConnection {
 		 * (`apps/smtp-ingress`'s `createBcryptPasswordVerifier()`) or both left `undefined` to
 		 * disable `AUTH`. See {@link PasswordVerifier}'s doc comment for why this is a separate
 		 * injected port rather than a dependency of this package. */
-		private readonly passwordVerifier: PasswordVerifier | undefined
+		private readonly passwordVerifier: PasswordVerifier | undefined,
+		/** `undefined` (the default) preserves the exact pre-`JR-4-06a` behaviour: end of `DATA`/
+		 * `BDAT ... LAST` always answers `451 4.3.0`, the same convention every other optional
+		 * dependency in this constructor already established -- see this file's module doc comment,
+		 * "`JournalAcceptance.accept()` is wired in", for why that convention is what keeps every
+		 * earlier task's protocol tests passing unchanged. Production always supplies a real
+		 * `JournalAcceptance` once a ledger database is configured (`apps/smtp-ingress/src/index.ts`). */
+		private readonly journalAcceptance: JournalAcceptancePort | undefined
 	) {
 		// Connection-level backstop, independent of protocol state: Node re-arms this internally on
 		// any read *or* write activity on the socket, so it fires only on genuine idleness --
@@ -1130,6 +1228,18 @@ class SmtpConnection {
 	}
 
 	private onData(chunk: Buffer): void {
+		if (this.commandProcessingSuspended) {
+			// `JR-4-06a`: an `accept()` call is settling (see {@link runCompleteTransfer}) or a bcrypt
+			// comparison is in flight (`JR-4-05c`). `state`/`bdatChunkRemaining` may still describe the
+			// transaction that is *finishing*, not the one these bytes actually belong to -- e.g. `state`
+			// is still `'data'` until {@link resetEnvelope} runs, which only happens after `accept()`
+			// settles. Routing on stale state here would let bytes belonging to whatever comes next be
+			// mis-read against it. Parked in `commandCarry` regardless of what they are; `drainCommandCarry()`
+			// (called once processing resumes, from the same place `verifyCredentials` already resumes it
+			// for its own asynchronous step) re-interprets them once state is current again.
+			this.commandCarry = Buffer.concat([this.commandCarry, chunk]);
+			return;
+		}
 		if (this.state === 'data') {
 			this.handleDataChunk(chunk);
 			return;
@@ -1843,9 +1953,19 @@ class SmtpConnection {
 			this.armCommandTimer();
 			return;
 		}
+		// `JR-4-06a`: start `accept()` now, before `354` -- the envelope is already frozen (no further
+		// `MAIL`/`RCPT` is reachable once `state` leaves `'rcpt'`). A failed assertion here (see
+		// `tryBeginAcceptance`'s doc comment) means this transaction must never be told to send a body
+		// at all, so `354`/`state = 'data'` are skipped entirely on that path.
+		if (this.journalAcceptance && !this.tryBeginAcceptance()) {
+			return;
+		}
 		this.writePlain(354, 'Start mail input; end with <CRLF>.<CRLF>');
 		this.state = 'data';
-		this.dataScanner = new DataScanner(this.smtp.sizeLimitBytes);
+		this.dataScanner = new DataScanner(
+			this.smtp.sizeLimitBytes,
+			this.journalAcceptance ? (chunk) => this.spoolBridge!.push(chunk) : undefined
+		);
 		this.armDataTimer();
 	}
 
@@ -1866,12 +1986,14 @@ class SmtpConnection {
 	}
 
 	/**
-	 * End of `DATA`. Delegates the actual response/reset logic to {@link completeTransfer} -- see
-	 * that method's doc comment for why it always answers `451 4.3.0` in this task, never `250`.
+	 * End of `DATA`. Delegates the actual response/reset logic to {@link completeTransfer} via
+	 * {@link runCompleteTransfer} -- see that method's doc comment for why the call is fired off
+	 * rather than awaited here, and {@link finalizeAcceptance} for what the response actually is now
+	 * that `JR-4-06a` has wired `accept()` in.
 	 */
 	private finishData(oversize: boolean): void {
 		this.disarmProtocolTimer();
-		this.completeTransfer(oversize, this.dataScanner?.contentByteLength ?? 0, 'DATA');
+		this.runCompleteTransfer(oversize, this.dataScanner?.contentByteLength ?? 0, 'DATA');
 	}
 
 	/**
@@ -1900,7 +2022,15 @@ class SmtpConnection {
 			return;
 		}
 		if (!this.bdatTracker) {
-			this.bdatTracker = new BdatContentTracker(this.smtp.sizeLimitBytes);
+			// `JR-4-06a`: the first `BDAT` of a transaction is the `BDAT` equivalent of `DATA`'s own
+			// `tryBeginAcceptance()` call site above -- same reasoning, same envelope-frozen guarantee.
+			if (this.journalAcceptance && !this.tryBeginAcceptance()) {
+				return;
+			}
+			this.bdatTracker = new BdatContentTracker(
+				this.smtp.sizeLimitBytes,
+				this.journalAcceptance ? (chunk) => this.spoolBridge!.push(chunk) : undefined
+			);
 		}
 		this.bdatChunkIsLast = parsed.last;
 		if (parsed.chunkSize === 0) {
@@ -1970,44 +2100,78 @@ class SmtpConnection {
 	 */
 	private finishBdatTransaction(oversize: boolean): void {
 		this.disarmProtocolTimer();
-		this.completeTransfer(oversize, this.bdatTracker?.contentByteLength ?? 0, 'BDAT');
+		this.runCompleteTransfer(oversize, this.bdatTracker?.contentByteLength ?? 0, 'BDAT');
+	}
+
+	/**
+	 * Fire-and-forget wrapper around {@link completeTransfer} (`JR-4-06a`). `completeTransfer` is now
+	 * genuinely asynchronous -- it awaits `journalAcceptance.accept()` when one is configured -- but
+	 * both call sites ({@link finishData}, {@link finishBdatTransaction}) are themselves synchronous
+	 * socket-event handlers with nothing useful to do with a returned promise. This method is what
+	 * makes that safe rather than merely convenient:
+	 *
+	 *  - **Suspends command processing for the duration**, reusing {@link commandProcessingSuspended}
+	 *    -- the exact mechanism {@link verifyCredentials} already established for its own asynchronous
+	 *    step (bcrypt). This closes a race `JR-4-06a` would otherwise introduce:
+	 *    {@link handleBdatChunkBytes} can hand a pipelined remainder (the start of the next command, or
+	 *    even the next transaction) to {@link drainCommandCarry} in the very same synchronous stack
+	 *    frame a `BDAT ... LAST` chunk finishes in. Without suspending, that remainder would be parsed
+	 *    against `state`/the envelope *before* `completeTransfer` has written this transaction's own
+	 *    reply and reset them -- out-of-order replies, or a command misrouted against stale state.
+	 *    {@link onData} now checks the same flag before routing raw bytes at all (not only before
+	 *    parsing a command line), so bytes arriving mid-`accept()` are parked in `commandCarry`
+	 *    regardless of what phase they would otherwise be read as.
+	 *  - **Never lets a genuine bug in `completeTransfer` become an unhandled rejection.**
+	 *    `completeTransfer` is not expected to reject in normal operation (every `JournalAcceptance`
+	 *    result is a plain value, never a thrown one, once past `accept()`'s own non-`DurableWriteError`
+	 *    rethrow for a true programming error -- see `acceptance.ts`). If it ever does, this connection
+	 *    cannot know what reply (if any) has already reached the wire, so the only safe action is to
+	 *    log loudly and drop the connection -- never leave the sender waiting forever for a reply that
+	 *    will never come.
+	 */
+	private runCompleteTransfer(
+		oversize: boolean,
+		contentByteLength: number,
+		transferMode: 'DATA' | 'BDAT'
+	): void {
+		this.commandProcessingSuspended = true;
+		this.completeTransfer(oversize, contentByteLength, transferMode)
+			.catch((err: unknown) => {
+				this.logger.error(
+					{ err, transferMode, remoteAddress: this.socket.remoteAddress },
+					'smtp-ingress: completeTransfer failed unexpectedly; closing the connection ' +
+						'rather than leaving the sender waiting for a reply that was never sent'
+				);
+				if (!this.socket.destroyed) {
+					this.socket.destroy();
+				}
+			})
+			.finally(() => {
+				this.commandProcessingSuspended = false;
+				if (!this.socket.destroyed) {
+					this.drainCommandCarry();
+				}
+			});
 	}
 
 	/**
 	 * Shared end of a mail transaction's body transfer, reached either from `DATA`'s terminator
 	 * ({@link finishData}) or from `BDAT ... LAST` ({@link finishBdatTransaction}) -- kept as one
-	 * method precisely so `JR-4-06` has a single call site to change, not two.
+	 * method precisely so `JR-4-06a` has a single call site to change, not two.
 	 *
-	 * **Always answers `451 4.3.0` in this task, never `250`, for either path** -- this is the
-	 * Product Owner's explicit instruction, not an oversight: `JournalAcceptance.accept()`
-	 * (`packages/journaling`, `JR-3-04`) is wired into this server in `JR-4-06`, and until that
-	 * wiring exists nothing durable has happened to either path's bytes -- no spool write, no
-	 * ledger append. Answering anything but a `4xx` here (skill section 1: "`250 OK` is a
-	 * promise... never issue it before that is true") would be exactly the failure mode this
-	 * entire project exists to prevent, and the fact that this is "only an intermediate
-	 * development state" does not excuse it -- a sender cannot tell an intermediate `250` from a
-	 * real one, and a real one is a promise this file cannot back yet. When `JR-4-06` wires the
-	 * real path, the oversize branch is unaffected and the non-oversize branch is replaced with a
-	 * call into `JournalAcceptance.accept()`, fed by this connection's
-	 * `remoteIp`/`ehloName`/`mailFrom`/`rcptTo`, this task's `tlsVersion`/`tlsCipher` (`null`/`null`
-	 * on a plaintext connection, the real negotiated values once {@link onTlsHandshakeComplete} has
-	 * run -- see the module doc comment's "TLS / STARTTLS" section), and a bridge from whichever of
-	 * `DataScanner`/`BdatContentTracker` produced `contentByteLength` to the
-	 * `AsyncIterable<Uint8Array>` `accept()` expects.
-	 *
-	 * A non-`LAST` `BDAT` chunk's own `250` (written directly in {@link handleBdatCommand}/
-	 * {@link handleBdatChunkBytes}, never through this method) is a **different, weaker** promise
-	 * than the one this method's `451`/future `250` makes: RFC 3030 section 2 requires a `250` per
-	 * successful chunk ("A 250 response MUST be sent to each successful BDAT data block"), but that
-	 * is flow control -- "I read that chunk" -- not the durable-acceptance signal a sender relies on
-	 * to stop retrying. That signal is exclusively this method's, exactly once per transaction,
-	 * for both paths alike.
+	 * Oversize is logged the same way regardless of whether `journalAcceptance` is wired -- it is a
+	 * protocol-layer fact (`DataScanner`/`BdatContentTracker`'s own `SIZE` accounting), not something
+	 * `accept()` ever sees or decides. What differs is the reply: with no `journalAcceptance`
+	 * configured, this keeps the exact pre-`JR-4-06a` behaviour (`552` for oversize, `451` for
+	 * everything else, unconditionally -- see the module doc comment's "`JournalAcceptance.accept()`
+	 * is wired in" section for why that default is preserved rather than removed). With one
+	 * configured, {@link finalizeAcceptance} decides the reply instead.
 	 */
-	private completeTransfer(
+	private async completeTransfer(
 		oversize: boolean,
 		contentByteLength: number,
 		transferMode: 'DATA' | 'BDAT'
-	): void {
+	): Promise<void> {
 		if (oversize) {
 			this.logger.error(
 				{
@@ -2017,6 +2181,11 @@ class SmtpConnection {
 				},
 				'smtp-ingress: rejecting message, exceeds configured SIZE limit'
 			);
+		}
+
+		if (this.journalAcceptance) {
+			await this.finalizeAcceptance(oversize, transferMode);
+		} else if (oversize) {
 			this.writeResponse(552, '5.3.4', 'Message size exceeds fixed maximum message size');
 		} else {
 			this.logger.info(
@@ -2030,9 +2199,227 @@ class SmtpConnection {
 			);
 			this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
 		}
+
 		this.resetEnvelope();
 		this.state = 'ready';
 		this.armCommandTimer();
+	}
+
+	/**
+	 * Start `journalAcceptance.accept()` for the transaction that is beginning right now -- called
+	 * from `handleDataCommand`/`handleBdatCommand`, before `354`/the tracker that will feed it, so a
+	 * failed assertion below can refuse the transaction outright rather than accept a body it cannot
+	 * durably store. Returns `false` (having already written a `451` and re-armed the command timer)
+	 * when it refuses; the caller must not proceed to `354`/`state = 'data'`/`'bdat'` in that case.
+	 *
+	 * `singleMatchedChainScopeId()`'s assertion is the one `ADR-027`/`JR-4-17` promises structurally
+	 * (a second `RCPT TO` for a different chain is rejected with `452 4.5.3` before it ever reaches
+	 * `matchedChainScopeIds`) -- asserted here rather than assumed, per the Product Owner's
+	 * instruction, because a caller that constructs `EsmtpServer` with `journalAcceptance` set but
+	 * `recipientAclEvaluator` left `undefined` (a misconfiguration this class cannot rule out on its
+	 * own: the two are independent constructor parameters) would otherwise reach `accept()` with an
+	 * empty `matchedRecipients` and no chain to write into at all.
+	 */
+	private tryBeginAcceptance(): boolean {
+		let chainScopeId: string;
+		try {
+			chainScopeId = this.singleMatchedChainScopeId();
+		} catch (err) {
+			this.logger.error(
+				{ err, remoteAddress: this.socket.remoteAddress },
+				'smtp-ingress: refusing to start acceptance -- the envelope did not resolve to ' +
+					'exactly one journal chain (ADR-027 invariant violated; is recipientAclEvaluator ' +
+					'configured alongside journalAcceptance?)'
+			);
+			this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
+			this.armCommandTimer();
+			return false;
+		}
+
+		this.spoolBridge = new SpoolWriteBridge({
+			onPause: () => this.socket.pause(),
+			onResume: () => {
+				if (!this.socket.destroyed) {
+					this.socket.resume();
+				}
+			},
+		});
+		this.acceptPromise = this.journalAcceptance!.accept({
+			chainScopeId,
+			// ADR-006 section 3.1: microseconds, and a whole millisecond -- `Date.now()` is already
+			// millisecond-granular, so multiplying by 1000 can never produce anything else. Captured
+			// once, here, at the moment the body transfer begins -- not re-read later, and not
+			// deferred to whenever `accept()` happens to run.
+			receivedAtMicros: BigInt(Date.now()) * 1000n,
+			remoteIp: this.socket.remoteAddress ?? null,
+			ehloName: this.ehloName,
+			tlsVersion: this.tlsVersion,
+			tlsCipher: this.tlsCipher,
+			envelopeFrom: this.mailFrom,
+			// Arrival order, never sorted (ADR-006) -- `this.rcptTo` is already in that order.
+			envelopeRcpt: [...this.rcptTo],
+			// The transaction's first matched recipient's source -- ADR-027 guarantees every matched
+			// recipient shares one chainScopeId, but does not promise they all share one sourceId; the
+			// first is "the" source this receipt is attributed to (architecture doc section on
+			// "the recipient determines the chain").
+			journalingSourceId: this.matchedRecipients[0]?.sourceId ?? null,
+			chunks: this.spoolBridge.chunks,
+		});
+		return true;
+	}
+
+	/** The one chain every recipient matched so far this transaction must resolve to (ADR-027) --
+	 * throws if that invariant does not hold. See {@link tryBeginAcceptance}'s doc comment for why
+	 * this is asserted rather than assumed. */
+	private singleMatchedChainScopeId(): string {
+		if (this.matchedChainScopeIds.size !== 1) {
+			throw new Error(
+				`expected exactly one matched chain per transaction (ADR-027), got ` +
+					`${this.matchedChainScopeIds.size}`
+			);
+		}
+		return this.matchedRecipients[0]!.chainScopeId;
+	}
+
+	/**
+	 * Decide the reply once `journalAcceptance` is configured (`JR-4-06a`) -- the second half of
+	 * {@link completeTransfer}, called only when `this.journalAcceptance` is set. Ends or aborts the
+	 * bridge {@link tryBeginAcceptance} started, awaits the `accept()` call it began, and writes the
+	 * reply the skill `journal-ledger` section 2 table asks for.
+	 *
+	 * ---------------------------------------------------------------------------------------------
+	 * Oversize: the one place in the whole system that overrides `accept()`'s own result
+	 * ---------------------------------------------------------------------------------------------
+	 * By the time oversize is known, `writeDurableSpoolFile()` is very likely already mid-write --
+	 * `accept()` created the spool file (`mkdir`+`createFile`) before it ever pulled a single chunk out
+	 * of the bridge (see `durable-write.ts`), so "wait until we know the message is not oversize
+	 * before starting the write" is not actually available without buffering the whole message first
+	 * to find out, which is exactly what streaming exists to avoid (skill section 1's streaming
+	 * requirement, `JR-3-02`'s acceptance criterion). So instead the bridge is **aborted**, not ended:
+	 * {@link SpoolWriteBridge.abort} makes `writeDurableSpoolFile()`'s `for await` reject, which --
+	 * `durable-write.ts`'s `F45` fix -- surfaces as a typed `DurableWriteError('write', ...)` rather
+	 * than an uncaught `Error`. `JournalAcceptance.accept()`'s own `DurableWriteError` handling then
+	 * quarantines whatever partial write this left in `incoming/` under reason `'write-failed'`
+	 * (`JR-3-09`) exactly as it already does for a genuine write failure, and settles to
+	 * `'spool-write-failed'` (which maps to `451` in the table below).
+	 *
+	 * That `451` mapping is *wrong* for this case -- skill section 2 is unconditional that an oversize
+	 * message is `552 5.3.4`, never a retry code -- and `accept()` itself has no way to know the write
+	 * it was asked to perform was actually rejected by the protocol layer for an unrelated reason (it
+	 * has no `SIZE` concept at all). So this method overrides whatever `accept()` settled to with `552`
+	 * whenever the SMTP layer's own oversize flag is set, regardless of the typed result underneath.
+	 * **This is the only place in the system allowed to do that** -- everywhere else, `accept()`'s
+	 * result is authoritative (`acceptance.ts`'s own doc comment argues at length why nothing may run
+	 * after a successful append, and the same discipline applies to trusting a *rejection* verbatim).
+	 * Nothing is lost by overriding here: the debris is already quarantined by `accept()` itself, so a
+	 * later `runCrashRecoveryScan()` finds nothing left in `incoming/` to misdiagnose as a crash (F40) --
+	 * proven directly in `smtp-acceptance-wiring.test.ts`.
+	 *
+	 * A transaction that reaches here abandoned rather than genuinely finished (see
+	 * {@link abandonInFlightAcceptance}) never calls this method at all -- `abandonInFlightAcceptance`
+	 * aborts and forgets the promise itself, from {@link resetEnvelope}, without ever writing a reply
+	 * for it (there is no command awaiting one: `RSET`/`EHLO`/`STARTTLS` already get their own reply
+	 * from their own handler).
+	 */
+	private async finalizeAcceptance(
+		oversize: boolean,
+		transferMode: 'DATA' | 'BDAT'
+	): Promise<void> {
+		const bridge = this.spoolBridge;
+		const acceptPromise = this.acceptPromise;
+		this.spoolBridge = null;
+		this.acceptPromise = null;
+		// Defensive only: the two fields are only ever both-null or both-set (see their doc comments),
+		// so this branch should be unreachable in practice.
+		if (!bridge || !acceptPromise) {
+			this.logger.error(
+				{ remoteAddress: this.socket.remoteAddress, transferMode },
+				'smtp-ingress: finalizeAcceptance called with no in-flight acceptance (unreachable in ' +
+					'normal operation)'
+			);
+			this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
+			return;
+		}
+
+		if (oversize) {
+			bridge.abort(
+				new Error('oversize: SIZE limit exceeded, aborting in-flight spool write')
+			);
+		} else {
+			bridge.end();
+		}
+
+		const result = await acceptPromise;
+
+		if (oversize) {
+			// See this method's doc comment's "Oversize" section for why this overrides `result`
+			// unconditionally rather than mapping it through the table below.
+			this.logger.error(
+				{
+					remoteAddress: this.socket.remoteAddress,
+					transferMode,
+					acceptResultKind: result.kind,
+				},
+				"smtp-ingress: oversize message rejected with 552; the aborted spool write's own " +
+					'result is overridden (see SmtpConnection.finalizeAcceptance)'
+			);
+			this.writeResponse(552, '5.3.4', 'Message size exceeds fixed maximum message size');
+			return;
+		}
+
+		if (isAccepted(result)) {
+			this.logger.info(
+				{
+					remoteAddress: this.socket.remoteAddress,
+					transferMode,
+					seq: result.seq.toString(),
+				},
+				'smtp-ingress: message durably accepted'
+			);
+			this.writeResponse(250, '2.0.0', `Ok: queued as ${result.seq}`);
+			return;
+		}
+
+		// The rest of skill `journal-ledger` section 2's table -- every local-failure kind
+		// `JournalAcceptance.accept()` can return once `oversize` is ruled out above.
+		switch (result.kind) {
+			case 'high-water-mark-exceeded':
+			case 'spool-capacity-exceeded':
+				this.logger.error(
+					{
+						remoteAddress: this.socket.remoteAddress,
+						transferMode,
+						resultKind: result.kind,
+					},
+					'smtp-ingress: rejecting message, spool capacity exceeded'
+				);
+				this.writeResponse(452, '4.3.1', 'Insufficient system storage');
+				return;
+			case 'spool-write-failed':
+			case 'ledger-append-failed':
+				this.logger.error(
+					{
+						remoteAddress: this.socket.remoteAddress,
+						transferMode,
+						resultKind: result.kind,
+					},
+					'smtp-ingress: rejecting message, local failure -- sender should retry'
+				);
+				this.writeResponse(
+					451,
+					'4.3.0',
+					'Requested action aborted: local error in processing'
+				);
+				return;
+			default: {
+				// Exhaustiveness guard: a new JournalAcceptanceResult kind must update this switch,
+				// not silently fall through with no reply ever written.
+				const _exhaustive: never = result;
+				throw new Error(
+					`unhandled JournalAcceptanceResult kind: ${JSON.stringify(_exhaustive)}`
+				);
+			}
+		}
 	}
 
 	/** Clears the envelope **and** any in-progress chunking state -- RFC 3030's requirement that
@@ -2048,6 +2435,52 @@ class SmtpConnection {
 		this.bdatTracker = null;
 		this.bdatChunkRemaining = null;
 		this.bdatChunkIsLast = false;
+		this.abandonInFlightAcceptance();
+	}
+
+	/**
+	 * Abort an `accept()` call that {@link tryBeginAcceptance} started but that will now never reach
+	 * {@link finalizeAcceptance} (`JR-4-06a`) -- reachable whenever `RSET`, a fresh `EHLO`/`HELO`, or a
+	 * `STARTTLS` handshake ({@link onTlsHandshakeComplete}) fires {@link resetEnvelope} in the middle
+	 * of a `BDAT` transaction, i.e. after the first `BDAT` already opened a bridge but before
+	 * `BDAT ... LAST` ever ran (`DATA` has no equivalent window: nothing can interrupt it between
+	 * `354` and the terminator except a timeout, which closes the connection outright).
+	 *
+	 * Left unhandled, the bridge's underlying stream would simply wait forever for chunks that will
+	 * never arrive, and the `writeDurableSpoolFile()` call already in flight for it would never
+	 * resolve -- an open file descriptor under `incoming/`, leaked for the rest of the connection's
+	 * lifetime. Aborting it the same way an oversize rejection does lets `accept()`'s own
+	 * `DurableWriteError` handling quarantine whatever partial write this left behind (`JR-3-09`,
+	 * reason `'write-failed'`), so nothing here needs to await the settling promise or decide the
+	 * debris's fate itself -- only log the (expected) outcome for anyone reading the log later.
+	 *
+	 * A no-op when no acceptance is in flight, which is by far the common case: every `EHLO`/`HELO`/
+	 * `RSET` outside of a `BDAT` transaction, and every ordinary `completeTransfer` (which already
+	 * cleared both fields via {@link finalizeAcceptance} before calling {@link resetEnvelope} itself).
+	 */
+	private abandonInFlightAcceptance(): void {
+		if (!this.spoolBridge) {
+			return;
+		}
+		const bridge = this.spoolBridge;
+		const acceptPromise = this.acceptPromise;
+		this.spoolBridge = null;
+		this.acceptPromise = null;
+		bridge.abort(
+			new Error('smtp-ingress: transaction abandoned (RSET/EHLO/STARTTLS) before BDAT LAST')
+		);
+		acceptPromise?.then(
+			(result) =>
+				this.logger.warn(
+					{ resultKind: result.kind },
+					'smtp-ingress: an abandoned in-flight acceptance settled without throwing'
+				),
+			(err: unknown) =>
+				this.logger.warn(
+					{ err },
+					'smtp-ingress: an abandoned in-flight acceptance rejected (expected)'
+				)
+		);
 	}
 
 	private disarmProtocolTimer(): void {
@@ -2162,6 +2595,14 @@ export interface EsmtpServerOptions {
 	 * doc comment for why this package cannot depend on bcrypt itself.
 	 */
 	readonly passwordVerifier?: PasswordVerifier;
+	/**
+	 * Durable acceptance (`JR-4-06a`). `undefined` (the default) preserves the exact pre-`JR-4-06a`
+	 * behaviour -- end of `DATA`/`BDAT ... LAST` always answers `451 4.3.0`, unconditionally -- the
+	 * same convention every other optional dependency above already established, which is what keeps
+	 * every earlier task's protocol tests passing unchanged. `apps/smtp-ingress/src/index.ts` passes a
+	 * real `JournalAcceptance` (`../spool/acceptance.ts`) here once a ledger database is configured.
+	 */
+	readonly journalAcceptance?: JournalAcceptancePort;
 }
 
 /**
@@ -2183,6 +2624,7 @@ export class EsmtpServer {
 	private readonly recipientAclEvaluator: RecipientAclEvaluator | undefined;
 	private readonly authCredentialEvaluator: AuthCredentialEvaluator | undefined;
 	private readonly passwordVerifier: PasswordVerifier | undefined;
+	private readonly journalAcceptance: JournalAcceptancePort | undefined;
 
 	constructor(options: EsmtpServerOptions) {
 		this.smtp = options.smtp;
@@ -2197,6 +2639,7 @@ export class EsmtpServer {
 		this.recipientAclEvaluator = options.recipientAclEvaluator;
 		this.authCredentialEvaluator = options.authCredentialEvaluator;
 		this.passwordVerifier = options.passwordVerifier;
+		this.journalAcceptance = options.journalAcceptance;
 		this.server = net.createServer((socket) => this.handleConnection(socket));
 	}
 
@@ -2218,8 +2661,9 @@ export class EsmtpServer {
 	/**
 	 * Stops accepting new connections and waits for the ones already open to end on their own.
 	 * Does **not** forcibly close them or send them anything -- a graceful drain that answers
-	 * `421 4.3.2` to in-flight sessions (skill section 2, "Shutdown in progress") is `JR-4-06`'s job,
-	 * once there is an acceptance path whose in-flight state that response needs to describe.
+	 * `421 4.3.2` to in-flight sessions (skill section 2, "Shutdown in progress") is `JR-4-06b`'s job,
+	 * not this one's (`JR-4-06a` only wires `accept()` into `completeTransfer()` -- see this file's
+	 * module doc comment).
 	 */
 	close(): Promise<void> {
 		return new Promise((resolve, reject) => {
@@ -2272,7 +2716,8 @@ export class EsmtpServer {
 			this.requireTlsResolver,
 			this.recipientAclEvaluator,
 			this.authCredentialEvaluator,
-			this.passwordVerifier
+			this.passwordVerifier,
+			this.journalAcceptance
 		);
 	}
 }

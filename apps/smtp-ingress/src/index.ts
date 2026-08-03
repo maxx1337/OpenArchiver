@@ -6,14 +6,19 @@ import {
 	ensureSpoolLayout,
 	EsmtpServer,
 	formatIngressConfigError,
+	JournalAcceptance,
 	NodeSpoolFileSystem,
 	parseIngressConfig,
+	PostgresLedgerWriter,
 	PostgresSourceAclLookup,
 	SourceAclCache,
+	type JournalAcceptancePort,
+	type QuarantineAlertSink,
 } from '@open-archiver/journaling';
 import { createBcryptPasswordVerifier } from './bcrypt-password-verifier';
 import { readIngressConfigInput } from './config-from-env';
 import { createLedgerQuery } from './postgres-query';
+import { postgresTransactor } from './postgres-transactor';
 
 /**
  * `apps/smtp-ingress` -- entry point (`JR-4-01`, ESMTP listener wired in `JR-4-02`).
@@ -59,9 +64,103 @@ import { createLedgerQuery } from './postgres-query';
  * given). `SourceAclCache` polls this connection on a timer rather than once per accepted
  * connection -- see `@open-archiver/journaling`'s `source-acl-cache.ts` for why a query-per-connect
  * would make Postgres a hard dependency of the receive path's availability.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `250` becomes possible (`JR-4-06a`)
+ * ---------------------------------------------------------------------------------------------
+ * A second, again deliberately separate, connection (`SMTP_INGRESS_LEDGER_DATABASE_URL`,
+ * `ledger-config.ts`) backs `PostgresLedgerWriter` via `./postgres-transactor.ts`'s bare-client
+ * transactor (F38, same reasoning as `sourceAclSql` above). `JournalAcceptance` is constructed from
+ * that writer plus the same spool configuration `ensureSpoolLayout()` already used, and handed to
+ * `EsmtpServer` as `journalAcceptance` -- the one thing that turns `completeTransfer()`'s reply from
+ * `451` (acceptance not wired) into a real durability decision. See
+ * `@open-archiver/journaling`'s `smtp-server.ts` module doc comment, "`JournalAcceptance.accept()` is
+ * wired in", for what that changes.
+ *
+ * **Unconfigured or unreachable at boot is not fatal to the process.** `ledger.databaseUrl` is
+ * optional (`ledger-config.ts`'s own doc comment argues why that is safe, unlike `sourceAcl`'s
+ * required one): with it unset, `journalAcceptance` stays `undefined` and this process behaves
+ * exactly as it did before this task. With it set but the database unreachable (or
+ * `deployment_identity` unexpectedly empty) at the one startup-time query this needs
+ * (`PostgresLedgerWriter`'s own doc comment: the deployment id is read once, not per append), this
+ * process logs the failure loudly and falls back to the same `undefined` rather than refusing to
+ * bind the SMTP port at all -- deliberately narrower tolerance than `SourceAclCache`'s
+ * available-first-then-fail-closed design (which keeps *retrying* in the background), because
+ * building an equivalent retry/promotion path for the ledger is more than this task's "wire
+ * `accept()` in" scope. Flagged for the Product Owner: a deployment that means to accept mail
+ * durably but has a typo'd or briefly-down ledger database at the moment this process starts will
+ * not crash-loop -- it will bind the port and answer every transaction `451` until the *next*
+ * restart, which is a real, current limitation rather than an oversight.
  */
 
 dotenv.config();
+
+/** A quarantine alert (`JR-3-09`) reaches the operator through this process's own logger -- the
+ * only place `apps/smtp-ingress` has to put one (`packages/journaling` has neither a logger nor an
+ * opinion on where alerts go; see `QuarantineAlertSink`'s doc comment). */
+function pinoAlertSink(logger: import('pino').Logger): QuarantineAlertSink {
+	return {
+		alert: (event) => {
+			logger.error({ event }, 'smtp-ingress: spool file quarantined');
+		},
+	};
+}
+
+/**
+ * Build the durable-acceptance dependency `EsmtpServer` needs (`JR-4-06a`). Returns `undefined`
+ * whenever `journalAcceptance` should stay unwired -- either `ledger.databaseUrl` was never
+ * configured, or it was configured but the one startup-time query this needs failed. See this
+ * file's module doc comment, "`250` becomes possible", for why the second case is a logged failure
+ * rather than a startup crash.
+ *
+ * The returned `ledgerSql`, when non-`null`, is this function's caller's responsibility to close on
+ * shutdown -- this function only opens it, it never closes anything itself, so a caller that decides
+ * not to use the connection (the failure path below) still owns cleanup.
+ */
+async function buildJournalAcceptance(
+	config: ReturnType<typeof parseIngressConfig>,
+	logger: import('pino').Logger
+): Promise<{
+	journalAcceptance: JournalAcceptancePort | undefined;
+	ledgerSql: postgres.Sql | null;
+}> {
+	if (config.ledger.databaseUrl === undefined) {
+		return { journalAcceptance: undefined, ledgerSql: null };
+	}
+
+	const ledgerSql = postgres(config.ledger.databaseUrl, { onnotice: () => {} });
+	try {
+		// Read once, at startup, never per append -- PostgresLedgerWriterOptions.deploymentId's own
+		// doc comment. A bare, unpatched client (F38) -- see ./postgres-transactor.ts's doc comment.
+		const rows = await ledgerSql<{ deployment_id: string }[]>`
+			select deployment_id from deployment_identity
+		`;
+		const deploymentId = rows[0]?.deployment_id;
+		if (deploymentId === undefined) {
+			throw new Error('deployment_identity has no row -- has this database been migrated?');
+		}
+
+		const backend = new PostgresLedgerWriter({
+			deploymentId,
+			transactor: postgresTransactor(ledgerSql),
+		});
+		const journalAcceptance = new JournalAcceptance({
+			fs: new NodeSpoolFileSystem(),
+			backend,
+			spoolConfig: config.spool,
+			alertSink: pinoAlertSink(logger),
+		});
+		return { journalAcceptance, ledgerSql };
+	} catch (err) {
+		logger.error(
+			{ err },
+			'smtp-ingress: could not initialize the ledger database connection at startup -- ' +
+				'accepting connections, but every transaction will answer 451 (acceptance not wired) ' +
+				'until this is fixed and the process is restarted'
+		);
+		return { journalAcceptance: undefined, ledgerSql };
+	}
+}
 
 async function main(): Promise<void> {
 	const config = parseIngressConfig(readIngressConfigInput(process.env));
@@ -90,6 +189,10 @@ async function main(): Promise<void> {
 	// "unavailable" anyway, but there is no reason to accept a connection just to reject it).
 	await sourceAclCache.start();
 
+	// JR-4-06a: see this file's module doc comment, "`250` becomes possible", for what an
+	// `undefined` result here means and why it is not a startup failure.
+	const { journalAcceptance, ledgerSql } = await buildJournalAcceptance(config, logger);
+
 	const server = new EsmtpServer({
 		smtp: config.smtp,
 		tls: config.tls,
@@ -107,6 +210,7 @@ async function main(): Promise<void> {
 			sourceAclCache,
 			config.tls.requireTls
 		),
+		journalAcceptance,
 	});
 	await server.listen(config.smtpPort);
 
@@ -122,9 +226,14 @@ async function main(): Promise<void> {
 		shuttingDown = true;
 		console.log(`smtp-ingress: received ${signal}, shutting down`);
 		sourceAclCache.stop();
+		const closeConnections = (): Promise<void> =>
+			Promise.all([
+				sourceAclSql.end({ timeout: 5 }),
+				ledgerSql ? ledgerSql.end({ timeout: 5 }) : Promise.resolve(),
+			]).then(() => undefined);
 		server.close().then(
-			() => sourceAclSql.end({ timeout: 5 }).finally(() => process.exit(0)),
-			() => sourceAclSql.end({ timeout: 5 }).finally(() => process.exit(0))
+			() => closeConnections().finally(() => process.exit(0)),
+			() => closeConnections().finally(() => process.exit(0))
 		);
 	};
 	process.on('SIGINT', () => shutdown('SIGINT'));

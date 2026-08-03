@@ -150,6 +150,7 @@ export {
 	type DecodedSaslPlain,
 	type EsmtpServerOptions,
 	type IngressLogger,
+	type JournalAcceptancePort,
 	type ParsedAuthCommand,
 	type ParsedMailFrom,
 	type PasswordVerifier,
@@ -160,6 +161,8 @@ export {
 	type SourceAclDecision,
 	type SourceAclEvaluator,
 } from './ingress/smtp-server';
+
+export { SpoolWriteBridge, type SpoolWriteBridgeCallbacks } from './ingress/spool-write-bridge';
 
 export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
 
@@ -184,3 +187,5 @@ export {
 	sourceAclConfigSchema,
 	type SourceAclConfig,
 } from './ingress/source-acl-config';
+
+export { ledgerConfigSchema, type LedgerConfig } from './ingress/ledger-config';

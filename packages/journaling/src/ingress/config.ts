@@ -3,6 +3,7 @@ import { spoolConfigSchema } from '../spool/config';
 import { smtpServerConfigSchema } from './smtp-config';
 import { ingressTlsConfigSchema } from './tls-config';
 import { sourceAclConfigSchema } from './source-acl-config';
+import { ledgerConfigSchema } from './ledger-config';
 
 /**
  * `apps/smtp-ingress` process configuration (`JR-4-01`, extended by `JR-4-02`), validated with
@@ -23,7 +24,7 @@ import { sourceAclConfigSchema } from './source-acl-config';
  * it reuses `sourceAcl` below verbatim (same database connection, same refresh/staleness knobs); see
  * `./source-acl-cache.ts`'s doc comment for why that is one cache serving two ACLs, not two caches.
  *
- * Five fields, one added by each of `JR-4-01`, `JR-4-02`, `JR-4-04` and `JR-4-05a`:
+ * Six fields, one added by each of `JR-4-01`, `JR-4-02`, `JR-4-04`, `JR-4-05a` and `JR-4-06a`:
  *  - `smtpPort`: the port the ESMTP listener binds (`JR-4-02`'s `EsmtpServer`, replacing `JR-4-01`'s
  *    bare `net.createServer()` placeholder).
  *  - `spool`: the process owns the spool per the privilege-separation table in
@@ -38,6 +39,10 @@ import { sourceAclConfigSchema } from './source-acl-config';
  *    tuning for the source ACL (`./source-acl-config.ts`, `./source-acl-cache.ts`). Unlike `smtp`
  *    and `tls`, this key's `databaseUrl` field has **no default** -- see that schema's doc comment
  *    for why "no database configured" must be a startup error, not a silent allow-everyone.
+ *  - `ledger` (`JR-4-06a`): the ledger database connection (`./ledger-config.ts`) for
+ *    `PostgresLedgerWriter`/`JournalAcceptance`. Unlike `sourceAcl`, `databaseUrl` here **is**
+ *    optional -- see that schema's own doc comment for why "not configured yet" is a safe default
+ *    for the ledger specifically, where it would not be for the source ACL.
  *
  * ---------------------------------------------------------------------------------------------
  * Why this package validates the shaped object, not `process.env` (`JR-4-01`)
@@ -75,6 +80,13 @@ export const ingressConfigSchema = z.object({
 	 * doc comment).
 	 */
 	sourceAcl: sourceAclConfigSchema,
+	/**
+	 * Ledger database connection (`./ledger-config.ts`, `JR-4-06a`). Required as a key, same shape as
+	 * `smtp`/`tls` above -- `{}` is a valid value (no ledger database configured, `journalAcceptance`
+	 * left unwired, pre-`JR-4-06a` `451`-always behaviour) -- see that schema's own doc comment for
+	 * why "unset" is safe here, unlike `sourceAcl.databaseUrl`.
+	 */
+	ledger: ledgerConfigSchema,
 	/**
 	 * Log verbosity. Optional -- a missing value is not a configuration error. Read for real since
 	 * `JR-4-02`: `apps/smtp-ingress/src/index.ts` builds a `pino` instance with `level: logLevel`

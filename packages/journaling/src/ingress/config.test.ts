@@ -36,6 +36,10 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 			sourceAcl: {
 				databaseUrl: 'postgresql://smtp_ingress_ro:pw@localhost:5432/open_archive',
 			},
+			// JR-4-06a: `ledger` is required as a key (like `smtp`/`tls`), but `{}` *is* valid --
+			// unlike `sourceAcl.databaseUrl`, `ledger.databaseUrl` has no security consequence when
+			// unset (see ledger-config.ts's doc comment for why).
+			ledger: {},
 		};
 
 		it('accepts a fully specified, valid configuration', () => {
@@ -148,6 +152,34 @@ suite('ci', 'IngressConfig (JR-4-01)', () => {
 						staleAfterMs: 1_000,
 					},
 				})
+			).toThrow();
+		});
+
+		it('rejects a configuration with the ledger key missing entirely', () => {
+			const { ledger: _ledger, ...rest } = validInput;
+			expect(() => parseIngressConfig(rest)).toThrow();
+		});
+
+		it('accepts ledger: {} -- unlike sourceAcl, databaseUrl is optional (JR-4-06a)', () => {
+			const config = parseIngressConfig({ ...validInput, ledger: {} });
+			expect(config.ledger.databaseUrl).toBeUndefined();
+		});
+
+		it('accepts an explicit ledger.databaseUrl', () => {
+			const config = parseIngressConfig({
+				...validInput,
+				ledger: {
+					databaseUrl: 'postgresql://smtp_ingress_ledger:pw@localhost:5432/open_archive',
+				},
+			});
+			expect(config.ledger.databaseUrl).toBe(
+				'postgresql://smtp_ingress_ledger:pw@localhost:5432/open_archive'
+			);
+		});
+
+		it('rejects an empty ledger.databaseUrl (distinct from leaving it unset)', () => {
+			expect(() =>
+				parseIngressConfig({ ...validInput, ledger: { databaseUrl: '' } })
 			).toThrow();
 		});
 

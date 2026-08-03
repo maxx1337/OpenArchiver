@@ -146,7 +146,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// sources but never for a duplicate or same-source recipient).
 		// 39 after JR-4-05c (AUTH) added tests/unit/smtp-auth-protocol.test.ts (the AUTH dialogue
 		// proven over a real loopback TCP+TLS socket).
-		expectedFiles: 39,
+		// 41 after JR-4-06a added ingress/spool-write-bridge.test.ts (the push-to-pull backpressure
+		// bridge between a socket's `data` events and `writeDurableSpoolFile()`'s `for await`) and
+		// tests/unit/smtp-acceptance-wiring.test.ts (`JournalAcceptance.accept()` wired into
+		// `completeTransfer()`: the response-code mapping, the oversize-abort override to `552` with
+		// nothing left in `incoming/`, an abandoned mid-`BDAT` transaction on `RSET`, and the
+		// calibrated streaming-memory proof).
+		expectedFiles: 41,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -346,7 +352,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// previously rejected chain is accepted in the next transaction, and an explicit check that two
 		// recipients of the same source and the same recipient twice both stay 250 with no rejection log
 		// (the pre-existing "does not log" case, made to assert response codes too, not counted again).
-		expectedTests: { ci: 670, nightly: 2, manual: 0 },
+		// 690 ci after JR-4-06a added 20: spool-write-bridge.test.ts (5, the push-to-pull backpressure
+		// bridge), durable-write.test.ts's F45 regression case (1), config.test.ts's four new ledger
+		// cases (4), and smtp-acceptance-wiring.test.ts's ci-classified cases (10: the response-code
+		// mapping table, the oversize override with the crash-recovery-clean proof, and the
+		// RSET-mid-BDAT abandon proof). 3 nightly after JR-4-06a added
+		// smtp-acceptance-wiring.test.ts's calibrated 150 MB streaming-memory proof.
+		expectedTests: { ci: 690, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -365,8 +377,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// added journal-ledger-lookup.int.test.ts -- PostgresLedgerLookup.findBySpoolTxIds() against a
 		// real database. 15 after JR-4-05a added source-acl-lookup.int.test.ts --
 		// PostgresSourceAclLookup.listActiveSources() against a real database, read through a client
-		// this file constructs itself and never hands to drizzle() (F38's rule).
-		expectedFiles: 15,
+		// this file constructs itself and never hands to drizzle() (F38's rule). 16 after JR-4-06a
+		// added journal-smtp-accept-e2e.int.test.ts -- the 250 proof: a real SMTP client over a real
+		// socket, a real EsmtpServer wired to a real JournalAcceptance (real disk, real Postgres
+		// through apps/smtp-ingress's own production bare-client transactor).
+		expectedFiles: 16,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -382,8 +397,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// merely "not true".
 		// 103 after JR-4-05c added 2 more to source-acl-lookup.int.test.ts: smtp_username/
 		// smtp_password_hash round-trip when AUTH is configured for a source, and read back as null
-		// for the ordinary source with no AUTH configured.
-		expectedTests: { ci: 103, nightly: 0, manual: 0 },
+		// for the ordinary source with no AUTH configured. 105 after JR-4-06a added 2 tests to
+		// journal-smtp-accept-e2e.int.test.ts: the 250-with-seq round trip (spool file and ledger row
+		// re-verified independently, byte-for-byte) and a second transaction on the same chain getting
+		// seq + 1 while a denied recipient never reaches accept() at all.
+		expectedTests: { ci: 105, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

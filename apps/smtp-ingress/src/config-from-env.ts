@@ -62,6 +62,14 @@ export function readIngressConfigInput(env: NodeJS.ProcessEnv): unknown {
 			refreshIntervalMs: env.SMTP_INGRESS_SOURCE_ACL_REFRESH_MS,
 			staleAfterMs: env.SMTP_INGRESS_SOURCE_ACL_STALE_AFTER_MS,
 		},
+		// JR-4-06a: a third, deliberately *different* variable again -- ADR-002 wants the ledger
+		// connection on its own credential too, eventually a role with only INSERT on
+		// journal_ledger (E11). Unset maps to `undefined`, the same "unset env var -> undefined"
+		// rule every optional field here follows -- ledger-config.ts's schema accepts that (`{}` is
+		// valid), unlike sourceAcl.databaseUrl.
+		ledger: {
+			databaseUrl: env.SMTP_INGRESS_LEDGER_DATABASE_URL,
+		},
 		logLevel: env.SMTP_INGRESS_LOG_LEVEL,
 	};
 }
