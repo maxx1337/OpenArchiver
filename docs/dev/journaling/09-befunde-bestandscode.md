@@ -2123,6 +2123,46 @@ Fehler, die dort unbemerkt bleibt — ein vergessener Parameter, ein vertauschte
 nicht gestarteter Cache wären genauso unsichtbar. `JR-4-20` behebt deshalb beides: die Kollision
 strukturell, **und** die untestete Verdrahtung.
 
+> **Behoben in `JR-4-20`** (2026-08-03, `78f2d96`). `RecipientAclEvaluator.evaluate` heißt jetzt
+> `evaluateRecipient` — `SourceAclCache` musste dafür **nicht** geändert werden, sie hatte die
+> Methode längst, nur war sie an keiner Schnittstelle und wurde nie aufgerufen. Der Nachweis gegen
+> künftige Vertauschung ist ein Kompilierfehler: `tests/unit/acl-evaluator-port-shapes.test.ts`
+> weist beide Richtungen mit `@ts-expect-error` zurück, geprüft über `tsc -p tsconfig.test.json`
+> (vor dem Fix kompilierten beide Zeilen anstandslos — deshalb war es unsichtbar). Alle übrigen
+> Ports des Prozesses auf dieselbe Falle geprüft: keine weitere Kollision. Und die zweite Hälfte ist
+> ebenfalls zu: `bindSourceAclCache()` ist jetzt **die** Verdrahtung, die Produktion **und** Test
+> gemeinsam aufrufen. Der Beleg, wie stark die Lücke war: **jeder** bestehende Test benutzte ein
+> Fake mit `evaluate:` und wurde von der Umbenennung rot — genau deshalb hatte keiner den Defekt
+> gesehen. Volllauf danach `846 passed | 7 skipped` bei 67 Dateien.
+
+---
+
+## F47 — der Typcheck für `packages/journaling` läuft in der CI nicht, und ist deshalb rot
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:**
+`.github/workflows/ci.yml` (Schrittfolge) und `packages/journaling/tests/unit/smtp-acceptance-wiring.test.ts:408` ·
+**Gefunden:** vom PO am 2026-08-03, nachdem `JR-4-18` und `JR-4-20` unabhängig denselben roten
+Typfehler gemeldet und als vorbestehend bestätigt hatten · **Status:** **offen**, Behebung als
+Zusatzauflage in `JR-4-06b`
+
+Zwei Teile, und der zweite erklärt den ersten:
+
+1. `corepack pnpm --filter @open-archiver/journaling test:types` ist rot —
+   `Record<string, unknown> | null` ist nicht zu `CanonicalJsonValue` zuweisbar (entstanden in
+   `JR-4-06a`).
+2. **Die CI prüft das nie.** `ci.yml` fährt `test:types` ausschließlich für
+   `@open-archiver/backend`. `packages/journaling` — das Paket, in dem seit E2 der gesamte
+   Ledger-, Spool- und Ingress-Code entsteht — wird gebaut (`build`), aber sein Testprogramm wird
+   nicht typgeprüft.
+
+**Warum das mehr ist als ein Typfehler:** der Wächter deckt die Stelle nicht ab, an der dieses
+Projekt inzwischen den größten Teil seines Codes schreibt. Ein Typfehler in einer
+`packages/journaling`-Testdatei fällt niemandem auf, solange ihn nicht zufällig ein Agent beim
+Arbeiten sieht — hier haben es zwei unabhängig voneinander gemeldet, und beide haben ihn korrekt als
+nicht ihren eingeordnet und liegen gelassen. Dieselbe Klasse wie F14/F15 (der Wächter zählte
+Dateien statt Tests) und wie F35s Nebenwirkung: **ein grüner Lauf, dessen Grün eine Lücke im
+Messbereich ist.**
+
 > **Behoben (`JR-4-20`).** Beide Hälften, wie im Befund gefordert:
 >
 > **1. Die Kollision strukturell ausgeschlossen, nicht nur umbenannt.** `RecipientAclEvaluator`
