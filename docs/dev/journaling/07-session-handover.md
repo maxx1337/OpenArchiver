@@ -88,7 +88,8 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 **Stand:** 2026-08-03 (**E4 ist in Arbeit**, 17 von 20 Tasks, nicht abgenommen) · **Branch:**
 `claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **966 Tests** bei 80
 Dateien — `unit ci 811 · integration ci 118 · adversarial ci 37`, **in der CI bestätigt**: Lauf
-`30830897752` auf `1bea369` **success** (`JR-4-09`), davor `30827457559` auf `670b65f` (F49)
+`30838566875` auf `36c207b` **success** (`JR-4-19`), davor `30830897752` (`JR-4-09`) und
+`30827457559` (F49)
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 

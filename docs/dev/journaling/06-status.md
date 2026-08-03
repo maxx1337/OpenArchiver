@@ -730,5 +730,11 @@ die erste im Modulscope liegt. **Lokal wäre das nie aufgefallen**: der Wächter
 Ende eines **vollen** Laufs, und der lief hier zwar, aber die Datei war beim ersten Volllauf noch nicht
 in dieser Form dabei.
 
+**CI grün im dritten Lauf:** `30838566875` auf `36c207b` **success** (2m26s), 80 Dateien,
+`unit ci 811/811 · integration ci 118/118 · adversarial ci 37/37`. **Damit ist der eigentliche
+Nachweis erbracht**, denn der Linux-Zweig des Integrationstests ist der, der `250` **und** genau eine
+Ledger-Zeile nach der Promotion verlangt — auf dem Windows-Host ist dieser Pfad wegen `EPERM` beim
+Directory-fsync gar nicht erreichbar.
+
 **Nächster Schritt:** die TEST-Scheiben `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme
 `JR-4-13` in eigener Sitzung.
