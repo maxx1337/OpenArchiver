@@ -22,7 +22,7 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34      |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                         |
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                              |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44                    |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45               |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -2055,3 +2055,32 @@ deklarierte Chunk-Länge immer vollständig ab, bevor es auf ein Oversize reagie
 nach Oversize bis zum Terminator weiterlesen und verwerfen, dann antworten; alternativ die Verbindung
 nach der Antwort schließen. Was `JR-4-16` daraus macht, entscheidet die Task; ein stiller
 Zustandswechsel nach `'ready'` mitten im Rumpf ist keine der beiden Möglichkeiten.
+
+---
+
+## F45 — ein verworfener Iterator verließ den Durable Write als nackter `Error`, nicht als `DurableWriteError`
+
+**Schwere:** mittel · **Kategorie:** Neuer Code · **Ort:**
+`packages/journaling/src/spool/durable-write.ts`, die `for await`-Schleife über `request.chunks` ·
+**Gefunden und behoben:** `JR-4-06a` (2026-08-03, Rolle DEV) beim Verdrahten des Oversize-Abbruchs ·
+**Status:** **behoben**, mit Regressionstest
+
+`writeDurableSpoolFile()` fasste seine eigenen Dateisystemaufrufe in `DurableWriteError`, ließ aber
+einen Fehler **aus dem Iterator** ungefasst durch — die `for await`-Schleife lag außerhalb des
+`try`/`catch`. Das war in E3 **latent**, weil kein Aufrufer den Abbruchweg benutzte: alle Quellen waren
+Arrays oder Testgeneratoren, die nicht werfen.
+
+**Scharf wird es genau mit `JR-4-06a`.** Dort bricht der Server einen laufenden Spool-Write bei
+Überschreitung des `SIZE`-Limits über den Iterator ab (`bridge.abort()`).
+`JournalAcceptance.accept()` unterscheidet aber **nach Typ**: ein `DurableWriteError` wird zu einem
+typisierten Ergebnis (`'spool-write-failed'` bzw. `'spool-capacity-exceeded'`, plus Quarantäne der
+eigenen Leiche nach `JR-3-09`), **alles andere wird bewusst weitergeworfen** — `acceptance.ts` nennt
+das „a programming error in the filesystem seam itself", und es zu verschlucken hieße, einen Fehler
+hinter einem Retry zu verstecken, der nie gelingen kann. Ein nackter `Error` aus dem Iterator wäre
+also als **unbehandelte Ausnahme** aus dem Annahmepfad geflogen, statt `552` zu erzeugen.
+
+**Die Lehre steht in diesem Projekt schon zweimal:** eine Fehlerklassifikation nach Typ ist nur so gut
+wie die Vollständigkeit der Stelle, die den Typ setzt. Wer einen `try`-Block um „die eigenen Aufrufe"
+legt und eine fremde, **injizierte** Quelle daneben laufen lässt, hat einen zweiten Fehlerpfad, den
+niemand sieht — solange keine Quelle wirft. Dasselbe Muster wie F41 (das Testnetz deckte vier von
+sieben Operationen ab) und F44 (die Probe traf den Fall nicht): der ungeprüfte Rand, nicht die Mitte.

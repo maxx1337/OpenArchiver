@@ -275,8 +275,9 @@ eingeschoben (siehe `03-backlog.md`).
 | 12          | E11  | Compliance-Features                | offen                                                                                                                                                                                                                                                 | 0 / 10                                                                                                                                         |
 | 13          | E12  | Rollout und Dokumentation          | offen                                                                                                                                                                                                                                                 | 0 / 9                                                                                                                                          |
 
-116 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 5: `JR-4-14` und `JR-4-15` als
-Auflagen aus **ADR-026**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-027**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan). Dazu **`JR-13-10`** als Folge-Task nach
+117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
+Auflagen aus **ADR-026**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-027**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
+nach einem gescheiterten Start nicht erholt). Dazu **`JR-13-10`** als Folge-Task nach
 E13 (Variante C aus ADR-017) — er gehört zu keinem Epic und zählt nicht in die Abnahme von `JR-13-09`.
 
 **Produktionscode für den Receiver:** seit E2 gibt es welchen — `packages/journaling` (kanonische
