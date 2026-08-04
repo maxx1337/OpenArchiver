@@ -116,7 +116,9 @@ findet es hier.
 | **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
 | **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | offen     |
 | **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | offen     |
-| **F54**  | Vorschlag, unbestätigt — der `500`-Abbruchpfad ist nicht idempotent: fragmentiert ankommende überlange Zeile kann `ECONNRESET` statt `500` erzeugen   | mittel  | offen     |
+| **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben   |
+| **F55**  | Vorschlag, unbestätigt — kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                       | mittel  | offen     |
+| **F56**  | Vorschlag, unbestätigt — kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                | mittel  | offen     |
 
 ---
 
@@ -2910,3 +2912,203 @@ der Zusammenführung der beiden `JR-4-14`-Dateien entstand. Ein möglicher Fix: 
 ersten `writeResponse(500, …)` leeren und einen Zustand „bereits abgelehnt" setzen, den jeder weitere
 `onData()`-Aufruf zuerst prüft, bevor er irgendetwas anderes tut — nicht umgesetzt, nur als Richtung
 notiert.
+
+## F55 (Vorschlag, noch nicht vom Auftraggeber bestätigt) — kein Limit für die Anzahl angenommener `RCPT TO` je Transaktion
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.handleRcpt()`,
+`recordMatchedRecipient()`, die Felder `rcptTo`/`matchedRecipients`) · **Gefunden:** von TEST am
+2026-08-04, im Rahmen von `JR-4-15` (ADR-026 Auflage 2, Scope-Punkt „Ressourcengrenzen je
+Verbindung") · **Status:** offen, nicht behoben (kein Produktionscode-Fix ohne Freigabe)
+
+### Was gemessen wurde
+
+`handleRcpt()` prüft die Empfänger-ACL, ADR-027s Ketten-Zugehörigkeit (`452 4.5.3` bei einer
+**anderen** Kette) und — bei authentifizierten Verbindungen — die Quellen-Übereinstimmung. Danach
+folgt unbedingt:
+
+```ts
+this.recordMatchedRecipient(parsed.address, decision.sourceId, decision.chainScopeId);
+// ...
+this.rcptTo.push(parsed.address);
+```
+
+Für **jeden** syntaktisch gültigen `RCPT TO`, der zur bereits zugeordneten Kette gehört (auch
+derselbe Empfänger beliebig oft — laut Backlog-Kommentar ausdrücklich zulässig: „doppelte Empfänger
+bleiben zulässig"), wachsen `rcptTo` und `matchedRecipients` um ein Element. Es gibt **keine**
+Konfiguration, keine Konstante und keine Prüfung, die die Anzahl der `RCPT TO`-Kommandos einer
+Transaktion begrenzt — anders als bei realen MTAs (Postfix' `smtpd_recipient_limit`, Default 1000).
+
+**Gemessen**, gegen den echten, kompilierten `EsmtpServer` über einen echten Loopback-Socket, mit
+demselben Empfänger einer bereits zugeordneten Kette wiederholt (`RCPT TO:<victim@example.com>`,
+gepipelinet in einem Schreibvorgang):
+
+| Anzahl `RCPT TO` | Gesendete Bytes (Client) | Antwortzeit gesamt | `heapUsed`-Wachstum (Server) |
+| ---------------- | ------------------------ | ------------------ | ---------------------------- |
+| 1 000            | ~30 KB                   | 51 ms              | nicht einzeln gemessen       |
+| 100 000          | ~3 MB                    | 845 ms             | nicht einzeln gemessen       |
+| 1 000 000        | ~30 MB                   | 3 931 ms           | **395,4 MB**                 |
+
+Jede einzelne Anfrage wird korrekt mit `250 2.1.5` beantwortet — kein Hänger, kein Absturz, keine
+falsche Antwort. Der Server bleibt **funktional korrekt**, aber der Speicherverbrauch wächst
+proportional zur Anzahl der Empfänger, ohne jede Obergrenze: 30 MB Eingabe erzeugen ~395 MB
+Heap-Wachstum auf dem Server — ein Verstärkungsfaktor von gut **13×** bei dieser Messung, und ohne
+Deckel wächst er mit jedem weiteren `RCPT TO` weiter.
+
+### Warum das ein eigenständiger Befund ist, nicht nur F52/F53 in neuer Form
+
+Anders als F52/F53/F54 (alle drei: eine Kommandozeile bzw. ein Puffer wird nicht gegen
+`MAX_COMMAND_LINE_BYTES` geprüft) ist hier **jede einzelne** Kommandozeile für sich genommen kurz und
+gültig — das Problem ist nicht die Zeilenlänge, sondern die **Anzahl** der Zeilen, die dieselbe
+Transaktion anhäufen darf, bevor `DATA`/`BDAT` überhaupt beginnt. Der `go-smtp`-Vorlage aus dem
+ADR-026-Nachtrag (`JR-4-21`) begegnet dieser Klasse von Fund nicht — `lineLimitReader` begrenzt
+Byte-Länge, nicht Anzahl-der-Kommandos-einer-Sorte.
+
+### Kalibrierung
+
+Reproduzierbar mit einem eigenständigen Skript (`node`, kein `vitest`) gegen den echten,
+kompilierten Server: eine erste, naive Fassung des Meßskripts erzeugte einen scheinbaren Hänger bei
+schon 5 000 Wiederholungen — nachgesehen war das ein Fehler im **Testklienten** (eine
+`String.slice()`-basierte Zeilenpufferung, die bei großen Antwortmengen selbst zum Engpass wurde),
+nicht am Server. Mit einem korrigierten, zählbasierten Klienten (keine Zeichenketten-Pufferung)
+liefen 1 000 000 Anfragen in unter 4 Sekunden durch — das ist die Zahl oben, und die Lehre selbst ist
+Teil des Befunds: **die eigene Meßmethode zuerst gegen einen bekannten Fall geprüft**, bevor „hängt"
+als Serververhalten statt als Werkzeugfehler gemeldet wird (Testrollen-Regel: ein Prüfwerkzeug, das
+fail-open ist, ist derselbe Fehler eine Ebene höher).
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber.
+Ein möglicher Fix: eine konfigurierbare Obergrenze für `rcptTo.length` je Transaktion, bei
+Überschreitung `452 4.5.3` (derselbe Code, den ADR-027 für „zu viele Empfänger" schon benutzt, nur
+aus einem anderen Grund) — nicht umgesetzt, nur als Richtung notiert.
+
+## F56 (Vorschlag, noch nicht vom Auftraggeber bestätigt) — kein expliziter Cipher-Suite-Filter: der Server verhandelt `AES128-SHA` (keine Forward Secrecy) unter TLS 1.2
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, TLS-Konfiguration · **Ort:**
+`packages/journaling/src/ingress/tls-config.ts` (`ingressTlsConfigSchema`, kein `ciphers`-Feld),
+`smtp-server.ts` (`buildTlsSocketOptions()`, setzt nur `minVersion`) · **Gefunden:** von TEST am
+2026-08-04, im Rahmen von `JR-4-15`, Scope-Punkt „TLS-Parameter" · **Status:** offen, nicht behoben
+
+### Was gemessen wurde
+
+`buildTlsSocketOptions()` übergibt an `new tls.TLSSocket(...)` ausschließlich `isServer`,
+`secureContext` und `minVersion: 'TLSv1.2'` — kein `ciphers`-String, kein `honorCipherOrder`. Damit
+gilt für die Cipher-Auswahl unter TLS 1.2 ausschließlich Node/OpenSSLs **Standard**-Liste, die vom
+verhandelnden **Client** eingeschränkt werden kann, aber vom Server nicht vorab verengt wird.
+
+Gemessen gegen einen echten `tls.TLSSocket({ isServer: true, secureContext, minVersion: 'TLSv1.2' })`
+mit genau dieser Konfiguration: ein Client, der explizit nur `AES128-SHA`
+(`TLS_RSA_WITH_AES_128_CBC_SHA` — reiner RSA-Schlüsselaustausch ohne Forward Secrecy, CBC-Betriebsart,
+SHA-1-MAC) anbietet, bekommt genau diesen Cipher ausgehandelt:
+
+```
+[AES128-SHA] negotiated: TLSv1.2 AES128-SHA
+[AES128-SHA] client negotiated: AES128-SHA
+```
+
+Zum Vergleich: ein gewöhnlicher, nicht eingeschränkter Client verhandelt von sich aus
+`ECDHE-RSA-AES128-GCM-SHA256` (Forward Secrecy, AEAD) — das Standardverhalten ist also gut, nur nicht
+**erzwungen**. `DES-CBC3-SHA` (3DES) ließ sich mit diesem Node-Client nicht gegenprüfen (OpenSSL 3.x
+verweigert 3DES bereits beim Aufbau des Client-Kontexts) — das ist eine Einschränkung des
+**Prüfwerkzeugs**, kein Beleg, dass der Server 3DES ablehnen würde; nicht weiter verifiziert.
+
+### Warum das ein eigenständiger Befund ist
+
+Ein Angreifer kann den Cipher einer TLS-1.2-Aushandlung nicht einseitig erzwingen (die
+`Finished`-Nachricht bindet die Aushandlung kryptographisch ab) — das eigentliche Risiko ist ein
+**legitimer, aber veralteter** Absender (ein alter Exchange-Server, eine schlecht konfigurierte
+MTA), der von sich aus nur `AES128-SHA` anbietet und dessen Journal-Mail dann ohne Forward Secrecy
+verschlüsselt wird: wird der private Schlüssel dieser Verbindung später kompromittiert (oder der
+Serverschlüssel selbst), lässt sich mitgeschnittener historischer Datenverkehr rückwirkend
+entschlüsseln — genau das, was Forward Secrecy verhindern soll. Für ein Compliance-Archivsystem, das
+selbst hochsensible Inhalte transportiert, ist das ein begründetes Härtungsziel, auch ohne aktiven
+Angreifer im Aushandlungspfad.
+
+### Kalibrierung
+
+Direkt am echten `tls.TLSSocket`-Konstrukt mit der exakten, im Quelltext verwendeten Optionsmenge
+gemessen (nicht am Quelltext allein behauptet). Als Gegenprobe: derselbe Aufbau ohne
+Client-seitige `ciphers`-Einschränkung verhandelt den erwarteten starken Cipher
+(`ECDHE-RSA-AES128-GCM-SHA256`) — der Fund betrifft also nur den Fall eines Clients, der selbst eine
+schwächere Auswahl anbietet, nicht das Serververhalten im Normalfall.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber. Ein
+möglicher Fix: `buildTlsSocketOptions()` einen expliziten `ciphers`-String mitgeben, der
+Nicht-PFS-Suiten (reiner RSA-Schlüsselaustausch) und `3DES`/`RC4`/`NULL` ausschließt (z. B. Mozillas
+„intermediate"-Profil als Ausgangspunkt) — nicht umgesetzt, nur als Richtung notiert.
+
+## `JR-4-15` — Sicherheitsdurchsicht des Empfangspfads (ADR-026 Auflage 2): Ergebnis je Scope-Punkt
+
+Rolle TEST, 2026-08-04. Akzeptanzkriterium wörtlich: „Jeder Punkt des Umfangs ist mit Befund oder
+mit begründetem ‚unauffällig' beantwortet; Befunde landen hier; kein Punkt bleibt unbeantwortet
+stehen." Sechs Punkte, in der Reihenfolge des Backlogs:
+
+1. **TLS-Parameter** — **Befund F56** (kein Cipher-Suite-Filter, `AES128-SHA` ohne Forward Secrecy
+   aushandelbar). Die Versionsgrenze selbst (`TLS_MIN_VERSION = 'TLSv1.2'`) ist bereits durch `JR-4-14`
+   mit einem von Hand gebauten TLS-1.1-`ClientHello` bewiesen abgelehnt
+   (`smtp-tls11-clienthello-rejection.test.ts`) — dieser Teilpunkt ist unauffällig.
+
+2. **Ressourcengrenzen je Verbindung** — **Befund F55** (kein Limit für die Anzahl `RCPT TO` je
+   Transaktion, Speicherverstärkung ~13× gemessen). Alle übrigen Grenzen sind vorhanden und durch
+   `JR-4-14` bereits gehärtet geprüft: `MAX_COMMAND_LINE_BYTES` (F52/F53/F54, behoben in `JR-4-21`),
+   `MAX_AUTH_ATTEMPTS_PER_CONNECTION = 3`, `PerSourceConnectionLimiter`,
+   `PerSourceTransactionRateLimiter`, die drei Protokoll-Timeouts (`connectionTimeoutMs`/
+   `commandTimeoutMs`/`dataTimeoutMs`), das `SIZE`-Limit. Unauffällig bis auf F55.
+
+3. **Informationsgehalt der Antworttexte** — **unauffällig, begründet.** Jeder `writeResponse()`-/
+   `writePlain()`-Aufruf in `smtp-server.ts` übergibt einen literalen, im Quelltext fest geschriebenen
+   String — mechanisch bestätigt durch `smtp-5xx-inventory.test.ts`s erschöpfenden Scan aller
+   `5xx`-Aufrufstellen (der nur literale Argumente erkennt und deshalb eine variable Zusammensetzung
+   ohnehin melden würde). Keine Aufrufstelle interpoliert `err.message`, `cause`, einen Stacktrace,
+   einen absoluten Pfad oder einen Konfigurationswert in eine an den Client gesendete Zeile. Ein
+   unauthentifizierter Peer erfährt aus einer Antwort also nie mehr als den SMTP-Code und einen
+   generischen, vorab festgelegten Text.
+
+4. **Envelope-Werte auf dem Weg in Protokoll und Ledger** — **geprüft, unauffällig mit einer
+   Einschränkung.** `remote_ip`/`ehlo_name` sind angreiferkontrolliert und fließen an zwei Stellen:
+   gehasht in die Kette (`canonical-encoding.ts`) und als Klartext-Spalten in `journal_ledger`
+   (`journal-ledger.ts`-Schema). Log-Injection im klassischen Sinn (eine eingeschleuste Newline, die
+   eine gefälschte Logzeile erzeugt) ist strukturell ausgeschlossen, weil `apps/smtp-ingress` echtes
+   `pino` benutzt — jeder Log-Aufruf erzeugt ein einzeiliges JSON-Objekt, in dem eine eingebettete
+   Newline als `\n`-Escape innerhalb eines JSON-Strings landet, nicht als literarischer Zeilenumbruch.
+   Ein NUL-Byte in `ehloName` — messbar über einen Angreifer-`EHLO`-Parameter erreichbar
+   (`smtp-protocol-robustness.adv.test.ts`) — ist in einer Postgres-`text`-Spalte nicht darstellbar
+   (`22021: invalid byte sequence for encoding "UTF8": 0x00`, gemessen gegen die echte Testdatenbank)
+   und lässt `PostgresLedgerWriter.append()` fehlschlagen — gemessen End-zu-Ende über den echten Draht
+   in `smtp-ingress-envelope-hostile-values.int.test.ts` (3 Fälle, alle grün): der Fehler wird von
+   `JournalAcceptance.accept()`s generischem `try`/`catch` aufgefangen, ordnungsgemäß als
+   `ledger-append-failed` klassifiziert und mit `451 4.3.0` beantwortet — kein Absturz, kein `5xx`,
+   die Spool-Datei bleibt für die Crash-Recovery unangetastet liegen, und derselbe Chain-Append
+   funktioniert danach normal weiter (Kette bleibt an Position 1, kein Loch). Die Einschränkung: nicht
+   geprüft ist, ob ein ANSI-Escape-Zeichen (nicht NUL) in `ehlo_name` beim Betrachten der `pino`-JSON-
+   Ausgabe in einem Terminal-Viewer (nicht in der strukturierten Datei selbst) etwas Störendes
+   anzeigen könnte — das ist eine Eigenschaft des Log-**Betrachters**, nicht dieser Anwendung, und
+   außerhalb dieser Scheibe nicht weiter verfolgt.
+
+5. **Speicherverhalten bei 150 MB** — **geprüft, unauffällig, mit benannter Lücke.** Der `BDAT`-Pfad
+   ist bereits mit einem Nightly-Test bei exakt 150 MB (`150 x 1 MiB`-Chunks) gemessen und bleibt
+   deutlich unter dem beobachteten Rausch-Rahmen (`smtp-server-protocol.test.ts`, `arrayBuffers`-
+   Metrik, F43-Lehre bereits berücksichtigt). Der `DATA`-Pfad ist **nicht separat** bei 150 MB
+   gemessen — strukturell identisch gepuffert (`writeDurableSpoolFile()` streamt für beide Pfade), aber
+   nicht empirisch bestätigt für `DATA` im Speziellen. Zusätzlich gilt **F50** (nicht neu, hier nur
+   verknüpft): der Durchsatz hängt an der Zeilenzahl, nicht an der Bytezahl — 50 MB mit 60-Byte-Zeilen
+   brauchen ~54 s, mit 998-Byte-Zeilen ~4 s; bei 150 MB mit kurzen Zeilen ist entsprechend mit
+   deutlich über einer Minute Laufzeit zu rechnen, was selbst kein Speicherproblem ist, aber die
+   Verbindung lange in Anspruch nimmt (Ressourcengrenzen-Punkt oben).
+
+6. **Keine Ableitung von Dateipfaden aus Angreiferdaten** — **unauffällig, begründet.**
+   `incomingFilePath()`/`quarantineFilePath()`/`shardOf()` (`spool/layout.ts`) sind ausschließlich
+   Funktionen von `spool_txid` — serverseitig per `generateTxId()` erzeugt (`crypto.randomBytes` plus
+   Zeitstempel, `spool/txid.ts`), nie aus `mailFrom`/`rcptTo`/`ehloName`/`remoteAddress` abgeleitet.
+   Mechanisch bestätigt: kein `path.join`/`path.resolve` in `packages/journaling/src/spool/*.ts` oder
+   `src/ingress/*.ts` referenziert einen dieser Bezeichner.
+
+**Neue Testdatei:** `packages/backend/tests/integration/smtp-ingress-envelope-hostile-values.int.test.ts`
+(3 Fälle, `ci`, echtes Postgres) — Punkt 4. Kein neuer Test für Punkt 1/2 (F55/F56) über die bereits
+zitierten Messskripte hinaus — beide Funde sind gemessen und dokumentiert, aber (wie bei F52/F53/F54
+vor `JR-4-21`) noch nicht als dauerhafte Regressionstests committet, weil beide Fixes vom Auftraggeber
+noch nicht freigegeben sind und ein Regressionstest gegen eine noch nicht entschiedene Obergrenze
+nichts Belastbares prüfen könnte.

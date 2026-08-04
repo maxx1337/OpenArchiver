@@ -538,7 +538,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// against a real database and a local fixture feed -- no internet access).
 		// 20 after JR-4-19 added smtp-ingress-ledger-recovery.int.test.ts (the real process starting
 		// with an unusable ledger database and promoting itself without a restart).
-		expectedFiles: 20,
+		// 21 after JR-4-15 added smtp-ingress-envelope-hostile-values.int.test.ts (a NUL byte in the
+		// attacker-controlled ehloName cannot be represented in Postgres text -- 3 cases: the direct
+		// PostgresLedgerWriter.append() rejection, that the chain still accepts a normal append
+		// afterward, and the real wire protocol producing 451, never a crash or a silent 250).
+		expectedFiles: 21,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -573,7 +577,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// unusable (451, untouched spool), promoting once deployment_identity is restored and accepting
 		// on the same open connection; and the counter-direction, a database that stays broken never
 		// producing a promotion however many retries elapse.
-		expectedTests: { ci: 118, nightly: 0, manual: 0 },
+		// 121 after JR-4-15 added 3 to smtp-ingress-envelope-hostile-values.int.test.ts (see the
+		// expectedFiles comment above for what each proves).
+		expectedTests: { ci: 121, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
