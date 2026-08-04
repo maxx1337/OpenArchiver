@@ -2424,7 +2424,7 @@ gefundener CRLF-terminierter Zeile auf), `packages/journaling/src/ingress/spool-
 (`for await (const chunk of chunks) { await handle.write(chunk); }` — ein `fs`-Write-Aufruf je
 Objekt) · **Gefunden:** von TEST am 2026-08-04 beim Bau der `JR-4-10`-Kill-Tests, als ein 20-Runden-
 Smoke-Lauf nach zehn Minuten nicht fertig war · **Status:** **behoben in `JR-4-21a`, Commit
-`pending`** (Rolle DEV, 2026-08-04)
+`543d73d`** (Rolle DEV, 2026-08-04)
 
 > **Behoben (`JR-4-21a`).** `SpoolWriteBridge.push()` sammelt gepushte Chunks jetzt in einem internen
 > Puffer und reicht erst ab `DEFAULT_FLUSH_THRESHOLD_BYTES` (128 KiB, aus dem im Befund selbst
