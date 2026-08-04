@@ -109,16 +109,16 @@ findet es hier.
 | **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                                  | hoch    | behoben   |
 | **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                        | mittel  | behoben   |
 | **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                        | hoch    | behoben   |
-| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | offen     |
+| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | behoben   |
 | **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                                    | hoch    | behoben   |
 | **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben   |
-| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | offen     |
+| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | behoben   |
 | **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
-| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | offen     |
-| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | offen     |
+| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | behoben   |
+| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | behoben   |
 | **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben   |
-| **F55**  | Vorschlag, unbestätigt — kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                       | mittel  | offen     |
-| **F56**  | Vorschlag, unbestätigt — kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                | mittel  | offen     |
+| **F55**  | kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                                                | mittel  | behoben   |
+| **F56**  | kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                                         | mittel  | behoben   |
 
 ---
 
@@ -2210,8 +2210,18 @@ strukturell, **und** die untestete Verdrahtung.
 **Schwere:** mittel · **Kategorie:** Testharness · **Ort:**
 `.github/workflows/ci.yml` (Schrittfolge) und `packages/journaling/tests/unit/smtp-acceptance-wiring.test.ts:408` ·
 **Gefunden:** vom PO am 2026-08-03, nachdem `JR-4-18` und `JR-4-20` unabhängig denselben roten
-Typfehler gemeldet und als vorbestehend bestätigt hatten · **Status:** **offen**, Behebung als
-Zusatzauflage in `JR-4-06b`
+Typfehler gemeldet und als vorbestehend bestätigt hatten · **Status:** **behoben in `JR-4-06b`,
+Commit `25a7e91`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-06b`).** Der CI-Schritt „Typecheck journaling test files" existiert
+> (`.github/workflows/ci.yml:108-109`, eingeführt durch `25a7e91` — mit `git log -S` gegengeprüft),
+> und `corepack pnpm --filter @open-archiver/journaling test:types` läuft mit **Exit 0** durch.
+> **Nachtrag (PO, 2026-08-04, `JR-4-13`):** Dieser Befund stand als Auflage 2 der E4-Abnahme noch
+> zehn Scheiben lang auf „offen", obwohl er längst behoben war — sowohl hier als auch in der
+> Übersichtstabelle. Der Tester hat es bei der Abnahme gefunden. Zusammen mit F50/F52/F53/F55/F56,
+> deren Detailabschnitte „behoben" führten, während die Übersichtstabelle „offen" sagte, ist das
+> dasselbe Muster wie die doppelt geführte Statusfassung in `README.md`: **eine zweite Fassung
+> derselben Wahrheit veraltet, sobald sie existiert.** Wer einen Status ändert, ändert beide Stellen.
 
 Zwei Teile, und der zweite erklärt den ersten:
 

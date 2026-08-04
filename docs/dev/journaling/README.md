@@ -110,13 +110,14 @@ Deshalb steht hier nur noch das Gerüst:
 | E13    | **abgenommen + gemergt** — IAM-Autorisierung gehärtet (vier Abnahmerunden)     |
 | E2     | **abgenommen + gemergt** — Ledger, kanonische Kodierung, Merkle, Hash-Kette    |
 | E3     | **abgenommen + gemergt** — Spool und Acceptance-Contract                       |
-| **E4** | **in Arbeit** — `smtp-ingress`: der Empfangspfad steht und nimmt an            |
+| **E4** | **abgenommen** (`JR-4-13`) — `smtp-ingress`; Rückmerge offen                   |
 | E5–E12 | offen                                                                          |
 
 **Was E4 heute kann:** ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`/`BDAT`,
 `STARTTLS` und `AUTH`; Quell- und Empfänger-ACL gegen `journaling_sources`; Crash-Recovery-Scan beim
-Start; und `250 … queued as <seq>` **erst** nach fsync von Spool **und** Ledger. Offen sind der
-M365-Range-Helper, die Ledger-Erholung nach Startfehler, vier TEST-Scheiben und die Abnahme.
+Start; und `250 … queued as <seq>` **erst** nach fsync von Spool **und** Ledger. **Seit dem 2026-08-04
+ist E4 abgenommen** (`JR-4-13`, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`); offen ist nur
+noch der Rückmerge in den Integrationsbranch.
 
 **Wo der nächste Schritt steht:** `07-session-handover.md`. **Wo die Entscheidungen stehen:**
 `05-entscheidungen.md` — für E4 sind das **ADR-026** (der SMTP-Server ist selbst gebaut, weil kein

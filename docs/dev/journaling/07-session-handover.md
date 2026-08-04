@@ -85,19 +85,23 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-04 (**E4 ist inhaltlich fertig — 21 von 21 Tasks, nur die Abnahme fehlt**) ·
-**Branch:** `claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf: **1038 Tests** bei 89
-Dateien — `unit ci 848 · integration ci 121 · adversarial ci 69`, **in der CI bestätigt**: Lauf
-`30914997638` **success** (`JR-4-21a`), davor `30905525089` (`JR-4-15`), `30903678696`
-(`JR-4-14`-Nacharbeit) und `30900280611` (`JR-4-14`)
+**Stand:** 2026-08-04 (**E4 ist abgenommen — 21 von 21 Tasks plus `JR-4-13`; noch nicht
+zurückgemergt**) · **Branch:** `claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf:
+**1040 Tests** bei 90 Dateien — `unit ci 850 · integration ci 121 · adversarial ci 69`, **zweimal
+unabhängig gefahren** (Tester und PO, identische Zahlen) · **CI** `30915618389` **success** für
+`b951be2`, vom Tester heruntergeladen und ausgewertet
 
-> **Die Task-Zählung ist am 2026-08-03 berichtigt worden.** Sie zählte die Splits `JR-4-05a`–`c` und
-> `JR-4-06a`/`b` im Zähler mit, während der Nenner die Backlog-IDs meint. Gezählt werden jetzt die
-> **IDs**: erledigt sind **alle 21** (`JR-4-01`…`JR-4-12`, `JR-4-14`…`JR-4-21` samt `JR-4-21a`).
-> **Offen ist allein `JR-4-13`, die Abnahme.**
+> **E4 ist abgenommen (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung).** Urteil: angenommen mit zwei
+> Auflagen, **beide in derselben Sitzung erledigt**. Das Protokoll mit einem Beleg je Kriterium steht
+> in **`16-abnahme-e4.md`** (`71d2b85`, nachgeführt `c79aff4`). Erledigt sind alle 21 IDs
+> (`JR-4-01`…`JR-4-12`, `JR-4-14`…`JR-4-21` samt `JR-4-21a`) **und** die Abnahme.
 
 > **Aus E4 ist kein Befund offen.** F42–F51 behoben oder aufgelöst; F52/F53/F54 in `JR-4-21`,
-> F50/F55/F56 in `JR-4-21a` behoben.
+> F50/F55/F56 in `JR-4-21a`, **F47** bei der Abnahme als längst behoben erkannt und korrigiert.
+
+> **Nichts ist gepusht.** `origin` steht auf `b951be2`; lokal liegen `71d2b85` (Protokoll), `a28b6af`
+> (Auflage 1), `c79aff4` (Nachführung) und der Statuscommit darüber. **Der Rückmerge ist die nächste
+> Handlung und braucht die Freigabe des Auftraggebers.**
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
@@ -369,19 +373,35 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **nur noch die Abnahme `JR-4-13`**
+### Nächster konkreter Schritt — **der Rückmerge von E4, dann E5**
 
-**E4 steht bei 21 von 21.** Alle Scheiben erledigt, alle Befunde des Empfangspfads behoben, CI grün.
-**Der einzige offene Punkt ist die Abnahme**, und sie gehört nach ADR-014/ADR-021 in eine **eigene,
-frische Sitzung** — die Sitzung, die gebaut hat, kann nicht abnehmen. In E2 hat der Auftraggeber
-genau darauf bestanden, und die erzwungene zweite Runde hat zwei echte Lücken und einen weiteren
-Befund gefunden.
+**E4 ist abgenommen.** `JR-4-13` ist am 2026-08-04 in einer unabhängigen TEST-Sitzung durchgeführt
+worden: 24 Kriterienzeilen mit Beleg, zwei Auflagen, beide sofort erledigt. Protokoll:
+**`16-abnahme-e4.md`**.
 
-**Der Prompt für die Abnahmesitzung:**
+**Damit ist der nächste Schritt der Rückmerge nach ADR-014** — und er ist eine Handlung des
+Auftraggebers, nicht eine der nächsten Sitzung:
+
+```bash
+git checkout claude/enterprise-product-implementation-cxmmqe
+git merge --no-ff claude/journaling-e4-smtp-ingress
+```
+
+Vorher `git fetch` und den lokalen Stand gegen `origin` abgleichen (Abschnitt „Immer zuerst"). **Der
+E4-Branch ist bisher nicht gepusht** — `origin/claude/journaling-e4-smtp-ingress` steht auf `b951be2`,
+die vier Abnahmecommits liegen nur lokal. Wer den Rückmerge fährt, pusht **zuerst den Epic-Branch**,
+damit die Abnahmehistorie nicht nur in diesem Container existiert; der Container ist schon einmal auf
+einen älteren Stand zurückgesetzt worden.
+
+**Danach beginnt E5** (Journal-Report-Parser, 0 / 9). Der Prompt dafür:
 
 ```
-Nimm E4 unabhängig ab — Rolle Tester, Kriterien aus docs/dev/journaling/03-backlog.md.
+Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
+und arbeite den nächsten Schritt ab.
 ```
+
+> **Die Abnahme selbst ist erledigt und wird nicht wiederholt.** Der frühere Prompt „Nimm E4
+> unabhängig ab" steht nur noch als Muster oben unter „Wie eine Session gestartet wird".
 
 | Scheibe                  | Ergebnis                                                                                                    |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------- |
@@ -391,7 +411,7 @@ Nimm E4 unabhängig ab — Rolle Tester, Kriterien aus docs/dev/journaling/03-ba
 | ~~`JR-4-21`~~            | CI `30902593426`: Grenze an die Transportschicht verlegt; alle vier Größen einheitlich in 1–11 ms           |
 | ~~`JR-4-15`~~            | CI `30905525089`: alle sechs Punkte beantwortet, zwei Befunde (F55/F56)                                     |
 | ~~`JR-4-21a`~~           | CI `30914997638`: F50/F55/F56 behoben; Durchsatzverhältnis kurz/lang von ≈ 13,9× auf ≈ 1,48× gefallen       |
-| **`JR-4-13`**            | **Abnahme E4 — eigene, frische Sitzung.** Das Material dafür steht oben unter „Was `JR-4-13` mitbekommt"    |
+| ~~`JR-4-13`~~            | **Abnahme durchgeführt 2026-08-04, unabhängige TEST-Sitzung: E4 ABGENOMMEN.** Protokoll `16-abnahme-e4.md`  |
 
 > **Zwei Dinge, die `JR-4-21` mitbringen muss, sonst ist der Fix nicht belegt:**
 >
