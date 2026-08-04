@@ -2919,7 +2919,7 @@ notiert.
 `packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.handleRcpt()`,
 `recordMatchedRecipient()`, die Felder `rcptTo`/`matchedRecipients`) · **Gefunden:** von TEST am
 2026-08-04, im Rahmen von `JR-4-15` (ADR-026 Auflage 2, Scope-Punkt „Ressourcengrenzen je
-Verbindung") · **Status:** **behoben in `JR-4-21a`, Commit `pending`** (Rolle DEV, 2026-08-04)
+Verbindung") · **Status:** **behoben in `JR-4-21a`, Commit `8755d9b`** (Rolle DEV, 2026-08-04)
 
 > **Behoben (`JR-4-21a`).** `smtp-config.ts` bekommt ein neues Feld `maxRecipientsPerTransaction`
 > (Default `1000`, per Zod auf `.min(100, ...)` begrenzt — RFC 5321 §4.5.3.1.8 verlangt, dass ein
