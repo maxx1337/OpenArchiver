@@ -127,10 +127,11 @@ Four things about it are easy to trip over:
   message states the number to write. `globalSetup` checks the files before the run; a reporter plus the
   `globalSetup` teardown check the **executed** test counts after it (JR-1-05c, findings F14/F15).
 - **A green run can be a disabled run** — the reason all of the above exists. Quote test counts, not
-  just "green": a full local run is `974 passed | 8 skipped` at 82 files as of `JR-4-10` (2026-08-03;
-  274 before E2, 398 at 30 files when E2 ended — E3 and E4 added the rest). CI run `30862834098`
-  confirms the same 82 files with `unit 56/56 · integration 20/20 · adversarial 6/6`. A run narrowed
-  with `-t`, a file filter, `--project` or `--shard` prints `verified NOTHING` and checks no counts.
+  just "green": a full local run is `989 passed | 8 skipped` at 84 files as of `JR-4-12` (2026-08-04;
+  274 before E2, 398 at 30 files when E2 ended, 974 at 82 files after `JR-4-10` — E4's TEST slices
+  added the rest). CI run `30864243188` confirms the same 84 files with
+  `unit 58/58 · integration 20/20 · adversarial 6/6`. A run narrowed with `-t`, a file filter,
+  `--project` or `--shard` prints `verified NOTHING` and checks no counts.
   **A full run now takes around two minutes** — `JR-2-08` writes ten thousand ledger entries against a
   real database, and that is deliberate rather than reducible (Testplan §12.6).
 - **Green is not the same as exercised.** `JR-4-10` shipped two consecutive versions that were useless
