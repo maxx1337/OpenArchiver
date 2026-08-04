@@ -114,6 +114,7 @@ findet es hier.
 | **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben   |
 | **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | offen     |
 | **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
+| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | offen     |
 
 ---
 
@@ -2582,3 +2583,114 @@ lief wieder grün.
 Kein Produktionscode-Fix — die Ursache liegt ausschließlich in der Beobachtung des Tests, nicht im
 Verhalten des Servers. Keine Änderung an der Aussage des Kriteriums selbst, nur an der Art, wie sie
 gemessen wird.
+
+## F52 — `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, RFC-Konformität/Ressourcenbegrenzung · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts:1390-1397` (`SmtpConnection.drainCommandCarry`) ·
+**Gefunden:** von TEST am 2026-08-04 beim Bau von `JR-4-14` (adversariale Protokollrobustheit,
+ADR-026 Auflage 1, Fallgruppe „überlange Envelope-Adressen") · **Status:** offen, nicht behoben
+(kein Produktionscode-Fix ohne Rückfrage)
+
+### Was gemessen wurde
+
+RFC 5321 §4.5.3.1.4 begrenzt eine Kommandozeile auf 512 Oktette. `drainCommandCarry()` prüft dieses
+Limit — aber nur in einem einzigen Zweig:
+
+```ts
+const idx = this.commandCarry.indexOf(CRLF);
+if (idx === -1) {
+	if (this.commandCarry.length > MAX_COMMAND_LINE_BYTES) {
+		this.writeResponse(500, '5.5.1', 'Line too long');
+		this.socket.end();
+	}
+	return;
+}
+const lineBuf = this.commandCarry.subarray(0, idx);
+```
+
+`MAX_COMMAND_LINE_BYTES` (512) wird ausschließlich abgefragt, wenn `indexOf(CRLF)` **kein**
+Ergebnis liefert — also nur, solange eine Zeile noch nicht durch ihr eigenes `CRLF` abgeschlossen
+ist. Sobald `commandCarry` ein `CRLF` enthält, egal an welcher Position, nimmt der Code den
+`idx !== -1`-Zweig, extrahiert die komplette Zeile (`subarray(0, idx)`, beliebig lang) und
+verarbeitet sie ganz normal über `processCommandLine()` — ohne die Zeile jemals gegen das Limit zu
+prüfen.
+
+Das ist über einen echten Socket reproduzierbar, deterministisch, nicht auf TCP-Fragmentierung
+angewiesen: ein einzelner `write()`-Aufruf mit einer 2000-Byte-Adresse **plus ihrem eigenen
+CRLF** —
+
+```ts
+const oversizedAddress = 'a'.repeat(2_000);
+await client.writeRaw(`MAIL FROM:<${oversizedAddress}@example.com>\r\n`);
+```
+
+— wird mit `250` beantwortet, nicht mit `500 5.5.1`. Der Test, der das zeigt, steht in
+`packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts` (Gruppe „a line that
+never completes with CRLF …", Fall „FINDING (see report/F52) …") und ist absichtlich als
+Dokumentation des **Ist-Zustands** formuliert, nicht als Regressionsschutz für ein gewünschtes
+Verhalten: der Kommentar dort sagt ausdrücklich, dass eine künftige Behebung diese Zeile ändern
+muss, nicht nur den Test lockern darf.
+
+### Warum das mehr als ein Format-Detail ist
+
+1. **RFC-Konformität**: die 512-Byte-Grenze ist in RFC 5321 kein Vorschlag, sondern eine Zusage an
+   den Client („MUST be able to receive... 512 octets"), die diese Implementierung damit für jede
+   Zeile bricht, die vollständig in einem TCP-Segment ankommt.
+2. **Ressourcenbegrenzung**: die Grenze ist genau der Mechanismus, den `JR-4-14`s Akzeptanzkriterium
+   „lässt den Speicher unbegrenzt wachsen" adressieren soll. Für eine Zeile, die **fragmentiert**
+   ankommt, greift die Prüfung zuverlässig (siehe die zwei grünen Fälle im selben Testfile, die
+   genau das zeigen — 50 000 Byte in einem Stück und 40×20 Byte über mehrere Schreibvorgänge treffen
+   beide den `idx === -1`-Zweig und werden korrekt mit `500`+Verbindungsabbruch beantwortet). Wie
+   groß eine „in einem Stück" ankommende Zeile in der Praxis werden kann, hängt von Node/`libuv`s
+   Lesepuffergröße und der Sendegeschwindigkeit des Angreifers ab — nicht unbegrenzt, aber ohne
+   diesen Fund auch nicht durch `MAX_COMMAND_LINE_BYTES` begrenzt, sondern nur durch das, was ein
+   einzelner `read()`-Syscall zurückgibt (in dieser Messung genügten 2000 Byte problemlos; nicht
+   gemessen, wie weit sich das treiben lässt, bevor das Betriebssystem selbst fragmentiert).
+3. **Betrifft mehr als `MAIL FROM`**: derselbe Zweig gilt für **jede** Kommandozeile — eine
+   überlange `RCPT TO`, ein überlanger, aber syntaktisch gültiger Verb-Präfix, jede Zeile. Die
+   Fallgruppe „überlange Envelope-Adressen" aus dem Backlog ist der Fall, der es zuerst auffällig
+   gemacht hat, aber die Ursache ist allgemein.
+
+### Kalibrierung
+
+Der Fund ist eine direkte Ableitung aus dem Quelltext (die `if (idx === -1)`-Verzweigung lässt keine
+andere Lesart zu), zusätzlich am echten `EsmtpServer` über einen echten Loopback-Socket gemessen,
+nicht nur am Quelltext behauptet — der oben zitierte Testfall demonstriert `250` statt `500` mit dem
+tatsächlichen Server. Eine Gegenprobe mit einer **kurzen** Adresse (unter 512 Byte) ergibt ebenfalls
+`250` — das beweist an sich nichts (das ist der Normalfall), zeigt aber, dass der Fund nicht an
+irgendeinem Nebeneffekt der Testadresse hängt.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber (E4
+Randbedingung: „Kein Produktionscode-Fix ohne Rückfrage"). Ein möglicher Fix: den Längen-Check auch
+im `idx !== -1`-Zweig ausführen (`idx > MAX_COMMAND_LINE_BYTES` prüfen, bevor die Zeile extrahiert
+wird) — nicht umgesetzt, nur als Richtung notiert.
+
+### Koordinationsnotiz — zwei Bearbeiter, dieselbe Scheibe, zwei "F52"
+
+Beim Aufräumen dieser Sitzung stand bereits eine zweite, unabhängig entstandene Datei auf der
+Platte: `packages/journaling/tests/unit/smtp-adversarial-protocol.test.ts` — ebenfalls für `JR-4-14`,
+mit stark überlappendem Fallkatalog (Zeile ohne CRLF, abgeschnittenes Kommando, Kommandoflut,
+DATA/BDAT/RCPT vor MAIL, CR/LF-Fälle, NUL/8-Bit-Bytes, Verbindungslimit), **unkommittiert**. Ihr
+eigener Testfall für exakt diesen Befund („an envelope address that pushes the whole command line
+over the length cap …") ist derzeit **rot** (`expected '250 2.1.0 Ok' to match /^500 5\.5\.1/`) — eine
+von diesem Befund unabhängige Bestätigung, gemessen, nicht nur behauptet.
+
+Diese Datei hat außerdem einen eigenen, andersartigen Fund erbracht, den dieser hier nicht abdeckt:
+`commandCarry` wächst während eines suspendierten Fensters (laufender `AUTH`-Bcrypt-Vergleich oder
+settling `accept()`) völlig ungeprüft, weil `onData()` die gesamte Zeilen-Verarbeitungsschleife samt
+Längenprüfung in diesem Zustand überspringt — unabhängig von Chunking, anders als der hier
+dokumentierte Fund. Beide Dateien haben diesen zweiten Fund „F52" genannt; um die Kollision nicht zu
+vertiefen, bleibt der hier dokumentierte Fund **F52**, der Fund aus der anderen Datei ist als **F53**
+vorgeschlagen (noch nicht ausgeschrieben — das ist Sache der Person, die diese Datei fertigstellt).
+
+Die zweite Datei ist **nicht** Teil dieses Commits (weder gelöscht noch übernommen) — sie liegt
+unverändert im Arbeitsbaum, nur für die Dauer der Verifikation dieses Commits nach
+`scratchpad/other-agent-wip/` verschoben und danach an ihren ursprünglichen Ort zurückgelegt.
+`tests/support/suite-inventory.ts` zählt in diesem Commit deshalb nur die eigenen zwei neuen Dateien
+(`smtp-protocol-robustness.adv.test.ts`, `smtp-tls11-clienthello-rejection.test.ts`), nicht die
+16 Fälle der zweiten Datei. tester-jr-4-10 und der PO sind informiert; die Zusammenführung
+(eine Datei behalten, F53 korrekt einordnen, das rote Testergebnis reparieren oder als weiteren
+Befund werten) ist eine offene Entscheidung, keine, die hier einseitig getroffen wurde.

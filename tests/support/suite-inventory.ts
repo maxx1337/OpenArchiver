@@ -172,7 +172,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// checkNeverPartial(), the pure checker the real kill-during-DATA adversarial test uses.
 		// 57 after JR-4-11 added tests/unit/bdat-data-byte-fidelity.test.ts.
 		// 58 after JR-4-12 added tests/unit/smtp-oversize-boundary.test.ts.
-		expectedFiles: 58,
+		// 59 after JR-4-14 added tests/unit/smtp-tls11-clienthello-rejection.test.ts -- the hand-built,
+		// byte-level TLS 1.1 ClientHello proof JR-4-04 handed forward, see that file's own doc comment.
+		// (A second JR-4-14 file, tests/unit/smtp-adversarial-protocol.test.ts, was found mid-session
+		// as a parallel, uncommitted attempt at the same backlog slice by another session on this same
+		// checkout -- see 09-befunde-bestandscode.md's coordination note for why it is deliberately
+		// left out of this count rather than committed: it currently fails 4 of its own cases.)
+		expectedFiles: 59,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -489,7 +495,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// -- plus 4 calibration cases for the alert-shape assertion itself (an exactly-one-correct-
 		// reason alert passes; zero alerts, two alerts, and one alert with the wrong reason must each
 		// be caught).
-		expectedTests: { ci: 833, nightly: 3, manual: 0 },
+		// 835 after JR-4-14 added tests/unit/smtp-tls11-clienthello-rejection.test.ts (2): the
+		// hand-built TLS 1.1 ClientHello is answered with a fatal protocol_version alert, never a
+		// ServerHello, and the same process still completes a normal TLS 1.2 handshake afterward. (See
+		// this suite's `expectedFiles` comment above for the second, uncommitted JR-4-14 file found on
+		// this checkout and why its 16 cases are deliberately not counted here.)
+		expectedTests: { ci: 835, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -571,7 +582,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 5 after JR-3-06/JR-3-07
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
 		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
-		expectedFiles: 6,
+		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts.
+		expectedFiles: 7,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -596,7 +608,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// durable half of the invariant is unverified locally by construction; only Linux CI exercises
 		// it. The checker itself (checkNeverPartial(), tests/support/kill-during-data-invariant.ts) is
 		// calibrated independently in the `unit` suite's kill-during-data-invariant.test.ts.
-		expectedTests: { ci: 38, nightly: 2, manual: 1 },
+		// 57 ci after JR-4-14 added 19 cases in smtp-protocol-robustness.adv.test.ts (ADR-026
+		// Auflage 1 -- adversarial protocol robustness; see that file's own doc comment).
+		expectedTests: { ci: 57, nightly: 2, manual: 1 },
 	},
 ];
 
