@@ -44,6 +44,68 @@ import { z } from 'zod';
  */
 export const TLS_MIN_VERSION = 'TLSv1.2' as const;
 
+/**
+ * ---------------------------------------------------------------------------------------------
+ * `TLS_CIPHERS` -- an explicit TLS <= 1.2 cipher allow-list (`JR-4-21a`, finding F56)
+ * ---------------------------------------------------------------------------------------------
+ * Before this constant existed, `buildTlsSocketOptions()` (`smtp-server.ts`) set only `minVersion`,
+ * so cipher selection under TLS 1.2 fell through to Node/OpenSSL's own default list -- which a
+ * **client** can narrow, but which this server never narrowed itself. Measured directly against a
+ * real `tls.TLSSocket({ isServer: true, secureContext, minVersion: 'TLSv1.2' })` built with exactly
+ * that configuration: a client offering only `AES128-SHA` (`TLS_RSA_WITH_AES_128_CBC_SHA` -- plain
+ * RSA key exchange, no forward secrecy, a SHA-1 MAC) negotiated it without objection.
+ *
+ * The risk is not an active attacker forcing a weak cipher -- TLS 1.2's `Finished` message binds the
+ * negotiation cryptographically, so that is not on the table here. The risk is a legitimate but
+ * outdated sender (an old Exchange server, a misconfigured relay) that offers nothing better than
+ * `AES128-SHA` by default: its journal mail -- for a system whose entire purpose is archiving
+ * sensitive content -- would then travel with no forward secrecy. A later compromise of that
+ * connection's (or the server's own) private key would let a recording attacker decrypt the
+ * captured traffic retroactively, exactly what forward secrecy exists to rule out.
+ *
+ * This list is deliberately narrow rather than merely "better": every suite requires an ephemeral
+ * Diffie-Hellman key exchange (`ECDHE`/`DHE`, so a compromised static key cannot decrypt past
+ * sessions) and an AEAD cipher (`GCM`/`ChaCha20-Poly1305`, so there is no separate, SHA-1-or-weaker
+ * MAC to exclude one at a time). It excludes every plain-RSA-key-exchange suite and every CBC/SHA-1
+ * suite by construction, without needing to name them. Loosely modelled on Mozilla's "intermediate"
+ * TLS guidance, narrowed further to forward-secrecy-only for this project's own reason above, not
+ * copied verbatim.
+ *
+ * `ciphers` (an OpenSSL cipher list string) governs TLS 1.2 and below only -- TLS 1.3 negotiates its
+ * own, separate, always-AEAD-and-forward-secret suite set and is unaffected by this string one way
+ * or the other, which is exactly why `minVersion` alone was left with no ceiling above it (see that
+ * field's own doc comment) and why this constant does not need a TLS-1.3-shaped counterpart: TLS 1.3
+ * already has no non-forward-secret, non-AEAD suite to exclude.
+ *
+ * Like `TLS_MIN_VERSION`, this is a fixed floor rather than a schema field: there is no compliance
+ * reason an operator would ever need to loosen it, and every other adjustable knob in this file's
+ * sibling (`smtp-config.ts`) is adjustable specifically because there *is* such a reason for those.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Where this constant is actually applied -- it is not `buildTlsSocketOptions()`
+ * ---------------------------------------------------------------------------------------------
+ * `EsmtpServer`'s constructor passes this string (plus `honorCipherOrder: true`) to
+ * `tls.createSecureContext({ cert, key, ciphers, honorCipherOrder })` at process start, not per
+ * connection. A first version of the fix instead added `ciphers` to the options object
+ * `buildTlsSocketOptions()` (`smtp-server.ts`) returns for `new tls.TLSSocket(plainSocket, options)`
+ * -- the natural-looking place, right next to `minVersion` -- but that option is silently ignored by
+ * Node whenever a `secureContext` is already supplied, which is always the case here. Measured both
+ * ways against a real server socket and a real TLS client handshake before trusting either:
+ * setting `ciphers` per-socket alongside an existing `secureContext` changed nothing (a client
+ * offering only `AES128-SHA` still got it), while the identical string passed to
+ * `createSecureContext()` made the server correctly answer "no shared cipher" to that same client.
+ * See `buildTlsSocketOptions()`'s own doc comment for the fuller account.
+ */
+export const TLS_CIPHERS =
+	'ECDHE-ECDSA-AES128-GCM-SHA256:' +
+	'ECDHE-RSA-AES128-GCM-SHA256:' +
+	'ECDHE-ECDSA-AES256-GCM-SHA384:' +
+	'ECDHE-RSA-AES256-GCM-SHA384:' +
+	'ECDHE-ECDSA-CHACHA20-POLY1305:' +
+	'ECDHE-RSA-CHACHA20-POLY1305:' +
+	'DHE-RSA-AES128-GCM-SHA256:' +
+	'DHE-RSA-AES256-GCM-SHA384';
+
 const pemContent = z.string().min(1, 'must be non-empty PEM content, not a file path');
 
 export const ingressTlsConfigSchema = z

@@ -2983,12 +2983,44 @@ Ein möglicher Fix: eine konfigurierbare Obergrenze für `rcptTo.length` je Tran
 Überschreitung `452 4.5.3` (derselbe Code, den ADR-027 für „zu viele Empfänger" schon benutzt, nur
 aus einem anderen Grund) — nicht umgesetzt, nur als Richtung notiert.
 
-## F56 (Vorschlag, noch nicht vom Auftraggeber bestätigt) — kein expliziter Cipher-Suite-Filter: der Server verhandelt `AES128-SHA` (keine Forward Secrecy) unter TLS 1.2
+## F56 — kein expliziter Cipher-Suite-Filter: der Server verhandelt `AES128-SHA` (keine Forward Secrecy) unter TLS 1.2
 
 **Schwere:** mittel · **Kategorie:** Empfangspfad, TLS-Konfiguration · **Ort:**
 `packages/journaling/src/ingress/tls-config.ts` (`ingressTlsConfigSchema`, kein `ciphers`-Feld),
-`smtp-server.ts` (`buildTlsSocketOptions()`, setzt nur `minVersion`) · **Gefunden:** von TEST am
-2026-08-04, im Rahmen von `JR-4-15`, Scope-Punkt „TLS-Parameter" · **Status:** offen, nicht behoben
+`smtp-server.ts` (`buildTlsSocketOptions()`, setzte nur `minVersion`) · **Gefunden:** von TEST am
+2026-08-04, im Rahmen von `JR-4-15`, Scope-Punkt „TLS-Parameter" · **Status:** **behoben in
+`JR-4-21a`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21a`).** `TLS_CIPHERS` (`tls-config.ts`) ist eine feste, PFS-und-AEAD-only-Liste
+> (nur `ECDHE`/`DHE`-Schlüsselaustausch, nur `GCM`/`ChaCha20-Poly1305`) — kein reiner RSA-Austausch,
+> kein CBC/SHA-1 mehr aushandelbar. **Die erste Fassung setzte diese Liste an der falschen Stelle**:
+> als `ciphers`/`honorCipherOrder` im Optionsobjekt, das `buildTlsSocketOptions()` an
+> `new tls.TLSSocket(plainSocket, options)` übergibt — genau daneben, wo `minVersion` steht, also
+> naheliegend, aber gemessen wirkungslos. Sobald ein `secureContext` bereits übergeben wird (was in
+> diesem Prozess immer der Fall ist), ignoriert Node einen Cipher-Parameter auf Socket-Ebene
+> vollständig; die Aushandlung folgt ausschließlich der Cipher-Liste, die beim Bau des
+> `secureContext` selbst (`tls.createSecureContext()`) galt. Ein Client, der nur `AES128-SHA`
+> anbietet, bekam diesen Cipher **trotz** gesetztem `ciphers`-Feld weiterhin ausgehandelt — an
+> genau dieser Stelle hätte ein reiner Optionsobjekt-Test (ohne echten Socket) den Fehler nicht
+> gefunden. Der Fix sitzt jetzt in `EsmtpServer`s Konstruktor:
+> `tls.createSecureContext({ cert, key, ciphers: TLS_CIPHERS, honorCipherOrder: true })`.
+> `buildTlsSocketOptions()` setzt weiterhin nur `minVersion`.
+>
+> **Kalibriert, in beiden Richtungen, gegen einen echten `net.Server` + `tls.TLSSocket`/echten
+> TLS-Client:** ein Client mit `ciphers: 'AES128-SHA', minVersion/maxVersion: 'TLSv1.2'` gegen den
+> unveränderten (Vorzustand-)Server verhandelte `AES128-SHA` erfolgreich — auch mit der (wirkungslosen)
+> ersten Fixfassung. Erst mit `ciphers`/`honorCipherOrder` am `secureContext` selbst antwortet der
+> Server „no shared cipher", derselbe Client scheitert mit einem fatalen Handshake-Alert. TLS 1.3
+> bleibt unberührt (eigener Testfall, `getProtocol() === 'TLSv1.3'`), ein gewöhnlicher Client
+> verhandelt weiterhin `ECDHE-RSA-AES128-GCM-SHA256` — Exchange Online und vergleichbare Absender
+> bleiben also zugelassen. `smtp-starttls-protocol.test.ts` (`JR-4-04`, TLS 1.2 **und** 1.3
+> Ende-zu-Ende) und `smtp-tls11-clienthello-rejection.test.ts` (`JR-4-14`) blieben grün.
+>
+> **Testfall:** neue Datei `packages/journaling/tests/unit/smtp-tls-cipher-filter.test.ts` (3 Fälle:
+> `AES128-SHA` wird abgelehnt, ein gewöhnlicher Client verhandelt weiterhin Forward-Secrecy-AEAD, TLS
+> 1.3 unberührt), plus zwei angepasste Fälle in `smtp-server.test.ts` (`buildTlsSocketOptions` setzt
+> **weder** `ciphers` noch `honorCipherOrder`; `TLS_CIPHERS` selbst enthält keine CBC/SHA-1- oder
+> reine-RSA-Suite). Voller Lauf danach: `1027 passed | 8 skipped`, 88 Dateien.
 
 ### Was gemessen wurde
 

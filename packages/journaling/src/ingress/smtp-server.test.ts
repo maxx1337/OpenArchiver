@@ -14,7 +14,7 @@ import {
 	parseMailFromArguments,
 	parseRcptToArguments,
 } from './smtp-server';
-import { TLS_MIN_VERSION } from './tls-config';
+import { TLS_CIPHERS, TLS_MIN_VERSION } from './tls-config';
 
 /**
  * `JR-4-02`/`JR-4-03` -- the ESMTP protocol engine's pure, socket-free logic: `EHLO` line
@@ -102,6 +102,24 @@ suite('ci', 'EsmtpServer pure logic (JR-4-02)', () => {
 		it('never sets maxVersion -- the default ceiling is inherited from Node, not pinned', () => {
 			const options = buildTlsSocketOptions({} as tls.SecureContext);
 			expect(options.maxVersion).toBeUndefined();
+		});
+
+		it('sets neither ciphers nor honorCipherOrder -- deliberately (JR-4-21a, F56): a per-socket cipher option is silently ignored once secureContext is already supplied, so TLS_CIPHERS is set at tls.createSecureContext() time instead, in the EsmtpServer constructor, never here', () => {
+			const options = buildTlsSocketOptions({} as tls.SecureContext);
+			expect(options.ciphers).toBeUndefined();
+			expect(options.honorCipherOrder).toBeUndefined();
+		});
+
+		it('TLS_CIPHERS itself never lists a CBC/SHA-1 suite or a plain-RSA-key-exchange suite', () => {
+			// Every listed suite must be forward-secret (ECDHE/DHE key exchange) and AEAD (GCM/
+			// CHACHA20-POLY1305). The wire-level proof that this list actually reaches the TLS engine
+			// (smtp-tls-cipher-filter.test.ts) lives in tests/unit, not here -- this file only checks
+			// the shape of the constant itself.
+			expect(TLS_CIPHERS).not.toContain('SHA-1');
+			for (const suiteName of TLS_CIPHERS.split(':')) {
+				expect(suiteName).toMatch(/^(?:ECDHE|DHE)-/);
+				expect(suiteName).toMatch(/GCM|CHACHA20-POLY1305/);
+			}
 		});
 	});
 

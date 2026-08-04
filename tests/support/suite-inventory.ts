@@ -178,7 +178,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// as a parallel, uncommitted attempt at the same backlog slice by another session on this same
 		// checkout -- see 09-befunde-bestandscode.md's coordination note for why it is deliberately
 		// left out of this count rather than committed: it currently fails 4 of its own cases.)
-		expectedFiles: 59,
+		// 60 after JR-4-21a added tests/unit/smtp-tls-cipher-filter.test.ts (F56).
+		expectedFiles: 60,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -500,7 +501,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ServerHello, and the same process still completes a normal TLS 1.2 handshake afterward. (See
 		// this suite's `expectedFiles` comment above for the second, uncommitted JR-4-14 file found on
 		// this checkout and why its 16 cases are deliberately not counted here.)
-		expectedTests: { ci: 835, nightly: 3, manual: 0 },
+		// 840 after JR-4-21a (F56 -- no cipher-suite filter, AES128-SHA negotiable with no forward
+		// secrecy): +2 in ingress/smtp-server.test.ts (buildTlsSocketOptions no longer sets
+		// ciphers/honorCipherOrder at all -- see that function's own doc comment for why the fix moved
+		// to EsmtpServer's tls.createSecureContext() call instead -- and TLS_CIPHERS itself never
+		// lists a CBC/SHA-1 or plain-RSA-key-exchange suite) + 3 in the new
+		// tests/unit/smtp-tls-cipher-filter.test.ts (a client offering only AES128-SHA is refused the
+		// handshake, an ordinary client still negotiates a forward-secret AEAD cipher under TLS 1.2,
+		// and a TLS 1.3 handshake is unaffected).
+		expectedTests: { ci: 840, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',

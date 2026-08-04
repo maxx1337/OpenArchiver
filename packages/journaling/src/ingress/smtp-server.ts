@@ -1,7 +1,7 @@
 import * as net from 'node:net';
 import * as tls from 'node:tls';
 import type { SmtpServerConfig } from './smtp-config';
-import { TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
+import { TLS_CIPHERS, TLS_MIN_VERSION, type IngressTlsConfig } from './tls-config';
 import { SpoolWriteBridge } from './spool-write-bridge';
 import {
 	isAccepted,
@@ -477,6 +477,25 @@ export const AUTH_DUMMY_PASSWORD_HASH =
  * fixed floor itself (`TLS_MIN_VERSION`, `'TLSv1.2'`) is documented in `tls-config.ts`; no `maxVersion`
  * is set, deliberately, so Node's own default ceiling (currently TLSv1.3) is inherited rather than
  * pinned in this file too.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * Cipher selection (`JR-4-21a`, finding F56) is set on the *secureContext*, not here
+ * ---------------------------------------------------------------------------------------------
+ * A first version of this fix added `ciphers: TLS_CIPHERS` to the object this function returns --
+ * plausible, since that is exactly where `minVersion` lives, but measured (against a real
+ * `net.Server` + `new tls.TLSSocket(plainSocket, options)`, the same construction
+ * {@link SmtpConnection.beginTlsUpgrade} uses) to have **no effect at all**: once a `secureContext`
+ * is already supplied -- as it always is here, see {@link EsmtpServer}'s constructor -- Node ignores
+ * a per-socket `ciphers`/`honorCipherOrder` option entirely and negotiates from whatever cipher list
+ * was baked into that `secureContext` when `tls.createSecureContext()` built it. A client offering
+ * only `AES128-SHA` still negotiated it -- the exact finding this fix exists to close -- with the
+ * per-socket `ciphers` option silently present and silently doing nothing. Confirmed in the other
+ * direction too: the identical `ciphers` string passed to `tls.createSecureContext({ cert, key,
+ * ciphers, honorCipherOrder })` **does** make the server answer "no shared cipher" to the same
+ * client. That is where {@link EsmtpServer}'s constructor now passes {@link TLS_CIPHERS} -- see that
+ * constant's own doc comment for the cipher list itself and the reasoning behind it. This function
+ * still receives the resulting `secureContext` unchanged; it no longer needs to know about ciphers
+ * at all.
  */
 export function buildTlsSocketOptions(secureContext: tls.SecureContext): tls.TLSSocketOptions {
 	return {
@@ -3111,8 +3130,20 @@ export class EsmtpServer {
 		this.logger = options.logger ?? noopIngressLogger;
 		const cert = options.tls?.cert;
 		const key = options.tls?.key;
+		// `ciphers`/`honorCipherOrder` (`JR-4-21a`, finding F56) must be set *here*, at
+		// `createSecureContext()` time, not as a per-socket option on `tls.TLSSocket` --
+		// `buildTlsSocketOptions()`'s doc comment has the measured reason why a per-socket `ciphers`
+		// option is silently ignored once a `secureContext` is already supplied. See
+		// `TLS_CIPHERS`'s own doc comment (`tls-config.ts`) for the list and the reasoning behind it.
 		this.tlsSecureContext =
-			cert !== undefined && key !== undefined ? tls.createSecureContext({ cert, key }) : null;
+			cert !== undefined && key !== undefined
+				? tls.createSecureContext({
+						cert,
+						key,
+						ciphers: TLS_CIPHERS,
+						honorCipherOrder: true,
+					})
+				: null;
 		const processRequireTls = options.tls?.requireTls ?? false;
 		this.requireTlsResolver = options.requireTlsResolver ?? (() => processRequireTls);
 		this.sourceAclEvaluator = options.sourceAclEvaluator;
