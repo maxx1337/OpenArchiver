@@ -2591,8 +2591,26 @@ gemessen wird.
 **Schwere:** mittel · **Kategorie:** Empfangspfad, RFC-Konformität/Ressourcenbegrenzung · **Ort:**
 `packages/journaling/src/ingress/smtp-server.ts:1390-1397` (`SmtpConnection.drainCommandCarry`) ·
 **Gefunden:** von TEST am 2026-08-04 beim Bau von `JR-4-14` (adversariale Protokollrobustheit,
-ADR-026 Auflage 1, Fallgruppe „überlange Envelope-Adressen") · **Status:** offen, nicht behoben
-(kein Produktionscode-Fix ohne Rückfrage)
+ADR-026 Auflage 1, Fallgruppe „überlange Envelope-Adressen") · **Status:** **behoben in `JR-4-21`,
+Commit `3b2bc66`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21`).** Die Grenze sitzt jetzt zeilenweise in `drainCommandCarry()` selbst: der
+> `idx !== -1`-Zweig prüft `idx > MAX_COMMAND_LINE_BYTES`, **bevor** die Zeile extrahiert wird, genau
+> die Prüfung, die hier gefehlt hat — der `idx === -1`-Zweig war unverändert schon richtig. Das ist
+> nach `go-smtp`s Vorlage (ADR-026-Nachtrag), aber **nicht** als ein eifriger Scan über den ganzen
+> Puffer: eine erste Fassung hat genau das versucht und `JR-4-07`s Byte-Treue-Suite zerschossen, weil
+> ein pipeliniertes `BDAT <n> LAST` samt eigenem Inhalt in einem Paket wie eine überlange Zeile aussah
+> — gefunden vom **Volllauf**, nicht von F52/F53s eigenen Tests. Die Schleife prüft deshalb genau eine
+> Zeile zur Zeit, in der Reihenfolge, in der sie ohnehin verarbeitet wird, und verlässt sich darauf,
+> nie ein zweites `indexOf(CRLF)` aufzurufen, sobald eine Zeile `DATA`/`BDAT` einleitet — das ist
+> dieses Projekts strukturelles Gegenstück zu `go-smtp`s `LineLimit = 0`, ohne eigenes Flag.
+>
+> **Kalibriert, wiederholt statt einmalig:** ein eigenständiges `node`-Skript (kein `vitest`) hat
+> gegen den echten, kompilierten Server je 10 Verbindungen bei ~2 000 Byte gefahren, einmal gegen den
+> Fix und einmal gegen den per `git stash` auf **nur** `smtp-server.ts` zurückgesetzten Vorzustand:
+> **10/10 `250` vorher, 10/10 `500 5.5.1` nachher**, beide Male in 1–8 ms. Testfall in
+> `packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts`, jetzt „fixed in
+> `JR-4-21` (F52): …" statt der bisherigen „FINDING"-Dokumentation des Ist-Zustands.
 
 ### Was gemessen wurde
 
@@ -2691,8 +2709,24 @@ Verbindungslimit-Verfeinerung mit einem noch offenen zweiten Slot, und die Kalib
 **Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
 `packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.onData()`, der
 `commandProcessingSuspended`-Zweig) · **Gefunden von:** tester-jr-4-10, beim eigenständigen Bau einer
-zweiten `JR-4-14`-Suite in derselben Sitzung · **Status:** offen, nicht behoben (kein
-Produktionscode-Fix ohne Freigabe des Auftraggebers)
+zweiten `JR-4-14`-Suite in derselben Sitzung · **Status:** **behoben in `JR-4-21`, Commit `3b2bc66`**
+(Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21`).** Anders als F52 (zeilenweise Prüfung in `drainCommandCarry()`) prüft der
+> `commandProcessingSuspended`-Zweig eifrig über den **ganzen** neu zusammengesetzten Puffer
+> (`appendDuringSuspension()`), weil `drainCommandCarry()` hier per Definition nicht läuft. Das ist
+> nur deshalb sicher, weil ein suspendiertes Fenster (laufender `AUTH`-Bcrypt-Vergleich oder
+> settelnder `accept()`-Aufruf) protokollbedingt **nie** rohe `DATA`/`BDAT`-Inhaltsbytes trägt —
+> `bdatChunkRemaining` ist zu diesem Zeitpunkt bereits `null`, `dataScanner` bereits fertig. Geprüft
+> wird die Länge jeder einzelnen, durch CRLF abgegrenzten Zeile im Puffer, nicht die Gesamtlänge —
+> sonst würde legitim gepipelinete, aber gestapelte kurze Kommandozeilen fälschlich abgelehnt.
+>
+> **Kalibriert:** derselbe Testfall in `smtp-protocol-robustness.adv.test.ts` (400-ms-Fenster,
+> 20 MB Flut) zeigt nach dem Fix eine sichtbar andere Form — die Verbindung wird jetzt innerhalb des
+> ersten überlangen Chunks abgelehnt statt die volle Fensterdauer zu füllen, gemessen: 2,0 MB
+> gesendet statt der vollen Flut, `arrayBuffers` +5,1 MB statt der ungebremsten Werte vor dem Fix.
+> Nicht als Schwelle assertiert (unverändert keine vom Auftraggeber freigegebene Obergrenze), aber
+> die Testbeschreibung ist von „reported as F53, not fixed here" auf „fixed in `JR-4-21`" umgestellt.
 
 ### Was gemessen wurde
 
@@ -2752,15 +2786,54 @@ Ein möglicher Fix: `commandCarry` auch im `commandProcessingSuspended`-Zweig ge
 prüfen (nicht notwendigerweise `MAX_COMMAND_LINE_BYTES`, da hier keine Kommandozeile erwartet wird,
 sondern Rohbytes bis zur Wiederaufnahme) — nicht umgesetzt, nur als Richtung notiert.
 
-## F54 (Vorschlag, noch nicht vom Auftraggeber bestätigt) — der Abbruchpfad von `MAX_COMMAND_LINE_BYTES` ist nicht idempotent: eine fragmentiert ankommende überlange Zeile kann zu einem `ECONNRESET` statt einem sauberen `500` führen
+## F54 — der Abbruchpfad von `MAX_COMMAND_LINE_BYTES` ist nicht idempotent: eine fragmentiert ankommende überlange Zeile kann zu einem `ECONNRESET` statt einem sauberen `500` führen
 
 **Schwere:** mittel · **Kategorie:** Empfangspfad, Protokollkonformität · **Ort:**
 `packages/journaling/src/ingress/smtp-server.ts` (`drainCommandCarry()`, der `idx === -1`-Zweig, und
 `onData()`, der Zweig für den ordinären Kommando-Modus) · **Gefunden:** von TEST am 2026-08-04, beim
 Untersuchen, warum ein für `JR-4-14` übernommener Testfall mit einer 2-MB-Adresse zuverlässig am
 5-Sekunden-`testTimeout` der `unit`-Projektkonfiguration scheiterte, statt (wie die ursprüngliche
-Fallbeschreibung erwartete) mit einem schnellen `250` · **Status:** offen, nicht behoben (kein
-Produktionscode-Fix ohne Freigabe)
+Fallbeschreibung erwartete) mit einem schnellen `250` · **Status:** **behoben in `JR-4-21`, Commit
+`3b2bc66`** (Rolle DEV, 2026-08-04). Vom Auftraggeber bestätigt — der Zusatz „Vorschlag, noch nicht
+bestätigt" ist entfernt.
+
+> **Behoben (`JR-4-21`).** Zwei Mechanismen: `oversizedLineRejected` (neues Feld) latcht die erste
+> Ablehnung — jeder weitere `onData()`-Aufruf prüft dieses Flag **zuerst** und tut sonst nichts mehr,
+> also auch keinen zweiten `writeResponse()`/`socket.end()`-Aufruf. Das allein reicht nicht: dieselbe
+> Kollisionsklasse tritt auch auf, wenn eine **andere** asynchrone Fortsetzung (`verifyCredentials`s
+> Bcrypt-`.then()`, `completeTransfer`s `accept()`-Fortsetzung) nach einer bereits erfolgten Ablehnung
+> noch schreiben will — deshalb prüfen `writeResponse()`/`writePlain()` jetzt zusätzlich
+> `socket.writableEnded` (nicht nur `socket.destroyed`, das `socket.end()` nicht synchron setzt).
+>
+> **Kalibriert, mit Wiederholung statt einem Lauf** (Auftraggeber-Anforderung, weil ein einzelner
+> grüner Lauf hier nichts beweist — der Fall ist ohne Wiederholung nicht sicher von einem seltenen
+> Rennen zu unterscheiden): der reguläre `vitest`-Testfall zehnmal hintereinander gegen den Fix
+> gefahren, **10/10 grün**. Zusätzlich ein eigenständiges `node`-Skript (kein `vitest`, kein
+> Pro-Test-Timeout) gegen den echten kompilierten Server, **10 Verbindungen je Größe**, an der vom
+> Auftraggeber benannten Größenmatrix:
+>
+> | Größe   | vorher (10 Läufe, nur `smtp-server.ts` per `git stash` zurückgesetzt) | nachher (10 Läufe) |
+> | ------- | --------------------------------------------------------------------- | ------------------ |
+> | ~2000 B | 10/10 falsches `250` (F52)                                            | 10/10 `500 5.5.1`  |
+> | 100 KB  | 10/10 `500` (war nie kaputt — der `idx === -1`-Zweig griff schon)     | 10/10 `500`        |
+> | ~200 KB | 10/10 Reset/Hänger, keine lesbare Antwort                             | 10/10 `500`        |
+> | 2 MB    | 10/10 Reset/Hänger, keine lesbare Antwort                             | 10/10 `500`        |
+>
+> Nach dem Fix antworten alle vier Größen einheitlich in 1–11 ms — keine Chunk-Abhängigkeit mehr, das
+> Signal, das laut Auftraggeber zeigt, dass die Grenze jetzt an der richtigen Schicht sitzt. Der
+> `RED UNTIL JR-4-21`-Marker im Testfall (`smtp-protocol-robustness.adv.test.ts`) ist entfernt.
+>
+> **Die eigentliche Erkenntnis dieser Scheibe liegt nicht in F52/F53/F54 selbst, sondern in einer
+> Regression, die der Fix zwischenzeitlich selbst eingeführt hat:** eine erste Fassung hat die
+> Zeilenlängengrenze als eifrigen Scan über den **ganzen** neu zusammengesetzten Puffer umgesetzt
+> („die Grenze sitzt im Reader" zu wörtlich genommen) und damit `JR-4-07`s Byte-Treue-Suite
+> zerschossen: ein pipeliniertes `BDAT <n> LAST` samt eigenem Inhalt in einem Paket sah, bevor die
+> Kommandozeile geparst war, wie eine einzige überlange Zeile aus. **Gefunden hat das der Volllauf,
+> nicht F52s oder F53s eigene Tests** — genau die Konstellation, vor der `go-smtp`s `LineLimit = 0`
+> um `BDAT` (ADR-026-Nachtrag, Punkt 2) warnt. Behoben, indem F52 zeilenweise **innerhalb**
+> `drainCommandCarry()`s bestehender Schleife prüft (die dort ohnehin nie ein zweites `indexOf(CRLF)`
+> auf Inhaltsbytes aufruft) und nur F53s Fall — wo Inhaltsbytes protokollbedingt ausgeschlossen sind —
+> weiterhin eifrig über den ganzen Puffer scannt.
 
 ### Was gemessen wurde
 
