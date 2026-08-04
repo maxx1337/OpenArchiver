@@ -935,3 +935,60 @@ größenabhängige Muster exakt reproduziert hat, danach zurückgesetzt und drei
 
 **Nächster Schritt:** `JR-4-15` (läuft), dann F50 als Fortsetzung von `JR-4-21`, dann Abnahme
 `JR-4-13` in eigener Sitzung.
+
+#### 2026-08-04 — `JR-4-15` erledigt (TEST): **E4 ist inhaltlich vollständig**, zwei neue Befunde F55/F56
+
+| Feld         | Inhalt                                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Task**     | `JR-4-15` — Sicherheitsdurchsicht des Empfangspfads (**ADR-026 Auflage 2**), letzte Scheibe vor der Abnahme                                                                                |
+| **Commit**   | `157292b`                                                                                                                                                                                  |
+| **CI**       | `30905525089` **success** — `1022 passed \| 8 skipped`, 87 Dateien, `unit ci 835/835 · integration ci 121/121 · adversarial ci 66/66`, Inventar verifiziert, keine DB-Rückstände           |
+| **Neu**      | `packages/backend/tests/integration/smtp-ingress-envelope-hostile-values.int.test.ts` (3 Fälle, echtes Postgres)                                                                           |
+| **Ergebnis** | Alle **sechs** Punkte des Umfangs beantwortet — vier „unauffällig" **mit Begründung**, zwei mit Befund. Kein Punkt bleibt unbeantwortet, damit ist das Akzeptanzkriterium wörtlich erfüllt |
+| **E4**       | **21 / 21 Tasks erledigt.** Offen ist allein die Abnahme `JR-4-13` — plus die Behebung von F50/F55/F56 in `JR-4-21a`                                                                       |
+
+**Die sechs Punkte im Einzelnen:**
+
+1. **TLS-Parameter** → **F56**: kein expliziter Cipher-Filter. `buildTlsSocketOptions()` setzt nur
+   `minVersion`; ein Client, der ausschließlich `AES128-SHA` anbietet (RSA-Schlüsselaustausch, **kein
+   Forward Secrecy**, SHA-1-MAC), bekommt ihn unter TLS 1.2 ausgehandelt — gemessen gegen einen echten
+   `tls.TLSSocket` mit der exakten Produktions-Optionsmenge. Die Versionsgrenze selbst ist unbetroffen.
+2. **Ressourcengrenzen je Verbindung** → **F55**: kein Limit für `RCPT TO` je Transaktion. 1 000 000
+   gepipelinete `RCPT TO` (~30 MB gesendet) ⇒ Heap **+~395 MB** (~13× Verstärkung), alle korrekt mit
+   `250` beantwortet, unter 4 s. Funktional richtig, aber ohne Deckel.
+3. **Informationsgehalt der Antworttexte** → **unauffällig, begründet.** Jede
+   `writeResponse()`/`writePlain()`-Stelle ist ein literaler String, mechanisch bestätigt durch den
+   erschöpfenden Scan in `smtp-5xx-inventory.test.ts`. Keine Fehlermeldung, kein Pfad, kein Stacktrace
+   erreicht je einen unauthentifizierten Peer.
+4. **Envelope-Werte in Protokoll und Ledger** → **unauffällig, aber der interessanteste Fall.** Ein
+   NUL-Byte in `ehloName` ist **angreifererreichbar** (`JR-4-14`) und in einer Postgres-`text`-Spalte
+   nicht darstellbar — gemessen `22021`. Ende-zu-Ende über den echten Draht: das generische
+   `try`/`catch` in `JournalAcceptance.accept()` fängt es, klassifiziert als `ledger-append-failed`,
+   antwortet **`451`** — kein Absturz, **kein `5xx`**, die Kette bleibt danach benutzbar. Log-Injection
+   strukturell ausgeschlossen (echtes `pino`, JSON-Escaping).
+5. **Speicherverhalten bei 150 MB** → geprüft am **`BDAT`**-Pfad (bestehender Nightly-Test); der
+   **`DATA`-Pfad ist nicht separat gemessen** (strukturell identisch gepuffert, aber nicht empirisch
+   bestätigt). **Als Lücke benannt, nicht verschwiegen**, mit F50 verknüpft.
+6. **Keine Dateipfad-Ableitung aus Angreiferdaten** → **unauffällig, begründet.** Alle Spool-Pfade sind
+   reine Funktionen von `spool_txid` (`crypto.randomBytes` + Zeitstempel); mechanisch bestätigt, dass
+   kein `path.join`/`path.resolve` `mailFrom`, `rcptTo`, `ehloName` oder `remoteAddress` referenziert.
+
+**Eine Kalibrierungsnotiz der Testrolle, die den Befund erst belastbar macht:** Die erste F55-Messung
+schien schon bei 5 000 Wiederholungen zu hängen — das war ein Fehler im **eigenen Testklienten**
+(zeichenkettenbasierte Zeilenpufferung wurde selbst zum Engpass), **nicht** am Server. Erst mit einem
+zählbasierten Klienten lief es glatt durch, und **erst danach** wurde F55 als Befund geführt. Ohne
+diese Selbstprüfung wäre ein Testartefakt als Serverdefekt in die Abnahme gegangen.
+
+**Nebenbei korrigiert:** F54s Statuszeile in der Übersichtstabelle stand noch auf „offen", während der
+ausführliche Abschnitt bereits „behoben in `JR-4-21`" sagte — ein Nachpflegefehler, jetzt synchron.
+
+**Entscheidung des PO zu F55/F56:** beide werden **behoben**, zusammen mit F50 in **`JR-4-21a`**
+(DEV, beauftragt) — statt sie offen in die Abnahme zu tragen. Begründung: derselbe Typ Härtungsbefund
+wie F52–F54, beide klein, und für ein Compliance-Archiv ist TLS **ohne Forward Secrecy** schwer zu
+vertreten. Auflagen an die Umsetzung: `RCPT`-Limit **≥ 100** (RFC 5321 §4.5.3.1.8), Antwort
+`452 4.5.3` unterscheidbar von ADR-027s gleichlautendem Fall; Cipher-Filter darf TLS 1.3 nicht
+berühren und **Exchange Online nicht aussperren** — ein zu strenger Filter ist hier gefährlicher als
+ein zu laxer.
+
+**Nächster Schritt:** `JR-4-21a` (F50, F55, F56 — läuft), dann Abnahme `JR-4-13` **in eigener,
+frischer Sitzung**.
