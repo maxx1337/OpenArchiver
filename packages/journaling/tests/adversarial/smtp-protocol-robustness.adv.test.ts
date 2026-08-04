@@ -1122,3 +1122,93 @@ suite(
 		}
 	}
 );
+
+/**
+ * F55 (`docs/dev/journaling/09-befunde-bestandscode.md`), **fixed in `JR-4-21a`** -- `handleRcpt()`
+ * had no limit on the number of `RCPT TO` commands one transaction could accumulate before
+ * `DATA`/`BDAT` even began. Measured against the real, compiled server: 1,000,000 pipelined `RCPT
+ * TO` commands for an already-matched recipient (~30 MB sent) all answered `250 2.1.5` correctly, in
+ * under 4 seconds, while the server's own heap grew by ~395 MB -- a ~13x amplification with no upper
+ * bound. Fixed with a configurable `maxRecipientsPerTransaction` (`smtp-config.ts`, default 1000,
+ * floor 100 per RFC 5321 section 4.5.3.1.8) checked in `handleRcpt()` before the ACL branch, so it
+ * holds whether or not a `recipientAclEvaluator` is configured at all.
+ */
+suite('ci', 'JR-4-21a -- F55: a per-transaction RCPT TO count limit', () => {
+	// `maxRecipientsPerTransaction` is deliberately never set below 100 anywhere in this file, even
+	// for a "small" test limit: RFC 5321 section 4.5.3.1.8 requires a server to accept at least 100
+	// recipients per message, and `smtp-config.ts`'s schema enforces that floor -- a test override
+	// below it would not exercise a stricter deployment, it would exercise a non-compliant one.
+	const TEST_RECIPIENT_LIMIT = 100;
+
+	it('accepts recipients up to the configured limit, rejects the next one with a distinguishable 452 4.5.3, and the transaction still completes for the recipients already accepted', async () => {
+		const { port } = await startServer({
+			smtpOverrides: { maxRecipientsPerTransaction: TEST_RECIPIENT_LIMIT },
+		});
+		const client = await connectClient(port);
+		await client.nextReply();
+		client.send('EHLO client.example.com');
+		await client.nextReply();
+		client.send('MAIL FROM:<sender@example.com>');
+		expect((await client.nextReply())[0]).toMatch(/^250 /);
+
+		for (let i = 0; i < TEST_RECIPIENT_LIMIT; i += 1) {
+			client.send(`RCPT TO:<recipient${i}@example.com>`);
+			expect((await client.nextReply())[0], `recipient ${i}`).toMatch(/^250 2\.1\.5/);
+		}
+
+		// One over the configured limit -- refused. The reply text is deliberately distinguishable
+		// from ADR-027's own 452 4.5.3 ("a different journal chain"): this one names the limit
+		// itself, so an operator's log does not conflate the two causes.
+		client.send('RCPT TO:<recipient-over-limit@example.com>');
+		const overLimitReply = await client.nextReply();
+		expect(overLimitReply[0]).toMatch(/^452 4\.5\.3/);
+		expect(overLimitReply.join(' ')).toMatch(/recipient limit/i);
+		expect(overLimitReply.join(' ')).not.toMatch(/journal chain/i);
+
+		// Not a transaction abort: a 452 rejects only this one recipient (RFC 5321's own "too many
+		// recipients" semantics) -- DATA still completes for the recipients already accepted.
+		client.send('DATA');
+		expect((await client.nextReply())[0]).toMatch(/^354 /);
+		await client.writeRaw('Subject: still within the recipient limit\r\n\r\nhello\r\n.\r\n');
+		expect((await client.nextReply())[0]).toMatch(/^250 2\.0\.0/);
+
+		await expectServerStillAcceptsAValidMessage(port);
+	});
+
+	it('every further RCPT TO past the limit is rejected, not just the first one over it', async () => {
+		const { port } = await startServer({
+			smtpOverrides: { maxRecipientsPerTransaction: TEST_RECIPIENT_LIMIT },
+		});
+		const client = await connectClient(port);
+		await client.nextReply();
+		client.send('EHLO client.example.com');
+		await client.nextReply();
+		client.send('MAIL FROM:<sender@example.com>');
+		expect((await client.nextReply())[0]).toMatch(/^250 /);
+		for (let i = 0; i < TEST_RECIPIENT_LIMIT; i += 1) {
+			client.send(`RCPT TO:<recipient${i}@example.com>`);
+			expect((await client.nextReply())[0], `recipient ${i}`).toMatch(/^250 /);
+		}
+		for (let i = 0; i < 3; i += 1) {
+			client.send(`RCPT TO:<extra${i}@example.com>`);
+			expect((await client.nextReply())[0], `extra recipient ${i}`).toMatch(/^452 4\.5\.3/);
+		}
+		await expectServerStillAcceptsAValidMessage(port);
+	});
+
+	it('the default configuration (no override) accepts at least the RFC 5321 section 4.5.3.1.8 floor of 100 recipients', async () => {
+		const { port } = await startServer();
+		const client = await connectClient(port);
+		await client.nextReply();
+		client.send('EHLO client.example.com');
+		await client.nextReply();
+		client.send('MAIL FROM:<sender@example.com>');
+		expect((await client.nextReply())[0]).toMatch(/^250 /);
+		for (let i = 0; i < 100; i += 1) {
+			client.send(`RCPT TO:<recipient${i}@example.com>`);
+			const reply = await client.nextReply();
+			expect(reply[0], `recipient ${i}`).toMatch(/^250 /);
+		}
+		await expectServerStillAcceptsAValidMessage(port);
+	});
+});

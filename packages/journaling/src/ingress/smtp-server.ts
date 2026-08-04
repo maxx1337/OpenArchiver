@@ -2171,6 +2171,40 @@ class SmtpConnection {
 			return;
 		}
 
+		// `JR-4-21a`, finding F55: unconditional, before the ACL branch below, so the bound holds
+		// whether or not a recipientAclEvaluator is configured at all -- the unbounded growth this
+		// closes is `rcptTo`/`matchedRecipients` themselves (see `recordMatchedRecipient`'s doc
+		// comment), not anything the ACL evaluator does. `>=` (not `>`), so the transaction can hold
+		// at most `maxRecipientsPerTransaction` accepted recipients, matching the RFC 5321 section
+		// 4.5.3.1.8 floor `smtp-config.ts`'s schema enforces on this value. Deliberately a different
+		// log message and response text than the ADR-027 cross-chain check a few lines below, even
+		// though both answer `452 4.5.3`: this is "too many recipients, full stop", that one is "too
+		// many recipients *of a second chain*" -- conflating the two would make an operator's log
+		// misdiagnose which cause fired. The transaction is not aborted; a sender may still complete
+		// DATA/BDAT with the recipients already accepted (452 rejects only this one recipient, per
+		// RFC 5321's own "too many recipients" semantics -- see the ADR-027 check's own doc comment
+		// for the same point made about its case).
+		if (this.rcptTo.length >= this.smtp.maxRecipientsPerTransaction) {
+			this.logger.error(
+				{
+					remoteAddress: this.socket.remoteAddress,
+					rejectedAddress: parsed.address,
+					maxRecipientsPerTransaction: this.smtp.maxRecipientsPerTransaction,
+					acceptedRecipientCount: this.rcptTo.length,
+				},
+				'smtp-ingress: rejecting RCPT TO with 452 4.5.3 -- this transaction already has the ' +
+					'maximum number of accepted recipients (F55, configurable via ' +
+					'maxRecipientsPerTransaction)'
+			);
+			this.writeResponse(
+				452,
+				'4.5.3',
+				'Too many recipients: this transaction has already reached its configured recipient limit'
+			);
+			this.armCommandTimer();
+			return;
+		}
+
 		if (this.recipientAclEvaluator) {
 			const decision = this.recipientAclEvaluator.evaluateRecipient(parsed.address);
 			if (decision.kind === 'denied') {

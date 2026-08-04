@@ -2913,13 +2913,37 @@ ersten `writeResponse(500, …)` leeren und einen Zustand „bereits abgelehnt" 
 `onData()`-Aufruf zuerst prüft, bevor er irgendetwas anderes tut — nicht umgesetzt, nur als Richtung
 notiert.
 
-## F55 (Vorschlag, noch nicht vom Auftraggeber bestätigt) — kein Limit für die Anzahl angenommener `RCPT TO` je Transaktion
+## F55 — kein Limit für die Anzahl angenommener `RCPT TO` je Transaktion
 
 **Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
 `packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.handleRcpt()`,
 `recordMatchedRecipient()`, die Felder `rcptTo`/`matchedRecipients`) · **Gefunden:** von TEST am
 2026-08-04, im Rahmen von `JR-4-15` (ADR-026 Auflage 2, Scope-Punkt „Ressourcengrenzen je
-Verbindung") · **Status:** offen, nicht behoben (kein Produktionscode-Fix ohne Freigabe)
+Verbindung") · **Status:** **behoben in `JR-4-21a`, Commit `pending`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21a`).** `smtp-config.ts` bekommt ein neues Feld `maxRecipientsPerTransaction`
+> (Default `1000`, per Zod auf `.min(100, ...)` begrenzt — RFC 5321 §4.5.3.1.8 verlangt, dass ein
+> Server **mindestens** 100 Empfänger je Nachricht annimmt, ein niedrigerer Wert wäre also selbst ein
+> Normverstoß, keine bloß strengere Einstellung). `handleRcpt()` prüft `this.rcptTo.length >=
+this.smtp.maxRecipientsPerTransaction` **unbedingt**, vor der ACL-Verzweigung — die Grenze gilt
+> also unabhängig davon, ob überhaupt ein `recipientAclEvaluator` konfiguriert ist. Bei Überschreitung
+> antwortet der Server `452 4.5.3`, mit einem Text, der sich bewusst von ADR-027s eigenem `452 4.5.3`
+> („andere Kette") unterscheidet — sonst könnte ein Betreiber die beiden Ursachen im Log nicht
+> auseinanderhalten. Die Transaktion läuft danach weiter: `452` weist nur diesen einen Empfänger
+> zurück, `DATA`/`BDAT` schließt mit den bereits angenommenen Empfängern normal ab.
+>
+> **Kalibriert:** die beiden Durchsetzungsfälle in `smtp-protocol-robustness.adv.test.ts` wurden gegen
+> den per `git stash` zurückgesetzten Vorzustand gefahren und schlugen dort mit der benannten
+> Zusicherung fehl (`expected '250 2.1.5 Ok' to match /^452 4\.5\.3/`), danach zurückgenommen
+> (`git diff` leer) und wieder grün nachgefahren.
+>
+> **Testfall:** drei neue Fälle in `smtp-protocol-robustness.adv.test.ts` (Empfänger bis zur
+> konfigurierten Grenze angenommen, der nächste mit unterscheidbarem `452 4.5.3` abgewiesen und die
+> Transaktion schließt trotzdem ab; jeder weitere Empfänger über der Grenze wird abgewiesen, nicht nur
+> der erste; die unveränderte Default-Konfiguration nimmt mindestens die RFC-Untergrenze von 100
+> Empfängern an) plus vier neue Fälle in `smtp-config.test.ts` (Default ≥ 100, ein Wert unter 100 wird
+> abgelehnt, genau 100 wird angenommen, ein nicht-ganzzahliger Wert wird abgelehnt). Voller Lauf
+> danach: `1034 passed | 8 skipped`, 88 Dateien.
 
 ### Was gemessen wurde
 

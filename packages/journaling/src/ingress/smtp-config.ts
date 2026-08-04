@@ -44,6 +44,22 @@ export const DEFAULT_COMMAND_TIMEOUT_MS = 5 * 60_000;
 export const DEFAULT_DATA_TIMEOUT_MS = 3 * 60_000;
 
 /**
+ * `JR-4-21a`, finding F55: `handleRcpt()` (`smtp-server.ts`) had no limit at all on the number of
+ * `RCPT TO` commands one transaction could accumulate before `DATA`/`BDAT` even began. Measured
+ * against the real, compiled server: 1,000,000 pipelined `RCPT TO` commands for an already-matched
+ * recipient (~30 MB sent) all answered `250 2.1.5` correctly, in under 4 seconds, while the server's
+ * own heap grew by ~395 MB -- a ~13x amplification with no upper bound at all.
+ *
+ * RFC 5321 section 4.5.3.1.8 requires a server to accept **at least** 100 recipients per message, so
+ * this default -- and the schema's own floor below -- must never be set below that without becoming
+ * a protocol violation. 1000 mirrors Postfix's own `smtpd_recipient_limit` default, a number real
+ * mail transfer agents already assume is a reasonable ceiling before falling back to
+ * recipient-splitting (see the `452 4.5.3` response in `handleRcpt()`, and ADR-027's own use of that
+ * same code for a different reason -- "too many recipients" is RFC 5321's own wording for it).
+ */
+export const DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION = 1000;
+
+/**
  * Used in the `220`/`EHLO` greeting only. Deliberately not derived from `os.hostname()`: a
  * dynamic OS-dependent default would make the greeting non-deterministic across environments and
  * across test runs. Operators who care about the banner (recommended: a real FQDN) set
@@ -85,6 +101,18 @@ export const smtpServerConfigSchema = z.object({
 		.positive('dataTimeoutMs must be a positive number of milliseconds')
 		.optional()
 		.default(DEFAULT_DATA_TIMEOUT_MS),
+	/** Maximum number of `RCPT TO` commands one transaction may accumulate before further ones are
+	 * refused with `452 4.5.3` (`JR-4-21a`, finding F55). `min(100, ...)` is not an arbitrary
+	 * hardening choice -- RFC 5321 section 4.5.3.1.8 requires a server to accept at least 100
+	 * recipients per message, so a lower configured value would be a protocol violation, not merely
+	 * a strict setting. See {@link DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION}'s own doc comment for the
+	 * measurement behind the default. */
+	maxRecipientsPerTransaction: z.coerce
+		.number()
+		.int()
+		.min(100, 'maxRecipientsPerTransaction must be at least 100 (RFC 5321 section 4.5.3.1.8)')
+		.optional()
+		.default(DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION),
 });
 
 export type SmtpServerConfig = z.infer<typeof smtpServerConfigSchema>;

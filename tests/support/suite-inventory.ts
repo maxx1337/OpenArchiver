@@ -509,7 +509,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// tests/unit/smtp-tls-cipher-filter.test.ts (a client offering only AES128-SHA is refused the
 		// handshake, an ordinary client still negotiates a forward-secret AEAD cipher under TLS 1.2,
 		// and a TLS 1.3 handshake is unaffected).
-		expectedTests: { ci: 840, nightly: 3, manual: 0 },
+		// 844 after JR-4-21a also added 4 to ingress/smtp-config.test.ts (F55 -- no limit on RCPT TO
+		// count per transaction): DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION is at least the RFC 5321
+		// section 4.5.3.1.8 floor of 100, a value below that floor is rejected, exactly 100 (the
+		// floor itself) is accepted, and a non-integer value is rejected.
+		expectedTests: { ci: 844, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -637,7 +641,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ~2000 B, 100 KB, ~200 KB, 2 MB), each repeating 10x internally rather than running once, so
 		// a race this size-dependent and this non-deterministic cannot pass by luck the way CI run
 		// 30900280611 did before the fix landed. Net +3 over the previous count.
-		expectedTests: { ci: 66, nightly: 2, manual: 1 },
+		// 69 ci after JR-4-21a (F55 -- no limit on the number of RCPT TO commands per transaction)
+		// added 3 cases to the same file: accepts recipients up to a configured limit and rejects one
+		// over it with a distinguishable 452 4.5.3 (never ADR-027's own "different journal chain"
+		// text) while the transaction still completes DATA for the recipients already accepted,
+		// every further RCPT TO past the limit is rejected rather than just the first one, and the
+		// unmodified default configuration accepts at least the RFC 5321 section 4.5.3.1.8 floor of
+		// 100 recipients.
+		expectedTests: { ci: 69, nightly: 2, manual: 1 },
 	},
 ];
 
