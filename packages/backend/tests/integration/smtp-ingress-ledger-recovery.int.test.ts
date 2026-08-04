@@ -310,6 +310,19 @@ suiteRequiring(
 				const beforeReply = await client.nextReply();
 				expect(beforeReply[0]).toMatch(/^451 4\.3\.0/);
 				expect(await incomingFiles(spoolRoot)).toEqual([]);
+				// F51: the socket reply and the log line are written in that order by the *same*
+				// synchronous call (smtp-server.ts logs, then writeResponse()), but they arrive at this
+				// process over two independent channels -- the socket, and the child's piped stdout.
+				// Reading output.stdout() the instant the reply above resolves races the pipe: the
+				// process had already decided and wired nothing wrong, only the observation was too
+				// early (measured, not assumed -- CI run 30863769294 failed exactly here while every
+				// functional assertion around it was green). Wait for the line to actually have arrived
+				// before counting it, the same pattern this file already uses at "listening on port".
+				await waitUntil(
+					() => countOccurrences(output.stdout(), UNWIRED_LINE) >= 1,
+					5_000,
+					'the process never logged that acceptance was not yet wired'
+				);
 				const unwiredBefore = countOccurrences(output.stdout(), UNWIRED_LINE);
 				expect(unwiredBefore).toBeGreaterThanOrEqual(1);
 
