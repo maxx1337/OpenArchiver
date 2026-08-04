@@ -2989,7 +2989,7 @@ aus einem anderen Grund) — nicht umgesetzt, nur als Richtung notiert.
 `packages/journaling/src/ingress/tls-config.ts` (`ingressTlsConfigSchema`, kein `ciphers`-Feld),
 `smtp-server.ts` (`buildTlsSocketOptions()`, setzte nur `minVersion`) · **Gefunden:** von TEST am
 2026-08-04, im Rahmen von `JR-4-15`, Scope-Punkt „TLS-Parameter" · **Status:** **behoben in
-`JR-4-21a`** (Rolle DEV, 2026-08-04)
+`JR-4-21a`, Commit `819403f`** (Rolle DEV, 2026-08-04)
 
 > **Behoben (`JR-4-21a`).** `TLS_CIPHERS` (`tls-config.ts`) ist eine feste, PFS-und-AEAD-only-Liste
 > (nur `ECDHE`/`DHE`-Schlüsselaustausch, nur `GCM`/`ChaCha20-Poly1305`) — kein reiner RSA-Austausch,
