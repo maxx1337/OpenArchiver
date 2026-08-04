@@ -2423,8 +2423,45 @@ gefundener CRLF-terminierter Zeile auf), `packages/journaling/src/ingress/spool-
 (`SpoolWriteBridge.push()`, ein Objekt je Aufruf, keine Zusammenfassung), `packages/journaling/src/spool/durable-write.ts:160`
 (`for await (const chunk of chunks) { await handle.write(chunk); }` — ein `fs`-Write-Aufruf je
 Objekt) · **Gefunden:** von TEST am 2026-08-04 beim Bau der `JR-4-10`-Kill-Tests, als ein 20-Runden-
-Smoke-Lauf nach zehn Minuten nicht fertig war · **Status:** offen, nicht behoben (kein
-Produktionscode-Fix ohne Rückfrage)
+Smoke-Lauf nach zehn Minuten nicht fertig war · **Status:** **behoben in `JR-4-21a`, Commit
+`pending`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21a`).** `SpoolWriteBridge.push()` sammelt gepushte Chunks jetzt in einem internen
+> Puffer und reicht erst ab `DEFAULT_FLUSH_THRESHOLD_BYTES` (128 KiB, aus dem im Befund selbst
+> genannten 64-256-KiB-Rahmen) ein zusammengefasstes Objekt an den Stream weiter — `handle.write()`
+> in `durable-write.ts` bekommt dadurch deutlich weniger, dafür größere Chunks, unabhängig davon, wie
+> kurz die Zeilen waren, aus denen sie stammen. `end()` leert den Restpuffer auch unterhalb der
+> Schwelle (eine Nachricht verliert ihren letzten, nicht vollen Block nicht), `abort()` verwirft ihn
+> (ein abgebrochener Schreibvorgang braucht ihn nie). **Unverändert:** `writeDurableSpoolFile()`
+> selbst, die fsync-Semantik, die Fehlerpfade (`ENOSPC` etc.), Byte-Treue (`Buffer.concat()`
+> transformiert kein Byte) und die Rückstau-Eigenschaft — der Speicherbedarf bleibt ein kleines
+> Vielfaches eines Flush-Batches, nicht proportional zur Nachrichtengröße.
+>
+> **Gemessen** (Skript gegen den echten, kompilierten `SpoolWriteBridge`/`writeDurableSpoolFile()`,
+> 50 MB, je einmal mit 60-Byte- und mit 998-Byte-Zeilen, „vorher" per `git stash` auf **nur**
+> `spool-write-bridge.ts` zurückgesetzt):
+>
+> | Zeileninhalt | vorher                | nachher              | Beschleunigung |
+> | ------------ | --------------------- | -------------------- | -------------- |
+> | 60 Byte      | 58 720 ms (0,88 MB/s) | 629 ms (82,14 MB/s)  | ≈ 93×          |
+> | 998 Byte     | 4 110 ms (12,19 MB/s) | 425 ms (117,88 MB/s) | ≈ 9,7×         |
+>
+> Die eigentliche Signatur des Befunds — der Faktor zwischen kurzen und langen Zeilen bei derselben
+> Bytemenge — fällt von **≈ 13,9×** (58 720 / 4 110 ms) auf **≈ 1,48×** (629 / 425 ms): der Durchsatz
+> hängt jetzt weit überwiegend an der Bytezahl, nicht mehr an der Zeilenzahl. Die „vorher"-Zahlen
+> reproduzieren die ursprüngliche Messung fast exakt (53 816 ms/4 288 ms dort gegen 58 720 ms/4 110 ms
+> hier — derselbe Mechanismus, derselbe Host).
+>
+> **Testfall:** drei neue Fälle in `spool-write-bridge.test.ts` (Batching kleiner Pushes zu wenigen,
+> größeren Chunks ohne Byteverlust oder Umordnung; `end()` leert den Restpuffer auch unterhalb der
+> Schwelle; `abort()` verwirft ihn), zwei bestehende Fälle dort mit explizitem
+> `flushThresholdBytes: 1` versehen, um die Chunkzahl-Wasserlinie unabhängig vom neuen
+> Byte-Batching zu isolieren. Zusätzlich eine dauerhafte **Coverage-Notiz**, keine Assertion (wie vom
+> Auftraggeber verlangt): `tests/unit/spool-write-bridge-throughput.test.ts` schreibt bei jedem
+> `ci`-Lauf 50 MB in beiden Zeilenformen und protokolliert beide Durchsätze über `coverageNotice()` —
+> derselbe Mechanismus, den `JR-2-08`/`JR-4-10` schon nutzen. `byte-fidelity-roundtrip.test.ts`
+> (`JR-4-07`) und `bdat-data-byte-fidelity.test.ts` (`JR-4-11`) blieben grün. Voller Lauf danach:
+> `1038 passed | 8 skipped`, 89 Dateien.
 
 ### Was gemessen wurde
 
@@ -2500,13 +2537,12 @@ tatsächlich vor Abschluss der Übertragung feuert — das wäre der Nachweis, d
 eine **hohe** statt einer **mittleren** Einstufung machen würde, und er braucht eine reale Zielumgebung,
 keinen Entwicklerhost.
 
-### Vorschlag, nicht umgesetzt
+### Umsetzung
 
-`SpoolWriteBridge`/`writeDurableSpoolFile()` auf Byte- statt Objektschwelle umstellen: mehrere kurze
-`onContent`-Zeilen vor der Weitergabe an `handle.write()` in einen Zwischenpuffer bis zu einer festen
-Zielgröße (z. B. 64–256 KiB) sammeln, ohne die Streaming-Eigenschaft (weiterhin O(1) Speicher
-gegenüber der Nachrichtengröße) aufzugeben. Eine Entscheidung darüber liegt beim PO; dieser Befund
-legt nur die Messung vor.
+Wie oben beschrieben in `JR-4-21a` behoben: `SpoolWriteBridge` sammelt kurze `onContent`-Zeilen in
+einem Zwischenpuffer bis zu 128 KiB, statt jede einzeln an `handle.write()` weiterzugeben —
+`writeDurableSpoolFile()` selbst blieb unverändert, die Streaming-Eigenschaft (O(1) Speicher
+gegenüber der Nachrichtengröße) ist erhalten.
 
 ## F51 — `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte
 

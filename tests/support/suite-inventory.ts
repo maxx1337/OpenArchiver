@@ -179,7 +179,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// checkout -- see 09-befunde-bestandscode.md's coordination note for why it is deliberately
 		// left out of this count rather than committed: it currently fails 4 of its own cases.)
 		// 60 after JR-4-21a added tests/unit/smtp-tls-cipher-filter.test.ts (F56).
-		expectedFiles: 60,
+		// 61 after JR-4-21a also added tests/unit/spool-write-bridge-throughput.test.ts (F50).
+		expectedFiles: 61,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -513,7 +514,19 @@ export const SUITES: readonly SuiteSpec[] = [
 		// count per transaction): DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION is at least the RFC 5321
 		// section 4.5.3.1.8 floor of 100, a value below that floor is rejected, exactly 100 (the
 		// floor itself) is accepted, and a non-integer value is rejected.
-		expectedTests: { ci: 844, nightly: 3, manual: 0 },
+		// 847 after JR-4-21a also added 3 to ingress/spool-write-bridge.test.ts (F50 -- the DATA path
+		// wrote once per SMTP line instead of batched by byte threshold): batches pushes under the
+		// flush threshold into fewer, larger chunks without losing or reordering a byte, end()
+		// flushes whatever is still buffered below the threshold, and abort() discards it rather than
+		// delivering it. Two pre-existing cases in the same file were changed in place, not counted
+		// again, to pass an explicit flushThresholdBytes of 1 so they keep isolating the chunk-count
+		// high-water-mark from the new byte-threshold batching.
+		// 848 after JR-4-21a also added the new tests/unit/spool-write-bridge-throughput.test.ts (1):
+		// F50's measurement, not an assertion test -- writes 50 MB as 60-byte lines and the same
+		// 50 MB as 998-byte lines through the real SpoolWriteBridge/writeDurableSpoolFile() pair and
+		// logs both throughputs via coverageNotice() every run, the same mechanism JR-2-08/JR-4-10
+		// already use.
+		expectedTests: { ci: 848, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
