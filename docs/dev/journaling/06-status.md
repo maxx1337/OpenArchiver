@@ -806,3 +806,70 @@ fehlschlagen kann.
 **Nächster Schritt:** F51-Fix und `JR-4-14` (beauftragt), danach `JR-4-15` als **eigener** Auftrag —
 bewusst abgeschnitten, damit `JR-4-14` mit zwölf Fallgruppen plus dem offenen TLS-1.1-Nachweis nicht
 unter Zeitdruck abgekürzt wird. Dann Abnahme `JR-4-13` in eigener Sitzung.
+
+#### 2026-08-04 — `F51` und `JR-4-14` erledigt, **drei Befunde F52/F53/F54**, **ADR-026-Nachtrag**, `JR-4-21` neu
+
+| Feld              | Inhalt                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tasks**         | `F51` (Testinstabilität, behoben), `JR-4-14` (adversariale Protokollrobustheit, ADR-026 Auflage 1) — beide TEST                                                                                                                                                                                                                                      |
+| **Commits**       | `5e85cda` (F51), `b06245a` (`JR-4-14`, 19 Fälle + TLS-1.1), `7aaf2f7` (Aufnahme der zweiten Suite, F53/F54), `a87c7ca` (ADR-026-Nachtrag, PO)                                                                                                                                                                                                        |
+| **Neu**           | `tests/adversarial/smtp-protocol-robustness.adv.test.ts` (25 Fälle), `tests/unit/smtp-tls11-clienthello-rejection.test.ts` (2 Fälle)                                                                                                                                                                                                                 |
+| **Testzahlen**    | `unit ci 835 · integration ci 118 · adversarial ci 57`; 86 Dateien, Inventar `unit 59/59 · integration 20/20 · adversarial 7/7`                                                                                                                                                                                                                      |
+| **CI**            | `30897110694` auf `b06245a` **success**. Danach `30899111832` und `30899178778` **rot** — **ein** Test, der F54-Fall (s. u.). Alles andere grün                                                                                                                                                                                                      |
+| **TLS 1.1**       | **erbracht** — der Nachweis, an dem `JR-4-04` ehrlich gescheitert war. Von Hand auf Byte-Ebene gebauter TLS-1.1-`ClientHello` nach echtem `STARTTLS` auf den rohen Socket; der Server antwortet mit fatalem `protocol_version`-Alert (`15 03 02 00 02 02 46`), nie mit `ServerHello`                                                                 |
+| **Einschränkung** | Kalibriert durch Senken von `TLS_MIN_VERSION` auf `'TLSv1.1'` (zurückgenommen): die Ablehnung blieb **unverändert**, weil OpenSSL 3.5.6 TLS 1.0/1.1 unterhalb der Node-Ebene abschaltet. **Dass** TLS 1.1 abgelehnt wird, ist bewiesen; **dass die Konfiguration der Grund ist**, in dieser Umgebung nicht isolierbar. So im Dateikommentar vermerkt |
+| **Offen**         | F52/F53/F54 → `JR-4-21` (DEV, läuft); F50 beim Auftraggeber; `JR-4-15`; Abnahme `JR-4-13`                                                                                                                                                                                                                                                            |
+
+**Drei Befunde, eine Wurzel.** `F52` — `MAX_COMMAND_LINE_BYTES` wird in `drainCommandCarry()` nur
+geprüft, wenn **kein** CRLF im Puffer steht; eine überlange, in einem Stück terminierte Zeile umgeht
+das Limit (gemessen: `250` statt `500`). `F53` — `commandCarry` wächst während eines suspendierten
+Fensters (AUTH-bcrypt, settling `accept()`) ungeprüft, weil die Prüfung in der von `onData()`
+übersprungenen Schleife liegt (gemessen: 6,0 MB gesendet, `arrayBuffers` **+76,6 MB**; die
+Größenordnung ist reproduzierbar, der Wert **nicht** — über mehrere Läufe 54,6 bis 135,0 MB).
+`F54` — der Abbruchpfad ist nicht idempotent (`ECONNRESET` bzw. Stillstand statt sauberem `500`).
+
+**Die Größenmatrix, aus zwei unabhängigen Testern und dem CI-Log — sie ist die eigentliche
+Diagnose:** ~2 000 Byte ⇒ falsches `250` (F52) · **100 KB ⇒ korrekt `500` in 25 ms** · ~200 KB ⇒ der
+rote CI-Fall · 2 MB ⇒ keine Antwort, dauerhaft. **Ein Limit, dessen Ergebnis von der Chunk-Zerlegung
+abhängt, sitzt an der falschen Schicht.** Dass es bei 100 KB _funktioniert_, ist der Beleg dafür:
+dort greift der intakte `idx === -1`-Zweig, weil Node in mehreren `data`-Ereignissen liefert.
+
+**Der rote CI-Lauf bleibt bewusst stehen.** Der F54-Fall ist gegen das **richtige** Verhalten
+geschrieben statt als Charakterisierungstest mit `Expected RED`-Marker. Man könnte ihn umdrehen; der
+PO hat es abgelehnt. In dieser Form ist er das **Abnahmekriterium** für `JR-4-21`: Der Fix macht ihn
+von selbst grün, ohne dass jemand an ihm dreht. `JR-4-21` gilt nicht als fertig, solange die CI nicht
+insgesamt `success` meldet.
+
+**Ein Fehler des PO, der hier hingehört: zwei Tester haben `JR-4-14` gleichzeitig gebaut.** Nachdem
+der erste am Nutzungslimit ausgefallen war, hat der PO einen Ersatz gestartet; nach dem Limit-Reset
+kam der erste zurück und begann dieselbe Scheibe. Beide arbeiteten im selben Arbeitsbaum an
+`suite-inventory.ts`. Aufgelöst durch PO-Entscheidung: `b06245a` bleibt maßgeblich, die zweite Suite
+wird aufgenommen statt behalten, ein Autor für `09-befunde-bestandscode.md`, Befundnummern vom PO
+vergeben. **Der Doppellauf hat trotzdem etwas geliefert, das ein Einzellauf nicht hätte:** F52 wurde
+von beiden unabhängig getroffen, F53 stammt allein vom ersten, und F54 kam aus einem roten Fall, den
+der PO **nicht löschen ließ**, bevor er erklärt war. Die Lehre ist trotzdem die alte: nie zwei
+Bearbeiter auf einer Scheibe.
+
+**ADR-026-Nachtrag (`a87c7ca`) — der Auftraggeber hat die Eigenimplementierung ein zweites Mal
+angezweifelt**, diesmal mit Go-Kandidaten. Die Rückfrage traf eine echte Lücke: die Kandidatentabelle
+prüft **ausschließlich npm-Pakete**, und das stand nirgends. Gemessen: `go-smtp` kann `BDAT`
+vollständig serverseitig (`handleBdat()`, `conn.go:993`), `net/smtp` ist ein Client und eingefroren,
+`microbus/smtpingress` hat kein `BDAT` und setzt NATS voraus. **Die Entscheidung bleibt** — nicht
+wegen des Protokolls, sondern wegen des Acceptance-Contracts: `250` folgt fsync von Spool **und**
+Ledger, also müsste ein Go-Ingress `spool` (1 684 Zeilen, E3, abgenommen) und `ledger` (1 154 Zeilen,
+E2, abgenommen) mitnehmen — die Hash-Kette zweimal implementiert, wo ein Byte Abweichung in der
+kanonischen Kodierung **genau der Befund ist, den das Produkt als Manipulation meldet**.
+
+**Was sich dadurch ändert:** Der Eigenbau hört auf, seine Härtung selbst zu erfinden. `go-smtp` löst
+F52, F53 und F54 **strukturell** über einen `lineLimitReader`, der die Grenze im **Reader** durchsetzt
+statt in der Parselogik — damit greift sie unabhängig von Chunkgrenzen und unabhängig davon, ob die
+Verarbeitungsschleife läuft. Dazu: Limit für `BDAT` gezielt abschalten und exakt wiederherstellen,
+`ParseUint` statt `Atoi` gegen negative Längen, bei Oversize den Chunk verwerfen statt die Verbindung
+zu desynchronisieren. MIT und AGPL sind verträglich; übernommen werden **Ansätze, nicht Quelltext**,
+mit Attribution im Dateikommentar.
+
+**Nächster Schritt:** `JR-4-21` (DEV, läuft) — F52/F53/F54 beheben nach der `go-smtp`-Vorlage, CI
+muss danach grün sein. Dann `JR-4-15` (Sicherheitsdurchsicht, prüft dann den gehärteten Stand), dann
+Abnahme `JR-4-13` in eigener Sitzung. **Beim Auftraggeber liegen:** F50, und ob die doppelt vergebene
+Nummer **ADR-026** (Task-ID-Schreibweise und SMTP-Empfangspfad tragen beide diese Nummer) umnummeriert
+wird oder eine Fußnote bekommt.
