@@ -1859,6 +1859,79 @@ in die App" hat sich aufgelöst, statt entschieden zu werden. Die Protokollierun
 der App und wird über den Port `IngressLogger` injiziert, wie `SpoolFileSystem`, `LedgerBackend` und
 `QuarantineAlertSink`.
 
+### Nachtrag 2026-08-04: **Go war nie geprüft** — nachgeholt, Entscheidung bestätigt, Vorlage übernommen
+
+**Der Auftraggeber hat die Entscheidung ein zweites Mal angezweifelt**, diesmal mit konkreten
+Kandidaten außerhalb von Node: [`go-smtp`](https://github.com/emersion/go-smtp),
+[`net/smtp`](https://pkg.go.dev/net/smtp) und
+[`microbus/smtpingress`](https://docs.microbus.io/package-reference/coreservices/smtpingress/).
+Anlass waren **F52** und **F53** — zwei Defekte, die `JR-4-14` gefunden hat und die genau in die
+Kategorie fallen, die diese ADR als Kosten ihrer eigenen Entscheidung benannt hat („es kostet die
+geerbte Härtung").
+
+**Die Rückfrage war berechtigt, und sie hat eine echte Lücke getroffen.** Der Satz „Es gibt in Node
+keinen SMTP-Server mit `BDAT`" ist richtig — aber die Tabelle darüber prüft **ausschließlich
+npm-Pakete**, und das stand nirgends. Für andere Sprachen galt die Aussage nie.
+
+**Gemessen am Quelltext, nach demselben Maßstab wie oben:**
+
+| Kandidat               | Befund                                                                                                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `go-smtp` (emersion)   | **Kann `BDAT` vollständig, serverseitig.** `handleBdat()` in `conn.go:993`, `bdatPipe`, `CHUNKING` in den Capabilities, eigene Byte-Zählung, korrektes `RSET`-Verhalten. Ein echter Kandidat — in **Go** |
+| `net/smtp`             | Scheidet aus: **Client** (`SendMail`), kein Server; von Go als eingefroren markiert                                                                                                                      |
+| `microbus/smtpingress` | Scheidet aus: kein `BDAT`/`CHUNKING`, und es setzt das vollständige Microbus-Substrat samt NATS voraus                                                                                                   |
+
+**Warum die Entscheidung trotzdem bestehen bleibt — der Grund ist nicht der SMTP-Server, sondern der
+Acceptance-Contract.** `250` fällt erst nach fsync von Spool **und** Ledger-Append. Beides muss im
+selben Prozess liegen wie der Protokollzustand. Ein Go-Ingress müsste deshalb mitnehmen:
+
+| Bereich   | Umfang heute | Lage                                                                                        |
+| --------- | ------------ | ------------------------------------------------------------------------------------------- |
+| `ingress` | 5 309 Zeilen | `go-smtp` ersetzt das **Protokoll**, nicht ACL gegen Postgres, Rate-Limits, TLS-Config      |
+| `spool`   | 1 684 Zeilen | **E3, abgenommen**                                                                          |
+| `ledger`  | 1 154 Zeilen | **E2, abgenommen** — kanonische Kodierung über 16 Felder, Chain-Hash, Merkle, Advisory-Lock |
+
+Der Ledger ist der Ausschlussgrund: ihn in Go nachzubauen hieße, die **Hash-Kette zweimal zu
+implementieren**. Weicht die kanonische Kodierung um ein Byte ab, entsteht ein Kettenbruch — also
+exakt der Befund, den das Produkt als Manipulation meldet. Die Alternative, eine IPC-Grenze zwischen
+fsync und `250`, legt eine Prozessgrenze in den kritischen Pfad und verkompliziert die
+Crash-Recovery. Dazu kämen 21 Testdateien zum Empfangspfad (allein die fünf großen 2 606 Zeilen),
+darunter der Kill-Test, der als erster belegt hat, dass die Kernzusage unter `SIGKILL` hält.
+
+**Entscheidung des Auftraggebers (2026-08-04): bei der Node-Eigenimplementierung bleiben — aber die
+Lösungen von `go-smtp` übernehmen, statt sie neu herzuleiten.** Das ist der Teil, der diese ADR
+verändert: der Eigenbau bleibt, hört aber auf, seine Härtung selbst zu erfinden.
+
+#### Die Vorlage, die dabei zu übernehmen ist
+
+`go-smtp` löst **F52 und F53 strukturell**, nicht durch Einzelprüfungen — und genau das ist der
+Unterschied zu unserer Implementierung:
+
+1. **`lineLimitReader` (`conn.go:38`, `60-69`): die Zeilenlängengrenze sitzt im _Reader_, nicht in
+   der Parselogik.** Damit greift sie unabhängig davon, ob das CRLF im selben Chunk ankommt (**F52**)
+   und unabhängig davon, ob die Verarbeitungsschleife gerade läuft (**F53**). Unsere Prüfung liegt in
+   `drainCommandCarry()` und in der von `onData()` überspringbaren Schleife — deshalb hat sie zwei
+   Lücken statt keiner.
+2. **Für `BDAT` wird das Limit gezielt abgeschaltet und exakt wiederhergestellt** (`LineLimit = 0` in
+   Zeile 1075, zurück auf `MaxLineLength` in 1091 und 1098), weil Chunks binär und ohne
+   Zeilenstruktur sind. Die Fallunterscheidung, die man leicht vergisst.
+3. **`strconv.ParseUint(args[0], 10, 32)` statt `Atoi`** — im Quelltext kommentiert mit „so we will
+   not accept negative values". Erschlägt den negativen `BDAT`-Längenfall an der Wurzel.
+4. **Oversize bei `BDAT`: `552` senden _und_ den angekündigten Chunk verwerfen**
+   (`io.Copy(Discard, LimitReader(…))`), damit die Verbindung synchron bleibt — dasselbe Verhalten,
+   das `JR-4-12` prüft.
+5. **Grenzen als benannte Serverfelder mit Defaults**: `MaxLineLength` (2000), `MaxRecipients`,
+   `MaxMessageBytes`, getrennte `ReadTimeout`/`WriteTimeout`, Idle-Timeout → `421`.
+
+**Lizenz:** `go-smtp` steht unter **MIT**, dieses Projekt unter **AGPL-3.0**. MIT ist damit
+verträglich. Übernommen werden **Lösungsansätze**, nicht Quelltext — die Umsetzung ist TypeScript
+gegen `node:net`. Wo eine Stelle erkennbar nachgebaut ist, gehört ein Verweis auf `go-smtp` samt
+MIT-Hinweis in den Dateikommentar; das ist guter Stil und hält die Herkunft nachvollziehbar.
+
+**Was das für `JR-4-15` bedeutet:** Auflage 2 bleibt bestehen und wird durch diesen Nachtrag nicht
+kleiner. Sie prüft künftig einen Empfangspfad, dessen Grenzen an der Transportschicht sitzen — die
+Durchsicht wird dadurch aussagekräftiger, nicht überflüssig.
+
 ## ADR-027 — Eine Transaktion, die Journal-Empfänger mehrerer Ketten adressiert
 
 **Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-05b` hat den Fall
