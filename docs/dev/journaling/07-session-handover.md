@@ -85,17 +85,19 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-04 (**E4 ist in Arbeit**, 18 von 21 Tasks, nicht abgenommen) · **Branch:**
-`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf: **1016 Tests** bei 86
-Dateien — `unit ci 835 · integration ci 118 · adversarial ci 63`, **in der CI bestätigt**: Lauf
-`30900280611` auf `d1bac6d` **success** (`JR-4-14`), davor `30897110694`, `30864243188`
-(`JR-4-12`) und `30862834098` (`JR-4-10`)
+**Stand:** 2026-08-04 (**E4 ist inhaltlich fertig — 21 von 21 Tasks, nur die Abnahme fehlt**) ·
+**Branch:** `claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf: **1038 Tests** bei 89
+Dateien — `unit ci 848 · integration ci 121 · adversarial ci 69`, **in der CI bestätigt**: Lauf
+`30914997638` **success** (`JR-4-21a`), davor `30905525089` (`JR-4-15`), `30903678696`
+(`JR-4-14`-Nacharbeit) und `30900280611` (`JR-4-14`)
 
 > **Die Task-Zählung ist am 2026-08-03 berichtigt worden.** Sie zählte die Splits `JR-4-05a`–`c` und
 > `JR-4-06a`/`b` im Zähler mit, während der Nenner die Backlog-IDs meint. Gezählt werden jetzt die
-> **IDs**: erledigt sind `JR-4-01`…`JR-4-12`, `JR-4-14` und `JR-4-16`…`JR-4-20`; offen sind
-> `JR-4-13` (Abnahme), `JR-4-15` und **`JR-4-21`** (neu am 2026-08-04, siehe unten). E4 hat damit
-> **21** Tasks.
+> **IDs**: erledigt sind **alle 21** (`JR-4-01`…`JR-4-12`, `JR-4-14`…`JR-4-21` samt `JR-4-21a`).
+> **Offen ist allein `JR-4-13`, die Abnahme.**
+
+> **Aus E4 ist kein Befund offen.** F42–F51 behoben oder aufgelöst; F52/F53/F54 in `JR-4-21`,
+> F50/F55/F56 in `JR-4-21a` behoben.
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
@@ -367,20 +369,29 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — die letzten TEST-Scheiben, dann die Abnahme
+### Nächster konkreter Schritt — **nur noch die Abnahme `JR-4-13`**
 
-**E4 steht bei 18 von 21.** Erledigt: `JR-4-01`…`JR-4-12`, `JR-4-14`, `JR-4-16`…`JR-4-20`, dazu
-**F49 und F51 behoben**, **ADR-028**, **ADR-026-Nachtrag**; offen **F50** (beim Auftraggeber) und
-**F52/F53/F54** (in `JR-4-21`):
+**E4 steht bei 21 von 21.** Alle Scheiben erledigt, alle Befunde des Empfangspfads behoben, CI grün.
+**Der einzige offene Punkt ist die Abnahme**, und sie gehört nach ADR-014/ADR-021 in eine **eigene,
+frische Sitzung** — die Sitzung, die gebaut hat, kann nicht abnehmen. In E2 hat der Auftraggeber
+genau darauf bestanden, und die erzwungene zweite Runde hat zwei echte Lücken und einen weiteren
+Befund gefunden.
 
-| Als Nächstes             | Was                                                                                                                | Warum hier                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| ~~`JR-4-10`~~            | **erledigt** — CI `30862834098`: 7 von 20 Runden zogen den `250`-Zweig, alle 7 mit passender Ledger-Zeile          | der erste echte Kill-Nachweis des Projekts, nicht nur grüner Testbau           |
-| ~~`JR-4-11`, `JR-4-12`~~ | **erledigt** — CI `30864243188`: BDAT byteidentisch zu `DATA`, SIZE-Grenzmatrix mit Alarm-Nachweis über beide Wege | `JR-4-11` ist vollständig lokal belegt, siehe Statuseintrag                    |
-| ~~`JR-4-14`~~            | **erledigt** — CI `30900280611`: 25 adversariale Fälle, **TLS-1.1-Nachweis erbracht**, drei Defekte gefunden       | der Nachweis, an dem `JR-4-04` ehrlich gescheitert war                         |
-| **`JR-4-21`**            | **DEV, läuft:** F52/F53/F54 beheben nach der `go-smtp`-Vorlage aus dem ADR-026-Nachtrag                            | die drei Defekte teilen eine Wurzel — die Grenze sitzt an der falschen Schicht |
-| `JR-4-15`                | TEST: Sicherheitsdurchsicht des Empfangspfads — **ADR-026 Auflage 2**                                              | **nach `JR-4-21`**, dann prüft sie den gehärteten Stand                        |
-| `JR-4-13`                | **Abnahme E4 — eigene, frische Sitzung**                                                                           | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen)    |
+**Der Prompt für die Abnahmesitzung:**
+
+```
+Nimm E4 unabhängig ab — Rolle Tester, Kriterien aus docs/dev/journaling/03-backlog.md.
+```
+
+| Scheibe                  | Ergebnis                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| ~~`JR-4-10`~~            | CI `30862834098`: 7 von 20 Runden zogen den `250`-Zweig, alle 7 mit passender Ledger-Zeile                  |
+| ~~`JR-4-11`, `JR-4-12`~~ | CI `30864243188`: `BDAT` byteidentisch zu `DATA`, `SIZE`-Grenzmatrix mit Alarm-Nachweis über beide Wege     |
+| ~~`JR-4-14`~~            | CI `30900280611`: 25 adversariale Fälle, **TLS-1.1-Nachweis erbracht**, drei Defekte gefunden (F52/F53/F54) |
+| ~~`JR-4-21`~~            | CI `30902593426`: Grenze an die Transportschicht verlegt; alle vier Größen einheitlich in 1–11 ms           |
+| ~~`JR-4-15`~~            | CI `30905525089`: alle sechs Punkte beantwortet, zwei Befunde (F55/F56)                                     |
+| ~~`JR-4-21a`~~           | CI `30914997638`: F50/F55/F56 behoben; Durchsatzverhältnis kurz/lang von ≈ 13,9× auf ≈ 1,48× gefallen       |
+| **`JR-4-13`**            | **Abnahme E4 — eigene, frische Sitzung.** Das Material dafür steht oben unter „Was `JR-4-13` mitbekommt"    |
 
 > **Zwei Dinge, die `JR-4-21` mitbringen muss, sonst ist der Fix nicht belegt:**
 >
@@ -416,9 +427,26 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 
 - **Zwei Kriterien sind aus ihren Scheiben herausgewandert.** „Version und Cipher stehen **im
   Ledger-Eintrag**" (`JR-4-04`) ist nur zur Hälfte erfüllt gewesen — die Ledger-Seite prüft `JR-4-13`
-  gegen `JR-4-06a`. Und „**TLS 1.1 wird abgelehnt**" ist **offen** und an `JR-4-14` übergegangen: in
-  dieser Umgebung erzeugt weder Nodes `tls.connect()` noch `openssl s_client -tls1_1` ein
-  TLS-1.1-`ClientHello`; belegt ist nur `minVersion: 'TLSv1.2'` plus TLS 1.2/1.3 Ende-zu-Ende.
+  gegen `JR-4-06a`. Und „**TLS 1.1 wird abgelehnt**" war offen und ist an `JR-4-14` übergegangen —
+  **dort erbracht** (2026-08-04): ein von Hand auf Byte-Ebene gebauter TLS-1.1-`ClientHello` nach
+  echtem `STARTTLS` auf den rohen Socket, Antwort ein fataler `protocol_version`-Alert
+  (`15 03 02 00 02 02 46`), nie ein `ServerHello`. **Mit einer Einschränkung, die die Abnahme kennen
+  muss:** Senkt man `TLS_MIN_VERSION` testweise auf `'TLSv1.1'`, bleibt die Ablehnung bestehen, weil
+  dieses OpenSSL (3.5.6) TLS 1.0/1.1 unterhalb der Node-Konfigurationsebene abschaltet. **Dass** TLS
+  1.1 abgewiesen wird, ist bewiesen; **dass die Konfiguration die Ursache ist**, in dieser Umgebung
+  nicht isolierbar. So auch im Dateikommentar vermerkt.
+- **Sechs Befunde sind nach der jeweiligen Scheibe entstanden und alle behoben** — die Abnahme prüft
+  also einen Stand, den keine der ursprünglichen Scheiben so getestet hat: **F52/F53/F54** (`JR-4-21`,
+  Zeilenlängengrenze an der falschen Schicht), **F55/F56** (`JR-4-21a`, `RCPT`-Limit und
+  Cipher-Filter), **F50** (`JR-4-21a`, Durchsatz). Die zugehörigen Regressionstests liegen in
+  `smtp-protocol-robustness.adv.test.ts` (F54 mit **vier Größen à zehn Wiederholungen**) und den
+  TLS-/Empfänger-Suiten.
+- **Zwei Fixes waren zuerst wirkungslos oder schädlich, und beide Male hat es nur eine Prüfung
+  gefangen, die man hätte weglassen können.** `JR-4-21`s erste Fassung zerschoss die Byte-Treue
+  (`JR-4-07`), gefunden vom **Volllauf**. `JR-4-21a`s erste F56-Fassung setzte `ciphers` auf
+  Socket-Ebene, was Node **ignoriert**, sobald ein `secureContext` übergeben wird — gefunden allein
+  daran, dass der **Kalibrierungslauf grün blieb, obwohl er rot werden musste**. Wer diese Scheiben
+  nachprüft, sollte beide Stellen als Erstes ansehen.
 - **Vom PO ausdrücklich nicht nachgemessen** (steht auch im Statuseintrag zu `JR-4-05b`): die drei
   Wege, über die ein Catch-all doch konfigurierbar sein könnte, die Adressvergleichs-Entscheidung
   samt Sonderfällen und die bewusste `postmaster`-Abweichung von RFC 5321 §4.5.1.

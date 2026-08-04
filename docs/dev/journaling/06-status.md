@@ -992,3 +992,62 @@ ein zu laxer.
 
 **Nächster Schritt:** `JR-4-21a` (F50, F55, F56 — läuft), dann Abnahme `JR-4-13` **in eigener,
 frischer Sitzung**.
+
+#### 2026-08-04 — `JR-4-21a` erledigt (DEV): F50, F55, F56 behoben. **E4 ist abnahmebereit**
+
+| Feld        | Inhalt                                                                                                                                                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task**    | `JR-4-21a` — F50 (Durchsatz), F55 (`RCPT`-Limit), F56 (Cipher-Filter)                                                                                                                                                                                               |
+| **Commits** | F56 `819403f`+`3925dd3` · F55 `8755d9b`+`5fb9b1d` · F50 `543d73d`+`f34f3b8` (je ein Fix- und ein Nachtrags-Commit, wie beauftragt nach jedem Befund einzeln gesichert)                                                                                              |
+| **CI**      | `30912736332`, `30913563209`, `30914997638` — alle **success**. Zuletzt `1038 passed \| 8 skipped`, 89 Dateien, `unit ci 848/848 · integration ci 121/121 · adversarial ci 69/69`, Inventar `unit 61/61 · integration 21/21 · adversarial 7/7`, keine DB-Rückstände |
+| **F56**     | `TLS_CIPHERS` erzwingt Forward Secrecy und AEAD; `AES128-SHA` wird abgelehnt (`no shared cipher`, fataler Alert), TLS 1.3 unverändert, gewöhnliche Clients verhandeln weiterhin `ECDHE-RSA-AES128-GCM-SHA256`                                                       |
+| **F55**     | `maxRecipientsPerTransaction` (Default 1000, **Floor 100** nach RFC 5321 §4.5.3.1.8), `452 4.5.3` mit von ADR-027 unterscheidbarem Text, Transaktion läuft danach weiter. Gemessen: 100 akzeptiert, 101. abgewiesen, Transaktion schließt ab                        |
+| **F50**     | `SpoolWriteBridge` puffert bis **128 KiB** vor der Weitergabe an den Stream                                                                                                                                                                                         |
+
+**Die F50-Durchsatztabelle — die Kernaussage ist nicht die Beschleunigung, sondern das Verhältnis:**
+
+| Zeilenlänge | vorher                | nachher              | Faktor |
+| ----------- | --------------------- | -------------------- | ------ |
+| 60 Byte     | 58 720 ms (0,88 MB/s) | 629 ms (82,14 MB/s)  | ≈ 93×  |
+| 998 Byte    | 4 110 ms (12,19 MB/s) | 425 ms (117,88 MB/s) | ≈ 9,7× |
+
+**Der Unterschied zwischen kurzen und langen Zeilen fällt von ≈ 13,9× auf ≈ 1,48×** — das war die
+Aussage von F50, und sie ist damit beantwortet. „Vorher" reproduziert die Originalmessung des Befunds
+fast exakt (53 816/4 288 ms dort gegen 58 720/4 110 ms hier), was den Vergleich belastbar macht.
+Zusätzlich läuft `spool-write-bridge-throughput.test.ts` als **dauerhafte Coverage-Notiz ohne
+Assertion** in jedem `ci`-Lauf mit; im CI-Lauf `30914997638` steht dort 124,80 MB/s gegen 250,50 MB/s
+(Verhältnis 2,0 statt 1,48 — andere Maschine, dieselbe Aussage).
+
+**Der wichtigste Teil dieser Scheibe ist ein Fix, der keiner war.** Die erste F56-Fassung setzte
+`ciphers`/`honorCipherOrder` im Optionsobjekt von `buildTlsSocketOptions()` — direkt neben
+`minVersion`, die naheliegende Stelle. **Gemessen wirkungslos:** Sobald ein `secureContext` übergeben
+wird — in diesem Prozess immer —, ignoriert Node einen Cipher-Parameter auf Socket-Ebene vollständig.
+Ein Client mit ausschließlich `AES128-SHA` verhandelte ihn weiterhin. **Aufgefallen ist es allein
+daran, dass der Kalibrierungslauf grün blieb, obwohl er rot werden musste.** Der wirksame Fix sitzt
+jetzt im Konstruktor von `EsmtpServer`: `tls.createSecureContext({ cert, key, ciphers: TLS_CIPHERS,
+honorCipherOrder: true })`, beide Richtungen empirisch belegt. **Ohne die Pflicht zur Kalibrierung
+wäre ein wirkungsloser Sicherheitsfix als erledigt in die Abnahme gegangen** — das ist der stärkste
+Beleg für diese Regel, den das Projekt bisher hat.
+
+**Und zum zweiten Mal in Folge hat der Volllauf etwas gefangen, das kein Einzeltest sah:** Die
+`TLS_CIPHERS`-Dokumentation enthielt den Literal-String `tls.connect(`, worauf der Textscanner von
+`no-outbound-mail-path.test.ts` (`JR-4-07`s Wächter „kein ausgehender Aufruf im Empfängerquelltext")
+ansprang. In `JR-4-21` war es die Byte-Treue-Regression, hier ein Kommentar — **beide Male der
+Volllauf, nie die eingegrenzte Suite.**
+
+**Bewusst nicht getan** (vom DEV benannt, vom PO akzeptiert): kein zweiter End-to-End-Test, der
+ADR-027s Cross-Chain-`452` gegen F55 abgrenzt — die Texte sind getrennt und per `not.toMatch` geprüft,
+ADR-027s eigener Test existiert bereits. Kein expliziter 3DES/RC4-Fall — dieses OpenSSL 3.5.5
+verweigert 3DES schon beim Aufbau des Client-Kontexts, wie der Befund selbst notiert.
+
+---
+
+### Stand von E4 zum Abschluss dieser Sitzung
+
+**Alle 21 Tasks erledigt, alle Befunde des Empfangspfads behoben.** Offen ist ausschließlich die
+**Abnahme `JR-4-13`**, und die gehört nach ADR-014/ADR-021 in eine **eigene, frische Sitzung** — die
+Sitzung, die gebaut hat, kann nicht abnehmen. In E2 hat der Auftraggeber genau darauf bestanden, und
+die erzwungene zweite Runde hat zwei echte Lücken gefunden.
+
+**Befundlage E4:** F42–F51 behoben oder aufgelöst, **F52/F53/F54** (`JR-4-21`) und **F55/F56**
+(`JR-4-21a`) behoben, **F50** behoben. Offen bleibt aus E4 **kein** Befund.
