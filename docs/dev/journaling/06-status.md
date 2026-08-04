@@ -870,6 +870,19 @@ mit Attribution im Dateikommentar.
 
 **Nächster Schritt:** `JR-4-21` (DEV, läuft) — F52/F53/F54 beheben nach der `go-smtp`-Vorlage, CI
 muss danach grün sein. Dann `JR-4-15` (Sicherheitsdurchsicht, prüft dann den gehärteten Stand), dann
-Abnahme `JR-4-13` in eigener Sitzung. **Beim Auftraggeber liegen:** F50, und ob die doppelt vergebene
-Nummer **ADR-026** (Task-ID-Schreibweise und SMTP-Empfangspfad tragen beide diese Nummer) umnummeriert
-wird oder eine Fußnote bekommt.
+Abnahme `JR-4-13` in eigener Sitzung.
+
+**Beide Punkte, die beim Auftraggeber lagen, sind am 2026-08-04 entschieden:**
+
+- **Die doppelte ADR-Nummer wird umnummeriert** (erledigt): Die Task-ID-Schreibweise heißt jetzt
+  **ADR-029**, der SMTP-Empfangspfad behält **ADR-026**. Umnummeriert wurde die Task-ID-ADR, weil sie
+  **fünf** Referenzen trug, die SMTP-ADR dagegen **40** — darunter Produktivcode
+  (`smtp-server.ts`), zwei Testdateien, `suite-inventory.ts`, und ihre beiden **Auflagen**
+  (`JR-4-14`, `JR-4-15`) werden unter der Nummer zitiert. Alle fünf Stellen sind umgestellt
+  (`05-entscheidungen.md`, `03-backlog.md`, dreimal `13-archiv-sessionprotokoll-bis-e3.md`), im
+  Archiv zeilengenau statt global, damit die SMTP-ADR im selben Dokument unberührt bleibt. Gegenprobe:
+  null verbleibende Task-ID-Treffer unter der alten Nummer.
+- **F50 wird behoben**, als Fortsetzung von `JR-4-21` (Entscheidung des Auftraggebers). **Nicht
+  parallel zu `JR-4-15`** — beide würden `tests/support/suite-inventory.ts` und
+  `09-befunde-bestandscode.md` anfassen, und dieselbe Konstellation hat heute schon einmal zwei
+  Bearbeiter kollidieren lassen. Reihenfolge: erst `JR-4-15` fertig, dann F50.

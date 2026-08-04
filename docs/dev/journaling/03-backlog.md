@@ -6,7 +6,8 @@ Nacharbeits-Suffix als Kleinbuchstabe direkt angehängt. Also `JR-2-03` = Epic 2
 = Epic 13, Task 9, zweite Nacharbeit. Abgeschlossene Tasks werden nicht gelöscht, sondern in
 `06-status.md` abgehakt.
 
-> **Der Bindestrich kam am 2026-08-01 dazu (ADR-026), und das ist keine Neuvergabe.** Bis dahin
+> **Der Bindestrich kam am 2026-08-01 dazu (ADR-029, bis 2026-08-04 als ADR-026 geführt), und das
+> ist keine Neuvergabe.** Bis dahin
 > hieß es `JR-<Epic><NN>` ohne Trennung, und `JR-1101` ließ sich als „Epic 1, Task 101" oder
 > „Epic 11, Task 01" lesen. Umgestellt wurde nur die **Schreibweise** — Epic, laufende Nummer und
 > Suffix jeder ID sind unverändert, kein Task hat eine andere Identität bekommen. Die Umsetzung

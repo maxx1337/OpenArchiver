@@ -1652,10 +1652,20 @@ nicht wiederverwendet werden:
    die operative Einlösung des in ADR-024 festgehaltenen §13-Punktes, **soweit der Auftraggeber
    selbst betreibt**. Wer betreibt, entscheidet ADR-024 — dort weiterhin **offen**.
 
-## ADR-026 — Task-IDs schreiben sich `JR-<Epic>-<NN>`
+## ADR-029 — Task-IDs schreiben sich `JR-<Epic>-<NN>`
 
-**Status:** **entschieden** (2026-08-01) · **Entscheider:** Auftraggeber · **Betrifft:**
-`03-backlog.md` und jedes Dokument, jeden Kommentar und jeden Suite-Namen, der eine Task-ID nennt
+> **Diese ADR hieß bis zum 2026-08-04 „ADR-026" — dieselbe Nummer wie die SMTP-ADR unten.** Die
+> Doppelvergabe fiel beim Schreiben von ADR-026s Go-Nachtrag auf; der Auftraggeber hat die
+> Umnummerierung entschieden. **Umnummeriert wurde diese**, nicht die SMTP-ADR: Die trägt 40
+> Referenzen quer durchs Repo, darunter Produktivcode (`smtp-server.ts`), zwei Testdateien und
+> `suite-inventory.ts`, und ihre beiden **Auflagen** (`JR-4-14`, `JR-4-15`) werden unter der Nummer
+> zitiert. Diese hier hatte fünf Referenzen. **Die Nummer ist bewusst 029 und nicht eine Lücke
+> davor** — 001 bis 028 sind vergeben, und eine ADR-Nummer ist ein Identifikator, kein Datum. Dass
+> 029 damit älter ist als 027 und 028, ist der Preis dafür, keine bestehende Nummer zu recyceln.
+
+**Status:** **entschieden** (2026-08-01, umnummeriert 2026-08-04) · **Entscheider:** Auftraggeber ·
+**Betrifft:** `03-backlog.md` und jedes Dokument, jeden Kommentar und jeden Suite-Namen, der eine
+Task-ID nennt
 
 Task-IDs tragen ab sofort einen Bindestrich zwischen Epic und laufender Nummer:
 **`JR-<Epic>-<NN>`**. Die laufende Nummer bleibt zweistellig, ein Nacharbeits-Suffix hängt als
