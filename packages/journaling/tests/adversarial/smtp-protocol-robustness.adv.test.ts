@@ -1045,49 +1045,80 @@ suite('ci', 'JR-4-14 -- expectServerStillAcceptsAValidMessageReal() calibration'
  * Written against the **correct** behaviour, per the Product Owner's explicit instruction
  * (`06-status.md`, 2026-08-04): a characterisation test that accepted either outcome (the race,
  * measured) would go green today and stay green after `JR-4-21` fixes it, proving nothing about
- * whether the fix landed. `PO declined` that shape. As written, this case was `JR-4-21`'s acceptance
- * criterion -- red until the fix shipped, exactly as intended, with no change to this file needed
- * (the naming convention `RED UNTIL <task>` already established in `packages/backend/tests/support/
- * fail-closed.ts` names the same pattern: "red before the fix, green after the fix, both logged").
+ * whether the fix landed. `PO declined` that shape. Under `RED UNTIL JR-4-21` (removed once the fix
+ * landed, per the same convention `packages/backend/tests/support/fail-closed.ts`'s `redUntil()`
+ * names: "red before the fix, green after the fix, both logged"), this case was `JR-4-21`'s
+ * acceptance criterion.
  *
- * **Marker removed (`JR-4-21`), this is now a regression test.** A single green run does not prove
- * a race is closed, so the marker's removal is backed by repetition, not one pass: this exact case,
- * unmodified, ran green **10/10** against the fix (and red before it -- reverting only
- * `smtp-server.ts` reproduced the race deterministically at this size, every time). A companion
- * standalone script (`node`, no `vitest`, no per-test timeout) repeated the same single-write
- * oversized-`MAIL FROM` probe **10x at each of four sizes** the Product Owner named as the finding's
- * own size matrix (~2 000 B, 100 KB, ~200 KB, 2 MB): before the fix, ~2 000 B got a wrong `250` 10/10,
- * 100 KB was already correct 10/10 (the `idx === -1` branch was never broken), and both ~200 KB and
- * 2 MB reproduced this finding's race 10/10 (closed with no readable reply); after the fix, all four
- * sizes answered a clean `500 5.5.1` in single-digit milliseconds, 10/10, with no size dependence
- * left at all -- see `JR-4-21`'s report for the full table.
+ * ---------------------------------------------------------------------------------------------
+ * Nacharbeit (`JR-4-14`, after `JR-4-21` landed): why one size and one run were not enough
+ * ---------------------------------------------------------------------------------------------
+ * Two gaps the Product Owner named explicitly, both closed here rather than left as an external,
+ * once-run measurement:
+ *
+ *  1. **The race is non-deterministic.** CI run `30900280611` passed this case even *before*
+ *     `JR-4-21` landed -- the race did not trigger that particular run. A single green run, at one
+ *     size, proves nothing about whether a race is closed; only repetition does. Every size below
+ *     runs {@link F54_REPETITIONS} times, and *every* repetition must independently produce the
+ *     correct outcome -- one failure anywhere fails the whole case.
+ *  2. **The defect was size-dependent** (F52's own finding: `~2 000` B was silently accepted, `100
+ *     KB` was already correct, `~200 KB` and `2 MB` raced to `ECONNRESET`) -- the fix's claim is that
+ *     the bound now lives in the *transport*, not the parser, so it must stop mattering how large or
+ *     how fragmented the line is. That claim is only tested by running the *same* assertion across
+ *     every size in the finding's own matrix and requiring them to agree, not by picking the one size
+ *     (`~200 KB`) that happened to reproduce the race most reliably pre-fix.
  */
 suite(
 	'ci',
 	'JR-4-14 -- F54: a fragmented overlong line is answered with a clean 500, never left to race an ECONNRESET (fixed in JR-4-21)',
 	() => {
-		it('a ~200 KB single-write MAIL FROM address, large enough to fragment across several socket reads, gets exactly one clean 500 and then a clean close -- never a bare reset, never a 250, never a hang', async () => {
-			const { port } = await startServer();
-			const client = await connectClient(port);
-			await client.nextReply();
-			client.send('EHLO client.example.com');
-			await client.nextReply();
+		/** The finding's own size matrix (`09-befunde-bestandscode.md`): the exact sizes measured
+		 * pre-fix to behave differently (`~2 000` B wrongly accepted, `100 KB` already correct, `~200
+		 * KB` and `2 MB` racing to `ECONNRESET`). Fixed-size labels rather than a generated range --
+		 * these are the four points the finding is actually anchored to, not an arbitrary sample. */
+		const SIZE_MATRIX: ReadonlyArray<{ readonly label: string; readonly bytes: number }> = [
+			{ label: '~2000 B', bytes: 2_000 },
+			{ label: '100 KB', bytes: 100 * 1024 },
+			{ label: '~200 KB', bytes: 200 * 1024 },
+			{ label: '2 MB', bytes: 2 * 1024 * 1024 },
+		];
+		/** Repeated this many times per size -- see the module doc comment's point 1. Ten is the
+		 * count the Product Owner asked for elsewhere in this epic's before/after tables; kept the
+		 * same here rather than picked independently. */
+		const F54_REPETITIONS = 10;
 
-			const ADDRESS_BYTES = 200 * 1024;
-			const line = `MAIL FROM:<${'a'.repeat(ADDRESS_BYTES)}@example.com>\r\n`;
-			await client.writeRaw(line);
+		for (const { label, bytes } of SIZE_MATRIX) {
+			it(`${label}: ${F54_REPETITIONS}/${F54_REPETITIONS} repetitions each get exactly one clean 500 and then a clean close -- never a bare reset, never a 250, never a hang`, async () => {
+				const line = `MAIL FROM:<${'a'.repeat(bytes)}@example.com>\r\n`;
+				const { port } = await startServer();
 
-			// The correct behaviour, deterministically: exactly one reply, and it is 500 5.5.1 -- not
-			// a race against the socket closing out from under the read (that race is the defect;
-			// once fixed, the reject path is idempotent and the reply is never lost to it).
-			const reply = await client.nextReply(10_000);
-			expect(reply[0]).toMatch(/^500 5\.5\.1/);
-			// Never a 250 (F52's failure mode, not F54's) is implied by the exact match above, not
-			// merely a possibility to rule out separately.
-			await client.waitForClose(5_000);
+				for (let attempt = 1; attempt <= F54_REPETITIONS; attempt += 1) {
+					const client = await connectClient(port);
+					await client.nextReply();
+					client.send('EHLO client.example.com');
+					await client.nextReply();
 
-			// The same process still accepts a fresh, valid message afterward.
-			await expectServerStillAcceptsAValidMessage(port);
-		}, 15_000);
+					await client.writeRaw(line);
+
+					// The correct behaviour, deterministically, on *every* attempt: exactly one reply,
+					// and it is 500 5.5.1 -- not a race against the socket closing out from under the
+					// read (that race is the defect; once fixed, the reject path is idempotent and the
+					// reply is never lost to it). The same regex fires for every size in the matrix --
+					// no per-size branch -- which is the equality claim itself, not a separate check.
+					const reply = await client.nextReply(10_000);
+					expect(reply[0], `${label}, attempt ${attempt}/${F54_REPETITIONS}`).toMatch(
+						/^500 5\.5\.1/
+					);
+					// Never a 250 (F52's failure mode, not F54's) is implied by the exact match above,
+					// not merely a possibility to rule out separately.
+					await client.waitForClose(5_000);
+				}
+
+				// The same process still accepts a fresh, valid message afterward -- once per size is
+				// enough here; the repetitions above already prove the process survives each attempt
+				// (a wedged process would fail attempt 2 of 10, not just a final health check).
+				await expectServerStillAcceptsAValidMessage(port);
+			}, 30_000);
+		}
 	}
 );

@@ -2752,13 +2752,21 @@ oder in einem Stück ankommen (der Unterschied, der F52 von F53 trennt, spielt h
 **Gemessen** (Testfall „measures commandCarry growth during one suspended AUTH window", übernommen
 nach `packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts`): während eines
 einzigen, 400 ms langen suspendierten `AUTH LOGIN`-Fensters (ein absichtlich verzögerter
-`PasswordVerifier` steht für die reale Kosten eines Bcrypt-Vergleichs) wurden 4,0 MB CRLF-freier
-Bytes gesendet; `process.memoryUsage().arrayBuffers` wuchs dabei um **82,0 MB** — mehr als das
-Zwanzigfache der gesendeten Bytes, weil jeder `Buffer.concat()`-Aufruf eine neue, größere Kopie
-alloziert und die alte (kurzfristig doppelt gehaltene) Kopie erst bei der nächsten Gelegenheit vom
-GC eingesammelt wird. Nach Ablauf des Fensters antwortet der Server korrekt (`535` falsche
-Zugangsdaten oder `501` bei einer als SASL-Fortsetzung fehlinterpretierten Flut) — der Prozess
-erholt sich, das Fenster ist nur eine Verzögerung, keine dauerhafte Sperre.
+`PasswordVerifier` steht für die reale Kosten eines Bcrypt-Vergleichs) wurden vor dem Fix
+**~6,0 MB** CRLF-freier Bytes gesendet, und `process.memoryUsage().arrayBuffers` wuchs dabei um:
+**28,3 MB** (CI, Linux, Lauf `30900280611`), **76,6 MB** und **83,7 MB** (zwei lokale Läufe
+verschiedener Bearbeiter unter Windows) — über mehrere Läufe eines Bearbeiters hinweg zwischen
+**54,6 und 135,0 MB**. **Reproduzierbar ist die Größenordnung — ein Vielfaches der gesendeten
+Menge —, nicht der einzelne Wert:** der CI-Wert ist mit knapp Faktor 5 der niedrigste der vier
+Messungen, und die Aussage hält trotzdem. Vermutete, nicht weiter verifizierte Ursache der Streuung:
+der GC-Zeitpunkt relativ zum Messpunkt und Zwischenzustände wiederholter `Buffer.concat()`-Aufrufe,
+von denen jeder eine neue, größere Kopie alloziert, während die alte kurzfristig doppelt gehalten
+wird, bis der GC sie einsammelt. **Nach dem Fix** (`JR-4-21`) wurden bei **2,0 MB** gesendeter Daten
+nur noch **4,0 MB** (CI) bzw. **5,1 MB** (lokal) Wachstum gemessen — die Ablehnung greift jetzt
+innerhalb des ersten überlangen Chunks, statt die volle Fensterdauer zu füllen. Nach Ablauf des
+Fensters antwortet der Server korrekt (`535` falsche Zugangsdaten oder `501` bei einer als
+SASL-Fortsetzung fehlinterpretierten Flut) — der Prozess erholt sich, das Fenster ist nur eine
+Verzögerung, keine dauerhafte Sperre.
 
 ### Warum das ernster ist als reine Speicherkosmetik
 

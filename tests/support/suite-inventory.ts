@@ -617,7 +617,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// acceptance instead of the fake port, the F53 flood-during-suspended-AUTH proof (real TLS +
 		// AUTH + PasswordVerifier), the calibration of the real-acceptance health check against a
 		// closed port, and the F54 (proposed) fragmented-overlong-line race case.
-		expectedTests: { ci: 63, nightly: 2, manual: 1 },
+		// 66 ci after JR-4-21 landed the fix (F52/F53/F54) and the F54 case became a Nacharbeit item
+		// for JR-4-14: the single ~200 KB case became 4 (one per size in the finding's own matrix --
+		// ~2000 B, 100 KB, ~200 KB, 2 MB), each repeating 10x internally rather than running once, so
+		// a race this size-dependent and this non-deterministic cannot pass by luck the way CI run
+		// 30900280611 did before the fix landed. Net +3 over the previous count.
+		expectedTests: { ci: 66, nightly: 2, manual: 1 },
 	},
 ];
 
