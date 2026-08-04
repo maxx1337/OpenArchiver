@@ -171,7 +171,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 56 after JR-4-10 added tests/unit/kill-during-data-invariant.test.ts -- calibration of
 		// checkNeverPartial(), the pure checker the real kill-during-DATA adversarial test uses.
 		// 57 after JR-4-11 added tests/unit/bdat-data-byte-fidelity.test.ts.
-		expectedFiles: 57,
+		// 58 after JR-4-12 added tests/unit/smtp-oversize-boundary.test.ts.
+		expectedFiles: 58,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -479,7 +480,16 @@ export const SUITES: readonly SuiteSpec[] = [
 		// hand-built expectation) -- plus 4 calibration cases for expectStoredBytesIdentical() itself
 		// (an untouched copy stays clean; a flipped byte, a truncated byte, and an extra trailing byte
 		// must each be caught).
-		expectedTests: { ci: 826, nightly: 3, manual: 0 },
+		// 833 after JR-4-12 added tests/unit/smtp-oversize-boundary.test.ts (7): 3 real cases -- exactly
+		// at the SIZE limit (accepted, byte-identical, zero alerts of either kind), one byte over
+		// (552, both detection paths: MAIL FROM SIZE= declared -- a structured warn log -- and the
+		// actual-transfer overrun -- the mandatory QuarantineAlertSink, reason 'oversize-rejected',
+		// file moved to quarantine/), and far over (552, both paths again, plus the connection staying
+		// aligned afterward: a further QUIT on the same connection still gets exactly one clean reply)
+		// -- plus 4 calibration cases for the alert-shape assertion itself (an exactly-one-correct-
+		// reason alert passes; zero alerts, two alerts, and one alert with the wrong reason must each
+		// be caught).
+		expectedTests: { ci: 833, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
