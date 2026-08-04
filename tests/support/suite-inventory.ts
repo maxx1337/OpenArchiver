@@ -180,7 +180,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// left out of this count rather than committed: it currently fails 4 of its own cases.)
 		// 60 after JR-4-21a added tests/unit/smtp-tls-cipher-filter.test.ts (F56).
 		// 61 after JR-4-21a also added tests/unit/spool-write-bridge-throughput.test.ts (F50).
-		expectedFiles: 61,
+		// 62 after JR-4-13's acceptance review (Auflage 1) added
+		// tests/unit/smtp-tls-fields-reach-acceptance.test.ts -- closes the gap the review found: no
+		// existing test compared the *negotiated* TLS version/cipher of a real STARTTLS handshake
+		// against the fields JournalAcceptancePort.accept() actually receives (see that file's own
+		// doc comment for the three near-misses it replaces).
+		expectedFiles: 62,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -526,7 +531,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 50 MB as 998-byte lines through the real SpoolWriteBridge/writeDurableSpoolFile() pair and
 		// logs both throughputs via coverageNotice() every run, the same mechanism JR-2-08/JR-4-10
 		// already use.
-		expectedTests: { ci: 848, nightly: 3, manual: 0 },
+		// 850 after JR-4-13's acceptance review (Auflage 1) added
+		// tests/unit/smtp-tls-fields-reach-acceptance.test.ts (2): a real TLS 1.3 handshake and a
+		// real TLS 1.2 handshake with an explicit non-default cipher, each driven through a full
+		// EHLO/MAIL/RCPT/DATA transaction and compared field-for-field against the fake
+		// JournalAcceptancePort.accept() actually received.
+		expectedTests: { ci: 850, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
