@@ -886,3 +886,52 @@ Abnahme `JR-4-13` in eigener Sitzung.
   parallel zu `JR-4-15`** — beide würden `tests/support/suite-inventory.ts` und
   `09-befunde-bestandscode.md` anfassen, und dieselbe Konstellation hat heute schon einmal zwei
   Bearbeiter kollidieren lassen. Reihenfolge: erst `JR-4-15` fertig, dann F50.
+
+#### 2026-08-04 — `JR-4-21` erledigt (DEV) und die `JR-4-14`-Nacharbeit (TEST)
+
+| Feld             | Inhalt                                                                                                                                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task**         | `JR-4-21` (neu am 2026-08-04): F52, F53 und F54 beheben nach der `go-smtp`-Vorlage aus ADR-026s Nachtrag                                                                                                                     |
+| **Commits**      | `3b2bc66` (Fix), `4e08fbf` (Befunde auf behoben), `4d19225` (TEST-Nacharbeit)                                                                                                                                                |
+| **CI**           | `30902132955`, `30902593426`, `30903678696` — alle **success**. Zuletzt `1019 passed \| 8 skipped`, 86 Dateien, `unit ci 835/835 · integration ci 118/118 · adversarial ci 66/66`, Inventar verifiziert, keine DB-Rückstände |
+| **Der Nachweis** | 10 Läufe je Größe gegen den echten kompilierten Server, „vorher" per `git stash` auf **nur** `smtp-server.ts` zurückgesetzt (siehe Tabelle unten). Nach dem Fix alle vier Größen **einheitlich in 1–11 ms** beantwortet      |
+| **F53 nachher**  | 2,0 MB gesendet ⇒ `arrayBuffers` **+4,0 MB** (CI) bzw. **+5,1 MB** (lokal), gegen **+28,3 MB** (CI) bzw. +76,6/83,7 MB (lokal) im ungefixten Zustand                                                                         |
+| **Offen**        | F50 (entschieden, nach `JR-4-15`), `JR-4-15`, Abnahme `JR-4-13`                                                                                                                                                              |
+
+| Größe   | vorher                       | nachher           |
+| ------- | ---------------------------- | ----------------- |
+| ~2000 B | 10/10 falsches `250`         | 10/10 `500 5.5.1` |
+| 100 KB  | 10/10 `500` (war nie kaputt) | 10/10 `500`       |
+| ~200 KB | 10/10 Reset/Hänger           | 10/10 `500`       |
+| 2 MB    | 10/10 Reset/Hänger           | 10/10 `500`       |
+
+**Die Regression, die diese Scheibe eigentlich lehrreich macht.** Die **erste** Fassung des Fixes hat
+„Grenze im Reader" naiv umgesetzt — ein eifriger Scan über den ganzen Puffer — und damit `JR-4-07`s
+**Byte-Treue zerschossen**: ein pipeliniertes `BDAT <n> LAST` samt Inhalt in einem Paket sah aus wie
+eine überlange Zeile. **Gefunden hat das der Volllauf, nicht die Tests der drei Befunde.** Genau davor
+schützt `go-smtp`s `LineLimit = 0`-Escape um `BDAT`, den ADR-026s Nachtrag als Punkt 2 der Vorlage
+nennt. Die endgültige Lösung trennt deshalb: **zeilenweise** Prüfung in `drainCommandCarry()` (F52,
+kann nie Inhaltsbytes sehen, weil die Schleife bei `DATA`/`BDAT` sofort aussteigt), **eifriger Scan
+nur** im `commandProcessingSuspended`-Zweig (F53, dort sind Inhaltsbytes protokollbedingt unmöglich),
+plus ein `oversizedLineRejected`-Latch mit `writableEnded`-Prüfung in `writeResponse`/`writePlain`
+(F54). **Die Trennung ist die Lösung — wer sie später verwischt, bekommt die Regression zurück.**
+
+**Ein Verfahrensfehler des PO, aus dem eine Regel wurde.** Der Entwickler ging 17 Minuten idle, ohne
+zu berichten, während 195 Zeilen ungesichert im Arbeitsbaum lagen; der PO hat den Stand daraufhin
+selbst committet (`3b2bc66`) — mit ausdrücklicher Kennzeichnung als Sicherung, nicht als
+Fertigmeldung, und mit einer Liste dessen, was noch **nicht** belegt war. Zwei Minuten später kam der
+Bericht: Er hatte alles längst gemessen, die Nachricht war nur noch unterwegs. **Die Sicherung war
+nicht falsch, ihre Begründung war es teilweise** — die Commit-Nachricht behauptet, die
+Wiederholungsmessung fehle, und das stimmte zu diesem Zeitpunkt schon nicht mehr. Korrigiert wird das
+hier und nicht durch Umschreiben der Historie. **Regel daraus:** vor einem Sicherungscommit **fragen
+und die Antwort abwarten**, solange keine akute Gefahr besteht; und wenn doch gesichert wird, das
+Fehlende als „mir nicht bekannt" formulieren statt als „nicht vorhanden".
+
+**Die Nacharbeit an `JR-4-14` (`4d19225`) hat den Nachweis verschärft:** Aus dem einen ~200-KB-Fall
+wurden **vier — einer je Größe**, jeder mit zehn internen Wiederholungen und derselben Prüfung.
+**Damit ist die Gleichheit über die Größen die Prüfung selbst**, kein Zusatzcheck. Kalibriert wurde
+gegen den **echten** Vorher-Stand (`smtp-server.ts` aus `27edf81` eingesetzt), der das erwartete
+größenabhängige Muster exakt reproduziert hat, danach zurückgesetzt und dreimal grün nachgefahren.
+
+**Nächster Schritt:** `JR-4-15` (läuft), dann F50 als Fortsetzung von `JR-4-21`, dann Abnahme
+`JR-4-13` in eigener Sitzung.
