@@ -85,16 +85,17 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-03 (**E4 ist in Arbeit**, 17 von 20 Tasks, nicht abgenommen) · **Branch:**
-`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf lokal: **989 Tests** bei 84
-Dateien — `unit ci 833 · integration ci 118 · adversarial ci 38`, **in der CI bestätigt**: Lauf
-`30864243188` auf `3100818` **success** (`JR-4-12`), davor `30862834098` (`JR-4-10`) und
-`30838566875` (`JR-4-19`)
+**Stand:** 2026-08-04 (**E4 ist in Arbeit**, 18 von 21 Tasks, nicht abgenommen) · **Branch:**
+`claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf: **1016 Tests** bei 86
+Dateien — `unit ci 835 · integration ci 118 · adversarial ci 63`, **in der CI bestätigt**: Lauf
+`30900280611` auf `d1bac6d` **success** (`JR-4-14`), davor `30897110694`, `30864243188`
+(`JR-4-12`) und `30862834098` (`JR-4-10`)
 
 > **Die Task-Zählung ist am 2026-08-03 berichtigt worden.** Sie zählte die Splits `JR-4-05a`–`c` und
-> `JR-4-06a`/`b` im Zähler mit, während der Nenner die 20 Backlog-IDs meint. Gezählt werden jetzt die
-> **IDs**: erledigt sind `JR-4-01`…`JR-4-12` und `JR-4-16`…`JR-4-20`, offen `JR-4-13`, `JR-4-14`,
-> `JR-4-15`.
+> `JR-4-06a`/`b` im Zähler mit, während der Nenner die Backlog-IDs meint. Gezählt werden jetzt die
+> **IDs**: erledigt sind `JR-4-01`…`JR-4-12`, `JR-4-14` und `JR-4-16`…`JR-4-20`; offen sind
+> `JR-4-13` (Abnahme), `JR-4-15` und **`JR-4-21`** (neu am 2026-08-04, siehe unten). E4 hat damit
+> **21** Tasks.
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
@@ -106,12 +107,37 @@ Dateien — `unit ci 833 · integration ci 118 · adversarial ci 38`, **in der C
 bzw. `BDAT … LAST` mit **`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append
 durch sind. Seit `JR-4-19` übersteht er auch einen Start ohne erreichbare Ledger-Datenbank: er
 antwortet `451`, holt die Verdrahtung im Hintergrund nach und nimmt danach **ohne Neustart** an.
-**Offen sind nur noch zwei TEST-Scheiben (`JR-4-14`, `JR-4-15`) und die Abnahme.**
+**Offen sind `JR-4-21` (Härtung, läuft), `JR-4-15` (Sicherheitsdurchsicht) und die Abnahme.**
 
 Seit `JR-4-10` ist die zentrale Zusage nicht mehr nur strukturell begründet, sondern **gemessen**:
 unter echtem `SIGKILL` während einer 50-MB-Übertragung haben in CI-Lauf `30862834098` sieben von
 zwanzig Runden den `250`-Zweig gezogen — und **alle sieben** hatten eine passende, byteexakt geprüfte,
 korrekt verkettete Ledger-Zeile. Kein Fall von „teilweise".
+
+**`JR-4-14` hat drei Defekte gefunden, und sie haben eine gemeinsame Wurzel** (`F52`, `F53`, `F54` in
+`09-befunde-bestandscode.md`): Die Zeilenlängengrenze wird in der **Parselogik** geprüft statt beim
+Hereinkommen der Bytes. Deshalb hängt ihr Ergebnis von der Chunk-Zerlegung ab — ~2 000 Byte ⇒
+falsches `250` · **100 KB ⇒ korrekt `500` in 25 ms** · ~200 KB ⇒ Fehlschlag · 2 MB ⇒ keine Antwort.
+**Dass der Fall bei 100 KB funktioniert, ist der Beleg**, nicht die Ausnahme: dort greift der intakte
+`idx === -1`-Zweig, weil Node in mehreren `data`-Ereignissen liefert.
+
+**Daraus ist `JR-4-21` entstanden (Rolle DEV, läuft), und mit ihr eine Änderung an ADR-026.** Der
+Auftraggeber hat die Eigenimplementierung ein zweites Mal angezweifelt, diesmal mit Go-Kandidaten —
+und traf eine echte Lücke: die Kandidatentabelle der ADR prüft **ausschließlich npm-Pakete**.
+Gemessen: `go-smtp` kann `BDAT` vollständig serverseitig. **Die Entscheidung bleibt trotzdem**, aber
+aus einem anderen Grund als bisher: nicht das Protokoll ist der Blocker, sondern der
+Acceptance-Contract — ein Go-Ingress müsste Spool (E3) und Ledger (E2) mitnehmen, also die Hash-Kette
+zweimal implementieren. **Was sich ändert:** Der Eigenbau hört auf, seine Härtung selbst zu erfinden;
+`go-smtp` ist ab jetzt die Vorlage (`lineLimitReader` — Grenze im **Reader** statt im Parser).
+Vollständig im Nachtrag zu ADR-026, `05-entscheidungen.md`.
+
+> **Ein Fehler, aus dem eine Regel geworden ist:** Nachdem der Tester am Nutzungslimit ausgefallen
+> war, hat der PO einen Ersatz gestartet — und nach dem Limit-Reset bauten **zwei** Tester dieselbe
+> Scheibe im selben Arbeitsbaum. `tests/support/suite-inventory.ts` trägt exakte Zahlen und verträgt
+> genau einen Bearbeiter. **Nie zwei Rollen gleichzeitig auf einer Scheibe, auch nicht nach einem
+> Ausfall** — erst prüfen, ob die erste Rolle zurück ist. Der Doppellauf hat zwar F52 unabhängig
+> bestätigt und über einen ungeklärten roten Fall F54 zutage gefördert, aber das rechtfertigt ihn
+> nicht.
 
 ### Was diese Session gemacht hat
 
@@ -343,17 +369,34 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 
 ### Nächster konkreter Schritt — die letzten TEST-Scheiben, dann die Abnahme
 
-**E4 steht bei 17 von 20.** Erledigt: `JR-4-01`…`JR-4-12` und `JR-4-16`…`JR-4-20`, dazu **F49
-behoben**, **ADR-028**, **F50 offen**, **F51 beauftragt**. Offen sind nur noch zwei TEST-Scheiben und
-die Abnahme:
+**E4 steht bei 18 von 21.** Erledigt: `JR-4-01`…`JR-4-12`, `JR-4-14`, `JR-4-16`…`JR-4-20`, dazu
+**F49 und F51 behoben**, **ADR-028**, **ADR-026-Nachtrag**; offen **F50** (beim Auftraggeber) und
+**F52/F53/F54** (in `JR-4-21`):
 
-| Als Nächstes             | Was                                                                                                                | Warum hier                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| ~~`JR-4-10`~~            | **erledigt** — CI `30862834098`: 7 von 20 Runden zogen den `250`-Zweig, alle 7 mit passender Ledger-Zeile          | der erste echte Kill-Nachweis des Projekts, nicht nur grüner Testbau        |
-| ~~`JR-4-11`, `JR-4-12`~~ | **erledigt** — CI `30864243188`: BDAT byteidentisch zu `DATA`, SIZE-Grenzmatrix mit Alarm-Nachweis über beide Wege | `JR-4-11` ist vollständig lokal belegt, siehe Statuseintrag                 |
-| `JR-4-14`                | TEST: adversariale Protokollrobustheit — **ADR-026 Auflage 1**, plus der offene TLS-1.1-Nachweis aus `JR-4-04`     | **beauftragt**, zusammen mit dem F51-Fix                                    |
-| `JR-4-15`                | TEST: Sicherheitsdurchsicht des Empfangspfads — **ADR-026 Auflage 2**                                              | **eigener Auftrag danach**, damit `JR-4-14` nicht abgekürzt wird            |
-| `JR-4-13`                | **Abnahme E4 — eigene, frische Sitzung**                                                                           | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen) |
+| Als Nächstes             | Was                                                                                                                | Warum hier                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| ~~`JR-4-10`~~            | **erledigt** — CI `30862834098`: 7 von 20 Runden zogen den `250`-Zweig, alle 7 mit passender Ledger-Zeile          | der erste echte Kill-Nachweis des Projekts, nicht nur grüner Testbau           |
+| ~~`JR-4-11`, `JR-4-12`~~ | **erledigt** — CI `30864243188`: BDAT byteidentisch zu `DATA`, SIZE-Grenzmatrix mit Alarm-Nachweis über beide Wege | `JR-4-11` ist vollständig lokal belegt, siehe Statuseintrag                    |
+| ~~`JR-4-14`~~            | **erledigt** — CI `30900280611`: 25 adversariale Fälle, **TLS-1.1-Nachweis erbracht**, drei Defekte gefunden       | der Nachweis, an dem `JR-4-04` ehrlich gescheitert war                         |
+| **`JR-4-21`**            | **DEV, läuft:** F52/F53/F54 beheben nach der `go-smtp`-Vorlage aus dem ADR-026-Nachtrag                            | die drei Defekte teilen eine Wurzel — die Grenze sitzt an der falschen Schicht |
+| `JR-4-15`                | TEST: Sicherheitsdurchsicht des Empfangspfads — **ADR-026 Auflage 2**                                              | **nach `JR-4-21`**, dann prüft sie den gehärteten Stand                        |
+| `JR-4-13`                | **Abnahme E4 — eigene, frische Sitzung**                                                                           | ADR-014/ADR-021: in derselben Sitzung zählt sie nicht (E2 hat das bewiesen)    |
+
+> **Zwei Dinge, die `JR-4-21` mitbringen muss, sonst ist der Fix nicht belegt:**
+>
+> 1. **Der F54-Testfall ist nicht deterministisch.** Er trifft ein Rennen nur manchmal — CI-Lauf
+>    `30900280611` ist mit ihm **zufällig** grün durchgelaufen. Ein einzelner grüner Lauf belegt den
+>    Fix deshalb **nicht**. Verlangt ist eine **Wiederholung** (mindestens zehn Läufe) mit
+>    Vorher/Nachher-Rate gegen den ungefixten Stand.
+> 2. **Die vier Größen müssen sich danach gleich verhalten**: ~2 000 Byte, 100 KB, ~200 KB, 2 MB.
+>    Die **Stabilität** über alle vier ist der eigentliche Beweis, dass die Grenze jetzt an der
+>    Transportschicht sitzt. Ein Ergebnis, das noch von der Chunk-Zerlegung abhängt, ist nicht
+>    deterministisch geworden, sondern nur seltener falsch.
+>
+> **Danach zurück an TEST** (Nacharbeit an `JR-4-14`): F54 innerhalb des Tests ~10× wiederholen statt
+> einmal, die Größenreihe vollständig abbilden, die `RED UNTIL JR-4-21`-Marker entfernen und bei F54
+> den Zusatz „Vorschlag, noch nicht vom Auftraggeber bestätigt" streichen — **der PO hat ihn
+> bestätigt**.
 
 > **Zwei TEST-Scheiben nie parallel an zwei Bearbeiter.** `tests/support/suite-inventory.ts` trägt
 > **exakte** Zahlen für Dateien und Tests. Zwei gleichzeitige Bearbeiter auf demselben Branch
