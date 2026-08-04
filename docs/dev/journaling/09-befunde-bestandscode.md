@@ -115,6 +115,8 @@ findet es hier.
 | **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | offen     |
 | **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
 | **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | offen     |
+| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | offen     |
+| **F54**  | Vorschlag, unbestätigt — der `500`-Abbruchpfad ist nicht idempotent: fragmentiert ankommende überlange Zeile kann `ECONNRESET` statt `500` erzeugen   | mittel  | offen     |
 
 ---
 
@@ -2668,29 +2670,162 @@ Randbedingung: „Kein Produktionscode-Fix ohne Rückfrage"). Ein möglicher Fix
 im `idx !== -1`-Zweig ausführen (`idx > MAX_COMMAND_LINE_BYTES` prüfen, bevor die Zeile extrahiert
 wird) — nicht umgesetzt, nur als Richtung notiert.
 
-### Koordinationsnotiz — zwei Bearbeiter, dieselbe Scheibe, zwei "F52"
+### Koordinationsnotiz — aufgelöst durch den PO (2026-08-04)
 
-Beim Aufräumen dieser Sitzung stand bereits eine zweite, unabhängig entstandene Datei auf der
-Platte: `packages/journaling/tests/unit/smtp-adversarial-protocol.test.ts` — ebenfalls für `JR-4-14`,
-mit stark überlappendem Fallkatalog (Zeile ohne CRLF, abgeschnittenes Kommando, Kommandoflut,
-DATA/BDAT/RCPT vor MAIL, CR/LF-Fälle, NUL/8-Bit-Bytes, Verbindungslimit), **unkommittiert**. Ihr
-eigener Testfall für exakt diesen Befund („an envelope address that pushes the whole command line
-over the length cap …") ist derzeit **rot** (`expected '250 2.1.0 Ok' to match /^500 5\.5\.1/`) — eine
-von diesem Befund unabhängige Bestätigung, gemessen, nicht nur behauptet.
+Zwei unabhängig entstandene `JR-4-14`-Dateien trafen genau diesen Defekt aus verschiedenen
+Richtungen: der eigene Testfall der zweiten, zwischenzeitlich vorhandenen Datei
+(`packages/journaling/tests/unit/smtp-adversarial-protocol.test.ts`, Fall „an envelope address that
+pushes the whole command line over the length cap …") war **unabhängig davon rot**
+(`expected '250 2.1.0 Ok' to match /^500 5\.5\.1/`) — zwei getrennt geschriebene Suiten, die denselben
+Defekt treffen, sind ein stärkerer Beleg als eine. Der PO hat die Nummern entschieden: **F52 bleibt
+dieser Fund**, der andersartige Fund derselben zweiten Datei (`commandCarry` wächst während eines
+suspendierten Fensters ungeprüft) ist **F53** (eigener Abschnitt unten, Finder: tester-jr-4-10). Die
+zweite Datei ist inzwischen vollständig in
+`packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts` aufgegangen (ihre
+eigenständigen Fälle übernommen, u. a. der F53-Nachweis mit echtem `PasswordVerifier`, die
+Verbindungslimit-Verfeinerung mit einem noch offenen zweiten Slot, und die Kalibrierung von
+`expectServerStillAcceptsAValidMessage()` gegen einen geschlossenen Port) und danach gelöscht.
 
-Diese Datei hat außerdem einen eigenen, andersartigen Fund erbracht, den dieser hier nicht abdeckt:
-`commandCarry` wächst während eines suspendierten Fensters (laufender `AUTH`-Bcrypt-Vergleich oder
-settling `accept()`) völlig ungeprüft, weil `onData()` die gesamte Zeilen-Verarbeitungsschleife samt
-Längenprüfung in diesem Zustand überspringt — unabhängig von Chunking, anders als der hier
-dokumentierte Fund. Beide Dateien haben diesen zweiten Fund „F52" genannt; um die Kollision nicht zu
-vertiefen, bleibt der hier dokumentierte Fund **F52**, der Fund aus der anderen Datei ist als **F53**
-vorgeschlagen (noch nicht ausgeschrieben — das ist Sache der Person, die diese Datei fertigstellt).
+## F53 — `commandCarry` wächst während eines suspendierten Fensters (`AUTH`, settling `accept()`) völlig ungeprüft
 
-Die zweite Datei ist **nicht** Teil dieses Commits (weder gelöscht noch übernommen) — sie liegt
-unverändert im Arbeitsbaum, nur für die Dauer der Verifikation dieses Commits nach
-`scratchpad/other-agent-wip/` verschoben und danach an ihren ursprünglichen Ort zurückgelegt.
-`tests/support/suite-inventory.ts` zählt in diesem Commit deshalb nur die eigenen zwei neuen Dateien
-(`smtp-protocol-robustness.adv.test.ts`, `smtp-tls11-clienthello-rejection.test.ts`), nicht die
-16 Fälle der zweiten Datei. tester-jr-4-10 und der PO sind informiert; die Zusammenführung
-(eine Datei behalten, F53 korrekt einordnen, das rote Testergebnis reparieren oder als weiteren
-Befund werten) ist eine offene Entscheidung, keine, die hier einseitig getroffen wurde.
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.onData()`, der
+`commandProcessingSuspended`-Zweig) · **Gefunden von:** tester-jr-4-10, beim eigenständigen Bau einer
+zweiten `JR-4-14`-Suite in derselben Sitzung · **Status:** offen, nicht behoben (kein
+Produktionscode-Fix ohne Freigabe des Auftraggebers)
+
+### Was gemessen wurde
+
+`onData()` behandelt drei Fälle: `state === 'data'`, ein offenes `BDAT`, und — als dritten,
+eigenständigen Zweig — `commandProcessingSuspended`:
+
+```ts
+if (this.commandProcessingSuspended) {
+	// ... erläuternder Kommentar im Quelltext ...
+	this.commandCarry = Buffer.concat([this.commandCarry, chunk]);
+	return;
+}
+```
+
+Dieser Zweig hängt jeden eingehenden Chunk **bedingungslos** an `commandCarry` an und kehrt sofort
+zurück — er ruft `drainCommandCarry()` gar nicht auf, und `drainCommandCarry()` ist die **einzige**
+Stelle, an der `MAX_COMMAND_LINE_BYTES` je geprüft wird (siehe F52 oben). Solange
+`commandProcessingSuspended` `true` ist — laufender `AUTH`-Bcrypt-Vergleich
+(`verifyCredentials()`) oder ein settelnder `accept()`-Aufruf —, gibt es für die Größe von
+`commandCarry` **keine** Prüfung jeder Art, unabhängig davon, ob die eingehenden Bytes fragmentiert
+oder in einem Stück ankommen (der Unterschied, der F52 von F53 trennt, spielt hier keine Rolle mehr).
+
+**Gemessen** (Testfall „measures commandCarry growth during one suspended AUTH window", übernommen
+nach `packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts`): während eines
+einzigen, 400 ms langen suspendierten `AUTH LOGIN`-Fensters (ein absichtlich verzögerter
+`PasswordVerifier` steht für die reale Kosten eines Bcrypt-Vergleichs) wurden 4,0 MB CRLF-freier
+Bytes gesendet; `process.memoryUsage().arrayBuffers` wuchs dabei um **82,0 MB** — mehr als das
+Zwanzigfache der gesendeten Bytes, weil jeder `Buffer.concat()`-Aufruf eine neue, größere Kopie
+alloziert und die alte (kurzfristig doppelt gehaltene) Kopie erst bei der nächsten Gelegenheit vom
+GC eingesammelt wird. Nach Ablauf des Fensters antwortet der Server korrekt (`535` falsche
+Zugangsdaten oder `501` bei einer als SASL-Fortsetzung fehlinterpretierten Flut) — der Prozess
+erholt sich, das Fenster ist nur eine Verzögerung, keine dauerhafte Sperre.
+
+### Warum das ernster ist als reine Speicherkosmetik
+
+Die Fensterdauer ist an einen echten, langsamen kryptographischen Vergleich gekoppelt (Bcrypt,
+Kostenfaktor 10 laut `smtp-server.ts`s eigenem `AUTH_DUMMY_PASSWORD_HASH`-Kommentar) — ein Angreifer
+kann das Fenster **selbst nicht verlängern**, aber er kann es **beliebig oft öffnen** (jeder
+`AUTH`-Versuch öffnet ein neues, bis `MAX_AUTH_ATTEMPTS_PER_CONNECTION` = 3 pro Verbindung greift)
+und **jedes einzelne Fenster** mit so vielen Bytes fluten, wie die Netzwerkverbindung in der
+Fensterzeit zulässt — ohne die sonst überall geltende 512-Byte-Grenze.
+
+### Kalibrierung
+
+Nicht als Schwelle assertiert (es gibt keine vom Auftraggeber freigegebene Obergrenze, gegen die
+sich "bestanden/durchgefallen" sinnvoll entscheiden ließe) — die Zahl wird protokolliert
+(`console.warn`), nicht geprüft. Die Kalibrierung liegt in der Mechanik selbst: derselbe Testfall
+zeigt, dass der Prozess nach dem Fenster korrekt antwortet (kein Hänger), und der Verzögerungsmechanismus
+(`slowVerifier`) macht das Fenster deterministisch beobachtbar, ohne von echtem `bcryptjs`-Timing
+abhängig zu sein (dieselbe Begründung, die `smtp-auth-protocol.test.ts`s `RecordingPasswordVerifier`
+für einen Fake statt echtem `bcryptjs` schon gibt).
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber.
+Ein möglicher Fix: `commandCarry` auch im `commandProcessingSuspended`-Zweig gegen eine Obergrenze
+prüfen (nicht notwendigerweise `MAX_COMMAND_LINE_BYTES`, da hier keine Kommandozeile erwartet wird,
+sondern Rohbytes bis zur Wiederaufnahme) — nicht umgesetzt, nur als Richtung notiert.
+
+## F54 (Vorschlag, noch nicht vom Auftraggeber bestätigt) — der Abbruchpfad von `MAX_COMMAND_LINE_BYTES` ist nicht idempotent: eine fragmentiert ankommende überlange Zeile kann zu einem `ECONNRESET` statt einem sauberen `500` führen
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Protokollkonformität · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`drainCommandCarry()`, der `idx === -1`-Zweig, und
+`onData()`, der Zweig für den ordinären Kommando-Modus) · **Gefunden:** von TEST am 2026-08-04, beim
+Untersuchen, warum ein für `JR-4-14` übernommener Testfall mit einer 2-MB-Adresse zuverlässig am
+5-Sekunden-`testTimeout` der `unit`-Projektkonfiguration scheiterte, statt (wie die ursprüngliche
+Fallbeschreibung erwartete) mit einem schnellen `250` · **Status:** offen, nicht behoben (kein
+Produktionscode-Fix ohne Freigabe)
+
+### Was gemessen wurde
+
+Eine überlange, **fragmentiert** ankommende Kommandozeile (groß genug, dass Node den `write()` nicht
+als einen einzigen `data`-Event zustellt — ab ca. 100 KB reproduzierbar gemessen, siehe Tabelle) löst
+den in F52 zitierten `idx === -1`-Zweig korrekt aus: `writeResponse(500, '5.5.1', 'Line too long')`
+gefolgt von `this.socket.end()`. Das Problem liegt **danach**: `commandCarry` wird bei diesem Aufruf
+**nicht** zurückgesetzt, und es gibt kein Merkmal wie „diese Verbindung wurde bereits abgelehnt,
+ignoriere alles Weitere". Trifft nach dem `socket.end()` ein **weiterer** Chunk derselben,
+bereits im Zustellungsprozess befindlichen Zeile ein (üblich: der Client hat den ganzen `write()`
+schon an das Betriebssystem übergeben, bevor er überhaupt eine Antwort lesen konnte), ruft
+`onData()` erneut `drainCommandCarry()` auf, das **erneut** `writeResponse(500, …)` und **erneut**
+`this.socket.end()` aufruft — auf einem Socket, der sich bereits im Schließen befindet. Gemessen,
+mit echtem Logger: das erzeugt zuverlässig
+
+```
+smtp-ingress: socket error {"err":{"code":"ERR_STREAM_WRITE_AFTER_END"}}
+```
+
+und der Socket wird daraufhin mit einem **RST** statt einem geordneten FIN geschlossen — was beim
+Client als `ECONNRESET` ankommt. **Nicht deterministisch, ob der Client die ursprüngliche
+`500`-Zeile noch zu lesen bekommt, bevor der Reset eintrifft** — in wiederholten Läufen desselben
+Szenarios kam die `500`-Zeile manchmal beim Client an (im gepufferten `data`-Text sichtbar) und
+manchmal nicht (ein Testklient, der auf eine vollständige, mit Regex erkannte Antwortzeile wartet,
+sah in mehreren Läufen **gar keine** Antwort und lief in seinen eigenen 15/30-Sekunden-Timeout,
+obwohl der Server nach wenigen Millisekunden bereits geantwortet **und** sich beendet hatte).
+
+**Größentabelle** (einzelner `write()`, lokal auf diesem Host gemessen, `EsmtpServer` ohne TLS/ACL):
+
+| Adressgröße                                     | Beobachtung                                                                                                                                                                        |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10 KB, 50 KB                                    | ein `data`-Event, komplette Zeile inkl. CRLF sofort verarbeitet → `250` (F52)                                                                                                      |
+| 100 KB                                          | fragmentiert, erster Chunk > 512 Byte ohne CRLF → korrektes `500`, keine Wiederholung beobachtet                                                                                   |
+| 200 KB – 1600 KB (jede gemessene Zwischengröße) | fragmentiert, **wiederholter** `writeResponse`+`socket.end()`-Aufruf, `ERR_STREAM_WRITE_AFTER_END`, `ECONNRESET` beim Client, `500`-Zeile beim Client **nicht zuverlässig lesbar** |
+
+Die genaue Schwelle zwischen „ein Chunk" und „mehrere Chunks" ist eine Eigenschaft von Node/`libuv`s
+Lesepuffergröße auf diesem Host, nicht eine feste, dokumentierte Konstante — auf einem anderen Host
+oder unter anderer Last kann sie abweichen.
+
+### Warum das über F52 hinausgeht
+
+F52 sagt: eine überlange **atomare** Zeile wird nie geprüft und einfach akzeptiert. Dieser Fund sagt
+etwas Schärferes über den **Ablehnungspfad selbst**: die Ablehnung, wenn sie greift, ist nicht
+idempotent, und ihr Fehlschlag beim zweiten Versuch beschädigt die ursprüngliche, bereits
+geschriebene Antwort möglicherweise noch **vor** deren zuverlässiger Zustellung. Das verletzt „jeder
+Fall ist aus Client-Sicht ausgewertet" im wörtlichen Sinn: aus Client-Sicht ist das Ergebnis für
+identische Eingaben bei wiederholten Läufen manchmal ein korrektes `500`, manchmal ein nackter
+Verbindungsabbruch ohne jede SMTP-Antwort — kein Crash des Serverprozesses (der Prozess selbst lief
+in jedem Lauf weiter und nahm danach neue Verbindungen an), aber ein für den Sender nicht
+unterscheidbares Verhalten von einem Netzwerkfehler.
+
+### Kalibrierung
+
+Reproduzierbar mit einem eigenständigen Skript gegen den echten, kompilierten `EsmtpServer`
+(`node:net`, kein `vitest`, keine Zeitbeschränkung) über eine Größenreihe (10 KB bis 1600 KB) sowie
+zweimal wiederholt bei 200 KB — beide Läufe zeigten denselben `ERR_STREAM_WRITE_AFTER_END` und
+`ECONNRESET`, mit unterschiedlicher Reihenfolge zwischen dem Log-Eintrag und dem Zustellzeitpunkt der
+`500`-Zeile beim Client (nicht deterministisch, aber der Fehler selbst reproduzierbar). Keine
+Produktionscode-Änderung vorgenommen.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix, und **diese Nummer (F54) ist ein Vorschlag, keine vom Auftraggeber
+bestätigte Zuweisung** — anders als F52/F53 wurde sie nicht vorab vergeben, weil der Fund erst bei
+der Zusammenführung der beiden `JR-4-14`-Dateien entstand. Ein möglicher Fix: `commandCarry` beim
+ersten `writeResponse(500, …)` leeren und einen Zustand „bereits abgelehnt" setzen, den jeder weitere
+`onData()`-Aufruf zuerst prüft, bevor er irgendetwas anderes tut — nicht umgesetzt, nur als Richtung
+notiert.

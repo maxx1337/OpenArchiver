@@ -610,7 +610,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// calibrated independently in the `unit` suite's kill-during-data-invariant.test.ts.
 		// 57 ci after JR-4-14 added 19 cases in smtp-protocol-robustness.adv.test.ts (ADR-026
 		// Auflage 1 -- adversarial protocol robustness; see that file's own doc comment).
-		expectedTests: { ci: 57, nightly: 2, manual: 1 },
+		// 63 ci after the same file absorbed 6 more cases from a second, independently-built JR-4-14
+		// file found on this checkout mid-session (packages/journaling/tests/unit/smtp-adversarial-
+		// protocol.test.ts, since deleted): a merely-long-but-under-cap address, a command-timeout
+		// variant of the truncated-command case, a representative case against real spool/ledger
+		// acceptance instead of the fake port, the F53 flood-during-suspended-AUTH proof (real TLS +
+		// AUTH + PasswordVerifier), the calibration of the real-acceptance health check against a
+		// closed port, and the F54 (proposed) fragmented-overlong-line race case.
+		expectedTests: { ci: 63, nightly: 2, manual: 1 },
 	},
 ];
 

@@ -1,19 +1,39 @@
 import { connect as connectTcp, type Socket } from 'node:net';
-import { afterEach, expect, it } from 'vitest';
-import { suite } from '@oa-test/classification';
+import * as tls from 'node:tls';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterAll, afterEach, expect, it } from 'vitest';
+import { suite, suiteRequiring } from '@oa-test/classification';
 import {
 	EsmtpServer,
 	type ConnectionLimiter,
 	type EsmtpServerOptions,
 	type IngressLogger,
 	type JournalAcceptancePort,
+	type PasswordVerifier,
 	type RecipientAclEvaluator,
 	type SourceAclDecision,
 	type SourceAclEvaluator,
 } from '../../src/ingress/smtp-server';
 import { smtpServerConfigSchema } from '../../src/ingress/smtp-config';
 import { PerSourceConnectionLimiter } from '../../src/ingress/connection-rate-limiter';
-import type { JournalAcceptanceResult, JournalTransactionInput } from '../../src/spool/acceptance';
+import {
+	JournalAcceptance,
+	type JournalAcceptanceResult,
+	type JournalTransactionInput,
+} from '../../src/spool/acceptance';
+import { NodeSpoolFileSystem } from '../../src/spool/fs-port';
+import type { QuarantineAlertSink } from '../../src/spool/quarantine';
+import type {
+	LedgerAppendRequest,
+	LedgerAppendResult,
+	LedgerBackend,
+} from '../../src/ledger/ledger-port';
+import {
+	generateTestTlsCertificate,
+	probeOpensslAvailable,
+} from '../support/generate-test-tls-cert';
 
 /**
  * `JR-4-14` -- ADR-026 Auflage 1: this server is hand-rolled on `node:net` (see `smtp-server.ts`'s
@@ -107,6 +127,90 @@ const fixedRecipientAcl: RecipientAclEvaluator = {
 		chainScopeId: RECIPIENT_CHAIN_SCOPE_ID,
 	}),
 };
+
+/**
+ * A representative subset of this file's cases run against **real** infrastructure --
+ * `NodeSpoolFileSystem` writing to a real temp directory, a real (in-memory) `LedgerBackend`, and
+ * the real `JournalAcceptance` two-phase commit -- instead of the {@link fakeAcceptance} port every
+ * other case uses. The Product Owner's instruction: a fake port can prove the SMTP-level reply is
+ * right, but it cannot prove the spool/ledger machinery survives a hostile case and is still usable
+ * afterward -- only a real `accept()` call touches disk at all. Which cases use which is called out
+ * at each call site; the rest reuse the port because the outcome they test (a protocol-level 503, a
+ * syntax error, a timeout) never reaches `accept()` in the first place, so the port and the real
+ * thing are indistinguishable for those specific assertions -- the same reasoning
+ * `smtp-response-code-table.test.ts` and `smtp-acceptance-wiring.test.ts` already rely on for their
+ * own fakes.
+ */
+const tempDirs: string[] = [];
+
+afterAll(async () => {
+	for (const dir of tempDirs.splice(0)) {
+		await rm(dir, { recursive: true, force: true }).catch(() => {});
+	}
+});
+
+class RecordingLedgerBackend implements LedgerBackend {
+	private seqCounter = 0n;
+	async append(_request: LedgerAppendRequest): Promise<LedgerAppendResult> {
+		this.seqCounter += 1n;
+		return {
+			seq: this.seqCounter,
+			chainHash: Buffer.alloc(32, 0xcc),
+			prevChainHash: Buffer.alloc(32, 0x00),
+		};
+	}
+}
+
+function noopAlertSink(): QuarantineAlertSink {
+	return { alert: () => {} };
+}
+
+/** `F48`: on this Windows host, `NodeSpoolFileSystem`'s directory `fsync` fails with `EPERM`, so
+ * even a *correctly wired* real acceptance answers `451` (`spool-write-failed`), never `250` --
+ * `journal-smtp-accept-e2e.int.test.ts` and every JR-4-1x status entry already establish this as a
+ * platform fact, not a defect. Every case below that uses real acceptance checks for this reply
+ * instead of a bare `250`, exactly the `EXPECTED_ACCEPT_REPLY` pattern `JR-4-11`/`JR-4-12`'s own test
+ * files already use. On Linux (the deployment target, and where this project's CI runs), the same
+ * assertion demands the real `250`. */
+const EXPECTED_ACCEPT_REPLY = process.platform === 'win32' ? /^451 4\.3\.0/ : /^250 2\.0\.0/;
+
+interface RealAcceptanceServer {
+	readonly server: EsmtpServer;
+	readonly port: number;
+}
+
+/** Build a server wired to real spool + real (in-memory) ledger via `JournalAcceptance`, for the
+ * representative cases named in this file's own module doc comment. */
+async function startServerWithRealAcceptance(
+	options: Partial<Omit<EsmtpServerOptions, 'smtp' | 'journalAcceptance'>> & {
+		smtpOverrides?: Record<string, unknown>;
+	} = {}
+): Promise<RealAcceptanceServer> {
+	const { smtpOverrides, ...rest } = options;
+	const spoolRoot = await mkdtemp(path.join(tmpdir(), 'oa-jr-4-14-real-'));
+	tempDirs.push(spoolRoot);
+	const acceptance = new JournalAcceptance({
+		fs: new NodeSpoolFileSystem(),
+		backend: new RecordingLedgerBackend(),
+		spoolConfig: { rootPath: spoolRoot, highWaterBytes: 500_000_000n },
+		alertSink: noopAlertSink(),
+	});
+	const smtp = smtpServerConfigSchema.parse(smtpOverrides ?? {});
+	const server = new EsmtpServer({
+		smtp,
+		logger: silentLogger,
+		journalAcceptance: acceptance,
+		recipientAclEvaluator: fixedRecipientAcl,
+		...rest,
+	});
+	openServers.push(server);
+	await server.listen(0, '127.0.0.1');
+	const address = server.address;
+	if (address === null) {
+		throw new Error('server did not bind');
+	}
+	return { server, port: address.port };
+}
 
 interface StartedServer {
 	readonly server: EsmtpServer;
@@ -274,6 +378,29 @@ async function expectServerStillAcceptsAValidMessage(port: number): Promise<void
 	expect(finalReply[0]).toMatch(/^250 2\.0\.0/);
 }
 
+/** Same health check, for the representative cases that run against real spool/ledger acceptance
+ * instead of {@link fakeAcceptance} -- see {@link EXPECTED_ACCEPT_REPLY}'s doc comment for why the
+ * expected reply is platform-conditional here specifically (F48). Calibrated in this file's
+ * "calibration" suite below, against a server that is already closed. */
+async function expectServerStillAcceptsAValidMessageReal(port: number): Promise<void> {
+	const client = await connectClient(port);
+	await client.nextReply(); // 220
+	client.send('EHLO client.example.com');
+	await client.nextReply();
+	client.send('MAIL FROM:<sender@example.com>');
+	const mailReply = await client.nextReply();
+	expect(mailReply[0]).toMatch(/^250 /);
+	client.send('RCPT TO:<recipient@example.com>');
+	const rcptReply = await client.nextReply();
+	expect(rcptReply[0]).toMatch(/^250 /);
+	client.send('DATA');
+	const dataReply = await client.nextReply();
+	expect(dataReply[0]).toMatch(/^354 /);
+	await client.writeRaw('Subject: still healthy\r\n\r\nhello\r\n.\r\n');
+	const finalReply = await client.nextReply(5_000);
+	expect(finalReply[0]).toMatch(EXPECTED_ACCEPT_REPLY);
+}
+
 /** `process.memoryUsage()` fields relevant to this file's flood/oversize cases. Sampled, not
  * asserted to be monotonically bounded per iteration -- GC is not synchronous, so the only honest
  * claim is "did not end up far higher after the flood than a comfortable budget", the same
@@ -378,6 +505,22 @@ suite(
 			// the finding is an RFC-conformance/resource-shaping gap, not a crash or an out-of-table reply.
 			await expectServerStillAcceptsAValidMessage(port);
 		});
+
+		it('an envelope address that is merely long, but well under the line cap, is accepted normally -- there is no separate address-length check', async () => {
+			// The contrasting, non-hostile case F52 sits next to: nothing in this file's own reading of
+			// the source suggests MAIL_FROM_PATTERN or handleMail() imposes any length bound on the
+			// address itself, separate from the command-line cap -- this confirms that reading rather
+			// than assuming it.
+			const { port } = await startServer();
+			const client = await connectClient(port);
+			await client.nextReply();
+			client.send('EHLO client.example.com');
+			await client.nextReply();
+			client.send(`MAIL FROM:<${'a'.repeat(100)}@example.com>`);
+			const reply = await client.nextReply();
+			expect(reply[0]).toMatch(/^250 /);
+			await expectServerStillAcceptsAValidMessage(port);
+		});
 	}
 );
 
@@ -390,6 +533,20 @@ suite('ci', 'JR-4-14 -- truncated and pipelined-invalid commands', () => {
 		const closed = client.waitForClose();
 		client.destroy();
 		await closed;
+		await expectServerStillAcceptsAValidMessage(port);
+	});
+
+	it('a command that is never completed and the peer stays connected (no CRLF, no disconnect) times out cleanly via the command timeout, not hung forever', async () => {
+		// The other direction from the case above: instead of the client dropping the connection, the
+		// server's own commandTimeoutMs is what ends it -- a distinct code path (armCommandTimer()'s
+		// timer firing) from the length-cap-triggered close.
+		const { port } = await startServer({ smtpOverrides: { commandTimeoutMs: 300 } });
+		const client = await connectClient(port);
+		await client.nextReply();
+		await client.writeRaw('MAIL FRO'); // deliberately incomplete, no CRLF, ever
+		const reply = await client.nextReply(3_000);
+		expect(reply[0]).toMatch(/^421 4\.4\.2/);
+		await client.waitForClose();
 		await expectServerStillAcceptsAValidMessage(port);
 	});
 
@@ -689,5 +846,205 @@ suite(
 
 			await expectServerStillAcceptsAValidMessage(port);
 		});
+	}
+);
+
+suite(
+	'ci',
+	'JR-4-14 -- a real accepted transaction survives the surrounding hostile cases too',
+	() => {
+		it('DATA before MAIL is 503 against real spool/ledger acceptance, and the same process still commits a real transaction afterward', async () => {
+			// The representative case named in this file's module doc comment: real NodeSpoolFileSystem,
+			// real (in-memory) LedgerBackend, real JournalAcceptance -- not the fakeAcceptance port every
+			// other case in this file uses. If a hostile case corrupted spoolBridge/acceptPromise state in
+			// a way the fake port's trivial accept() could not reveal, this is where it would show up: a
+			// real accept() call after the fact either hangs, throws, or writes a spool file that never
+			// gets a matching ledger row.
+			const { port } = await startServerWithRealAcceptance();
+			const client = await connectClient(port);
+			await client.nextReply();
+			client.send('EHLO client.example.com');
+			await client.nextReply();
+			client.send('DATA');
+			expect((await client.nextReply())[0]).toMatch(/^503 /);
+			await expectServerStillAcceptsAValidMessageReal(port);
+		});
+	}
+);
+
+/**
+ * `F53` (`docs/dev/journaling/09-befunde-bestandscode.md`) -- `SmtpConnection.onData()` appends every
+ * incoming chunk to `commandCarry` unconditionally while `commandProcessingSuspended` is `true` (an
+ * in-flight `AUTH` bcrypt comparison, or a settling `accept()` call): that branch never calls
+ * `drainCommandCarry()`, and `drainCommandCarry()` is the only place `MAX_COMMAND_LINE_BYTES` is ever
+ * checked (F52, above). `AUTH` is only ever offered post-`STARTTLS` in this server
+ * (`smtp-starttls-protocol.test.ts`), so this needs a real certificate and a real (deliberately slow,
+ * standing in for a real bcrypt comparison's wall-clock cost -- the same reasoning
+ * `smtp-auth-protocol.test.ts`'s own `RecordingPasswordVerifier` doc comment gives for a fake rather
+ * than real `bcryptjs`) `PasswordVerifier`.
+ *
+ * Credit: this case (and the finding it measures) was originally built independently, in the same
+ * session, by tester-jr-4-10 in `packages/journaling/tests/unit/smtp-adversarial-protocol.test.ts`
+ * (since absorbed into this file and deleted) -- reproduced here with F52/F53's numbering corrected
+ * to the Product Owner's final assignment (that file's own comments called this finding "F52" and
+ * the complete-overlong-line finding above "F53" -- the reverse of the assignment that stands).
+ */
+suiteRequiring(
+	'ci',
+	'JR-4-14 -- F53: a flood during an in-flight AUTH comparison',
+	probeOpensslAvailable(),
+	() => {
+		it('measures commandCarry growth during one suspended AUTH window -- reported as F53, not fixed here', async () => {
+			const { cert, key } = generateTestTlsCertificate();
+			const spoolRoot = await mkdtemp(path.join(tmpdir(), 'oa-jr-4-14-f53-'));
+			tempDirs.push(spoolRoot);
+			const acceptance = new JournalAcceptance({
+				fs: new NodeSpoolFileSystem(),
+				backend: new RecordingLedgerBackend(),
+				spoolConfig: { rootPath: spoolRoot, highWaterBytes: 500_000_000n },
+				alertSink: noopAlertSink(),
+			});
+			// Deliberately slow and controllable -- standing in for a real bcrypt comparison's
+			// wall-clock cost without depending on it.
+			const SUSPEND_MS = 400;
+			const slowVerifier: PasswordVerifier = {
+				compare: () =>
+					new Promise((resolve) => setTimeout(() => resolve(false), SUSPEND_MS)),
+			};
+			const smtp = smtpServerConfigSchema.parse({});
+			const server = new EsmtpServer({
+				smtp,
+				tls: { cert, key, requireTls: false },
+				logger: silentLogger,
+				recipientAclEvaluator: fixedRecipientAcl,
+				journalAcceptance: acceptance,
+				authCredentialEvaluator: { lookupCredential: () => ({ kind: 'not_found' }) },
+				passwordVerifier: slowVerifier,
+			});
+			openServers.push(server);
+			await server.listen(0, '127.0.0.1');
+			const address = server.address!;
+
+			const plainSocket = connectTcp(address.port, '127.0.0.1');
+			openSockets.push(plainSocket);
+			const client = new TestSmtpClient(plainSocket);
+			await client.nextReply();
+			client.send('EHLO client.example.com');
+			await client.nextReply();
+			client.send('STARTTLS');
+			await client.nextReply();
+			const tlsSocket = await new Promise<tls.TLSSocket>((resolve, reject) => {
+				const upgraded = tls.connect(
+					{ socket: plainSocket, rejectUnauthorized: false },
+					() => resolve(upgraded)
+				);
+				upgraded.once('error', reject);
+			});
+			openSockets.push(tlsSocket);
+			const tlsClient = new TestSmtpClient(tlsSocket);
+			tlsClient.send('EHLO client.example.com');
+			await tlsClient.nextReply();
+			// AUTH LOGIN's username step suspends command processing for the bcrypt comparison the
+			// moment the password line arrives -- see verifyCredentials()'s doc comment.
+			tlsClient.send('AUTH LOGIN');
+			await tlsClient.nextReply(); // 334 Username:
+			tlsClient.send(Buffer.from('attacker').toString('base64'));
+			await tlsClient.nextReply(); // 334 Password:
+			await tlsClient.writeRaw(`${Buffer.from('whatever').toString('base64')}\r\n`);
+
+			// The suspended window is now open. Flood it with CRLF-free bytes for most of its
+			// duration, then measure.
+			const FLOOD_BYTES = 20 * 1024 * 1024; // 20 MB
+			const CHUNK = 1024 * 1024;
+			const before = process.memoryUsage().arrayBuffers;
+			const floodStart = Date.now();
+			let sent = 0;
+			while (sent < FLOOD_BYTES && Date.now() - floodStart < SUSPEND_MS - 50) {
+				await tlsClient.writeRaw(Buffer.alloc(CHUNK, 0x41));
+				sent += CHUNK;
+			}
+			const after = process.memoryUsage().arrayBuffers;
+			const growthMb = (after - before) / (1024 * 1024);
+			const sentMb = sent / (1024 * 1024);
+
+			// Not asserted as a pass/fail threshold -- no limit exists to assert against without a
+			// Product Owner decision (see F53's writeup). Logged for the record this test IS the
+			// evidence for.
+			// eslint-disable-next-line no-console
+			console.warn(
+				`[JR-4-14/F53] sent ${sentMb.toFixed(1)} MB during one ${SUSPEND_MS}ms suspended ` +
+					`AUTH window; arrayBuffers grew by ${growthMb.toFixed(1)} MB.`
+			);
+
+			// The process itself must still recover once the comparison settles and the flood ends:
+			// either the eventual 535 (wrong credentials) or 501 (the flood read as a malformed SASL
+			// continuation) must still arrive -- a real, in-table reply, not a hang.
+			const settleReply = await tlsClient.nextReply(SUSPEND_MS + 5_000);
+			expect(settleReply[0]).toMatch(/^5(01|35) /);
+		}, 15_000);
+	}
+);
+
+/**
+ * Calibration (tester role rule): `expectServerStillAcceptsAValidMessageReal()` must be shown to
+ * actually fail against a server that accepts nothing, before the real-acceptance case above is
+ * trusted to mean something by passing it -- the same discipline the fake-port helper's own module
+ * doc comment already claims for itself, made explicit here for the real-infra variant too.
+ */
+suite('ci', 'JR-4-14 -- expectServerStillAcceptsAValidMessageReal() calibration', () => {
+	it('BAD (must be caught): a closed port never gets a reply, and the helper throws rather than passing', async () => {
+		const { server, port } = await startServerWithRealAcceptance();
+		await server.close();
+		await expect(expectServerStillAcceptsAValidMessageReal(port)).rejects.toThrow();
+	});
+});
+
+/**
+ * F54 (proposed, `docs/dev/journaling/09-befunde-bestandscode.md`) -- the `500`-and-close path in
+ * `drainCommandCarry()`'s `idx === -1` branch does not reset `commandCarry` and sets no "already
+ * rejected" flag. A fragmented overlong line (large enough that Node's socket delivers it to this
+ * process across more than one `data` event -- measured to start around 100 KB on this host, not a
+ * documented constant) can trigger that branch more than once: the second call's `writeResponse()`
+ * writes to a socket already mid-`.end()`, throws `ERR_STREAM_WRITE_AFTER_END`, and the connection
+ * can close with an RST instead of a clean FIN -- observed, non-deterministically, as either a
+ * delivered `500 5.5.1` or a bare `ECONNRESET` with no SMTP-level reply at all, for the identical
+ * input across repeated runs. This case asserts what holds in *both* observed outcomes -- it does
+ * not force one, because forcing one would misrepresent a measured race as a deterministic contract.
+ */
+suite(
+	'ci',
+	'JR-4-14 -- F54 (proposed): a fragmented overlong line can be answered with a bare ECONNRESET instead of a clean 500',
+	() => {
+		it('a ~200 KB single-write MAIL FROM address, large enough to fragment across several socket reads, either gets a clean 500 or a bare reset -- never a 250, never a hang, and the process is still healthy afterward', async () => {
+			const { port } = await startServer();
+			const client = await connectClient(port);
+			await client.nextReply();
+			client.send('EHLO client.example.com');
+			await client.nextReply();
+
+			const ADDRESS_BYTES = 200 * 1024;
+			await client.writeRaw(`MAIL FROM:<${'a'.repeat(ADDRESS_BYTES)}@example.com>\r\n`);
+
+			const outcome = await Promise.race([
+				client.nextReply(10_000).then((reply) => ({ kind: 'reply' as const, reply })),
+				client.waitForClose(10_000).then(() => ({ kind: 'reset' as const })),
+			]);
+
+			if (outcome.kind === 'reply') {
+				// The clean-rejection branch of the race: a real 500, in the response-code table, and
+				// never the silent accept F52 documents for a *non-fragmented* line of this shape.
+				expect(outcome.reply[0]).toMatch(/^500 5\.5\.1/);
+			}
+			// Either branch: never a 250 (that would mean the oversize address was silently accepted,
+			// F52's failure mode, not F54's), and no hang -- the race above already timed the whole
+			// thing out at 10s if neither a reply nor a close happened, which would itself fail this
+			// test via an unhandled rejection from `waitForClose`.
+			expect(client.closed || outcome.kind === 'reset').toBeTruthy();
+
+			// Whichever branch fired, the same process still accepts a fresh, valid message afterward
+			// -- the one invariant that must hold regardless of which side of the race this run landed
+			// on.
+			await expectServerStillAcceptsAValidMessage(port);
+		}, 15_000);
 	}
 );
