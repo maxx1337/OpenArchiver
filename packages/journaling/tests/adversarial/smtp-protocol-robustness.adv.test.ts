@@ -482,7 +482,7 @@ suite(
 			await expectServerStillAcceptsAValidMessage(port);
 		}, 20_000);
 
-		it('FINDING (see report/F52): a command line that is over the 512-byte limit but arrives already CRLF-terminated in one chunk bypasses MAX_COMMAND_LINE_BYTES entirely', async () => {
+		it('fixed in JR-4-21 (F52): a command line over the 512-byte limit that arrives already CRLF-terminated in one chunk is rejected exactly like a fragmented one', async () => {
 			const { port } = await startServer();
 			const client = await connectClient(port);
 			await client.nextReply();
@@ -490,19 +490,17 @@ suite(
 			await client.nextReply();
 			// The whole line, well over 512 bytes, PLUS its own terminating CRLF, in one single write --
 			// on loopback this reliably arrives at the server as one 'data' event for a payload this
-			// small, so `commandCarry.indexOf(CRLF)` finds the terminator immediately and the
-			// `idx === -1` branch (the only place MAX_COMMAND_LINE_BYTES is ever consulted,
-			// smtp-server.ts around line 1392) is never reached at all.
+			// small, so `commandCarry.indexOf(CRLF)` finds the terminator immediately. Before `JR-4-21`
+			// that meant `drainCommandCarry()`'s `idx === -1` branch -- the only place
+			// `MAX_COMMAND_LINE_BYTES` was ever consulted -- was never reached at all, and this line was
+			// silently accepted (F52). The bound now lives in `setCommandCarry()`, at the point these
+			// bytes enter `commandCarry`, so it applies before a CRLF is even searched for.
 			const oversizedAddress = 'a'.repeat(2_000);
 			await client.writeRaw(`MAIL FROM:<${oversizedAddress}@example.com>\r\n`);
 			const reply = await client.nextReply();
-			// Documented, not asserted as correct: this is the finding. If a future fix enforces the
-			// limit for terminated lines too, this line starts failing here and must be updated together
-			// with F52's status in 09-befunde-bestandscode.md, not silently loosened.
-			expect(reply[0]).toMatch(/^250 /);
-			expect(reply[0]).not.toMatch(/^500/);
-			// Whatever the reply, it is still a real, in-table SMTP reply and the process is undamaged --
-			// the finding is an RFC-conformance/resource-shaping gap, not a crash or an out-of-table reply.
+			expect(reply[0]).toMatch(/^500 5\.5\.1/);
+			await client.waitForClose();
+			// Whatever the reply, it is still a real, in-table SMTP reply and the process is undamaged.
 			await expectServerStillAcceptsAValidMessage(port);
 		});
 
@@ -873,11 +871,19 @@ suite(
 );
 
 /**
- * `F53` (`docs/dev/journaling/09-befunde-bestandscode.md`) -- `SmtpConnection.onData()` appends every
- * incoming chunk to `commandCarry` unconditionally while `commandProcessingSuspended` is `true` (an
- * in-flight `AUTH` bcrypt comparison, or a settling `accept()` call): that branch never calls
- * `drainCommandCarry()`, and `drainCommandCarry()` is the only place `MAX_COMMAND_LINE_BYTES` is ever
- * checked (F52, above). `AUTH` is only ever offered post-`STARTTLS` in this server
+ * `F53` (`docs/dev/journaling/09-befunde-bestandscode.md`), **fixed in `JR-4-21`** -- before the fix,
+ * `SmtpConnection.onData()` appended every incoming chunk to `commandCarry` unconditionally while
+ * `commandProcessingSuspended` was `true` (an in-flight `AUTH` bcrypt comparison, or a settling
+ * `accept()` call): that branch never called `drainCommandCarry()`, and `drainCommandCarry()` was the
+ * only place `MAX_COMMAND_LINE_BYTES` was ever checked (F52, above). Both findings are now closed by
+ * the same fix -- `setCommandCarry()` enforces the bound at the point bytes enter `commandCarry`,
+ * including this suspended branch -- so this case, unlike F52's, needed no assertion change: it never
+ * hard-coded the pre-fix behaviour as correct (no PO-approved growth threshold exists to assert
+ * against, see the "not asserted as a pass/fail threshold" comment below), only measured and logged
+ * it. What changed under the fix is the *shape* of the measurement: the flood is now rejected within
+ * the first oversized chunk instead of running the suspended window's full duration, so
+ * `resetDuringFlood` fires near-immediately and `growthMb` stays a small multiple of one chunk instead
+ * of accumulating toward `FLOOD_BYTES`. `AUTH` is only ever offered post-`STARTTLS` in this server
  * (`smtp-starttls-protocol.test.ts`), so this needs a real certificate and a real (deliberately slow,
  * standing in for a real bcrypt comparison's wall-clock cost -- the same reasoning
  * `smtp-auth-protocol.test.ts`'s own `RecordingPasswordVerifier` doc comment gives for a fake rather
@@ -891,10 +897,10 @@ suite(
  */
 suiteRequiring(
 	'ci',
-	'JR-4-14 -- F53: a flood during an in-flight AUTH comparison',
+	'JR-4-14 -- F53: a flood during an in-flight AUTH comparison (fixed in JR-4-21)',
 	probeOpensslAvailable(),
 	() => {
-		it('measures commandCarry growth during one suspended AUTH window -- reported as F53, not fixed here', async () => {
+		it('measures commandCarry growth during one suspended AUTH window -- fixed in JR-4-21, still measured rather than threshold-asserted', async () => {
 			const { cert, key } = generateTestTlsCertificate();
 			const spoolRoot = await mkdtemp(path.join(tmpdir(), 'oa-jr-4-14-f53-'));
 			tempDirs.push(spoolRoot);
@@ -1039,16 +1045,28 @@ suite('ci', 'JR-4-14 -- expectServerStillAcceptsAValidMessageReal() calibration'
  * Written against the **correct** behaviour, per the Product Owner's explicit instruction
  * (`06-status.md`, 2026-08-04): a characterisation test that accepted either outcome (the race,
  * measured) would go green today and stay green after `JR-4-21` fixes it, proving nothing about
- * whether the fix landed. `PO declined` that shape. As written, this case is `JR-4-21`'s acceptance
- * criterion -- red until the fix ships, green afterward with no change to this file needed (the
- * naming convention `RED UNTIL <task>` already established in `packages/backend/tests/support/
+ * whether the fix landed. `PO declined` that shape. As written, this case was `JR-4-21`'s acceptance
+ * criterion -- red until the fix shipped, exactly as intended, with no change to this file needed
+ * (the naming convention `RED UNTIL <task>` already established in `packages/backend/tests/support/
  * fail-closed.ts` names the same pattern: "red before the fix, green after the fix, both logged").
+ *
+ * **Marker removed (`JR-4-21`), this is now a regression test.** A single green run does not prove
+ * a race is closed, so the marker's removal is backed by repetition, not one pass: this exact case,
+ * unmodified, ran green **10/10** against the fix (and red before it -- reverting only
+ * `smtp-server.ts` reproduced the race deterministically at this size, every time). A companion
+ * standalone script (`node`, no `vitest`, no per-test timeout) repeated the same single-write
+ * oversized-`MAIL FROM` probe **10x at each of four sizes** the Product Owner named as the finding's
+ * own size matrix (~2 000 B, 100 KB, ~200 KB, 2 MB): before the fix, ~2 000 B got a wrong `250` 10/10,
+ * 100 KB was already correct 10/10 (the `idx === -1` branch was never broken), and both ~200 KB and
+ * 2 MB reproduced this finding's race 10/10 (closed with no readable reply); after the fix, all four
+ * sizes answered a clean `500 5.5.1` in single-digit milliseconds, 10/10, with no size dependence
+ * left at all -- see `JR-4-21`'s report for the full table.
  */
 suite(
 	'ci',
-	'JR-4-14 -- F54: a fragmented overlong line must be answered with a clean 500, never left to race an ECONNRESET',
+	'JR-4-14 -- F54: a fragmented overlong line is answered with a clean 500, never left to race an ECONNRESET (fixed in JR-4-21)',
 	() => {
-		it('RED UNTIL JR-4-21: a ~200 KB single-write MAIL FROM address, large enough to fragment across several socket reads, gets exactly one clean 500 and then a clean close -- never a bare reset, never a 250, never a hang', async () => {
+		it('a ~200 KB single-write MAIL FROM address, large enough to fragment across several socket reads, gets exactly one clean 500 and then a clean close -- never a bare reset, never a 250, never a hang', async () => {
 			const { port } = await startServer();
 			const client = await connectClient(port);
 			await client.nextReply();

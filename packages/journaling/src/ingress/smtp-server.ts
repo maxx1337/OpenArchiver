@@ -90,6 +90,62 @@ import { ProtocolRejectionAbort } from '../spool/quarantine';
  * unchanged, and still the only bound on a sender that never sends a terminator at all.
  *
  * ---------------------------------------------------------------------------------------------
+ * The command-line length bound, closed at both ends (`JR-4-21`, findings F52/F53/F54)
+ * ---------------------------------------------------------------------------------------------
+ * `MAX_COMMAND_LINE_BYTES` used to be checked inside {@link SmtpConnection.drainCommandCarry} --
+ * the parser -- and only in the branch reached when no CRLF had been found yet in `commandCarry`.
+ * That left two gaps the Product Owner asked `go-smtp` (github.com/emersion/go-smtp, MIT license,
+ * compatible with this project's AGPL-3.0 -- see `05-entscheidungen.md` ADR-026's 2026-08-04
+ * addendum) to answer, having measured that it solves both *structurally*: a line that arrives
+ * whole, its own CRLF included, in one TCP segment (F52), and bytes parked while
+ * {@link SmtpConnection.commandProcessingSuspended} skips the parser entirely during an `AUTH`
+ * bcrypt comparison or a settling `accept()` call (F53). `go-smtp`'s `lineLimitReader`
+ * (`conn.go:38`, `60-69`) puts the bound in the *reader*, at the point bytes enter the connection's
+ * buffer, so it applies regardless of chunk boundaries or parser state -- but `go-smtp` can do that
+ * uniformly only because it also gives itself an explicit `LineLimit = 0` escape hatch around
+ * `BDAT` (`conn.go:1075`/`1091`/`1098`, the addendum's point 2), since its reader has no other way
+ * to know when raw content, rather than another line, is coming next.
+ *
+ * This server's `commandCarry` is push-buffered rather than pulled a line at a time, so a single
+ * eager scan across the whole buffer cannot make that same distinction safely: a `BDAT <n> LAST`
+ * command pipelined together with its own raw content in one packet looks, to a scan that has not
+ * parsed the command yet, exactly like one very long unterminated line. A first version of this fix
+ * did exactly that and broke `JR-4-07`'s byte-fidelity suite as a result -- caught by the full test
+ * suite, not by either finding's own tests. The fix therefore uses *two* mechanisms, matched to the
+ * two places bytes can enter `commandCarry` unchecked, not one reader-wide rule:
+ *
+ *   - {@link SmtpConnection.drainCommandCarry} (F52) now checks one line at a time, in the same
+ *     order it already dispatches them, and simply never reaches a second `indexOf(CRLF)` call once
+ *     a line turns out to start `DATA`/`BDAT` -- see that method's own doc comment for why this is
+ *     this project's structural equivalent of `go-smtp`'s `LineLimit = 0`, without an explicit flag.
+ *   - {@link SmtpConnection.appendDuringSuspension} (F53) scans the *whole* buffer eagerly instead,
+ *     which is safe there specifically because a suspended window can never legitimately contain
+ *     `DATA`/`BDAT` content -- see that method's own doc comment for why.
+ *
+ * A third finding, F54, fell out of the same area: the old reject path (`500` then `socket.end()`)
+ * was not idempotent, so a fragmented oversized line's later chunks -- already in flight when the
+ * first `500` went out -- could retrigger it on a socket already mid-close
+ * (`ERR_STREAM_WRITE_AFTER_END`), tearing the connection down with an RST the client sees as
+ * `ECONNRESET`, possibly racing or pre-empting the original `500` line. Two fixes, at two different
+ * levels: {@link SmtpConnection.oversizedLineRejected} latches the first rejection so every later
+ * `data` event on this connection does nothing at all, and {@link SmtpConnection.writeResponse}/
+ * {@link SmtpConnection.writePlain} -- every reply this class ever sends goes through one of the
+ * two -- now also check {@link net.Socket.writableEnded}, not just `destroyed`, before writing.
+ * The second one turned out to matter beyond the immediate F54 repro: {@link
+ * SmtpConnection.verifyCredentials}'s bcrypt continuation and {@link SmtpConnection.completeTransfer}'s
+ * `accept()` continuation both write a reply once their own awaited work settles, with no way to
+ * know whether {@link SmtpConnection.rejectOversizedLine} ended the socket while they were waiting -- an oversized flood
+ * arriving *during* either suspended window (exactly F53's scenario) reaches exactly this race, just
+ * from a different call site than the one F54 was originally measured against. Guarding the shared
+ * write chokepoint closes every such call site at once, present and future, instead of teaching each
+ * asynchronous continuation individually about a socket state it has no other reason to check. See
+ * {@link SmtpConnection.oversizedLineRejected}'s doc comment for why `socket.destroyed` alone cannot
+ * serve as that latch, and {@link SmtpConnection.writeResponse}'s doc comment for the same point
+ * about `destroyed` alone as a write guard. Adopted from `go-smtp` as a solution *pattern*, not
+ * source, per the Product Owner's instruction; where a fix mirrors a specific `go-smtp` mechanism,
+ * the doc comment says so and names the file/line it is measured against, as here.
+ *
+ * ---------------------------------------------------------------------------------------------
  * TLS / `STARTTLS` (`JR-4-04`)
  * ---------------------------------------------------------------------------------------------
  * `EHLO` now advertises `STARTTLS` whenever a certificate/key is configured and the connection is
@@ -1182,6 +1238,19 @@ class SmtpConnection {
 	/** Whether the chunk currently being read (or just finished) carried `BDAT`'s `LAST` marker. */
 	private bdatChunkIsLast = false;
 	private commandCarry: Buffer = Buffer.alloc(0);
+	/**
+	 * `true` once {@link rejectOversizedLine} has rejected an oversized command line and answered
+	 * `500 5.5.1`/ended the socket (`JR-4-21`, findings F52/F53/F54). Checked first, before anything
+	 * else, at the top of {@link onData} -- once set, every later `data` event on this connection is a
+	 * no-op, deliberately, because the reject path is not naturally idempotent otherwise: `socket.end()`
+	 * half-closes the writable side but does not set `socket.destroyed` synchronously, so a fragmented
+	 * oversized line's *next* chunk (already in flight when the first `500` went out) would otherwise
+	 * retrigger the same `writeResponse()`/`socket.end()` pair on a socket already mid-close --
+	 * `ERR_STREAM_WRITE_AFTER_END`, an RST, and a client that sees `ECONNRESET` instead of (or racing)
+	 * the `500` line it was owed (F54). Never cleared -- there is no reason to accept anything further
+	 * from a connection whose sender has already been told to stop and hung up on.
+	 */
+	private oversizedLineRejected = false;
 	private protocolTimer: NodeJS.Timeout | null = null;
 	/** `true` from the moment {@link onTlsHandshakeComplete} fires -- never set anywhere else, and
 	 * never cleared once set: a session does not downgrade. */
@@ -1347,6 +1416,11 @@ class SmtpConnection {
 	}
 
 	private onData(chunk: Buffer): void {
+		if (this.oversizedLineRejected) {
+			// F54: the reject path already ran once for this connection -- nothing further is read,
+			// parsed, or answered. See {@link oversizedLineRejected}'s doc comment.
+			return;
+		}
 		if (this.commandProcessingSuspended) {
 			// `JR-4-06a`: an `accept()` call is settling (see {@link runCompleteTransfer}) or a bcrypt
 			// comparison is in flight (`JR-4-05c`). `state`/`bdatChunkRemaining` may still describe the
@@ -1356,7 +1430,10 @@ class SmtpConnection {
 			// mis-read against it. Parked in `commandCarry` regardless of what they are; `drainCommandCarry()`
 			// (called once processing resumes, from the same place `verifyCredentials` already resumes it
 			// for its own asynchronous step) re-interprets them once state is current again.
-			this.commandCarry = Buffer.concat([this.commandCarry, chunk]);
+			//
+			// F53: {@link appendDuringSuspension} is the fix -- see its own doc comment for why bytes
+			// parked here can be checked eagerly, unlike the ordinary path below.
+			this.appendDuringSuspension(chunk);
 			return;
 		}
 		if (this.state === 'data') {
@@ -1372,27 +1449,111 @@ class SmtpConnection {
 	}
 
 	/**
+	 * F53's fix: appends `chunk` while {@link commandProcessingSuspended} is parking bytes instead of
+	 * handing them to {@link drainCommandCarry} at all -- the old check lived *inside* that parser, so
+	 * a suspended window had no check of any kind (`JR-4-21`). Unlike the ordinary path in
+	 * {@link onData}, this eagerly checks *every* line already sitting in the buffer, not just the one
+	 * {@link drainCommandCarry} would look at next -- see {@link rejectOversizedLine}'s doc comment for
+	 * the general pattern this follows.
+	 *
+	 * That eagerness is safe *here specifically*, in a way it would not be on the ordinary path (see
+	 * {@link drainCommandCarry}'s own comment for why that path checks one line at a time instead):
+	 * `commandProcessingSuspended` is only ever `true` for an in-flight `AUTH` bcrypt comparison, which
+	 * happens before any `MAIL`/`RCPT`/`DATA`/`BDAT` in a session, or for a settling `accept()` call,
+	 * which happens *after* `DATA`'s terminator or `BDAT ... LAST` has already fully consumed that
+	 * transaction's content -- {@link bdatChunkRemaining} is already `null` and {@link dataScanner} has
+	 * already finished by the point {@link runCompleteTransfer} sets this flag. Either way, bytes
+	 * parked during a suspended window can never be raw `DATA`/`BDAT` content; they are the next
+	 * command line (or an `AUTH` continuation response), the exact shape a line-length bound applies
+	 * to without exception.
+	 */
+	private appendDuringSuspension(chunk: Buffer): void {
+		const newCarry = Buffer.concat([this.commandCarry, chunk]);
+		let lineStart = 0;
+		for (;;) {
+			const crlfIdx = newCarry.indexOf(CRLF, lineStart);
+			const lineLength = (crlfIdx === -1 ? newCarry.length : crlfIdx) - lineStart;
+			if (lineLength > MAX_COMMAND_LINE_BYTES) {
+				this.rejectOversizedLine();
+				return;
+			}
+			if (crlfIdx === -1) {
+				break;
+			}
+			lineStart = crlfIdx + CRLF.length;
+		}
+		this.commandCarry = newCarry;
+	}
+
+	/**
+	 * The shared reject action for `MAX_COMMAND_LINE_BYTES` (`JR-4-21`, findings F52/F53/F54):
+	 * `500 5.5.1`, end the socket, empty `commandCarry` (nothing will ever read it again), and latch
+	 * {@link oversizedLineRejected} so the connection is never re-evaluated (F54) -- see that field's
+	 * doc comment for why `socket.destroyed` alone cannot serve as that latch. Called from
+	 * {@link appendDuringSuspension} (F53) and from {@link drainCommandCarry} (F52's two branches).
+	 */
+	private rejectOversizedLine(): void {
+		this.oversizedLineRejected = true;
+		this.commandCarry = Buffer.alloc(0);
+		this.writeResponse(500, '5.5.1', 'Line too long');
+		this.socket.end();
+	}
+
+	/**
 	 * The command-line parsing loop, extracted out of {@link onData} in `JR-4-03` so it can be
 	 * re-entered from {@link handleBdatChunkBytes} once a `BDAT` chunk finishes and leaves a
 	 * remainder behind -- the same "bytes after the boundary belong to whatever comes next" shape
 	 * {@link onData} already handled for a pipelined `DATA` command, generalised to a second
 	 * direction (chunk bytes -> command line, not just command line -> chunk bytes).
+	 *
+	 * `MAX_COMMAND_LINE_BYTES` (`JR-4-21`, finding F52) is checked here for *one* line at a time, in
+	 * the same order this loop already dispatches them -- deliberately not an eager whole-buffer scan
+	 * the way {@link appendDuringSuspension} does for F53. The difference matters: this loop's *only*
+	 * job, once a line turns out to start `DATA` or `BDAT`, is to hand everything after that line's
+	 * CRLF to {@link handleDataChunk}/{@link handleBdatChunkBytes} as raw content and return
+	 * immediately (see `enteredDataState()`/`bdatChunkRemaining !== null` below) -- it never calls
+	 * `indexOf(CRLF)` again after that point, so it never mistakes message-body or `BDAT`-chunk bytes
+	 * (which have no `MAX_COMMAND_LINE_BYTES` bound of their own and legitimately contain runs far
+	 * longer than 512 bytes) for a command line. An eager scan across the *whole* buffer cannot make
+	 * that distinction ahead of time -- it would have to guess whether the bytes after some later CRLF
+	 * are another command or already the start of a raw-byte phase, and guessing wrong here is exactly
+	 * how a first version of this fix broke `JR-4-07`'s byte-fidelity suite (a `BDAT <n> LAST` command
+	 * pipelined with its own content in one packet was misread as one long line and rejected). This is
+	 * this project's version of `go-smtp`'s `LineLimit = 0` escape hatch around `BDAT`
+	 * (`conn.go:1075`/`1091`/`1098`, ADR-026 addendum point 2): instead of an explicit toggle, the loop
+	 * structurally never checks a line once it has recognised it left line mode.
 	 */
 	private drainCommandCarry(): void {
 		for (;;) {
-			if (this.socket.destroyed || this.commandProcessingSuspended) {
+			if (
+				this.socket.destroyed ||
+				this.commandProcessingSuspended ||
+				this.oversizedLineRejected
+			) {
 				// `commandProcessingSuspended` (`JR-4-05c`): a bcrypt comparison is in flight for the
 				// line just read -- see that field's doc comment. Any further bytes already sitting in
 				// `commandCarry` stay put; `verifyCredentials`'s `finally` re-enters this loop once the
-				// comparison resolves.
+				// comparison resolves. `oversizedLineRejected` (F54): once tripped, `commandCarry` is
+				// permanently empty (see {@link rejectOversizedLine}) and nothing here has anything left
+				// to do -- checked anyway, defensively, so a future call site added to either
+				// `.finally()` resumption path cannot resurrect a reject-then-reprocess bug by accident.
 				return;
 			}
 			const idx = this.commandCarry.indexOf(CRLF);
 			if (idx === -1) {
+				// F52's first gap: an unterminated run that never stops growing. Unchanged from before
+				// `JR-4-21` -- this half of the check was never missing.
 				if (this.commandCarry.length > MAX_COMMAND_LINE_BYTES) {
-					this.writeResponse(500, '5.5.1', 'Line too long');
-					this.socket.end();
+					this.rejectOversizedLine();
 				}
+				return;
+			}
+			// F52's actual gap: a line that arrives whole, its own CRLF included, in one chunk took this
+			// branch and was never checked at all before `JR-4-21` -- `idx` is exactly that line's
+			// length (the bytes before its CRLF), so the same bound applies here too, before the line is
+			// ever extracted or processed.
+			if (idx > MAX_COMMAND_LINE_BYTES) {
+				this.rejectOversizedLine();
 				return;
 			}
 			const lineBuf = this.commandCarry.subarray(0, idx);
@@ -2246,6 +2407,12 @@ class SmtpConnection {
 			this.armCommandTimer();
 		}
 		if (remainder.length > 0 && !this.socket.destroyed) {
+			// `remainder` is older than whatever `commandProcessingSuspended` may already have parked
+			// in `commandCarry` while `finishBdatTransaction()`'s `accept()` call was settling above, so
+			// it goes first. Plain concatenation, deliberately not eagerly checked (`JR-4-21`): this
+			// remainder can itself be a pipelined next `BDAT <n>` command *plus* (some or all of) its
+			// own raw content in the same packet -- exactly the shape `drainCommandCarry()`'s per-line
+			// check (not an eager whole-buffer scan) exists to handle safely, see its doc comment.
 			this.commandCarry = Buffer.concat([remainder, this.commandCarry]);
 			this.drainCommandCarry();
 		}
@@ -2789,14 +2956,28 @@ class SmtpConnection {
 		forceClose.unref();
 	}
 
+	/**
+	 * `!this.socket.destroyed` alone (the guard both of these had before `JR-4-21`) is not enough to
+	 * make a write safe: `socket.end()` sets {@link net.Socket.writableEnded} synchronously but does
+	 * not set `destroyed` until the underlying transport actually finishes closing, some time later.
+	 * A write reaching either method in that window throws `ERR_STREAM_WRITE_AFTER_END` (finding
+	 * F54) -- the specific way that manifested before this fix was {@link rejectOversizedLine}'s own
+	 * reject path re-firing on a fragmented oversized line's later chunks, but the same window is
+	 * reachable from *any* asynchronous completion that writes a reply after `rejectOversizedLine` has
+	 * already ended the socket -- {@link verifyCredentials}'s bcrypt continuation and
+	 * {@link completeTransfer}'s `accept()` continuation both write through here once their awaited
+	 * work settles, with no knowledge of what happened to the socket while they were waiting. Adding
+	 * `writableEnded` to the guard here, at the one chokepoint every reply in this class already goes
+	 * through, closes all of those call sites at once rather than teaching each one about the other.
+	 */
 	private writeResponse(code: number, enhancedCode: string, message: string): void {
-		if (!this.socket.destroyed) {
+		if (!this.socket.destroyed && !this.socket.writableEnded) {
 			this.socket.write(`${code} ${enhancedCode} ${message}\r\n`);
 		}
 	}
 
 	private writePlain(code: number, message: string): void {
-		if (!this.socket.destroyed) {
+		if (!this.socket.destroyed && !this.socket.writableEnded) {
 			this.socket.write(`${code} ${message}\r\n`);
 		}
 	}
