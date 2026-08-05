@@ -24,7 +24,7 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
 | Kategorie                  | Bedeutung                                                                              | Befunde                                         |
 | -------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29                 |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29, F60            |
 | **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22                              |
 | **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43, F47, F48, F49 |
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                     |
@@ -3351,3 +3351,53 @@ vorher nur wahrscheinlich, nicht sicher.
 **Nicht mitentschieden:** derselbe Prozess loggt über `pino` **und** `console.log` auf denselben
 Dateideskriptor (in **F49** ausdrücklich offen gelassen). Der Fix für (1) sollte diese Stelle nicht
 stillschweigend mitumbauen — das ist eine eigene Entscheidung.
+
+## F60 — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht
+
+**Schwere:** mittel · **Kategorie:** Bestandscode ·
+**Ort:** `packages/backend/src/services/StorageService.ts` `put()` (Zeilen 68–72),
+Signatur in `packages/types/src/storage.types.ts` `IStorageProvider.put()` ·
+**Gefunden:** 2026-08-05 bei der Entscheidung zu **ADR-010** (`JR-6-02a`) ·
+**Status:** **offen — vorgeschlagene Zuordnung: E7** (WORM-Storage, wo `S3StorageProvider` ohnehin
+angefasst wird). Entscheidung des Auftraggebers ausstehend
+
+Die Schnittstelle verspricht Streaming:
+
+```ts
+put(path: string, content: Buffer | NodeJS.ReadableStream): Promise<void>;
+```
+
+Die Implementierung löst es sofort auf:
+
+```ts
+async put(path: string, content: Buffer | NodeJS.ReadableStream): Promise<void> {
+	const buffer = Buffer.isBuffer(content) ? content : await streamToBuffer(content);
+	// … verschlüsselt und schreibt den ganzen Buffer
+}
+```
+
+Der Grund ist nachvollziehbar und kein Versehen: die transparente Verschlüsselung (AES-256-CBC, Magic
+`oa_enc_idf_v1::` + IV) läuft über einen ganzen Buffer. **Der Effekt ist aber, dass es im ganzen
+Repository keinen streamenden Schreibpfad gibt** — ein Aufrufer, der sorgfältig streamt, um Heap zu
+sparen, verliert diese Eigenschaft an der Storage-Grenze, ohne dass irgendetwas es ihm sagt.
+
+**Warum das hier auffiel, und warum es dort nicht hingehört, wo es aufgefallen ist.** ADR-010 hatte als
+ernstesten Einwand gegen die Wiederverwendung von `processEmail()`, dass es mit `readFile()` die ganze
+Nachricht in den Heap liest — während E3 (`JR-3-02`) ausdrücklich streamt, um genau das zu vermeiden,
+und diese Zusage abgenommen ist. Die Messung hat den Einwand **aufgelöst statt bestätigt**: ein eigener
+Pfad hätte an `storage.put()` genauso gepuffert. Damit war die Vollpufferung kein
+Unterscheidungsmerkmal mehr zwischen den ADR-Optionen — aber sie ist nicht verschwunden, sondern nur an
+ihren tatsächlichen Ort gewandert.
+
+**Was es für Phase B konkret bedeutet:** bei `SMTP_SIZE_LIMIT_BYTES` von 50 MB und der Concurrency 3
+des `journal-inbound`-Workers liegen im schlechtesten Fall drei Nachrichten **doppelt** im Heap (roher
+Buffer plus verschlüsseltes Ergebnis). Das ist beherrschbar und wird hier bewusst hingenommen; es ist
+kein Grund, `JR-6-02` anders zu bauen.
+
+**Nicht mitentschieden, gehört aber zusammen:** ob die Verschlüsselung auf einen Stream-Cipher
+umgestellt wird (`createCipheriv` kann streamen — die Magic-und-IV-Präambel ließe sich vorschalten) oder
+ob die Signatur ehrlich auf `Buffer` verengt wird. **Die zweite Variante ist die kleinere Änderung und
+die schlechtere:** sie macht die Grenze sichtbar, hebt sie aber nicht auf, und E7 will für Object Lock
+ohnehin an denselben Code. Wichtig ist nur, dass die Signatur und das Verhalten aufhören, sich zu
+widersprechen — **eine Schnittstelle, die Streaming verspricht und puffert, lädt jeden künftigen
+Aufrufer dazu ein, eine Speicherzusage zu geben, die sie nicht hält.**

@@ -641,15 +641,88 @@ Datenbank.
 
 ## ADR-010 — `processEmail` erweitern oder eigener Journaling-Pfad
 
-**Status:** **offen** — zu entscheiden in E6 (`JR-6-02`)
+**Status:** **entschieden** (2026-08-05, `JR-6-02a`) · **Entscheider:** PO auf Messung ·
+**Quelle:** RFC §2/§7, Architektur §6
 
-`IngestionService.processEmail()` enthält die vollständige Hash-, Dedupe- und
-Storage-Pfad-Logik (Drei-Gate-Dedupe plus Byte-Hash-Gate) und ist bereits umfangreich. Erweitern
-oder einen journaling-spezifischen Pfad daneben stellen?
+`IngestionService.processEmail()` enthält die vollständige Hash-, Dedupe- und Storage-Pfad-Logik
+(Drei-Gate-Dedupe plus Byte-Hash-Gate) und ist bereits umfangreich. Erweitern oder einen
+journaling-spezifischen Pfad daneben stellen?
 
-**Abwägung:** Wiederverwendung vermeidet divergierende Dedupe-Semantik — der teuerste denkbare
-Fehler in diesem Projekt. Ein separater Pfad hält den Journaling-Code lesbar, riskiert aber genau
-diese Divergenz. Entscheidung erst, wenn der Parser (E5) zeigt, wie stark die Metadatenform abweicht.
+Die ursprüngliche Abwägung lautete: Wiederverwendung vermeidet divergierende Dedupe-Semantik — **der
+teuerste denkbare Fehler in diesem Projekt** —, ein separater Pfad hält den Journaling-Code lesbar,
+riskiert aber genau diese Divergenz. Entschieden werden sollte erst, „wenn der Parser (E5) zeigt, wie
+stark die Metadatenform abweicht". Der Parser steht seit E5, die Bedingung ist erfüllt.
+
+### Entscheidung: **keine der beiden.** Wiederverwenden — **unverändert** — hinter einem injizierten Port
+
+`processEmail()` wird **nicht angefasst** und **nicht nachgebaut**. Die Phase-B-Pipeline liegt in
+`packages/journaling/src/phase-b/` und erreicht das Archivieren über einen Port
+(`ArchiveObjectPort`), dessen einzige Implementierung in `packages/backend` `processEmail()`
+**unmodifiziert** aufruft.
+
+**Erstens, weil der Bestand für genau diesen Aufrufer gebaut ist** — das ist der Fund, der die Frage
+entscheidet, und er stand in keiner der beiden Optionen:
+
+| Stelle im Bestand                                    | Was sie beweist                                                                                                                            |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `processEmail(…, skipTempFileCleanup)`               | Der Parameter ist laut Kommentar „für die **journaling fan-out loop**, die `processEmail()` mehrfach mit demselben `EmailObject` aufruft"  |
+| `isJournaled: source.provider === 'smtp_journaling'` | Wird an **drei** `INSERT`-Stellen gesetzt; `smtp_journaling` steht im `ingestionProviderEnum` und in `IngestionCredentials`                |
+| `preserveOriginalFile`-Modus                         | Speichert `rawEmlBuffer` **unverändert**, hasht ihn **vor** `storage.put()`, erzeugt **keine** Attachment-Zeilen — Byte-Treue plus ADR-006 |
+| Gate 2 (Shared-File-Reference)                       | Eine physische Datei, **N** `archived_emails`-Zeilen mit je eigenem `userEmail` — genau die Fan-out-Form, die ein Journal-Report braucht   |
+
+Diese Verdrahtung lag im **Enterprise-Overlay**, das in diesem Repository fehlt (CLAUDE.md §2). Der
+Aufrufer ist weg, die für ihn gebaute Schnittstelle ist da. Sie nachzubauen hieße, eine zweite
+Dedupe-Semantik neben eine bestehende zu stellen, die für diesen Fall schon Vorkehrungen trägt.
+
+**Zweitens, weil „erweitern" ADR-025 verletzt.** Journaling-Semantik in `processEmail()` hineinzulegen
+heißt, sie in `packages/backend` entstehen zu lassen — und zwar so, dass sie sich nur mit ihm zusammen
+betreiben lässt. Genau das verbietet ADR-025, und nicht aus Ästhetik: es kassiert die Option, die
+Herauslösung eine **Verpackungsentscheidung** bleiben zu lassen. Ein Port kostet eine Datei und hält
+beide Regeln gleichzeitig ein — Architektur §6 („Worker in `packages/backend`") und ADR-025
+(„Logik nicht dort").
+
+**Drittens, weil das Gegenargument gemessen nicht trägt.** Der ernsteste Einwand gegen
+Wiederverwendung war der Speicher: `processEmail()` liest mit `readFile()` die **ganze** Nachricht in
+den Heap, während E3 (`JR-3-02`) ausdrücklich streamt, um genau das zu vermeiden. Nachgemessen am
+Code: **`StorageService.put()` puffert einen übergebenen Stream ohnehin sofort zu einem Buffer**
+(`streamToBuffer()`, weil AES-256-CBC über ganze Buffer läuft) — obwohl die Signatur von
+`IStorageProvider.put()` `Buffer | NodeJS.ReadableStream` verspricht. **Ein eigener Pfad würde also
+genauso puffern.** Die Volllpufferung ist eine Eigenschaft der Storage-Schicht, nicht von
+`processEmail()`, und damit **kein Unterscheidungsmerkmal zwischen den Optionen**. Als eigener Befund
+festgehalten: **F60**, zuzuordnen zu **E7** (WORM-Storage), wo der S3-Provider ohnehin angefasst wird.
+
+### Was die Pipeline trotzdem selbst tun muss — und warum das kein Widerspruch ist
+
+Wiederverwendung heißt nicht, dass `processEmail()` Phase B **ist**. Drei Zusagen kann es
+konstruktionsbedingt nicht erfüllen, weil es den Ledger nicht kennt. Sie liegen deshalb **vor** dem
+Port, in `packages/journaling`:
+
+1. **`content_sha256` ist die Autorität, nicht der `Message-ID`-Header.** `processEmail()`s Gate 1 und
+   2 schlüsseln auf `messageIdHeader`; RFC §4.5 und `JR-6-03` verlangen Objekt-Dedupe auf
+   `content_sha256`. Das ist **die** Divergenz, vor der diese ADR warnt — sie wird nicht dadurch
+   vermieden, dass man den Bestand benutzt, sondern dadurch, dass die Pipeline den Hash **vorher**
+   prüft und dem Port eine hash-abgeleitete Identität übergibt. Ein Journal-Report mit gefälschtem
+   oder fehlendem `Message-ID` deduped damit dennoch korrekt.
+2. **Die Spool-Bytes werden gegen die Ledger-Zeile geprüft, bevor irgendetwas archiviert wird.** Stimmt
+   der Hash der Spool-Datei nicht mit dem `content_sha256` der Receipt überein, ist die Datei nicht
+   das, was quittiert wurde ⇒ **Quarantäne und Alarm, nie archivieren, nie löschen**.
+3. **Jede Receipt bleibt im Ledger.** `processEmail()` gibt bei einem Duplikat `null` zurück — für
+   Phase B bedeutet das nicht „nichts zu tun", sondern „Objekt existiert, jetzt `duplicate_of`
+   schreiben" (`JR-6-03`). Ein Empfangsereignis ist nicht die Nachricht.
+
+### Konsequenz
+
+- `packages/backend` bekommt **einen Adapter**, keine Journaling-Logik. Der Prüfpunkt jedes Reviews im
+  Journaling-Umfeld (ADR-025) bleibt anwendbar.
+- **`processEmail()` bleibt unverändert.** Wer es doch anfassen muss, hat diese ADR zu ändern, nicht zu
+  umgehen — und muss dann sagen, was mit der Herauslösungsoption geschieht.
+- Der Journaling-Pfad benutzt eine `ingestion_sources`-Zeile mit `provider = 'smtp_journaling'` und
+  `preserveOriginalFile = true`. Beides existiert; `isJournaled` folgt daraus von allein.
+- **Verworfen: `processEmail()` erweitern.** Verletzt ADR-025, wächst eine Methode mit drei
+  Dedupe-Gates weiter, und der einzige gemessene Vorteil (Speicher) existiert nicht.
+- **Verworfen: eigener Storage-/Dedupe-Pfad.** Erzeugt die zweite Dedupe-Semantik, die diese ADR als
+  teuersten denkbaren Fehler benennt — und zwar ohne Gegenwert, weil der Bestand die Fan-out-Form
+  schon hat.
 
 ## ADR-011 — Ledger-Backend: Postgres zuerst, steckbar
 
