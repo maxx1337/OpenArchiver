@@ -125,10 +125,10 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010 entschieden, F59 und
-F61 behoben — F61 war die wahre Ursache der roten Läufe**) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
-Volllauf: **1265 passed | 8 skipped** bei 103 Dateien — `unit ci 1070/1070 · integration ci 126/126 ·
-adversarial ci 69/69`, Exit 0
+**Stand:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, `JR-6-02b` angefangen; ADR-010
+und ADR-033 entschieden; F59 und F61 behoben — F61 war die wahre Ursache der roten Läufe**) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
+Volllauf: **1276 passed | 8 skipped** bei 104 Dateien — `unit ci 1081/1081 · integration ci 126/126 ·
+adversarial ci 69/69`, Exit 0 · CI `31018325835` success
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -456,7 +456,11 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **`JR-6-02b`, Ende-zu-Ende bis zum durchsuchbaren Treffer**
+### Nächster konkreter Schritt — **`JR-6-02b` weiter: der Backend-Adapter, dann Ende-zu-Ende**
+
+> **Was von `JR-6-02b` noch offen ist, in dieser Reihenfolge:** der Adapter auf `processEmail()` (Punkt 4
+> unten), die Indexierung (5), die Spool-Freigabe (6) und der Ende-zu-Ende-Test bis zum durchsuchbaren
+> Treffer. Punkte 1–3 stehen.
 
 Der Prompt für die nächste Sitzung:
 
@@ -469,8 +473,10 @@ und arbeite den nächsten Schritt ab.
 **4 von 4 Versuchen success** (102 Dateien, `unit 1065/1065 · integration 126/126 ·
 adversarial 69/69`). Nicht neu abzweigen, nicht neu reservieren.
 
-**Erledigt sind `JR-6-01` und `JR-6-02a`.** `ADR-010` ist entschieden, das Tor steht, **F59 und F61 sind
-behoben** — F61 war die wahre Ursache der roten Läufe und der schwerere Befund von beiden.
+**Erledigt sind `JR-6-01`, `JR-6-02a` und der erste Teil von `JR-6-02b`.** `ADR-010` und **`ADR-033`**
+sind entschieden, das Tor steht, die Owner-Auflösung für die drei schwächeren Parse-Ergebnisse steht,
+**F59 und F61 sind behoben** — F61 war die wahre Ursache der roten Läufe und der schwerere Befund von
+beiden.
 `JR-6-02` ist nach **ADR-021** geteilt; offen ist **`JR-6-02b`**.
 
 **Was `JR-6-02b` zu tun hat**, in der Reihenfolge der Architektur §6 — und der erste Schritt ist schon
@@ -481,12 +487,12 @@ gebaut:
 2. **Parsen** mit `parseJournalReport(rawMessage, smtpEnvelope, sourceMode)` aus E5. Das Ergebnis ist
    eine **Vierer-Union**: `journal_report`, `parse_failed`, `plain_bcc`, `ndr`. Alle vier brauchen
    Behandlung, und **keine davon lehnt ab** — die Nachricht ist quittiert.
-3. **Owner auflösen** mit `resolveOwner(envelope, domainGroups)`. **Achtung, das ist eine echte Lücke:**
-   `resolveOwner()` ist typisiert auf `OwnerResolutionEnvelope`, also nur auf `journal_report`. Für
-   `plain_bcc` und `ndr` gibt es **keinen** äquivalenten Eingang — E5 hat das ausdrücklich offen gelassen
-   („Whether/how to resolve an owner for those two kinds is an open question left to whichever later
-   slice needs it"). **`JR-6-02b` ist diese Scheibe.** Das ist eine Entscheidung, keine Implementierung —
-   sie braucht eine der reservierten ADR-Nummern (**033–036**).
+3. ~~**Owner auflösen**~~ — **erledigt: `ADR-033` plus `ownerEnvelopeFor()`.** `resolveOwner()` blieb
+   unverbreitert; `plain_bcc`, `ndr` und `parse_failed` bekommen einen Envelope aus den eigenen
+   RFC-5322-Kopfzeilen der Außenmail und laufen durch **denselben** Resolver. **Merken für den Rest der
+   Scheibe:** `envelopeRcpt` ist nie der Owner (bei Plain-BCC ist das die Archivadresse selbst), und die
+   **Fidelität** (`journal-report` / `rfc5322-headers` / `none`) muss bis in die Metadaten mitreisen —
+   ein kopfzeilen-abgeleiteter Owner darf nicht wie ein report-abgeleiteter aussehen.
 4. **Archivieren** über den Port aus ADR-010: eine `ingestion_sources`-Zeile mit
    `provider = 'smtp_journaling'` und `preserveOriginalFile = true`, dann je aufgelöstem Owner ein
    `processEmail(email, source, storage, userEmail, /* skipTempFileCleanup */ true)`.

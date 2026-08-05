@@ -7,9 +7,9 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
 **Letzte Aktualisierung:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010
-entschieden. F59 behoben, **F61 gefunden und behoben** — sie war die wahre Ursache der roten Läufe;
-F60 neu und offen.** Volllauf: **1265 passed | 8 skipped** bei 103 Dateien,
-`unit ci 1070 · integration ci 126 · adversarial ci 69`, Exit 0. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
+entschieden, **ADR-033 entschieden**. F59 behoben, **F61 gefunden und behoben** — sie war die wahre
+Ursache der roten Läufe; F60 neu und offen.** Volllauf: **1276 passed | 8 skipped** bei 104 Dateien,
+`unit ci 1081 · integration ci 126 · adversarial ci 69`, Exit 0; CI `31018325835` success. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
 ADR-033–036, F59–F70 — **F59 und F60 sind daraus vergeben**) · **Branch:**
 `claude/journaling-e6-phase-b-worker` (Epic-Zweig über dem Integrationsbranch
 `claude/enterprise-product-implementation-cxmmqe`; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
@@ -449,8 +449,9 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
   **Aufgeteilt nach ADR-021:**
     - [x] `JR-6-02a` — **ADR-010 entschieden** (`41068aa`) plus das Tor, das entscheidet, ob eine
           Spool-Datei überhaupt archiviert werden darf (`fba499c`)
-    - [ ] `JR-6-02b` — Parser und Owner-Auflösung anschließen, Backend-Adapter auf `processEmail()`,
-          Indexierung, Spool-Freigabe. **Ende-zu-Ende bis zum durchsuchbaren Treffer**
+    - [~] `JR-6-02b` — **läuft.** Erledigt: **ADR-033** entschieden und umgesetzt (Owner-Auflösung für
+      `plain_bcc`, `ndr`, `parse_failed`). Offen: Backend-Adapter auf `processEmail()`,
+      Indexierung, Spool-Freigabe, **Ende-zu-Ende bis zum durchsuchbaren Treffer**
 - [ ] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of`
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
@@ -540,6 +541,33 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
 > hätte eine Receipt **ohne** Hash als **Manipulation** gemeldet. Jetzt `?? null`, mit zwei
 > Regressionsfällen für beide Nullish-Formen. Dass `ledger-lookup.test.ts` seine Zeilen selbst baut, ist
 > genau der Grund, warum es das gefunden hat.
+
+> **ADR-033 ist entschieden (2026-08-05, erster Teil von `JR-6-02b`): Owner-Auflösung für die drei
+> Ergebnisarten ohne Journal-Report-Envelope.** `resolveOwner()` wird **nicht** verbreitert — E5s
+> Typisierung bleibt. Statt dessen bekommen `plain_bcc`, `ndr` und `parse_failed` einen Envelope aus den
+> **eigenen RFC-5322-Kopfzeilen der Außenmail**, und **derselbe** `resolveOwner()` läuft darüber: ein
+> Resolver, zwei Envelope-Quellen, dieselbe Begründung wie ADR-010 für die Dedupe.
+>
+> **Die tragende Festlegung ist eine Verneinung: `envelopeRcpt` wird nie als Owner benutzt.** Bei einer
+> Plain-BCC-Kopie ist `RCPT TO` die **Archivadresse selbst** (von E5 gemessen) — sie als Owner zu nehmen
+> würde jede solche Nachricht einem Pseudo-Postfach zuschreiben und dabei wie eine **gelungene**
+> Auflösung aussehen. Drei der elf Tests bauen genau diese Falle nach: ein `envelopeRcpt` von
+> `archive@ourcompany.com`, dessen Domain **konfiguriert ist**, also hätte ein Resolver, der danach
+> greift, einen zuversichtlichen `primary-domain-match` auf das falsche Postfach gemeldet.
+>
+> **Warum der kopfzeilen-abgeleitete Envelope schwächer, aber echt ist:** bei `plain_bcc` **sind** `To`/`Cc`
+> der Außenmail die Empfängerkopfzeilen der Originalnachricht (die Kopie ist eine Kopie derselben Bytes);
+> bei einem `ndr` ist die Empfängerkopfzeile der **ursprüngliche Absender**, und das ist für einen Bounce
+> der richtige Owner — `extractableHeaders.from` wäre es nicht, dort steht der Mailer-Daemon.
+>
+> **Ehrlich benannt und von keinem Resolver behebbar:** in Plain-BCC-Betrieb ist ein reiner
+> BCC-Empfänger **spurlos verloren**. Eigenschaft des Betriebsmodus, gehört in die Betreiberdoku — und der
+> Grund, warum die Fidelität (`journal-report` / `rfc5322-headers` / `none`) mitreist statt weggeglättet zu
+> werden.
+>
+> `parseHeaderAddressList()` ist dafür **exportiert** worden und kennt jetzt `'From'`. Nachbauen war keine
+> Option: ein naiver Komma-Split macht aus `"Doe, Jane" <jane@…>` zwei Bogus-Adressen, und ADR-027 lässt
+> nur `mailparser` als Parsing-Abhängigkeit zu.
 
 > **Die roten CI-Läufe hatten eine andere Ursache als F59, und sie heißt F61.** Der Prozess stürzte mit
 > einem unbehandelten `ECONNRESET` ab und erreichte seinen `SIGTERM`-Handler **nie** — die fehlende
