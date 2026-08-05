@@ -7,9 +7,8 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
 **Letzte Aktualisierung:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010
-entschieden, F59 behoben, F60 neu und offen.** Volllauf: **1260 passed | 8 skipped** bei 102 Dateien,
-`unit ci 1065 · integration ci 126 · adversarial ci 69`, Exit 0; CI `31003830220` **4 von 4 Versuchen
-success**. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
+entschieden. F59 **weiterhin offen** — ein erster Fix hat ihn nicht geschlossen; F60 neu und offen.** Volllauf: **1260 passed | 8 skipped** bei 102 Dateien,
+`unit ci 1065 · integration ci 126 · adversarial ci 69`, Exit 0; CI `31005188529` **rot an F59**, alle anderen Suiten grün. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
 ADR-033–036, F59–F70 — **F59 und F60 sind daraus vergeben**) · **Branch:**
 `claude/journaling-e6-phase-b-worker` (Epic-Zweig über dem Integrationsbranch
 `claude/enterprise-product-implementation-cxmmqe`; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
@@ -541,7 +540,21 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
 > Regressionsfällen für beide Nullish-Formen. Dass `ledger-lookup.test.ts` seine Zeilen selbst baut, ist
 > genau der Grund, warum es das gefunden hat.
 
-> **F59 ist behoben (2026-08-05), auf Entscheidung des Auftraggebers nach dem zweiten Treffer.** Zwei von
+> **F59 ist NICHT behoben — der erste Fix hat nicht gewirkt, und die Entwarnung war ein Fehlschluss.**
+> CI `31005188529` ist **nach** dem Fix mit genau derselben Meldung rot geworden. Die vier grünen Läufe,
+> die als Beleg gemeldet wurden (`31003830220`), waren **Wiederholungen derselben Revision** und damit zu
+> wenige und zu abhängige Ziehungen: bei einer Grundrate um 50–65 % sind vier grüne Läufe
+> unwahrscheinlich, aber nicht aussagekräftig — **F54 verlangte ausdrücklich mindestens zehn**, und diese
+> Zahl wurde nicht eingehalten. Der Lehrsatz gehört zu F59 im Befundregister.
+>
+> **Was stattdessen zuerst passiert ist:** die Fehlermeldung des Tests trug **nur `stdout`**, also war
+> nicht unterscheidbar, ob der Handler lief und seine Zeile verlor oder ob der Prozess aus einem anderen
+> Grund starb. Genau das entscheidet, welcher Fix richtig ist. `ingress-process-boot.test.ts` meldet
+> jetzt **Exit-Code, Signal und `stderr`** mit. Der zweite Fix wird erst nach diesen Werten bestimmt,
+> nicht geraten. Ein Kandidat steht bereit (synchrones `fs.writeSync` auf Deskriptor 1), falls die Daten
+> „Handler lief" zeigen.
+>
+> Der Rest des ersten Fixes bleibt und ist nicht falsch — er ist nur nicht hinreichend: zwei von
 > drei Pushes dieses Zweigs endeten rot, jedes Mal an demselben Test, jedes Mal an derselben Ursache — ein
 > roter Lauf mit immer derselben bekannten Ursache ist schlimmer als ein flackernder Test, weil er die CI
 > als Beleg entwertet (die Lehre aus **F48**). `writeLineThenFlush()` löst erst auf, wenn der Stream den
@@ -549,12 +562,9 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
 > Begrenzt auf zwei Sekunden und ohne Ablehnung, weil ein **hängender** Shutdown der schlechtere Tausch
 > wäre: ein Supervisor `SIGKILL`t einen Prozess, der nicht aufhört.
 >
-> **Der Beleg ist eine Rate, nicht ein Lauf** — dieselbe Form, die `JR-4-21` für F54 verlangt hat.
-> Vorher 2 von 3 rot, nachher **4 von 4 grün** (CI `31003830220`, vier Versuche derselben Revision), und
-> in jedem Versuch steht der betroffene Test als **ausgeführt** im Log. Zwei Dinge dazu ehrlich benannt:
-> auf diesem Windows-Host ist die Wirkung **nicht** messbar (die Zusicherung steht hinter
-> `platform !== 'win32'`), und vier Läufe widerlegen einen Wettlauf nicht endgültig — was darüber hinaus
-> trägt, ist die strukturelle Aussage plus ein deterministischer Mechanismus-Test.
+> **Auf diesem Windows-Host ist die Wirkung nicht messbar** — die Zusicherung steht hinter
+> `platform !== 'win32'`, weil Windows kein catchbares `SIGTERM` an ein Kind liefert. Der Beleg muss
+> deshalb aus der CI kommen, und **genau dort ist er nicht erbracht worden**: siehe oben.
 >
 > **Der Helfer liegt in `packages/journaling`, nicht in `apps/smtp-ingress`, und der Grund ist eine
 > Harness-Eigenschaft, die man kennen sollte: kein Projekt-Glob erfasst `apps/`.** Eine Testdatei dort

@@ -3311,9 +3311,10 @@ hält diese Grenze fest. Sie gehört in die Konfigurationsprüfung im Backend.
 **Schwere:** niedrig (Diagnostik, kein Datenverlust) · **Kategorie:** Neuer Code ·
 **Ort:** `apps/smtp-ingress/src/index.ts` `shutdown()` (Zeilen 332 und 349–352) ·
 **Gefunden:** 2026-08-05 in `JR-6-01`, durch einen roten CI-Lauf (`30999645177`) an einem Test, den
-diese Scheibe nicht angefasst hat · **Status:** **behoben am 2026-08-05** — der Auftraggeber hat sich
-nach dem **zweiten** Treffer (CI `31002635354`, in `JR-6-02a`) für die Behebung im Produktionscode
-entschieden. Umsetzung siehe „Behebung" unten
+diese Scheibe nicht angefasst hat · **Status:** **offen — ein erster Fix ist ausgeliefert und hat den
+Befund NICHT geschlossen.** Der Auftraggeber hat sich nach dem **zweiten** Treffer (CI `31002635354`, in
+`JR-6-02a`) für die Behebung im Produktionscode entschieden; die Umsetzung steht unten, aber CI
+`31005188529` ist **nach** ihr mit demselben Fehler rot geworden. Siehe „Erster Fix — unzureichend"
 
 Der Shutdown-Pfad schreibt seine einzige Bestätigungszeile mit `console.log` und ruft danach in
 beiden Zweigen von `server.close()` `process.exit(0)`:
@@ -3354,7 +3355,35 @@ vorher nur wahrscheinlich, nicht sicher.
 Dateideskriptor (in **F49** ausdrücklich offen gelassen). Der Fix für (1) sollte diese Stelle nicht
 stillschweigend mitumbauen — das ist eine eigene Entscheidung.
 
-### Behebung (2026-08-05, Variante 1 — Entscheidung des Auftraggebers)
+### Erster Fix — unzureichend, und die Fehlschluss-Geschichte dazu
+
+**Der unten beschriebene Fix hat den Befund nicht geschlossen.** CI `31005188529` ist danach mit
+**genau derselben** Meldung rot geworden (`expected … to contain 'shutting down'`), an derselben Stelle.
+
+**Wie es zu der falschen Entwarnung kam, und das ist der eigentliche Lehrsatz.** Nach dem Fix liefen
+vier Versuche derselben Revision grün (CI `31003830220`), und daraus wurde geschlossen, der Fix wirke —
+mit derselben Rate-Argumentation, die `JR-4-21` für **F54** verlangt hatte. Der Schluss war falsch, und
+zwar auf eine Weise, die es wert ist, hier zu stehen: **eine Vorher/Nachher-Rate belegt einen Fix nur
+dann, wenn die Stichprobe groß genug für die Grundrate ist.** Bei „2 von 3 rot" liegt die Ausfallrate
+grob bei 50–65 %; vier grüne Läufe in Folge sind darunter zwar unwahrscheinlich (≈ 2–6 %), aber **die
+vier Läufe waren Wiederholungen ein und derselben Revision auf demselben Runner-Typ** und damit keine
+unabhängigen Ziehungen im Sinne der Annahme. Vier Läufe sind schlicht zu wenig; F54 verlangte
+ausdrücklich **mindestens zehn**, und diese Zahl wurde hier nicht eingehalten.
+
+**Was jetzt zuerst passiert, statt eines zweiten Rateversuchs:** die Fehlermeldung des Tests trug
+**nur `stdout`**. Damit war aus dem Log nicht unterscheidbar, ob (a) der Handler lief und seine Zeile
+verlor, oder (b) der Prozess aus einem anderen Grund starb, ohne den Handler zu erreichen. Genau diese
+Unterscheidung entscheidet, welcher Fix richtig ist. `ingress-process-boot.test.ts` meldet deshalb ab
+jetzt **Exit-Code, terminierendes Signal und `stderr`** mit — eine Diagnose, keine
+Verhaltensänderung. Erst mit diesen drei Werten wird der zweite Fix bestimmt.
+
+**Ein Kandidat steht bereit, falls (a) zutrifft:** die Zeile **synchron** auf Deskriptor 1 schreiben
+(`fs.writeSync`, mit begrenztem Wiederholen bei `EAGAIN`, weil eine Pipe auf Linux nicht-blockierend
+ist). Danach sind die Bytes im Pipe-Puffer, bevor der Aufruf zurückkehrt — das hängt an keiner
+Flush-Semantik und an keiner Annahme darüber, was den Ereignis-Loop offen hält. Bei (b) hilft das
+nichts, und deshalb wird nicht geraten.
+
+### Behebung, erster Versuch (2026-08-05, Variante 1 — Entscheidung des Auftraggebers)
 
 Auslöser war der **zweite** Treffer: zwei von drei Pushes des E6-Zweigs endeten rot, jedes Mal an
 demselben Test, jedes Mal an derselben Ursache. Damit war der Befund kein Randfall mehr, sondern hat die
@@ -3397,19 +3426,11 @@ gestorben wäre.
 catchbares `SIGTERM` an ein Kind liefert. Der Beleg für die Wirkung ist deshalb dieselbe Form, die
 `JR-4-21` für **F54** verlangt hat: eine **Rate vorher gegen nachher**, nicht ein einzelner grüner Lauf.
 Vorher: **2 von 3 Läufen rot** (`30999645177`, `31002635354`; grün war nur der Wiederholungslauf von
-`30999645177`). Nachher: **4 von 4 Läufen grün** — CI `31003830220`, vier Versuche derselben Revision,
-jeder eine frische Runner-Ausführung. Im Log jedes Versuchs steht der betroffene Test als **ausgeführt**
-(`✓ [ci] apps/smtp-ingress process boot (JR-4-01) > with valid configuration …`) samt
-`Suite inventory verified: unit 73/73, integration 22/22, adversarial 7/7` und
-`[TEST-EXECUTED] unit: ci 1065/1065`. Das ist der Unterschied zwischen „grün" und „grün, weil nichts
-geprüft wurde", und er wird hier ausdrücklich mitgemessen, weil derselbe Test vorher **bestanden aussah**,
-wenn er zufällig gewann.
-
-**Ehrlich benannte Grenze:** vier Läufe widerlegen einen Wettlauf nicht endgültig, sie verschieben nur die
-Rate von „mehrheitlich rot" zu „keiner rot". Was den Fix darüber hinaus trägt, ist die **strukturelle**
-Aussage — der Exit hängt jetzt an einem Promise, das die Quittung des Streams abwartet — und der
-Mechanismus-Test, der deterministisch ist. Die Rate belegt, dass die Struktur in der Umgebung wirkt, in
-der der Befund aufgetreten ist.
+`30999645177`). Nach dem ersten Fix: vier Versuche grün (`31003830220`) — **und danach wieder rot**
+(`31005188529`). Die vier grünen Läufe haben den Fix **nicht** belegt; siehe „Erster Fix —
+unzureichend" oben. Der Mechanismus-Test (`graceful-exit.test.ts`) bleibt gültig und deterministisch: er
+prüft, dass `writeLineThenFlush()` tut, was es zusagt. Was er nicht prüfen kann, ist, ob **dieses**
+Versprechen die Ursache des Befunds trifft.
 
 ## F60 — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht
 

@@ -125,10 +125,10 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010 entschieden, F59
-behoben**) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
+**Stand:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010 entschieden. F59
+weiterhin offen — der erste Fix hat ihn nicht geschlossen**) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
 Volllauf: **1260 passed | 8 skipped** bei 102 Dateien — `unit ci 1065/1065 · integration ci 126/126 ·
-adversarial ci 69/69`, Exit 0 · CI `31003830220` **4 von 4 Versuchen success**
+adversarial ci 69/69`, Exit 0 · CI `31005188529` **rot an F59**, alle anderen Suiten grün
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -140,7 +140,7 @@ adversarial ci 69/69`, Exit 0 · CI `31003830220` **4 von 4 Versuchen success**
 > **Aus E4 ist kein Befund offen.** Beim E4-Rückmerge kollidierten drei Nummernkreise; aufgelöst nach
 > „der eingehende Zweig gibt nach", die Regel daraus ist **ADR-032**.
 
-> **`F59` ist gefunden und behoben** — beides in dieser Sitzung. `apps/smtp-ingress` schrieb seine
+> **`F59` ist gefunden, ein erster Fix ist ausgeliefert, und er hat den Befund NICHT geschlossen.** `apps/smtp-ingress` schrieb seine
 > Shutdown-Zeile mit `console.log` und rief direkt danach `process.exit(0)`; das leert einen
 > **Pipe**-stdout auf Linux nicht. Aufgefallen ist er **nicht** durch eine Änderung an diesem Code,
 > sondern weil `JR-6-01`s neue Tests den Wettlauf auf dem CI-Runner wahrscheinlich genug gemacht haben:
@@ -148,7 +148,14 @@ adversarial ci 69/69`, Exit 0 · CI `31003830220` **4 von 4 Versuchen success**
 > Prozess **war** beendet, nur seine letzte Zeile fehlte. Nach dem **zweiten** Treffer (2 von 3 Pushes)
 > hat der Auftraggeber die Behebung im Produktionscode entschieden — und das war der richtige Grund: ein
 > roter Lauf mit immer derselben bekannten Ursache entwertet die CI als Beleg, die Lehre aus **F48**.
-> Belegt über eine **Rate** statt einen Lauf: vorher 2 von 3 rot, nachher **4 von 4 grün**.
+> **Die Entwarnung war ein Fehlschluss, und der Lehrsatz gehört hierher:** nach dem Fix liefen vier
+> Versuche derselben Revision grün, und daraus wurde geschlossen, der Fix wirke — mit derselben
+> Rate-Argumentation, die `JR-4-21` für F54 verlangt hatte. **F54 verlangte mindestens zehn Läufe**, und
+> vier Wiederholungen einer Revision sind keine unabhängigen Ziehungen. Der nächste Lauf war wieder rot
+> (`31005188529`). Statt eines zweiten Rateversuchs meldet `ingress-process-boot.test.ts` jetzt
+> **Exit-Code, Signal und `stderr`** mit: die Fehlermeldung trug nur `stdout`, also war nicht
+> unterscheidbar, ob der Handler lief und seine Zeile verlor oder ob der Prozess anders starb — und genau
+> das entscheidet, welcher Fix richtig ist.
 
 > **Ein Befund ist neu und offen: `F60`.** `StorageService.put()` puffert einen übergebenen Stream sofort
 > zu einem Buffer, obwohl `IStorageProvider.put()` `Buffer | NodeJS.ReadableStream` verspricht — die
@@ -174,9 +181,9 @@ ADR-010 archivieren, indexieren, Spool freigeben.
 ### Was diese Session gemacht hat
 
 > **Zwei Scheiben und eine Entscheidung:** `JR-6-01` (`d0f4840`), **ADR-010** samt F60 (`41068aa`),
-> `JR-6-02a` (`fba499c`), F59 behoben (`72509b5`) — plus die Nummernreservierung nach ADR-032 auf dem
-> Integrationszweig (`fc15edc`). Volllauf **1260 passed | 8 skipped** bei 102 Dateien, Exit 0; CI
-> `31003830220` **4 von 4 Versuchen success**.
+> `JR-6-02a` (`fba499c`), ein erster — unzureichender — F59-Fix (`72509b5`) — plus die Nummernreservierung nach ADR-032 auf dem
+> Integrationszweig (`fc15edc`). Volllauf **1260 passed | 8 skipped** bei 102 Dateien, Exit 0. **Die CI ist
+> rot an F59** (`31005188529`) — alle anderen 101 Dateien grün.
 
 > **ADR-010 ist entschieden, und die Antwort ist keine der beiden Optionen der ADR.** Nicht
 > `processEmail()` erweitern und nicht einen eigenen Pfad daneben stellen, sondern **unverändert
@@ -447,7 +454,9 @@ und arbeite den nächsten Schritt ab.
 **4 von 4 Versuchen success** (102 Dateien, `unit 1065/1065 · integration 126/126 ·
 adversarial 69/69`). Nicht neu abzweigen, nicht neu reservieren.
 
-**Erledigt sind `JR-6-01` und `JR-6-02a`.** `ADR-010` ist entschieden, das Tor steht, F59 ist behoben.
+**Erledigt sind `JR-6-01` und `JR-6-02a`.** `ADR-010` ist entschieden und das Tor steht. **F59 ist
+weiterhin offen und hält die CI rot** — das ist das Erste, was diese Sitzung anfassen muss, und die
+Diagnose dafür läuft schon mit (siehe unten).
 `JR-6-02` ist nach **ADR-021** geteilt; offen ist **`JR-6-02b`**.
 
 **Was `JR-6-02b` zu tun hat**, in der Reihenfolge der Architektur §6 — und der erste Schritt ist schon
@@ -572,9 +581,12 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
    zweite Variante ist kleiner und schlechter — sie macht die Grenze sichtbar, hebt sie aber nicht auf.
    **Blockiert E6 nicht:** die Vollpufferung ist bewusst hingenommen (bei 50 MB und Concurrency 3 liegen
    im schlechtesten Fall drei Nachrichten doppelt im Heap).
-    > **~~`F59`~~ ist behoben** (2026-08-05, Variante „im Produktionscode", Entscheidung des
-    > Auftraggebers nach dem zweiten Treffer). Ein roter Lauf an `ingress-process-boot.test.ts` ist damit
-    > **wieder eine Aussage** und nicht mehr zuerst gegen F59 zu prüfen.
+    > **`F59` ist weiterhin offen und hält die CI rot.** Der erste Fix (vor dem Exit auf die
+    > Stream-Quittung warten) hat ihn **nicht** geschlossen: CI `31005188529` ist danach mit derselben
+    > Meldung rot geworden. Ein roter Lauf an `ingress-process-boot.test.ts` ist deshalb **weiter zuerst
+    > gegen F59 zu prüfen**. Der nächste Schritt ist **keine** neue Vermutung, sondern die Diagnose, die
+    > jetzt mitläuft (Exit-Code, Signal, `stderr`) — sie unterscheidet „Handler lief und verlor die Zeile"
+    > von „Prozess starb anders". Der Kandidat für den zweiten Fix steht im Befund.
 1. **`F43`: soll `JR-3-02`s Speichernachweis nachgemessen werden?** Das ist die einzige Frage, die
    ein **abgenommenes** Epic berührt. `heapUsed` kann Vollpufferung in Node-`Buffer`n nicht sehen —
    gemessen, mit absichtlich eingebauter Regression kalibriert. Der **Code** ist mit hoher
