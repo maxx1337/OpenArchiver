@@ -7,8 +7,9 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
 **Letzte Aktualisierung:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010
-entschieden. F59 **weiterhin offen** — ein erster Fix hat ihn nicht geschlossen; F60 neu und offen.** Volllauf: **1260 passed | 8 skipped** bei 102 Dateien,
-`unit ci 1065 · integration ci 126 · adversarial ci 69`, Exit 0; CI `31005188529` **rot an F59**, alle anderen Suiten grün. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
+entschieden. F59 behoben, **F61 gefunden und behoben** — sie war die wahre Ursache der roten Läufe;
+F60 neu und offen.** Volllauf: **1265 passed | 8 skipped** bei 103 Dateien,
+`unit ci 1070 · integration ci 126 · adversarial ci 69`, Exit 0. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
 ADR-033–036, F59–F70 — **F59 und F60 sind daraus vergeben**) · **Branch:**
 `claude/journaling-e6-phase-b-worker` (Epic-Zweig über dem Integrationsbranch
 `claude/enterprise-product-implementation-cxmmqe`; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
@@ -540,7 +541,25 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
 > Regressionsfällen für beide Nullish-Formen. Dass `ledger-lookup.test.ts` seine Zeilen selbst baut, ist
 > genau der Grund, warum es das gefunden hat.
 
-> **F59 ist NICHT behoben — der erste Fix hat nicht gewirkt, und die Entwarnung war ein Fehlschluss.**
+> **Die roten CI-Läufe hatten eine andere Ursache als F59, und sie heißt F61.** Der Prozess stürzte mit
+> einem unbehandelten `ECONNRESET` ab und erreichte seinen `SIGTERM`-Handler **nie** — die fehlende
+> Shutdown-Zeile war ein **Symptom**. `EsmtpServer.handleConnection()`s drei Ablehnungspfade kehrten
+> zurück, ohne je einen `'error'`-Listener anzuhängen; ein `net.Socket` ohne solchen Listener lässt
+> `EventEmitter` **werfen**. Der `denied`-Pfad ist der Pfad **jeder** IP, die nicht auf der ACL steht, also
+> konnte jeder, der den Port erreicht, den Empfänger mit einer Connect-dann-Reset-Schleife anhalten —
+> **Schwere hoch**, behoben, mit fünf kalibrierten Regressionsfällen. **Und die Ursache ist
+> plattformunabhängig reproduzierbar:** mit zurückgenommenem Fix meldet der Lauf auch auf diesem
+> Windows-Host `Unhandled Errors: Error: read ECONNRESET`. Aus einem Wettlauf ist ein deterministischer
+> Test geworden.
+>
+> **Der Lehrsatz ist der Diagnosewert einer Zusicherung, nicht der Bug.** Der Test hatte drei
+> Beobachtungen zur Hand — Ausgabe, Exit-Code, Signal — und meldete **eine**. Das hat **zwei** Runden
+> Fixarbeit in die falsche Richtung geschickt, samt einer falschen Entwarnung aus vier grünen Läufen
+> (F54 verlangte mindestens zehn, und vier Wiederholungen einer Revision sind keine unabhängigen
+> Ziehungen). Eine Zusicherung, die nur einen Teil des Beobachtbaren berichtet, ist kein halber Beleg,
+> sondern ein Hinweisgeber auf die **falsche** Ursache.
+>
+> **F59 bleibt richtig und behoben, nur nie belegt zugeordnet.**
 > CI `31005188529` ist **nach** dem Fix mit genau derselben Meldung rot geworden. Die vier grünen Läufe,
 > die als Beleg gemeldet wurden (`31003830220`), waren **Wiederholungen derselben Revision** und damit zu
 > wenige und zu abhängige Ziehungen: bei einer Grundrate um 50–65 % sind vier grüne Läufe

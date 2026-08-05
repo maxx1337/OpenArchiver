@@ -30,7 +30,7 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                     |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                        |
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                             |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46, F58, F59               |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46, F58, F59, F61          |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -3311,10 +3311,12 @@ hält diese Grenze fest. Sie gehört in die Konfigurationsprüfung im Backend.
 **Schwere:** niedrig (Diagnostik, kein Datenverlust) · **Kategorie:** Neuer Code ·
 **Ort:** `apps/smtp-ingress/src/index.ts` `shutdown()` (Zeilen 332 und 349–352) ·
 **Gefunden:** 2026-08-05 in `JR-6-01`, durch einen roten CI-Lauf (`30999645177`) an einem Test, den
-diese Scheibe nicht angefasst hat · **Status:** **offen — ein erster Fix ist ausgeliefert und hat den
-Befund NICHT geschlossen.** Der Auftraggeber hat sich nach dem **zweiten** Treffer (CI `31002635354`, in
-`JR-6-02a`) für die Behebung im Produktionscode entschieden; die Umsetzung steht unten, aber CI
-`31005188529` ist **nach** ihr mit demselben Fehler rot geworden. Siehe „Erster Fix — unzureichend"
+diese Scheibe nicht angefasst hat · **Status:** **behoben, aber er war nie die Ursache der roten
+CI-Läufe.** Die Ursache ist **F61** (ein zurückgesetzter Socket riss den Prozess ab, bevor er seinen
+`SIGTERM`-Handler erreichte). F59 selbst ist ein **echter, aber latenter** Defekt: `process.exit()` leert
+keinen Pipe-stdout, und der Fix dafür (`writeLineThenFlush()`) bleibt richtig und ist behalten. **Was an
+F59 falsch war, ist die Zuschreibung** — zweimal wurde ein Fehlschlag mit ihm erklärt, den er nicht
+verursacht hat. Siehe „Erster Fix — was er war und was er nicht war"
 
 Der Shutdown-Pfad schreibt seine einzige Bestätigungszeile mit `console.log` und ruft danach in
 beiden Zweigen von `server.close()` `process.exit(0)`:
@@ -3355,10 +3357,13 @@ vorher nur wahrscheinlich, nicht sicher.
 Dateideskriptor (in **F49** ausdrücklich offen gelassen). Der Fix für (1) sollte diese Stelle nicht
 stillschweigend mitumbauen — das ist eine eigene Entscheidung.
 
-### Erster Fix — unzureichend, und die Fehlschluss-Geschichte dazu
+### Erster Fix — was er war und was er nicht war
 
-**Der unten beschriebene Fix hat den Befund nicht geschlossen.** CI `31005188529` ist danach mit
-**genau derselben** Meldung rot geworden (`expected … to contain 'shutting down'`), an derselben Stelle.
+**Der unten beschriebene Fix ist richtig und bleibt — er hat nur den beobachteten Fehlschlag nicht
+behoben, weil dieser eine andere Ursache hatte.** CI `31005188529` ist danach mit **genau derselben**
+Meldung rot geworden (`expected … to contain 'shutting down'`). Die Ursache steht als **F61** weiter
+unten: der Prozess stürzte mit einem unbehandelten `ECONNRESET` ab und erreichte seinen `SIGTERM`-Handler
+**nie**, also konnte keine Flush-Verbesserung etwas ändern.
 
 **Wie es zu der falschen Entwarnung kam, und das ist der eigentliche Lehrsatz.** Nach dem Fix liefen
 vier Versuche derselben Revision grün (CI `31003830220`), und daraus wurde geschlossen, der Fix wirke —
@@ -3377,11 +3382,14 @@ Unterscheidung entscheidet, welcher Fix richtig ist. `ingress-process-boot.test.
 jetzt **Exit-Code, terminierendes Signal und `stderr`** mit — eine Diagnose, keine
 Verhaltensänderung. Erst mit diesen drei Werten wird der zweite Fix bestimmt.
 
-**Ein Kandidat steht bereit, falls (a) zutrifft:** die Zeile **synchron** auf Deskriptor 1 schreiben
-(`fs.writeSync`, mit begrenztem Wiederholen bei `EAGAIN`, weil eine Pipe auf Linux nicht-blockierend
-ist). Danach sind die Bytes im Pipe-Puffer, bevor der Aufruf zurückkehrt — das hängt an keiner
-Flush-Semantik und an keiner Annahme darüber, was den Ereignis-Loop offen hält. Bei (b) hilft das
-nichts, und deshalb wird nicht geraten.
+**Die Diagnose hat (b) ergeben, nicht (a)** — Exit-Code 1, kein Signal,
+`node:events:497 throw er; // Unhandled 'error' event`, `Error: read ECONNRESET`. Der Handler lief nie.
+Der bereitgehaltene Kandidat (synchrones `fs.writeSync` auf Deskriptor 1) wurde deshalb **nicht**
+ausgeliefert: er hätte nichts geändert, und ihn trotzdem einzubauen wäre der dritte Rateversuch gewesen.
+**F59 bleibt damit als latenter Defekt behoben, ohne dass ihm je ein beobachteter Fehlschlag zugeordnet
+werden kann.** Ob `process.exit()` hier je eine Zeile verloren hat, ist unbewiesen — der Fix ist trotzdem
+richtig, weil die Zusage („eine Betriebsmeldung erreicht das Log") sonst von der Maschinengeschwindigkeit
+abhängt.
 
 ### Behebung, erster Versuch (2026-08-05, Variante 1 — Entscheidung des Auftraggebers)
 
@@ -3481,3 +3489,67 @@ die schlechtere:** sie macht die Grenze sichtbar, hebt sie aber nicht auf, und E
 ohnehin an denselben Code. Wichtig ist nur, dass die Signatur und das Verhalten aufhören, sich zu
 widersprechen — **eine Schnittstelle, die Streaming verspricht und puffert, lädt jeden künftigen
 Aufrufer dazu ein, eine Speicherzusage zu geben, die sie nicht hält.**
+
+## F61 — ein zurückgesetzter Socket reißt den ganzen SMTP-Empfänger ab: die Ablehnungspfade hängen keinen `error`-Handler an
+
+**Schwere:** **hoch** (fernauslösbarer Absturz des Empfängers, trivialer Denial of Service) ·
+**Kategorie:** Neuer Code ·
+**Ort:** `packages/journaling/src/ingress/smtp-server.ts` `EsmtpServer.handleConnection()` — die drei
+Ablehnungspfade (`denied`, `unavailable`, Verbindungsgrenze) ·
+**Gefunden:** 2026-08-05 in E6, als Nebenprodukt der Diagnose zu **F59** ·
+**Status:** **behoben am 2026-08-05**, mit kalibriertem Regressionstest
+(`tests/unit/smtp-connection-reset-crash.test.ts`, 5 Fälle)
+
+`handleConnection()` beantwortet drei Fälle mit `socket.end(text)` und kehrt **zurück, ohne je eine
+`SmtpConnection` zu bauen** — und der einzige `'error'`-Listener des ganzen Verbindungspfads lag in
+deren Konstruktor (`attachSocketHandlers`). Ein `net.Socket` **ohne** `'error'`-Listener verschluckt den
+Fehler nicht: `EventEmitter` **wirft** ihn, und eine unbehandelte Ausnahme im Accept-Pfad beendet den
+Prozess.
+
+Gemessen, nicht geschlossen — so sah es aus:
+
+```
+exit code 1, terminating signal null
+node:events:497
+      throw er; // Unhandled 'error' event
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+```
+
+**Warum das schwer wiegt.** Der `denied`-Pfad ist der Pfad **jeder** IP, die nicht auf der ACL steht.
+Wer den Port erreichen kann und nicht zugelassen ist, kann den Empfänger mit einer
+Connect-dann-Reset-Schleife anhalten. Ein abgestürzter Empfänger nimmt keine Post an — Absender
+warten und wiederholen, es ist also Verfügbarkeit und kein Datenverlust, aber es ist der billigste
+denkbare Denial of Service gegen einen Compliance-Empfänger. Und es braucht keine Absicht: ein
+Load-Balancer-Healthcheck, ein Portscanner oder ein MTA, der aufgibt, erzeugt dasselbe RST.
+
+**Behebung:** ein `'error'`-Listener **als Erstes** in `handleConnection()`, vor jedem Zweig, der
+zurückkehren kann. Er loggt nur, solange keine `SmtpConnection` den Socket besitzt — danach loggt diese
+selbst, und eine zweite Zeile wäre nur eine Dopplung.
+
+### Wie er gefunden wurde, und warum das die lehrreichere Hälfte ist
+
+**F61 ist die tatsächliche Ursache der roten CI-Läufe, die zweimal F59 zugeschrieben wurden.** Der
+Ablauf ist es wert, festgehalten zu werden:
+
+1. `ingress-process-boot.test.ts` wurde rot mit `expected … to contain 'shutting down'`. Das sah aus wie
+   eine verlorene Logzeile.
+2. Daraus wurde **F59**, mit einer plausiblen und sogar zutreffenden Ursachenbeschreibung
+   (`process.exit()` leert keinen Pipe-stdout) — nur war sie **nicht die Ursache dieses Fehlschlags**.
+3. Der Fix für F59 wurde gebaut, ausgeliefert, und vier grüne Läufe wurden als Beleg gemeldet. Beides
+   war falsch: der Beleg (zu wenige, abhängige Läufe) und die Diagnose.
+4. Erst als die Zusicherung **Exit-Code, Signal und `stderr`** mitmeldete, war die Antwort eindeutig —
+   und eine andere: Exit-Code 1, kein Signal, `Unhandled 'error' event`. Der Prozess hat seinen
+   `SIGTERM`-Handler **nie erreicht**; die fehlende Zeile war ein **Symptom**.
+
+**Der Lehrsatz ist der Diagnosewert einer Zusicherung, nicht der Bug.** Der Test hatte drei
+Beobachtungen zur Hand — Ausgabe, Exit-Code, Signal — und meldete eine. Das hat zwei Runden Fixarbeit
+in die falsche Richtung geschickt. Eine Zusicherung, die nur einen Teil des Beobachtbaren berichtet, ist
+kein halber Beleg, sondern ein **Hinweisgeber auf die falsche Ursache**.
+
+**Und ein zweiter, angenehmerer Befund:** die Ursache ist **plattformunabhängig** reproduzierbar. Das
+Symptom war Linux-only (auf Windows steht die Zusicherung hinter `platform !== 'win32'`), der Absturz
+nicht — mit zurückgenommenem Fix meldet der Lauf **auf diesem Windows-Host**
+`Unhandled Errors: Error: read ECONNRESET`. `socket.resetAndDestroy()` erzeugt ein echtes RST, deshalb
+schlägt der nächste Lesevorgang der Gegenseite **jedes Mal** fehl statt manchmal: aus einem Wettlauf ist
+ein deterministischer Test geworden.

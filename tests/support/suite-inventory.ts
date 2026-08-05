@@ -226,7 +226,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// no project glob reaches apps/, so a test file placed there would be collected by nobody -- the
 		// unclassified-file check would fail the run, which is the correct outcome and the reason the
 		// testable part of the fix went where tests can see it.
-		expectedFiles: 73,
+		//
+		// 74 after F61 added tests/unit/smtp-connection-reset-crash.test.ts -- the actual cause of the red
+		// CI runs that F59 had been blamed for twice. EsmtpServer.handleConnection()'s rejection paths
+		// returned without ever attaching a socket 'error' listener, so a client that reset while being
+		// refused crashed the whole receiver with an uncaught ECONNRESET.
+		expectedFiles: 74,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -753,7 +758,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// resolves anyway when the stream never does -- against a stream whose callback the test fires
 		// itself. One of the 9 is a counter-check that reproduces the unfixed shape (write, then "exit"
 		// without waiting) and shows the write still in flight at the moment the process would have died.
-		expectedTests: { ci: 1065, nightly: 3, manual: 0 },
+		//
+		// 1070 after F61 added 5 in smtp-connection-reset-crash.test.ts. They are calibrated, and the
+		// calibration is the point: with the fix reverted the run reports `Unhandled Errors: Error: read
+		// ECONNRESET` -- on Windows too. The *symptom* that exposed F61 was Linux-only (a lost shutdown
+		// line, blamed on F59 for two rounds); the *cause* is not, so this suite measures it on every host.
+		// `socket.resetAndDestroy()` sends a real RST, which is what makes the peer's next read fail every
+		// time instead of sometimes.
+		expectedTests: { ci: 1070, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
