@@ -449,9 +449,14 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
   **Aufgeteilt nach ADR-021:**
     - [x] `JR-6-02a` — **ADR-010 entschieden** (`41068aa`) plus das Tor, das entscheidet, ob eine
           Spool-Datei überhaupt archiviert werden darf (`fba499c`)
-    - [~] `JR-6-02b` — **läuft.** Erledigt: **ADR-033** entschieden und umgesetzt (Owner-Auflösung für
-      `plain_bcc`, `ndr`, `parse_failed`). Offen: Backend-Adapter auf `processEmail()`,
-      Indexierung, Spool-Freigabe, **Ende-zu-Ende bis zum durchsuchbaren Treffer**
+    - [~] `JR-6-02b` — **Code fertig, Abnahme durch TEST offen.** Erledigt: **ADR-033** (Owner-Auflösung
+      für `plain_bcc`/`ndr`/`parse_failed`) und **ADR-034** (Fan-out über jeden aufgelösten Owner,
+      Backend-Adapter auf `processEmail()`, Indexierung, Spool-Freigabe als Löschen). `runPhaseBPipeline()`
+      verbindet alles; **Ende-zu-Ende manuell mit echtem Postgres/Meilisearch belegt** (siehe unten und
+      ADR-034 Punkt 6), aber **kein automatisierter Test dafür** — die CI hat keinen
+      Meilisearch-Service-Container, und die neuen Backend-Adapter hängen am Prozess-Singleton `db`, nicht
+      an der isolierten Test-Harness-Datenbank. Beides sind Entscheidungen für den Auftraggeber, keine
+      offenen Enden dieser Scheibe.
 - [ ] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of`
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
@@ -715,3 +720,30 @@ adversarial 69/69`, der neue `valkey`-Service trägt. **Der erste Versuch dessel
   Indexierung, Spool-Freigabe, Ende-zu-Ende bis zum durchsuchbaren Treffer
 - **Nicht getan, absichtlich:** die Doku-Diät, weiterhin. Und der `duplicate_of`-Pfad — er gehört zu
   `JR-6-03` und wurde bewusst nicht vorgezogen, obwohl das Tor die Stelle schon kennt
+
+### 2026-08-05 — `JR-6-02b` fertiggestellt (neue Sitzung)
+
+- **Rolle:** DEV (Subagent `senior-dev`)
+- **Commit:** `cb1a524` (Code + Tests). Diese Doku-Aktualisierung folgt als eigener Commit.
+- **Tests:** 21 neu gegenüber dem Vortag (11 `pipeline.test.ts`, 3 `spool-entry-releaser.test.ts`,
+  2 `ledger-lookup.test.ts`, 5 `journal-inbound.options.test.ts`). Volllauf **1297 passed | 8
+  skipped** bei 106 Dateien, Exit 0, `unit ci 1102/1102 · integration ci 126/126 ·
+adversarial ci 69/69`
+- **CI:** noch nicht geprüft zum Zeitpunkt dieses Eintrags — folgt nach dem Push, siehe
+  `07-session-handover.md`
+- **Entscheidungen:** **ADR-034** (Fan-out über jeden aufgelösten Owner via `normalizedEmail`;
+  Spool-Freigabe ist Löschen, kein drittes Spool-Verzeichnis; der Prozessor wirft für jeden
+  Nicht-Erfolg; `envelope_from`/`envelope_rcpt` erneut in den Ledger-Lookup gezogen; kein
+  automatisierter E2E-Test gegen echtes Meilisearch, mit Begründung). Details in
+  `05-entscheidungen.md`
+- **Manuell verifiziert, nicht automatisiert:** echtes Postgres + echtes Meilisearch +
+  echtes Dateisystem — `basic-journal-report.eml` fanned out auf drei Owner
+  (`bob`/`carol`/`dave@contoso.com`), alle drei archiviert und indexiert, Volltextsuche nach
+  `"Quarterly numbers"` findet alle drei, Spool-Datei danach gelöscht. Siehe ADR-034 Punkt 6 für
+  die Begründung, warum das kein committeter Test wurde
+- **Befunde:** **F62** neu (`IJournalInboundJob` ist totes Gerüst, Architektur-Doku korrigiert)
+- **Offen:** `JR-6-03` (Idempotenz/`duplicate_of`), `JR-6-04` (Reconciler), `JR-6-05`–`JR-6-07`
+  (Test-Slices), `JR-6-08` (Abnahme). Die Entscheidung, ob ein automatisierter Meilisearch-E2E-Test
+  gebaut wird (und mit welcher CI-/DI-Änderung), liegt beim Auftraggeber
+- **Nicht getan, absichtlich:** die Doku-Diät, weiterhin. `IJournalInboundJob` selbst wurde nicht aus
+  `packages/types` entfernt (F62) — nur die Doku-Aussage über seine Rolle korrigiert

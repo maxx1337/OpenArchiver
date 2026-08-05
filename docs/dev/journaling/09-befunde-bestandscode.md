@@ -3560,3 +3560,36 @@ nicht — mit zurückgenommenem Fix meldet der Lauf **auf diesem Windows-Host**
 `Unhandled Errors: Error: read ECONNRESET`. `socket.resetAndDestroy()` erzeugt ein echtes RST, deshalb
 schlägt der nächste Lesevorgang der Gegenseite **jedes Mal** fehl statt manchmal: aus einem Wettlauf ist
 ein deterministischer Test geworden.
+
+## F62 — `IJournalInboundJob` ist totes, aus der Zeit vor `JR-6-01` stammendes Gerüst und wird in der Architektur-Doku noch als künftiger Payload beworben
+
+**Gefunden:** `JR-6-02b` (2026-08-05), beim Verdrahten des Phase-B-Prozessors gegen die tatsächliche
+`JournalInboundJobData`-Payload.
+
+**Der Fund.** `packages/types/src/journaling.types.ts` definiert `IJournalInboundJob`
+(`journalingSourceId`, `tempFilePath`, `remoteAddress`, `receivedAt`) — eine Payload-Form, die
+**vollständig durch den Ledger nachschlagbar** wäre, statt kopiert zu werden. Eine Suche über das
+gesamte Repository (`grep -rl IJournalInboundJob`) findet **keinen einzigen Aufrufer, keinen
+Konstruktor, keine Verwendung** außerhalb der eigenen Definition. `docs/dev/journaling/02-architektur.md`
+§3 beschrieb bis zu diesem Fund sogar ausdrücklich, dieser Typ bleibe „als Payload nutzbar" und sein
+`tempFilePath`-Feld werde „künftig" auf den Spool-Pfad zeigen — eine Beschreibung, die der tatsächlich
+getroffenen und umgesetzten `JR-6-01`-Entscheidung direkt widerspricht.
+
+**Warum das mehr als Aufräumen ist.** `JR-6-01` hat, mit ausführlicher, gemessener Begründung
+(`06-status.md`), genau **gegen** diese Form entschieden: eine Payload mit `journalingSourceId` und
+`tempFilePath` kopiert Werte, die der Ledger schon hält, und eine solche Kopie kann **unentdeckbar**
+von ihrer Ledger-Zeile abweichen (dieselbe Klasse Fehler wie F46). Die tatsächliche Payload
+(`JournalInboundJobData`, `packages/journaling/src/phase-b/queue-contract.ts`) trägt genau ein Feld,
+`spoolTxId`. Dass der ältere Typ weiterhin exportiert und in der Architektur-Doku als Zielzustand
+beschrieben stand, ist ein Fund derselben Art, die dieses Register schon mehrfach verzeichnet hat: eine
+Doku-Aussage, die stillschweigend hinter der tatsächlich getroffenen Entscheidung zurückblieb, statt
+sie zu korrigieren, sobald sie getroffen war.
+
+**Behoben, teilweise:** `02-architektur.md` §3 trägt jetzt eine Korrektur mit Verweis auf diesen Befund
+und auf `JR-6-01`s tatsächliche Entscheidung. **Nicht behoben:** `IJournalInboundJob` selbst ist noch
+nicht aus `packages/types` entfernt — das ist eine eigenständige Aufräumarbeit mit eigenem Review
+(ein exportierter Typ ohne Aufrufer könnte von einem externen Konsumenten des Pakets importiert sein,
+auch wenn nichts im Repository selbst ihn nutzt), und liegt außerhalb des Umfangs von `JR-6-02b`.
+
+**Schwere:** niedrig — der Typ wird nirgends konstruiert, richtet also keinen Schaden an. Der Wert des
+Fundes liegt in der korrigierten Doku-Aussage, nicht in einer Verhaltensänderung.

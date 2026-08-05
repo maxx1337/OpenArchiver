@@ -2450,20 +2450,118 @@ mitgeführt wird statt weggeglättet.
 - **Verworfen: die drei Arten gar nicht auflösen und pauschal in ein Sammelpostfach legen.** Das wirft
   die `To`/`Cc`-Information weg, die in zwei der drei Fälle vorhanden **und** korrekt ist.
 
-## ADR-034 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
+## ADR-034 — Phase-B-Pipeline: Fan-out über jeden aufgelösten Owner, Spool-Freigabe ist Löschen, kein E2E-Suchbeleg in der CI
+
+**Status:** **entschieden** (2026-08-05, `JR-6-02b`) · **Entscheider:** DEV, auf Messung ·
+**Quelle:** Architektur §6, ADR-010, ADR-033, `docs/dev/journaling/07-session-handover.md`s
+Auftragstext für `JR-6-02b`
+
+`JR-6-02b` verbindet Gate (`JR-6-02a`), Parser (E5) und Owner-Auflösung (ADR-033) zu
+`runPhaseBPipeline()` (`packages/journaling/src/phase-b/pipeline.ts`) und schließt drei Fragen, die
+keine der vorherigen Entscheidungen schon beantwortet hatte.
+
+### 1. Fan-out: jeder aufgelöste Owner wird archiviert, nicht nur der Gewinner
+
+`resolveOwner()` liefert einen Gewinner **plus** `additionalMatches` — andere `to`/`cc`/`bcc`-Adressen,
+die ebenfalls eine konfigurierte Domain treffen (JR-5-07 harte Vorgabe 4). Bisher hatte das niemand
+konsumiert. `JR-6-02b`s Auftrag ("je aufgelöstem Owner ein `processEmail`-Aufruf") verlangt genau das:
+die Pipeline archiviert Gewinner **und** jeden zusätzlichen Treffer, dedupliziert auf die normalisierte
+Adresse (derselbe Empfänger in `To` und `Cc` archiviert einmal, nicht zweimal).
+
+**Konsequenz für `OwnerResolutionWinner`:** `additionalMatches` trug bisher nur `{field, address}` —
+die rohe, nicht normalisierte Adresse. Für den Fan-out fehlte die alias-zu-primär-Domain-Normalisierung
+je Treffer. Ergänzt um `normalizedEmail` (`packages/types/src/journal-parser.types.ts`), berechnet in
+`winnerOf()` genau wie für den Gewinner selbst — ein Resolver, eine Normalisierungsregel, für alle
+Treffer gleich (dieselbe Begründung wie ADR-010 für die Dedupe-Semantik). `owner-resolution.test.ts`
+ist entsprechend angepasst (`normalizedEmail` in jeder `winner`/`additionalMatches`-Zusicherung), ohne
+neue Fälle — die bestehenden Tests beweisen weiterhin dasselbe Verhalten, nur mit dem vollständigeren
+Objekt.
+
+### 2. `content_sha256` ist die Identität, die `processEmail()`s Gates sehen — nicht der echte `Message-Id`-Header
+
+ADR-010 warnt ausdrücklich vor der Divergenz zwischen `processEmail()`s `messageIdHeader`-Schlüsselung
+und RFC §4.5s Hash-Dedupe. Der Backend-Adapter (`journal-archive-object-adapter.ts`) löst das, indem er
+den `EmailObject.headers`-Eintrag `message-id` **synthetisch aus dem verifizierten
+`contentSha256Hex`** baut (`<phase-b-sha256-<hex>@journal.internal>`) — nie aus dem tatsächlichen
+Header der Nachricht. Ein Journal-Report mit gefälschtem oder fehlendem `Message-Id` dedupliziert damit
+korrekt auf Objekt-Identität.
+
+**Ein `null` von `processEmail()` wird nicht als „nichts zu tun" behandelt.** Der Adapter löst die
+**bereits existierende** `archived_emails`-Zeile mit demselben Schlüssel auf, den Gate 1 benutzt hat,
+und gibt `{kind: 'duplicate', archivedEmailId}` zurück — nicht nur `{kind: 'duplicate'}`. Grund: ein
+Retry desselben Jobs (nach einem Absturz zwischen erfolgreichem Archivieren und der Indexierung) sieht
+beim zweiten Versuch für **alle** Owner „bereits vorhanden" und würde ohne die Id nichts mehr
+indexieren — die Nachricht bliebe archiviert, aber nie durchsuchbar. Mit der Id indexiert die Pipeline
+jeden Owner **unbedingt**, ob frisch archiviert oder als Duplikat erkannt.
+
+### 3. Spool-Freigabe ist Löschen, keine dritte Spool-Verzeichnisebene
+
+`SpoolEntryReleaser.release()` (`packages/journaling/src/phase-b/spool-entry-releaser.ts`) löscht die
+Spool-Datei per `fs.unlink`. Kein neues `SpoolFileSystem`-Verfahren (sechs bestehende Implementierungen
+hätten eine neue Pflichtmethode für einen Concern gebraucht, der nur Phase B betrifft — dieselbe
+Begründung, die `spool-entry-reader.ts` schon für den Lese-Port gab). Kein drittes Spool-Verzeichnis
+neben `incoming/`/`quarantine/`: die Architektur dokumentiert keines, und die dauerhafte Aufzeichnung
+nach erfolgreicher Phase B ist das archivierte Objekt plus die Ledger-Receipt, nicht die Spool-Kopie.
+Aufgerufen **ausschließlich** als letzter Schritt von `runPhaseBPipeline()`, nachdem jeder Owner
+archiviert (oder korrekt als Duplikat erkannt) **und** indexiert wurde — ein Fehler an jeder früheren
+Stelle wirft, bevor die Datei je gelöscht wird.
+
+### 4. Der Prozessor wirft für jeden Nicht-Erfolg — keine Rückgabe eines Fehlerwerts
+
+`runPhaseBPipeline()` wirft (nie ein Ergebnisobjekt mit `success: false`) für: Gate-Ablehnung
+(`PhaseBSpoolEntryRefusedError`, nach dem Alert), eine unlesbare Spool-Datei
+(`PhaseBSpoolFileUnreadableError`), fehlende Owner-Konfiguration (`PhaseBOwnerConfigMissingError`) und
+einen Archivierungsfehler (`PhaseBArchiveFailedError`). `journal-inbound.processor.ts` fängt das nicht
+ab — ein rejecteter Promise lässt BullMQ den Job scheitern lassen, was `JR-6-04`s Reconciler und einen
+Betreiber gleichermaßen lesen können. Diese Haltung ist keine neue Entscheidung, sondern die
+Durchsetzung dessen, was `JR-6-01` schon für den Platzhalter-Prozessor festgelegt hatte.
+
+### 5. `envelope_from`/`envelope_rcpt` mussten den Ledger-Lookup erneut verlassen
+
+`LedgerEntryByTxId` (`JR-3-05`) trug diese beiden Felder nicht — der einzige bisherige Aufrufer
+(Crash-Recovery) brauchte sie nicht. `parseJournalReport()`s NDR/Plain-BCC-Unterscheidung braucht aber
+genau `envelope_from`s Null-Reverse-Path-Signal (RFC §5321.5.5). Erweitert um beide Felder (`?? null`
+für fehlende Spalten, dieselbe Absicherung wie bei `content_sha256`/`size_bytes` in `JR-6-02a`) und bis
+in `SpoolEntryArchive` durchgereicht — derselbe Fund, aus demselben Grund, den `JR-6-02a` schon einmal
+für `eventType`/`content_sha256`/`size_bytes` gemacht hat: der Lese-Port wächst mit dem, was Phase B
+tatsächlich braucht, nicht mit dem, was ein früherer Aufrufer zufällig schon abgefragt hatte.
+
+### 6. Kein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch — mit einem manuellen Beleg statt eines geschätzten
+
+**Zwei unabhängige Gründe, nicht nur einer:**
+
+- **Die CI hat keinen Meilisearch-Service-Container.** `.github/workflows/ci.yml` startet `postgres`
+  und `valkey` (seit `JR-6-01`), aber kein `meilisearch` — ein committeter Test, der echte Suche
+  braucht, könnte in der CI grundsätzlich nicht laufen, unabhängig von jeder anderen Entscheidung.
+  Einen Service-Container hinzuzufügen ist dieselbe Art Infrastrukturentscheidung wie `JR-6-01`s
+  `valkey`-Container — eine, die dem Auftraggeber vorgelegt wird, nicht nebenbei in dieser Scheibe
+  mitgezogen wird.
+- **Die neuen Backend-Adapter hängen am Prozess-Singleton `db`**, genau wie `IngestionService` und
+  jeder bestehende Service in `packages/backend` (keine Dependency Injection einer Datenbankverbindung
+  — anders als `packages/journaling`, wo das die Regel ist). Der Test-Harness isoliert
+  Integrationstests dagegen über `acquireTestDatabase()` in eine **eigene** Wegwerf-Datenbank je Datei.
+  Beides gleichzeitig zu wollen — echte Adapter, echte Isolation — geht mit dem heutigen Zuschnitt
+  nicht ohne eine Dependency-Injection-Änderung an `IngestionService`/`StorageService`, die über diese
+  Scheibe hinausgeht.
+
+**Was stattdessen steht:** ein manueller Lauf gegen echtes Postgres, echtes Meilisearch und das echte
+Dateisystem (`docker-compose`-Infrastruktur dieses Hosts, `basic-journal-report.eml`-Fixture),
+protokolliert im Sitzungsbericht — Fan-out auf drei Owner (`bob`/`carol`/`dave@contoso.com`), alle drei
+archiviert, indexiert, per Volltextsuche nach `"Quarterly numbers"` mit drei Treffern gefunden, die
+Spool-Datei nach Abschluss gelöscht. Das ist **einmal** demonstriert, nicht durch einen Lauf, den
+irgendjemand wiederholen kann, ohne die Schritte von Hand nachzubauen — der Unterschied zwischen einem
+Beleg und einem Test. Ob ein committeter Test diesen Grad an Beleg verdient (und mit welcher der beiden
+oben genannten Änderungen), ist eine Entscheidung des Auftraggebers.
+
+## ADR-035 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
 
 **Status:** **reserviert** (2026-08-05) · **Grundlage:** ADR-032 Punkt 4
 
 Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**;
-**033 ist mit der Owner-Auflösung für die schwächeren Parse-Ergebnisse vergeben** (siehe oben).
-Wer während E6 eine weitere Nummer braucht, ergänzt sie **hier auf dem Integrationszweig** und nicht
-auf dem Epic-Zweig — die Reservierung ist nur wirksam, solange der Vorrat an der Stelle geführt wird,
-die beim Rückmerge gewinnt.
-
-**Die in E6 fällige Entscheidung trägt bereits eine Nummer:** `ADR-010` (`processEmail` erweitern
-oder eigener Journaling-Pfad) steht seit dem 2026-07-27 als _offen_ in dieser Datei und ist
-`JR-6-02` zugeordnet. Sie ist **keine** der vier reservierten — für sie wird der bestehende
-Abschnitt gefüllt, nicht ein neuer angelegt (ADR-032 Punkt 2: eine Nummer wird nie umgewidmet).
+**033** ist mit der Owner-Auflösung für die schwächeren Parse-Ergebnisse vergeben, **034** mit der
+Phase-B-Pipeline (beide oben). Wer während E6 eine weitere Nummer braucht, ergänzt sie **hier auf dem
+Integrationszweig** und nicht auf dem Epic-Zweig — die Reservierung ist nur wirksam, solange der
+Vorrat an der Stelle geführt wird, die beim Rückmerge gewinnt.
 
 Reservierungen laufen mit der Abnahme des Epics aus. Nicht gebrauchte Nummern fallen an den
 allgemeinen Vorrat zurück; ein nachfolgendes Epic reserviert dann ab der ersten freien.
