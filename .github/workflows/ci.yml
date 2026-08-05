@@ -95,9 +95,12 @@ jobs:
             # the comment here correctly said the integration suite never touched `config/storage.ts`
             # at all; that stopped being true the moment the worker's own module graph reached it.
             # `STORAGE_LOCAL_ROOT_PATH` only needs to exist as a path -- `journal-inbound-worker.int.test.ts`
-            # fails its one job at the gate (no ledger receipt), before any file is ever written.
+            # fails its one job at the gate (no ledger receipt), before any file is ever written. A
+            # plain literal, not a `${{ runner.temp }}` expression: this is job-level `env:`, and the
+            # existing use of that expression in this file is step-level -- kept simple rather than
+            # relying on an untested combination.
             STORAGE_TYPE: local
-            STORAGE_LOCAL_ROOT_PATH: ${{ runner.temp }}/oa-storage
+            STORAGE_LOCAL_ROOT_PATH: /tmp/oa-storage
             # `CryptoService` throws at import without this (`decryptSource()`/`seedIngestionSource()`
             # now always populate `credentials`, JR-6-02b's F-caught gap in the shared seed helper).
             # A fixed test-only value, never a secret.
