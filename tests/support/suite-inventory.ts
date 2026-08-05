@@ -375,7 +375,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// source addressing its own recipient is unaffected, an authenticated source addressing a
 		// different source's recipient is refused 550 5.7.1, and an unauthenticated connection is
 		// unaffected by the source-conflict check).
-		// 670 ci after JR-4-17 (ADR-027 -- a second RCPT TO for a different chain is rejected, not
+		// 670 ci after JR-4-17 (ADR-030 -- a second RCPT TO for a different chain is rejected, not
 		// merely logged): the pre-existing "two recipients resolving to different chains" case in
 		// tests/unit/smtp-recipient-acl-protocol.test.ts was rewritten in place (not counted again) to
 		// assert the new 452 4.5.3 for the second recipient, the first recipient's 250 unaffected, and
@@ -650,7 +650,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// durable half of the invariant is unverified locally by construction; only Linux CI exercises
 		// it. The checker itself (checkNeverPartial(), tests/support/kill-during-data-invariant.ts) is
 		// calibrated independently in the `unit` suite's kill-during-data-invariant.test.ts.
-		// 57 ci after JR-4-14 added 19 cases in smtp-protocol-robustness.adv.test.ts (ADR-026
+		// 57 ci after JR-4-14 added 19 cases in smtp-protocol-robustness.adv.test.ts (ADR-029
 		// Auflage 1 -- adversarial protocol robustness; see that file's own doc comment).
 		// 63 ci after the same file absorbed 6 more cases from a second, independently-built JR-4-14
 		// file found on this checkout mid-session (packages/journaling/tests/unit/smtp-adversarial-
@@ -666,7 +666,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 30900280611 did before the fix landed. Net +3 over the previous count.
 		// 69 ci after JR-4-21a (F55 -- no limit on the number of RCPT TO commands per transaction)
 		// added 3 cases to the same file: accepts recipients up to a configured limit and rejects one
-		// over it with a distinguishable 452 4.5.3 (never ADR-027's own "different journal chain"
+		// over it with a distinguishable 452 4.5.3 (never ADR-030's own "different journal chain"
 		// text) while the transaction still completes DATA for the recipients already accepted,
 		// every further RCPT TO past the limit is rejected rather than just the first one, and the
 		// unmodified default configuration accepts at least the RFC 5321 section 4.5.3.1.8 floor of

@@ -6,6 +6,28 @@ neu verhandelt wird. Status: **entschieden** · **offen** · **verworfen**.
 Eine als _entschieden_ markierte Entscheidung wird nur mit einer neuen ADR geändert, die die alte
 explizit ersetzt — nie durch stille Abweichung im Code.
 
+> **Umnummerierung am 2026-08-04, beim Rückmerge von E4 — wer eine ADR-Nummer in einem älteren
+> Commit, Kommentar oder Protokoll liest, muss das hier kennen.** E4 (`smtp-ingress`) und E5
+> (Journal-Report-Parser) sind **parallel auf zwei Zweigen** entstanden und haben unabhängig
+> voneinander dieselben Nummern vergeben. E4 hatte zusätzlich die bestehende ADR-026 (Task-IDs) auf
+> ADR-029 verschoben, während der Integrationszweig sie als ADR-026 weiterführte. Aufgelöst nach dem
+> Grundsatz **der eingehende Zweig gibt nach**, entschieden vom Auftraggeber:
+>
+> | vorher auf dem E4-Zweig                 | jetzt                                     |
+> | --------------------------------------- | ----------------------------------------- |
+> | ADR-026 — SMTP-Eigenimplementierung     | **ADR-029**                               |
+> | ADR-027 — eine Kette pro Transaktion    | **ADR-030**                               |
+> | ADR-028 — Erholung der Ledger-Anbindung | **ADR-031**                               |
+> | ADR-029 — Task-IDs `JR-<Epic>-<NN>`     | **ADR-026** (zurück auf die Trunk-Nummer) |
+>
+> Unverändert bleiben die auf dem Integrationszweig vergebenen **ADR-027** (`mailparser`) und
+> **ADR-028** (Betriebsart ist Konfiguration). Die Umstellung erfasste 98 Referenzen in 15 Dateien und
+> ist mechanisch als Permutation ausgeführt worden, nicht von Hand.
+>
+> **Die Lehre steht in ADR-032:** zwei parallele Zweige, die beide aus demselben fortlaufenden
+> Nummernkreis schöpfen, kollidieren zwangsläufig — das galt hier gleichzeitig für ADR-Nummern,
+> Befundnummern (F42/F43) und Dateinamen (`12-`).
+
 ---
 
 ## ADR-001 — Umfang von Epic 0: nur Planung und Dokumentation
@@ -1652,10 +1674,10 @@ nicht wiederverwendet werden:
    die operative Einlösung des in ADR-024 festgehaltenen §13-Punktes, **soweit der Auftraggeber
    selbst betreibt**. Wer betreibt, entscheidet ADR-024 — dort weiterhin **offen**.
 
-## ADR-029 — Task-IDs schreiben sich `JR-<Epic>-<NN>`
+## ADR-026 — Task-IDs schreiben sich `JR-<Epic>-<NN>`
 
-> **Diese ADR hieß bis zum 2026-08-04 „ADR-026" — dieselbe Nummer wie die SMTP-ADR unten.** Die
-> Doppelvergabe fiel beim Schreiben von ADR-026s Go-Nachtrag auf; der Auftraggeber hat die
+> **Diese ADR hieß bis zum 2026-08-04 „ADR-029" — dieselbe Nummer wie die SMTP-ADR unten.** Die
+> Doppelvergabe fiel beim Schreiben von ADR-029s Go-Nachtrag auf; der Auftraggeber hat die
 > Umnummerierung entschieden. **Umnummeriert wurde diese**, nicht die SMTP-ADR: Die trägt 40
 > Referenzen quer durchs Repo, darunter Produktivcode (`smtp-server.ts`), zwei Testdateien und
 > `suite-inventory.ts`, und ihre beiden **Auflagen** (`JR-4-14`, `JR-4-15`) werden unter der Nummer
@@ -1736,7 +1758,7 @@ Suite und Klasse und nicht deren Namen — die Umbenennung geht daran vorbei. Da
 `tsc -p tsconfig.test.json` je Exit 0, `svelte-check` 0 Fehler / 0 Warnungen, Prettier sauber über
 alle 75 Dateien.
 
-## ADR-026 — SMTP-Empfangspfad: Eigenimplementierung statt Bibliothek
+## ADR-029 — SMTP-Empfangspfad: Eigenimplementierung statt Bibliothek
 
 **Status:** **entschieden** (2026-08-02) · **Entscheider:** PO, auf der Messung von `JR-4-02` und
 einer **eigenen Gegenprobe** · **Quelle:** Backlog E4 (`JR-4-02`, `JR-4-03`), RFC §4.1/§4.2, Skill
@@ -1809,7 +1831,7 @@ Weil die Frage wiederkommen wird, hier die Zahlen aus dem entpackten Paket (`smt
 | **Aber `BDAT` ist kein Kommando-Problem**       | `lib/smtp-stream.js` (295 Zeilen) kennt **zwei** Modi: Kommandozeilen und `_dataMode` (Terminatorsuche mit Dot-Unstuffing). Ein „lies genau `n` rohe Bytes"-Modus — der, in dem `BDAT` arbeitet — **existiert nicht**. Er müsste **in** die Bibliothek hinein |
 | Was der Umstieg spart                           | `STARTTLS` (`JR-4-04`), `AUTH`/SASL (Teil von `JR-4-05`), Timeouts, Parameter-Parsing, Dot-Unstuffing — real, aber der Größenordnung nach **rund 1,5 von 16** E4-Tasks                                                                                        |
 | Was der Umstieg kostet                          | `JR-4-02`, `JR-4-03` und `JR-4-16` sind fertig, getestet und gemessen — sie wären wegzuwerfen; die Byte-Treue (Randbedingung 3) liefe künftig durch fremden Stream-Code; der `BDAT`-Eingriff läge an drei Stellen in nicht-öffentlicher API                   |
-| Unerwünschtes, das mitkommt                     | `handler_VRFY`, `handler_XCLIENT`, `handler_XFORWARD`, `handler_WIZ`, `handler_SHELL` — ADR-026 schließt die ersten drei ausdrücklich aus, weil `XCLIENT`/`XFORWARD` einer Gegenstelle erlauben, `remote_ip`/`ehlo_name` zu setzen, also gehashte Felder      |
+| Unerwünschtes, das mitkommt                     | `handler_VRFY`, `handler_XCLIENT`, `handler_XFORWARD`, `handler_WIZ`, `handler_SHELL` — ADR-029 schließt die ersten drei ausdrücklich aus, weil `XCLIENT`/`XFORWARD` einer Gegenstelle erlauben, `remote_ip`/`ehlo_name` zu setzen, also gehashte Felder      |
 
 **Die Entscheidung bleibt damit bestehen**, aber ihre Begründung ist ausgetauscht: nicht „keine
 Bibliothek kann `BDAT`" allein, sondern „`BDAT` ist für Vollständigkeit unverzichtbar **und** keine
@@ -1942,7 +1964,7 @@ MIT-Hinweis in den Dateikommentar; das ist guter Stil und hält die Herkunft nac
 kleiner. Sie prüft künftig einen Empfangspfad, dessen Grenzen an der Transportschicht sitzen — die
 Durchsicht wird dadurch aussagekräftiger, nicht überflüssig.
 
-## ADR-027 — Eine Transaktion, die Journal-Empfänger mehrerer Ketten adressiert
+## ADR-030 — Eine Transaktion, die Journal-Empfänger mehrerer Ketten adressiert
 
 **Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-05b` hat den Fall
 erkannt und ausdrücklich **nicht** gelöst, wie beauftragt · **Umsetzung:** `JR-4-17` (neu), **vor
@@ -2015,7 +2037,7 @@ Drei Auflagen daraus:
    die Messung negativ aus, ist der oben benannte Ausbaupfad zu bauen — dann mit dem vollen Preis für
    Recovery und Sperrreihenfolge.
 
-## ADR-028 — Erholung der Ledger-Anbindung: Provider statt Wert, Wiederholung bis zum ersten Erfolg
+## ADR-031 — Erholung der Ledger-Anbindung: Provider statt Wert, Wiederholung bis zum ersten Erfolg
 
 **Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-06a` hat die Lücke
 selbst offengelegt und vorgelegt; Task `JR-4-19` · **Berührt:** Skill `journal-ledger` §2
@@ -2075,3 +2097,49 @@ sondern Vorgaben:
 - Ledger-Einträge werden nie gelöscht, auch nicht bei DSGVO-Löschung (§10).
 - Hashing vor Verschlüsselung (§7).
 - Keine Compliance-Behauptung über die Formulierung in §13 hinaus.
+
+---
+
+## ADR-032 — Fortlaufende Nummernkreise gehören dem Integrationszweig, nicht dem Epic-Zweig
+
+**Status:** **entschieden** (2026-08-04) · **Entscheider:** Auftraggeber · **Betrifft:** ADR-Nummern,
+Befundnummern in `09-befunde-bestandscode.md`, Dateinamen in `docs/dev/journaling/`
+
+Beim Rückmerge von E4 kollidierten **drei** Nummernkreise gleichzeitig, weil E4 und E5 parallel auf
+zwei Zweigen entstanden sind und beide aus demselben fortlaufenden Vorrat geschöpft haben:
+
+| Kreis             | Kollision                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| **ADR-Nummern**   | ADR-026, ADR-027 und ADR-028 doppelt vergeben; E4 hatte zusätzlich die bestehende ADR-026 verschoben |
+| **Befundnummern** | F42/F43 doppelt — E5 vergab sie in `06-status.md` und `12-parallelbetrieb.md` statt in `09-befunde…` |
+| **Dateinamen**    | `12-parallelbetrieb.md` (E5) gegen `12-archiv-e13-e2.md` (E4)                                        |
+
+Das war kein Versehen einer einzelnen Sitzung, sondern die zwangsläufige Folge davon, dass ein
+fortlaufender Zähler auf zwei Zweigen gleichzeitig weitergezählt wird. Er verhält sich wie eine
+Sequenz ohne Sperre.
+
+### Entscheidung
+
+1. **Der Integrationszweig führt die Nummernkreise.** Kollidiert ein Epic-Zweig beim Rückmerge, gibt
+   **der eingehende Zweig nach** — unabhängig davon, welche Seite billiger umzustellen wäre. Der Trunk
+   ist bereits abgenommen und wird von Folgearbeit referenziert; er ist der stabile Bezugspunkt.
+2. **Eine Nummer wird nie umgewidmet.** Was der Trunk als ADR-026 führt, bleibt ADR-026. Eine
+   Verschiebung wie die von E4 (Task-IDs von 026 auf 029) ist auch dann unzulässig, wenn sie auf dem
+   eigenen Zweig konsistent aussieht.
+3. **Befundnummern werden ausschließlich in `09-befunde-bestandscode.md` vergeben.** Die Regel stand
+   dort schon; E5 hat sie verletzt, indem es F42/F43 in Statusdokumenten vergab. Wer in einem anderen
+   Dokument einen Befund nennt, verweist auf eine dort bereits angelegte Nummer.
+4. **Wer einen Epic-Zweig eröffnet, reserviert seine Nummern vorab auf dem Integrationszweig** — ein
+   Platzhalterabschnitt (`## ADR-0NN — reserviert für E<N>`) genügt und kostet einen Commit. Das ist
+   die eigentliche Gegenmaßnahme: Kollisionen entstehen beim Vergeben, nicht beim Mergen.
+
+### Konsequenz
+
+Die Umnummerierung ist in der Notiz am Kopf dieser Datei dokumentiert. Sie hat 98 Referenzen in 15
+Dateien erfasst und ist als mechanische Permutation ausgeführt worden, nicht von Hand — bei einer
+Zyklusabbildung (026→029→026) ist die naheliegende Reihenfolge von Einzelersetzungen falsch, und der
+Fehler wäre stumm geblieben.
+
+**Nicht entschieden ist der Umgang mit Task-IDs** (`JR-<Epic>-<NN>`). Sie kollidieren strukturell
+nicht, weil die Epic-Nummer im Präfix steht — genau die Eigenschaft, die den anderen drei Kreisen
+fehlt. Wenn ein künftiger Kreis neu entsteht, ist das die Vorlage.

@@ -95,7 +95,7 @@ import { ProtocolRejectionAbort } from '../spool/quarantine';
  * `MAX_COMMAND_LINE_BYTES` used to be checked inside {@link SmtpConnection.drainCommandCarry} --
  * the parser -- and only in the branch reached when no CRLF had been found yet in `commandCarry`.
  * That left two gaps the Product Owner asked `go-smtp` (github.com/emersion/go-smtp, MIT license,
- * compatible with this project's AGPL-3.0 -- see `05-entscheidungen.md` ADR-026's 2026-08-04
+ * compatible with this project's AGPL-3.0 -- see `05-entscheidungen.md` ADR-029's 2026-08-04
  * addendum) to answer, having measured that it solves both *structurally*: a line that arrives
  * whole, its own CRLF included, in one TCP segment (F52), and bytes parked while
  * {@link SmtpConnection.commandProcessingSuspended} skips the parser entirely during an `AUTH`
@@ -223,7 +223,7 @@ import { ProtocolRejectionAbort } from '../spool/quarantine';
  * because `JR-4-06` needs exactly that mapping to fill `JournalTransactionInput.chainScopeId`/
  * `journalingSourceId` when it wires `completeTransfer()` into `JournalAcceptance.accept()`. A
  * transaction can no longer end up with recipients resolving to **more than one** chain: `JR-4-05b`
- * recorded the case and left it undecided, and `ADR-027` (`docs/dev/journaling/05-entscheidungen.md`,
+ * recorded the case and left it undecided, and `ADR-030` (`docs/dev/journaling/05-entscheidungen.md`,
  * implemented by `JR-4-17`) decided it -- the second and every later `RCPT TO` that would add a
  * *different* `chainScopeId` to this transaction is rejected with `452 4.5.3` in {@link handleRcpt},
  * before it ever reaches {@link recordMatchedRecipient}. See that method's doc comment for what
@@ -1539,7 +1539,7 @@ class SmtpConnection {
 	 * how a first version of this fix broke `JR-4-07`'s byte-fidelity suite (a `BDAT <n> LAST` command
 	 * pipelined with its own content in one packet was misread as one long line and rejected). This is
 	 * this project's version of `go-smtp`'s `LineLimit = 0` escape hatch around `BDAT`
-	 * (`conn.go:1075`/`1091`/`1098`, ADR-026 addendum point 2): instead of an explicit toggle, the loop
+	 * (`conn.go:1075`/`1091`/`1098`, ADR-029 addendum point 2): instead of an explicit toggle, the loop
 	 * structurally never checks a line once it has recognised it left line mode.
 	 */
 	private drainCommandCarry(): void {
@@ -2177,12 +2177,12 @@ class SmtpConnection {
 		// comment), not anything the ACL evaluator does. `>=` (not `>`), so the transaction can hold
 		// at most `maxRecipientsPerTransaction` accepted recipients, matching the RFC 5321 section
 		// 4.5.3.1.8 floor `smtp-config.ts`'s schema enforces on this value. Deliberately a different
-		// log message and response text than the ADR-027 cross-chain check a few lines below, even
+		// log message and response text than the ADR-030 cross-chain check a few lines below, even
 		// though both answer `452 4.5.3`: this is "too many recipients, full stop", that one is "too
 		// many recipients *of a second chain*" -- conflating the two would make an operator's log
 		// misdiagnose which cause fired. The transaction is not aborted; a sender may still complete
 		// DATA/BDAT with the recipients already accepted (452 rejects only this one recipient, per
-		// RFC 5321's own "too many recipients" semantics -- see the ADR-027 check's own doc comment
+		// RFC 5321's own "too many recipients" semantics -- see the ADR-030 check's own doc comment
 		// for the same point made about its case).
 		if (this.rcptTo.length >= this.smtp.maxRecipientsPerTransaction) {
 			this.logger.error(
@@ -2250,11 +2250,11 @@ class SmtpConnection {
 				this.armCommandTimer();
 				return;
 			}
-			// ADR-027 (docs/dev/journaling/05-entscheidungen.md), JR-4-17: a second, or later, RCPT TO
+			// ADR-030 (docs/dev/journaling/05-entscheidungen.md), JR-4-17: a second, or later, RCPT TO
 			// that would add a *different* chainScopeId to the one(s) already matched in this
 			// transaction. One SMTP transaction produces one receipt in exactly one chain (ADR-007,
 			// skill journal-ledger section 5) -- JR-4-05b's recordMatchedRecipient only ever logged
-			// this case; ADR-027 is the decision. Rejected with 452 4.5.3 ("too many recipients"),
+			// this case; ADR-030 is the decision. Rejected with 452 4.5.3 ("too many recipients"),
 			// deliberately not 550: sending MTAs already implement recipient-limit splitting for
 			// exactly this enhanced code and resend the rejected recipient in a transaction of its
 			// own, where it is unambiguous again -- a 550 would be permanent and would silently lose
@@ -2277,7 +2277,7 @@ class SmtpConnection {
 						matchedRecipients: this.matchedRecipients.map((r) => ({ ...r })),
 					},
 					'smtp-ingress: rejecting RCPT TO with 452 4.5.3 -- this transaction already ' +
-						'matched a different journal chain (ADR-027: a transaction stays assigned to ' +
+						'matched a different journal chain (ADR-030: a transaction stays assigned to ' +
 						'exactly one chain; the sending MTA is expected to resend this recipient in its ' +
 						'own transaction)'
 				);
@@ -2302,7 +2302,7 @@ class SmtpConnection {
 
 	/**
 	 * Record one recipient the recipient ACL matched to a source/chain. By the time this runs,
-	 * `handleRcpt`'s `ADR-027` guard has already rejected -- with `452 4.5.3`, before reaching here --
+	 * `handleRcpt`'s `ADR-030` guard has already rejected -- with `452 4.5.3`, before reaching here --
 	 * any recipient that would add a *second*, distinct `chainScopeId` to this transaction, so every
 	 * call here only ever adds the transaction's first chain or repeats one already matched (the same
 	 * recipient again, or another recipient of the same source). `matchedChainScopeIds` stays a `Set`
@@ -2592,7 +2592,7 @@ class SmtpConnection {
 	 * durably store. Returns `false` (having already written a `451` and re-armed the command timer)
 	 * when it refuses; the caller must not proceed to `354`/`state = 'data'`/`'bdat'` in that case.
 	 *
-	 * `singleMatchedChainScopeId()`'s assertion is the one `ADR-027`/`JR-4-17` promises structurally
+	 * `singleMatchedChainScopeId()`'s assertion is the one `ADR-030`/`JR-4-17` promises structurally
 	 * (a second `RCPT TO` for a different chain is rejected with `452 4.5.3` before it ever reaches
 	 * `matchedChainScopeIds`) -- asserted here rather than assumed, per the Product Owner's
 	 * instruction, because a caller that constructs `EsmtpServer` with `journalAcceptance` set but
@@ -2608,7 +2608,7 @@ class SmtpConnection {
 			this.logger.error(
 				{ err, remoteAddress: this.socket.remoteAddress },
 				'smtp-ingress: refusing to start acceptance -- the envelope did not resolve to ' +
-					'exactly one journal chain (ADR-027 invariant violated; is recipientAclEvaluator ' +
+					'exactly one journal chain (ADR-030 invariant violated; is recipientAclEvaluator ' +
 					'configured alongside journalAcceptance?)'
 			);
 			this.writeResponse(451, '4.3.0', 'Requested action aborted: local error in processing');
@@ -2638,7 +2638,7 @@ class SmtpConnection {
 			envelopeFrom: this.mailFrom,
 			// Arrival order, never sorted (ADR-006) -- `this.rcptTo` is already in that order.
 			envelopeRcpt: [...this.rcptTo],
-			// The transaction's first matched recipient's source -- ADR-027 guarantees every matched
+			// The transaction's first matched recipient's source -- ADR-030 guarantees every matched
 			// recipient shares one chainScopeId, but does not promise they all share one sourceId; the
 			// first is "the" source this receipt is attributed to (architecture doc section on
 			// "the recipient determines the chain").
@@ -2648,13 +2648,13 @@ class SmtpConnection {
 		return true;
 	}
 
-	/** The one chain every recipient matched so far this transaction must resolve to (ADR-027) --
+	/** The one chain every recipient matched so far this transaction must resolve to (ADR-030) --
 	 * throws if that invariant does not hold. See {@link tryBeginAcceptance}'s doc comment for why
 	 * this is asserted rather than assumed. */
 	private singleMatchedChainScopeId(): string {
 		if (this.matchedChainScopeIds.size !== 1) {
 			throw new Error(
-				`expected exactly one matched chain per transaction (ADR-027), got ` +
+				`expected exactly one matched chain per transaction (ADR-030), got ` +
 					`${this.matchedChainScopeIds.size}`
 			);
 		}

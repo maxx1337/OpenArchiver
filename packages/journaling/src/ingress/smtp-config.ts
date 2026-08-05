@@ -54,7 +54,7 @@ export const DEFAULT_DATA_TIMEOUT_MS = 3 * 60_000;
  * this default -- and the schema's own floor below -- must never be set below that without becoming
  * a protocol violation. 1000 mirrors Postfix's own `smtpd_recipient_limit` default, a number real
  * mail transfer agents already assume is a reasonable ceiling before falling back to
- * recipient-splitting (see the `452 4.5.3` response in `handleRcpt()`, and ADR-027's own use of that
+ * recipient-splitting (see the `452 4.5.3` response in `handleRcpt()`, and ADR-030's own use of that
  * same code for a different reason -- "too many recipients" is RFC 5321's own wording for it).
  */
 export const DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION = 1000;

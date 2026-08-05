@@ -36,7 +36,7 @@ import {
 } from '../support/generate-test-tls-cert';
 
 /**
- * `JR-4-14` -- ADR-026 Auflage 1: this server is hand-rolled on `node:net` (see `smtp-server.ts`'s
+ * `JR-4-14` -- ADR-029 Auflage 1: this server is hand-rolled on `node:net` (see `smtp-server.ts`'s
  * own module doc comment for why no library was available that supported `BDAT`), which means it
  * never inherited the hardening an established SMTP server package would have brought against a
  * hostile or merely broken peer. This file is that hardening's proof, over a real loopback socket.
@@ -1157,7 +1157,7 @@ suite('ci', 'JR-4-21a -- F55: a per-transaction RCPT TO count limit', () => {
 		}
 
 		// One over the configured limit -- refused. The reply text is deliberately distinguishable
-		// from ADR-027's own 452 4.5.3 ("a different journal chain"): this one names the limit
+		// from ADR-030's own 452 4.5.3 ("a different journal chain"): this one names the limit
 		// itself, so an operator's log does not conflate the two causes.
 		client.send('RCPT TO:<recipient-over-limit@example.com>');
 		const overLimitReply = await client.nextReply();

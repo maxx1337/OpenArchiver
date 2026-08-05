@@ -24,7 +24,7 @@ import { smtpServerConfigSchema } from '../../src/ingress/smtp-config';
  *
  * A hand-written `RecipientAclEvaluator` fake stands in for `SourceAclCache`, the same substitution
  * `smtp-source-acl-protocol.test.ts` makes for the source ACL -- this file's job is the wiring
- * inside `SmtpConnection.handleRcpt` (which code for which decision, `ADR-027`'s cross-chain
+ * inside `SmtpConnection.handleRcpt` (which code for which decision, `ADR-030`'s cross-chain
  * rejection, and the bookkeeping in `recordMatchedRecipient`), not the cache's own
  * refresh/staleness/case-folding logic, which is `source-acl-cache.test.ts`'s and
  * `recipient-address.test.ts`'s job.
@@ -206,7 +206,7 @@ suite('ci', 'EsmtpServer recipient ACL gate over the wire (JR-4-05b)', () => {
 		expect(line).toMatch(/^250 2\.1\.5/);
 	});
 
-	it("ADR-027 (JR-4-17): a second RCPT TO for a different journal chain is rejected 452 4.5.3; the first recipient keeps its 250, and the rejection is logged with only the transaction's one committed chain in matchedRecipients", async () => {
+	it("ADR-030 (JR-4-17): a second RCPT TO for a different journal chain is rejected 452 4.5.3; the first recipient keeps its 250, and the rejection is logged with only the transaction's one committed chain in matchedRecipients", async () => {
 		const { logger, errors } = recordingLogger();
 		const { port } = await startServer({
 			logger,
@@ -224,7 +224,7 @@ suite('ci', 'EsmtpServer recipient ACL gate over the wire (JR-4-05b)', () => {
 		const second = await send(socket, reader, 'RCPT TO:<journal-b@journaling.example.com>');
 		expect(second).toMatch(/^452 4\.5\.3/);
 
-		// The rejection is still logged (skill/ADR-027 requirement: visible, not silently dropped --
+		// The rejection is still logged (skill/ADR-030 requirement: visible, not silently dropped --
 		// full operator visibility is E10's job, but the log must not disappear because it is now
 		// rejected). The logged state proves the rejected recipient never entered the transaction:
 		// `matchedRecipients` at the moment of rejection holds only the first, accepted chain.
@@ -280,7 +280,7 @@ suite('ci', 'EsmtpServer recipient ACL gate over the wire (JR-4-05b)', () => {
 		expect(afterReset).toMatch(/^250 2\.1\.5/);
 	});
 
-	it('two recipients of the same source, or the same recipient twice, both stay ordinary 250s -- no rejection, no ambiguity log (ADR-027 only concerns a *different* chain)', async () => {
+	it('two recipients of the same source, or the same recipient twice, both stay ordinary 250s -- no rejection, no ambiguity log (ADR-030 only concerns a *different* chain)', async () => {
 		const { logger, errors } = recordingLogger();
 		const { port } = await startServer({
 			logger,

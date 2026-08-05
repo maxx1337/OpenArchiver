@@ -2639,13 +2639,13 @@ gemessen wird.
 **Schwere:** mittel · **Kategorie:** Empfangspfad, RFC-Konformität/Ressourcenbegrenzung · **Ort:**
 `packages/journaling/src/ingress/smtp-server.ts:1390-1397` (`SmtpConnection.drainCommandCarry`) ·
 **Gefunden:** von TEST am 2026-08-04 beim Bau von `JR-4-14` (adversariale Protokollrobustheit,
-ADR-026 Auflage 1, Fallgruppe „überlange Envelope-Adressen") · **Status:** **behoben in `JR-4-21`,
+ADR-029 Auflage 1, Fallgruppe „überlange Envelope-Adressen") · **Status:** **behoben in `JR-4-21`,
 Commit `3b2bc66`** (Rolle DEV, 2026-08-04)
 
 > **Behoben (`JR-4-21`).** Die Grenze sitzt jetzt zeilenweise in `drainCommandCarry()` selbst: der
 > `idx !== -1`-Zweig prüft `idx > MAX_COMMAND_LINE_BYTES`, **bevor** die Zeile extrahiert wird, genau
 > die Prüfung, die hier gefehlt hat — der `idx === -1`-Zweig war unverändert schon richtig. Das ist
-> nach `go-smtp`s Vorlage (ADR-026-Nachtrag), aber **nicht** als ein eifriger Scan über den ganzen
+> nach `go-smtp`s Vorlage (ADR-029-Nachtrag), aber **nicht** als ein eifriger Scan über den ganzen
 > Puffer: eine erste Fassung hat genau das versucht und `JR-4-07`s Byte-Treue-Suite zerschossen, weil
 > ein pipeliniertes `BDAT <n> LAST` samt eigenem Inhalt in einem Paket wie eine überlange Zeile aussah
 > — gefunden vom **Volllauf**, nicht von F52/F53s eigenen Tests. Die Schleife prüft deshalb genau eine
@@ -2886,7 +2886,7 @@ bestätigt" ist entfernt.
 > zerschossen: ein pipeliniertes `BDAT <n> LAST` samt eigenem Inhalt in einem Paket sah, bevor die
 > Kommandozeile geparst war, wie eine einzige überlange Zeile aus. **Gefunden hat das der Volllauf,
 > nicht F52s oder F53s eigene Tests** — genau die Konstellation, vor der `go-smtp`s `LineLimit = 0`
-> um `BDAT` (ADR-026-Nachtrag, Punkt 2) warnt. Behoben, indem F52 zeilenweise **innerhalb**
+> um `BDAT` (ADR-029-Nachtrag, Punkt 2) warnt. Behoben, indem F52 zeilenweise **innerhalb**
 > `drainCommandCarry()`s bestehender Schleife prüft (die dort ohnehin nie ein zweites `indexOf(CRLF)`
 > auf Inhaltsbytes aufruft) und nur F53s Fall — wo Inhaltsbytes protokollbedingt ausgeschlossen sind —
 > weiterhin eifrig über den ganzen Puffer scannt.
@@ -2964,7 +2964,7 @@ notiert.
 **Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
 `packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.handleRcpt()`,
 `recordMatchedRecipient()`, die Felder `rcptTo`/`matchedRecipients`) · **Gefunden:** von TEST am
-2026-08-04, im Rahmen von `JR-4-15` (ADR-026 Auflage 2, Scope-Punkt „Ressourcengrenzen je
+2026-08-04, im Rahmen von `JR-4-15` (ADR-029 Auflage 2, Scope-Punkt „Ressourcengrenzen je
 Verbindung") · **Status:** **behoben in `JR-4-21a`, Commit `8755d9b`** (Rolle DEV, 2026-08-04)
 
 > **Behoben (`JR-4-21a`).** `smtp-config.ts` bekommt ein neues Feld `maxRecipientsPerTransaction`
@@ -2973,7 +2973,7 @@ Verbindung") · **Status:** **behoben in `JR-4-21a`, Commit `8755d9b`** (Rolle D
 > Normverstoß, keine bloß strengere Einstellung). `handleRcpt()` prüft `this.rcptTo.length >=
 this.smtp.maxRecipientsPerTransaction` **unbedingt**, vor der ACL-Verzweigung — die Grenze gilt
 > also unabhängig davon, ob überhaupt ein `recipientAclEvaluator` konfiguriert ist. Bei Überschreitung
-> antwortet der Server `452 4.5.3`, mit einem Text, der sich bewusst von ADR-027s eigenem `452 4.5.3`
+> antwortet der Server `452 4.5.3`, mit einem Text, der sich bewusst von ADR-030s eigenem `452 4.5.3`
 > („andere Kette") unterscheidet — sonst könnte ein Betreiber die beiden Ursachen im Log nicht
 > auseinanderhalten. Die Transaktion läuft danach weiter: `452` weist nur diesen einen Empfänger
 > zurück, `DATA`/`BDAT` schließt mit den bereits angenommenen Empfängern normal ab.
@@ -2993,7 +2993,7 @@ this.smtp.maxRecipientsPerTransaction` **unbedingt**, vor der ACL-Verzweigung �
 
 ### Was gemessen wurde
 
-`handleRcpt()` prüft die Empfänger-ACL, ADR-027s Ketten-Zugehörigkeit (`452 4.5.3` bei einer
+`handleRcpt()` prüft die Empfänger-ACL, ADR-030s Ketten-Zugehörigkeit (`452 4.5.3` bei einer
 **anderen** Kette) und — bei authentifizierten Verbindungen — die Quellen-Übereinstimmung. Danach
 folgt unbedingt:
 
@@ -3031,7 +3031,7 @@ Anders als F52/F53/F54 (alle drei: eine Kommandozeile bzw. ein Puffer wird nicht
 `MAX_COMMAND_LINE_BYTES` geprüft) ist hier **jede einzelne** Kommandozeile für sich genommen kurz und
 gültig — das Problem ist nicht die Zeilenlänge, sondern die **Anzahl** der Zeilen, die dieselbe
 Transaktion anhäufen darf, bevor `DATA`/`BDAT` überhaupt beginnt. Der `go-smtp`-Vorlage aus dem
-ADR-026-Nachtrag (`JR-4-21`) begegnet dieser Klasse von Fund nicht — `lineLimitReader` begrenzt
+ADR-029-Nachtrag (`JR-4-21`) begegnet dieser Klasse von Fund nicht — `lineLimitReader` begrenzt
 Byte-Länge, nicht Anzahl-der-Kommandos-einer-Sorte.
 
 ### Kalibrierung
@@ -3050,7 +3050,7 @@ fail-open ist, ist derselbe Fehler eine Ebene höher).
 
 Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber.
 Ein möglicher Fix: eine konfigurierbare Obergrenze für `rcptTo.length` je Transaktion, bei
-Überschreitung `452 4.5.3` (derselbe Code, den ADR-027 für „zu viele Empfänger" schon benutzt, nur
+Überschreitung `452 4.5.3` (derselbe Code, den ADR-030 für „zu viele Empfänger" schon benutzt, nur
 aus einem anderen Grund) — nicht umgesetzt, nur als Richtung notiert.
 
 ## F56 — kein expliziter Cipher-Suite-Filter: der Server verhandelt `AES128-SHA` (keine Forward Secrecy) unter TLS 1.2
@@ -3142,7 +3142,7 @@ möglicher Fix: `buildTlsSocketOptions()` einen expliziten `ciphers`-String mitg
 Nicht-PFS-Suiten (reiner RSA-Schlüsselaustausch) und `3DES`/`RC4`/`NULL` ausschließt (z. B. Mozillas
 „intermediate"-Profil als Ausgangspunkt) — nicht umgesetzt, nur als Richtung notiert.
 
-## `JR-4-15` — Sicherheitsdurchsicht des Empfangspfads (ADR-026 Auflage 2): Ergebnis je Scope-Punkt
+## `JR-4-15` — Sicherheitsdurchsicht des Empfangspfads (ADR-029 Auflage 2): Ergebnis je Scope-Punkt
 
 Rolle TEST, 2026-08-04. Akzeptanzkriterium wörtlich: „Jeder Punkt des Umfangs ist mit Befund oder
 mit begründetem ‚unauffällig' beantwortet; Befunde landen hier; kein Punkt bleibt unbeantwortet

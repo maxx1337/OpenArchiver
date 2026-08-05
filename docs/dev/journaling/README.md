@@ -120,8 +120,8 @@ ist E4 abgenommen** (`JR-4-13`, unabhängige TEST-Sitzung, Protokoll `16-abnahme
 noch der Rückmerge in den Integrationsbranch.
 
 **Wo der nächste Schritt steht:** `07-session-handover.md`. **Wo die Entscheidungen stehen:**
-`05-entscheidungen.md` — für E4 sind das **ADR-026** (der SMTP-Server ist selbst gebaut, weil kein
-Node-Paket `BDAT` beherrscht und Nachrichten mit bare line feeds sonst nie ankommen) und **ADR-027**
+`05-entscheidungen.md` — für E4 sind das **ADR-029** (der SMTP-Server ist selbst gebaut, weil kein
+Node-Paket `BDAT` beherrscht und Nachrichten mit bare line feeds sonst nie ankommen) und **ADR-030**
 (eine Transaktion bleibt genau einer Kette zugeordnet).
 
 ## Branch

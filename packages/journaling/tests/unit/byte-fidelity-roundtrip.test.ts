@@ -53,7 +53,7 @@ import type {
  * line containing only `.`. That scheme has no representation for a bare LF, a bare CR, or a final
  * line with no line ending at all -- there is no CRLF for the dot-stuffing/terminator logic to find.
  * This is not a limitation of this server; it is why `CHUNKING`/`BDAT` (RFC 3030) exists at all, and
- * why ADR-026 makes it mandatory rather than optional: Microsoft 365 journal reports can and do
+ * why ADR-029 makes it mandatory rather than optional: Microsoft 365 journal reports can and do
  * contain bare LFs (historically stripped by Exchange transport, no longer guaranteed), and those
  * bytes are simply not transmissible through `DATA`. `BDAT` carries a declared-length octet stream
  * with no line orientation and no dot-stuffing, so it is the only path that can carry this half of
@@ -413,7 +413,7 @@ const CRLF_CORPUS: ReadonlyArray<{ readonly name: string; readonly content: Buff
 
 const BDAT_ONLY_CORPUS: ReadonlyArray<{ readonly name: string; readonly content: Buffer }> = [
 	{
-		name: 'bare LF only, no CR anywhere, no trailing CRLF (the ADR-026 case)',
+		name: 'bare LF only, no CR anywhere, no trailing CRLF (the ADR-029 case)',
 		content: Buffer.from(
 			'Subject: test\nFrom: sender@example.com\n\nBare LF body, no CR anywhere\nsecond line\n',
 			'latin1'

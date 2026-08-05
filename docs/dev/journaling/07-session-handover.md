@@ -127,7 +127,7 @@ falsches `250` · **100 KB ⇒ korrekt `500` in 25 ms** · ~200 KB ⇒ Fehlschla
 **Dass der Fall bei 100 KB funktioniert, ist der Beleg**, nicht die Ausnahme: dort greift der intakte
 `idx === -1`-Zweig, weil Node in mehreren `data`-Ereignissen liefert.
 
-**Daraus ist `JR-4-21` entstanden (Rolle DEV, läuft), und mit ihr eine Änderung an ADR-026.** Der
+**Daraus ist `JR-4-21` entstanden (Rolle DEV, läuft), und mit ihr eine Änderung an ADR-029.** Der
 Auftraggeber hat die Eigenimplementierung ein zweites Mal angezweifelt, diesmal mit Go-Kandidaten —
 und traf eine echte Lücke: die Kandidatentabelle der ADR prüft **ausschließlich npm-Pakete**.
 Gemessen: `go-smtp` kann `BDAT` vollständig serverseitig. **Die Entscheidung bleibt trotzdem**, aber
@@ -135,7 +135,7 @@ aus einem anderen Grund als bisher: nicht das Protokoll ist der Blocker, sondern
 Acceptance-Contract — ein Go-Ingress müsste Spool (E3) und Ledger (E2) mitnehmen, also die Hash-Kette
 zweimal implementieren. **Was sich ändert:** Der Eigenbau hört auf, seine Härtung selbst zu erfinden;
 `go-smtp` ist ab jetzt die Vorlage (`lineLimitReader` — Grenze im **Reader** statt im Parser).
-Vollständig im Nachtrag zu ADR-026, `05-entscheidungen.md`.
+Vollständig im Nachtrag zu ADR-029, `05-entscheidungen.md`.
 
 > **Ein Fehler, aus dem eine Regel geworden ist:** Nachdem der Tester am Nutzungslimit ausgefallen
 > war, hat der PO einen Ersatz gestartet — und nach dem Limit-Reset bauten **zwei** Tester dieselbe
@@ -148,17 +148,17 @@ Vollständig im Nachtrag zu ADR-026, `05-entscheidungen.md`.
 ### Was diese Session gemacht hat
 
 > **Neun Scheiben abgeschlossen:** `JR-4-01` (Prozessskelett, zod-Config, Import-Graph-Nachweis),
-> `JR-4-02` (ESMTP-Server — **und ADR-026**), `JR-4-03` (`CHUNKING`/`BDAT`), `JR-4-16` (F44),
+> `JR-4-02` (ESMTP-Server — **und ADR-029**), `JR-4-03` (`CHUNKING`/`BDAT`), `JR-4-16` (F44),
 > `JR-4-04` (STARTTLS/TLS), `JR-4-05a`/`b`/`c` (Quell-ACL und erste Datenbankanbindung,
-> Empfänger-ACL, `AUTH` über TLS), `JR-4-17` (ADR-027), `JR-4-06a` (`accept()` verdrahtet, erstes
+> Empfänger-ACL, `AUTH` über TLS), `JR-4-17` (ADR-030), `JR-4-06a` (`accept()` verdrahtet, erstes
 > `250`), `JR-4-18` (Crash-Recovery-Scan verdrahtet), `JR-4-20` (F46), `JR-4-06b` (ganze Codetabelle,
 > Graceful Drain), `JR-4-07` (kein Relaying, Byte-Treue), `JR-4-08` (Verbindungs- und Ratengrenzen).
 >
-> **Zwei ADRs:** **ADR-026** — der SMTP-Server ist **selbst gebaut**, weil kein Node-Paket `BDAT`
+> **Zwei ADRs:** **ADR-029** — der SMTP-Server ist **selbst gebaut**, weil kein Node-Paket `BDAT`
 > beherrscht; der Auftraggeber hat die Entscheidung zu Recht angezweifelt, und der **Nachtrag** hat
 > die Begründung ausgetauscht: „Exchange benutzt BDAT" trägt nicht (RFC 3030 verlangt `DATA`-Fallback),
 > tragend ist, dass Microsoft **bare line feeds** nicht mehr entfernt und solche Nachrichten über
-> `DATA` **nicht übertragbar** sind. **ADR-027** — eine Transaktion bleibt genau **einer** Kette
+> `DATA` **nicht übertragbar** sind. **ADR-030** — eine Transaktion bleibt genau **einer** Kette
 > zugeordnet; ein zweiter `RCPT TO` für eine andere Kette bekommt `452 4.5.3`.
 >
 > **Sieben Befunde: F42–F48.** Die vier, die zählen:
@@ -179,7 +179,7 @@ Vollständig im Nachtrag zu ADR-026, `05-entscheidungen.md`.
 >   `arrayBuffers` laufen und **kalibriert** sein. Setzt ein Fragezeichen hinter `JR-3-02`s
 >   abgenommene Zusicherung; zu prüfen ist der **Nachweis**, nicht der Code.
 >
-> **Vier neue Tasks aus diesen Funden:** `JR-4-16` (F44), `JR-4-17` (ADR-027), `JR-4-18`
+> **Vier neue Tasks aus diesen Funden:** `JR-4-16` (F44), `JR-4-17` (ADR-030), `JR-4-18`
 > (Crash-Recovery-Scan — war gebaut, getestet, abgenommen und **von niemandem aufgerufen**),
 > `JR-4-19` (Ledger-Verbindung erholt sich nach Startfehler nicht), `JR-4-20` (F46). E4 hat damit
 > **20** Tasks, das Projekt 117.
@@ -511,7 +511,7 @@ und arbeite den nächsten Schritt ab.
 > legt die Alternativen vor.
 
 > **`JR-4-19` ist erledigt (2026-08-03), und zwei Dinge daraus gelten weiter.** **(1)**
-> `EsmtpServer` nimmt seit ADR-028 einen **Provider** statt eines Werts für `journalAcceptance`,
+> `EsmtpServer` nimmt seit ADR-031 einen **Provider** statt eines Werts für `journalAcceptance`,
 > aufgelöst **genau einmal je Transaktion** bei `MAIL FROM` und für deren Dauer festgehalten. Wer das
 > anfasst, muss wissen: dieselbe Auflösung entscheidet, ob überhaupt eine `SpoolWriteBridge` geöffnet
 > wird — ein Provider, der mitten in der Transaktion neu gelesen wird, führt zu einer Quittung ohne
@@ -574,7 +574,7 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 **Beantwortet und nicht mehr offen:** die Rückfrage des Auftraggebers vom 2026-08-03, ob statt des
 Eigenbaus eine fertige SMTP-Bibliothek (`smtp-server`) genommen werden sollte. Geprüft, verneint, und
-der **Nachtrag in `ADR-026`** hält sowohl das Ergebnis als auch die Aufwandsrechnung fest — inklusive
+der **Nachtrag in `ADR-029`** hält sowohl das Ergebnis als auch die Aufwandsrechnung fest — inklusive
 der Korrektur, dass die Begründung im RFC („Exchange Online uses BDAT. Not optional.") **nicht** trug
 und durch die Bare-LF-Begründung ersetzt ist. Wer die Frage erneut stellt, findet dort beide
 Rechnungen.
