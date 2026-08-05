@@ -28,6 +28,8 @@ function verdictOf(kind: SpoolEntryVerdict['kind']): SpoolEntryVerdict {
 				receivedAt: new Date(0),
 				contentSha256Hex: '0'.repeat(64),
 				sizeBytes: 1,
+				envelopeFrom: null,
+				envelopeRcpt: null,
 			};
 		case 'no_receipt':
 			return { kind: 'no_receipt', reason: 'r' };
