@@ -76,8 +76,7 @@ jobs:
                     --health-retries 5
 
         env:
-            # Server *and* credentials for the test harness. No `STORAGE_*` variables: the
-            # integration suite never touches `config/storage.ts`.
+            # Server *and* credentials for the test harness.
             DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
             PGPASSWORD: postgres
             # JR-6-01: the same variables `packages/backend/src/config/redis.ts` reads, so the spawned
@@ -90,6 +89,19 @@ jobs:
             # emits a failing test instead of a visible skip. Positive expectation, in the suite --
             # it replaces the log grep that used to look for the absence of a skip notice.
             OA_TEST_REQUIRE_INFRA: '1'
+            # JR-6-02b: `journal-inbound.worker.ts` now imports the real Phase-B processor, which
+            # imports `IngestionService`/`StorageService` at module scope -- and `config/storage.ts`
+            # throws **at import**, not at first use, if `STORAGE_TYPE` is unset. Before this slice
+            # the comment here correctly said the integration suite never touched `config/storage.ts`
+            # at all; that stopped being true the moment the worker's own module graph reached it.
+            # `STORAGE_LOCAL_ROOT_PATH` only needs to exist as a path -- `journal-inbound-worker.int.test.ts`
+            # fails its one job at the gate (no ledger receipt), before any file is ever written.
+            STORAGE_TYPE: local
+            STORAGE_LOCAL_ROOT_PATH: ${{ runner.temp }}/oa-storage
+            # `CryptoService` throws at import without this (`decryptSource()`/`seedIngestionSource()`
+            # now always populate `credentials`, JR-6-02b's F-caught gap in the shared seed helper).
+            # A fixed test-only value, never a secret.
+            ENCRYPTION_KEY: ci-test-only-encryption-key-not-a-secret
 
         steps:
             - name: Checkout repository
