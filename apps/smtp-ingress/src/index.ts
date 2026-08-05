@@ -18,6 +18,7 @@ import {
 	PostgresSourceAclLookup,
 	runExclusiveCrashRecoveryScan,
 	SourceAclCache,
+	writeLineThenFlush,
 	type JournalAcceptancePort,
 	type QuarantineAlertSink,
 } from '@open-archiver/journaling';
@@ -329,7 +330,16 @@ async function main(): Promise<void> {
 			return;
 		}
 		shuttingDown = true;
-		console.log(`smtp-ingress: received ${signal}, shutting down`);
+		// F59: `console.log` here plus `process.exit(0)` below lost this line whenever the drain finished
+		// before the pipe write did -- `process.exit()` does not flush pending async `stdout` writes, and
+		// `stdout` is a pipe under every test harness and every process supervisor. It cost two red CI
+		// runs in E6 on a process that had shut down perfectly. The write is now something the exit
+		// **waits for**, with a bounded wait: a hung shutdown would be worse than a lost line, so
+		// `writeLineThenFlush()` never rejects and gives up after two seconds.
+		const shutdownLineFlushed = writeLineThenFlush(
+			process.stdout,
+			`smtp-ingress: received ${signal}, shutting down`
+		);
 		sourceAclCache.stop();
 		// JR-4-19: stop the retry timer too. It is `unref()`'d, so it would not hold the loop open,
 		// but a retry firing during the drain would open a database transaction and take the
@@ -340,16 +350,24 @@ async function main(): Promise<void> {
 				sourceAclSql.end({ timeout: 5 }),
 				ledgerSql ? ledgerSql.end({ timeout: 5 }) : Promise.resolve(),
 			]).then(() => undefined);
+		// F59: the shutdown line is awaited **after** the drain, not before it. Putting the wait first
+		// would delay closing connections for the sake of a log line; putting it last costs nothing in the
+		// normal case (by then the write has long since flushed) and only matters in exactly the case that
+		// broke -- a drain that finished faster than the pipe.
+		const exit = (): Promise<void> =>
+			closeConnections()
+				.catch(() => undefined)
+				.then(() => shutdownLineFlushed)
+				.then(() => {
+					process.exit(0);
+				});
 		// JR-4-06b: `server.close()` now performs the graceful drain itself (skill `journal-ledger`
 		// section 2's "Shutdown in progress" row) -- an idle connection gets `421 4.3.2` immediately, a
 		// connection mid-transaction is left alone until it earns its own real reply, and only then
 		// closed. Nothing here changed to get that: `EsmtpServer.close()`'s contract is what grew: see
 		// `@open-archiver/journaling`'s `smtp-server.ts`, `EsmtpServer.close()`'s doc comment, and
 		// `packages/journaling/tests/unit/smtp-graceful-shutdown.test.ts` for the proof.
-		server.close().then(
-			() => closeConnections().finally(() => process.exit(0)),
-			() => closeConnections().finally(() => process.exit(0))
-		);
+		void server.close().then(exit, exit);
 	};
 	process.on('SIGINT', () => shutdown('SIGINT'));
 	process.on('SIGTERM', () => shutdown('SIGTERM'));

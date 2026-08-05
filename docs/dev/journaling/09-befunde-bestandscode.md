@@ -3311,7 +3311,9 @@ hält diese Grenze fest. Sie gehört in die Konfigurationsprüfung im Backend.
 **Schwere:** niedrig (Diagnostik, kein Datenverlust) · **Kategorie:** Neuer Code ·
 **Ort:** `apps/smtp-ingress/src/index.ts` `shutdown()` (Zeilen 332 und 349–352) ·
 **Gefunden:** 2026-08-05 in `JR-6-01`, durch einen roten CI-Lauf (`30999645177`) an einem Test, den
-diese Scheibe nicht angefasst hat · **Status:** **offen, Entscheidung des Auftraggebers ausstehend**
+diese Scheibe nicht angefasst hat · **Status:** **behoben am 2026-08-05** — der Auftraggeber hat sich
+nach dem **zweiten** Treffer (CI `31002635354`, in `JR-6-02a`) für die Behebung im Produktionscode
+entschieden. Umsetzung siehe „Behebung" unten
 
 Der Shutdown-Pfad schreibt seine einzige Bestätigungszeile mit `console.log` und ruft danach in
 beiden Zweigen von `server.close()` `process.exit(0)`:
@@ -3351,6 +3353,51 @@ vorher nur wahrscheinlich, nicht sicher.
 **Nicht mitentschieden:** derselbe Prozess loggt über `pino` **und** `console.log` auf denselben
 Dateideskriptor (in **F49** ausdrücklich offen gelassen). Der Fix für (1) sollte diese Stelle nicht
 stillschweigend mitumbauen — das ist eine eigene Entscheidung.
+
+### Behebung (2026-08-05, Variante 1 — Entscheidung des Auftraggebers)
+
+Auslöser war der **zweite** Treffer: zwei von drei Pushes des E6-Zweigs endeten rot, jedes Mal an
+demselben Test, jedes Mal an derselben Ursache. Damit war der Befund kein Randfall mehr, sondern hat die
+CI als Beleg entwertet — genau das, was **F48** dieses Projekt schon einmal gekostet hat. Ein roter Lauf,
+der immer dieselbe bekannte Ursache hat, ist schlimmer als ein flackernder Test.
+
+**Was geändert wurde.** `writeLineThenFlush()` in
+`packages/journaling/src/ingress/graceful-exit.ts`: schreibt eine Zeile und löst erst auf, wenn der Stream
+den Schreibvorgang quittiert hat. `apps/smtp-ingress`s `shutdown()` **wartet** darauf, und zwar **nach**
+dem Drain — vorher zu warten würde das Schließen der Verbindungen einer Logzeile unterordnen, nachher
+kostet es im Normalfall nichts und greift nur in dem Fall, der kaputt war: ein Drain, der schneller fertig
+ist als die Pipe.
+
+**Drei Eigenschaften, die zur Entscheidung gehören:**
+
+- **Die Wartezeit ist begrenzt** (2 s) und das Promise **lehnt nie ab**. Ein unbegrenztes Warten würde
+  eine verlorene Logzeile gegen einen **hängenden Shutdown** tauschen, und das ist der schlechtere
+  Tausch: ein Supervisor `SIGKILL`t einen Prozess, der nicht aufhört, und ein `SIGKILL` während Phase B
+  ist genau das, was Spool und Reconciler danach aufräumen müssen. Ein `stdout`, dessen Leser weg ist
+  (`EPIPE`), ist ein realer Zustand.
+- **Der Helfer liegt in `packages/journaling`, nicht in `apps/smtp-ingress`** — aus einem
+  Harness-Grund, der es wert ist, gemerkt zu werden: **kein Projekt-Glob erfasst `apps/`**, eine
+  Testdatei dort würde von niemandem gesammelt und der Unclassified-Check würde den Lauf zu Recht rot
+  melden. Prüfbares Verhalten gehört dorthin, wo Tests hinreichen, statt einen Glob für einen Helfer zu
+  verbreitern.
+- **F49 bleibt unberührt.** Der Helfer nimmt den Stream als Parameter und hat keine Meinung darüber, dass
+  `pino` und `console.log` auf denselben Deskriptor schreiben.
+
+**Wie der Fix belegt ist — und wie ausdrücklich nicht.** Der Regressionstest prüft **nicht** noch einmal,
+dass ein gestarteter Ingress „shutting down" ausgibt: das ist die Zusicherung, die geflackert hat (einer
+von drei CI-Läufen), und sie ein weiteres Mal zu behaupten würde die Laune des Runners messen. Geprüft
+wird der **Mechanismus**, gegen einen Stream, dessen Callback der Test selbst auslöst: das Promise löst
+nicht auf, bevor der Stream quittiert hat, und es löst trotzdem auf, wenn der Stream nie quittiert. Eine
+der neun Fälle ist eine **Gegenprobe**, die die unbehobene Form nachbaut (schreiben, dann ohne Warten
+„beenden") und zeigt, dass der Schreibvorgang in dem Moment noch unterwegs war, in dem der Prozess
+gestorben wäre.
+
+**Auf diesem Windows-Host ist die Wirkung nicht messbar** — die Zusicherung in
+`ingress-process-boot.test.ts` steht hinter `process.platform !== 'win32'`, weil Windows kein
+catchbares `SIGTERM` an ein Kind liefert. Der Beleg für die Wirkung ist deshalb dieselbe Form, die
+`JR-4-21` für **F54** verlangt hat: eine **Rate vorher gegen nachher**, nicht ein einzelner grüner Lauf.
+Vorher: **2 von 3 Läufen rot** (`30999645177`, `31002635354`; grün war nur der Wiederholungslauf von
+`30999645177`). Nachher: siehe den Statuseintrag zum F59-Fix in `06-status.md`.
 
 ## F60 — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht
 

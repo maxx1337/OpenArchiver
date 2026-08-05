@@ -200,6 +200,13 @@ export {
 export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
 
 export {
+	DEFAULT_FLUSH_TIMEOUT_MS,
+	writeLineThenFlush,
+	type FlushableStream,
+	type FlushOutcome,
+} from './ingress/graceful-exit';
+
+export {
 	diffM365Ranges,
 	formatM365RangeDiff,
 	M365_ENDPOINTS_BASE_URL,

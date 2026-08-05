@@ -220,7 +220,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// (the decision whether a spool entry may be archived at all), alerts.test.ts (the severity split
 		// E5 deliberately left to E6) and spool-entry-reader.test.ts (streaming hash against a one-shot
 		// hash, across several read chunks).
-		expectedFiles: 72,
+		//
+		// 73 after the F59 fix added packages/journaling/src/ingress/graceful-exit.test.ts. The helper it
+		// tests lives in this package rather than in apps/smtp-ingress for a harness reason worth knowing:
+		// no project glob reaches apps/, so a test file placed there would be collected by nobody -- the
+		// unclassified-file check would fail the run, which is the correct outcome and the reason the
+		// testable part of the fix went where tests can see it.
+		expectedFiles: 73,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -739,7 +745,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// nullable columns. That pair is a regression test for a defect this slice introduced and its own
 		// test caught -- `row.size_bytes === null` does not match `undefined`, and the gate branches on
 		// `contentSha256 === null`, so an `undefined` would have reported a hashless receipt as tampering.
-		expectedTests: { ci: 1056, nightly: 3, manual: 0 },
+		//
+		// 1065 after the F59 fix added 9 in graceful-exit.test.ts. Note what those 9 do *not* do: they do
+		// not re-assert that a spawned ingress prints "shutting down". That assertion is the one that
+		// flapped (1 of 3 CI runs), so repeating it would measure the runner's mood. They pin the
+		// **mechanism** instead -- the promise does not resolve before the stream reports the write, and it
+		// resolves anyway when the stream never does -- against a stream whose callback the test fires
+		// itself. One of the 9 is a counter-check that reproduces the unfixed shape (write, then "exit"
+		// without waiting) and shows the write still in flight at the moment the process would have died.
+		expectedTests: { ci: 1065, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
