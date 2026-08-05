@@ -125,10 +125,10 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-05 (**E6 hat begonnen, `JR-6-01` ist erledigt**) · **Branch:**
-`claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf: **1214 passed
-| 8 skipped** bei 98 Dateien — `unit ci 1019/1019 · integration ci 126/126 · adversarial ci 69/69`,
-Exit 0
+**Stand:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010 entschieden, F59
+behoben**) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
+Volllauf: **1260 passed | 8 skipped** bei 102 Dateien — `unit ci 1065/1065 · integration ci 126/126 ·
+adversarial ci 69/69`, Exit 0 · CI `31003830220` **4 von 4 Versuchen success**
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -140,14 +140,23 @@ Exit 0
 > **Aus E4 ist kein Befund offen.** Beim E4-Rückmerge kollidierten drei Nummernkreise; aufgelöst nach
 > „der eingehende Zweig gibt nach", die Regel daraus ist **ADR-032**.
 
-> **Ein Befund ist neu und offen: `F59`.** `apps/smtp-ingress` schreibt seine Shutdown-Zeile mit
-> `console.log` und ruft direkt danach `process.exit(0)` — das leert einen **Pipe**-stdout auf Linux
-> nicht, die Zeile kann verlorengehen. Aufgefallen ist er **nicht** durch eine Änderung an diesem Code,
-> sondern weil `JR-6-01`s 33 neue Tests (fünf davon starten Prozesse) den Wettlauf auf dem CI-Runner
-> wahrscheinlich genug gemacht haben: `ingress-process-boot.test.ts` aus `JR-4-01` wurde rot, obwohl
-> diese Scheibe ihn nicht angefasst hat. Der Prozess **war** beendet, nur seine letzte Zeile fehlte.
-> **Er braucht eine Entscheidung des Auftraggebers** — Empfehlung steht in
-> `09-befunde-bestandscode.md`: im Produktionscode beheben, nicht im Test wegprüfen.
+> **`F59` ist gefunden und behoben** — beides in dieser Sitzung. `apps/smtp-ingress` schrieb seine
+> Shutdown-Zeile mit `console.log` und rief direkt danach `process.exit(0)`; das leert einen
+> **Pipe**-stdout auf Linux nicht. Aufgefallen ist er **nicht** durch eine Änderung an diesem Code,
+> sondern weil `JR-6-01`s neue Tests den Wettlauf auf dem CI-Runner wahrscheinlich genug gemacht haben:
+> `ingress-process-boot.test.ts` aus `JR-4-01` wurde rot, obwohl keine E6-Scheibe ihn angefasst hat. Der
+> Prozess **war** beendet, nur seine letzte Zeile fehlte. Nach dem **zweiten** Treffer (2 von 3 Pushes)
+> hat der Auftraggeber die Behebung im Produktionscode entschieden — und das war der richtige Grund: ein
+> roter Lauf mit immer derselben bekannten Ursache entwertet die CI als Beleg, die Lehre aus **F48**.
+> Belegt über eine **Rate** statt einen Lauf: vorher 2 von 3 rot, nachher **4 von 4 grün**.
+
+> **Ein Befund ist neu und offen: `F60`.** `StorageService.put()` puffert einen übergebenen Stream sofort
+> zu einem Buffer, obwohl `IStorageProvider.put()` `Buffer | NodeJS.ReadableStream` verspricht — die
+> Verschlüsselung läuft über ganze Buffer. Es gibt damit **im ganzen Repository keinen streamenden
+> Schreibpfad**, und ein Aufrufer, der sorgfältig streamt, verliert die Eigenschaft an der
+> Storage-Grenze, ohne dass es ihm etwas sagt. Gefunden **bei** der Entscheidung zu ADR-010, wo es das
+> ernsteste Gegenargument aufgelöst hat statt bestätigt. Vorgeschlagene Zuordnung **E7**; blockiert E6
+> nicht.
 
 ### Der Stand in einem Satz
 
@@ -157,13 +166,42 @@ Inhalt.** `apps/smtp-ingress` spricht ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPU
 Crash-Recovery-Scan und antwortet auf das Ende von `DATA` bzw. `BDAT … LAST` mit
 **`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append durch sind. Seit
 `JR-6-01` gibt es dahinter den `journal-inbound`-Worker als eigenen Prozess mit begründeten
-Queue-Parametern; **was fehlt, ist `JR-6-02`** — die Verarbeitung selbst, von der Spool-Datei bis zum
-durchsuchbaren Treffer.
+Queue-Parametern, und seit `JR-6-02a` das **Tor**, das entscheidet, ob eine Spool-Datei überhaupt
+archiviert werden darf — archiviert wird nur, wenn eine `receipt`-Zeile existiert **und** die Datei genau
+auf deren `content_sha256` hasht. **Was fehlt, ist `JR-6-02b`:** parsen, Owner auflösen, über den Port aus
+ADR-010 archivieren, indexieren, Spool freigeben.
 
 ### Was diese Session gemacht hat
 
-> **Eine Scheibe: `JR-6-01`** (`d0f4840`), plus die Nummernreservierung nach ADR-032 auf dem
-> Integrationszweig (`fc15edc`). Volllauf **1214 passed | 8 skipped** bei 98 Dateien, Exit 0.
+> **Zwei Scheiben und eine Entscheidung:** `JR-6-01` (`d0f4840`), **ADR-010** samt F60 (`41068aa`),
+> `JR-6-02a` (`fba499c`), F59 behoben (`72509b5`) — plus die Nummernreservierung nach ADR-032 auf dem
+> Integrationszweig (`fc15edc`). Volllauf **1260 passed | 8 skipped** bei 102 Dateien, Exit 0; CI
+> `31003830220` **4 von 4 Versuchen success**.
+
+> **ADR-010 ist entschieden, und die Antwort ist keine der beiden Optionen der ADR.** Nicht
+> `processEmail()` erweitern und nicht einen eigenen Pfad daneben stellen, sondern **unverändert
+> wiederverwenden, hinter einem injizierten Port**. Der Fund, der es entscheidet, stand in keiner der
+> Optionen: **`processEmail()` ist für genau diesen Aufrufer gebaut.** `skipTempFileCleanup` existiert
+> laut Kommentar „für die journaling fan-out loop", `isJournaled` wird aus
+> `provider === 'smtp_journaling'` gesetzt, der `preserveOriginalFile`-Modus speichert den rohen Buffer
+> unverändert und hasht **vor** `storage.put()`, und Gate 2 erzeugt die Fan-out-Form (eine physische
+> Datei, N `archived_emails`-Zeilen). Diese Verdrahtung lag im **Enterprise-Overlay**, das hier fehlt —
+> der Aufrufer ist weg, die für ihn gebaute Schnittstelle ist da. „Erweitern" hätte zudem ADR-025
+> verletzt. Und das ernsteste Gegenargument (Speicher) trägt **gemessen** nicht: daraus wurde **F60**.
+
+> **Was `JR-6-02a` gebaut hat, in einem Satz je Teil.** `classifySpoolEntry()` ist eine reine Funktion
+> mit fünf Urteilen; `no_receipt` ist der **erwartete** Ausgang eines Absturzes zwischen Spool-fsync und
+> Ledger-Append, und Archivieren würde dort eine Annahme **erfinden**, die es nie gab. Der Lese-Port hat
+> zwei Methoden, damit `measure()` streamend hasht und **vor** dem Urteil läuft — ein verwaister 50-MB-
+> Eintrag kommt so nie in den Heap; `read()` puffert nur für Einträge, die das Tor passiert haben. Der
+> Alarmkanal ist der, den E5 ausdrücklich E6 überlassen hatte, und nur `content_mismatch` ist `critical`.
+
+> **Ein Fehler, den der eigene Bestandstest gefangen hat, und er ist lehrreich.**
+> `row.size_bytes === null` trifft `undefined` nicht — und das Tor verzweigt auf
+> `contentSha256 === null`, also hätte ein durchgereichtes `undefined` eine Receipt **ohne** Hash als
+> **Manipulation** gemeldet: einen Integritätsalarm für einen Writer-Defekt. Gefunden hat es
+> `ledger-lookup.test.ts`, weil es seine Datenbankzeilen **selbst baut** statt sie von einem echten
+> `SELECT` zu nehmen. Ein Fake, der nur das liefert, was der Code gerade liest, hätte hier nichts gemerkt.
 
 **Der Plan, auf den der Auftraggeber verwiesen hat, war leer.** `C:\Users\Maxim\.claude\plans\e6-phase-B-worker.md`
 existiert mit 0 Byte. Gearbeitet wurde deshalb aus diesem Handover, der den nächsten Schritt eindeutig
@@ -396,7 +434,7 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **`JR-6-02`, und mit ihr fällt ADR-010**
+### Nächster konkreter Schritt — **`JR-6-02b`, Ende-zu-Ende bis zum durchsuchbaren Treffer**
 
 Der Prompt für die nächste Sitzung:
 
@@ -405,86 +443,97 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht schon:** `claude/journaling-e6-phase-b-worker`, mit eigenem Upstream, `JR-6-01`
-gepusht, CI-Lauf `30999645177` **success** (98 Dateien, `unit 1019/1019 · integration 126/126 ·
-adversarial 69/69`). Nicht neu abzweigen, nicht neu reservieren — die Nummern liegen bereit.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, CI `31003830220`
+**4 von 4 Versuchen success** (102 Dateien, `unit 1065/1065 · integration 126/126 ·
+adversarial 69/69`). Nicht neu abzweigen, nicht neu reservieren.
 
-`JR-6-02` ist die Verarbeitung: **Spool lesen → Journal-Report parsen → Außenobjekt in den Storage →
-Metadaten nach `archived_emails` → indexieren → Spool freigeben.** Sie ist der erste Verbraucher
-**beider** in E4/E5 zusammengeführter Epics und die erste Stelle, an der ihr Zusammenspiel überhaupt
-ausgeführt wird. Der Einstiegspunkt ist eine einzige Funktion:
-`packages/backend/src/jobs/processors/journal-inbound.processor.ts` — sie wirft heute und ist genau dafür
-so gebaut, dass `JR-6-02` sie **füllt** statt den Prozess umzubauen.
+**Erledigt sind `JR-6-01` und `JR-6-02a`.** `ADR-010` ist entschieden, das Tor steht, F59 ist behoben.
+`JR-6-02` ist nach **ADR-021** geteilt; offen ist **`JR-6-02b`**.
 
-> **Was `JR-6-01` an Material mitgibt, das nicht im Backlog steht — und der Reihe nach das Wichtigste:**
->
-> **(1) ADR-010 ist die Scheibe, nicht ein Nebenprodukt.** Die Frage lautet: `processEmail()`
-> erweitern oder einen journaling-spezifischen Pfad daneben stellen? Die ADR hält als Abwägung fest,
-> dass Wiederverwendung **divergierende Dedupe-Semantik vermeidet — der teuerste denkbare Fehler in
-> diesem Projekt** — und ein separater Pfad genau diese Divergenz riskiert. Sie sollte erst
-> entschieden werden, „wenn der Parser zeigt, wie stark die Metadatenform abweicht". **Der Parser ist
-> jetzt da** (E5, `packages/journaling/src/parser/`), die Bedingung ist erfüllt.
->
-> **(2) Es gibt einen echten Widerspruch zwischen Architektur §6 und ADR-025, und `JR-6-01` hat ihn
-> auf eine Weise aufgelöst, die `JR-6-02` fortsetzen muss.** §6 sagt „neuer Worker-Prozess **in
-> `packages/backend`**". ADR-025 sagt, journaling-spezifische Logik dürfe **nie so in
-> `packages/backend` entstehen, dass sie sich nur mit ihm zusammen betreiben lässt** — und begründet
-> das nicht ästhetisch, sondern damit, dass eine spätere Herauslösung eine **Verpackungsentscheidung**
-> bleiben soll. Beides gilt, und beides ist erfüllbar: **das Prozessgerüst gehört ins Backend, die
-> Pipeline nach `packages/journaling`, mit injizierten Ports.** So liegt es nach `JR-6-01` — der
-> Worker im Backend, der Vertrag in `packages/journaling`, keine Journaling-Logik im Backend außer
-> Verdrahtung. `StorageService`, `IndexingService` und `IngestionService` sind Backend-Dienste und
-> werden **hineingegeben**, nicht importiert. **Das ist die eigentliche Vorentscheidung zu ADR-010:**
-> „`processEmail` erweitern" heißt zwangsläufig, Journaling-Semantik in `packages/backend` zu legen.
-> Wer sich dafür entscheidet, muss ADR-025 ausdrücklich adressieren, nicht übersehen.
->
-> **(3) Hashing vor Verschlüsselung ist Bestand und muss Bestand bleiben.** `content_sha256` über die
-> **Plaintext-Wire-Bytes**, `StorageService` verschlüsselt danach — damit der Hash gegen einen
-> Re-Export prüfbar bleibt (CLAUDE.md §5.5, Architektur §7). `JR-6-05` schreibt es fest und testet es;
-> `JR-6-02` darf die Reihenfolge nicht vorher schon umdrehen.
->
-> **(4) Parse-Fehler lehnen nichts ab.** Sie setzen `parse_failed`, indexieren was extrahierbar ist
-> und alarmieren (Architektur §6). Eine Nachricht, die schon quittiert ist, kann nicht nachträglich
-> abgelehnt werden — der Ledger-Eintrag existiert.
->
-> **(5) Der Reconciler (`JR-6-04`) liest den Job-Zustand.** Deshalb wirft der Processor heute, statt zu
-> quittieren, und deshalb ist die Payload ein Feld breit. Wer in `JR-6-02` einen Zwischenzustand
-> einführt („Objekt liegt, Metadaten fehlen"), muss sagen, **woran der Reconciler ihn erkennt** — aus
-> Spool und Ledger, nicht aus Redis.
->
-> **(6) `JR-6-03` kommt gleich danach und teilt sich die Dedupe-Stelle.** Ein Objekt, **zwei**
-> Ledger-Einträge, der zweite mit `duplicate_of`. Empfangsereignis ≠ Nachricht. Wer die Dedupe in
-> `JR-6-02` baut, sollte diese Trennung schon dort anlegen, statt sie danach nachzurüsten.
+**Was `JR-6-02b` zu tun hat**, in der Reihenfolge der Architektur §6 — und der erste Schritt ist schon
+gebaut:
 
-**Drei Dinge, die beim Weiterarbeiten zählen** — unverändert gültig, jedes einmal teuer bezahlt:
+1. ~~Ledger-Zeile auflösen, Spool-Bytes messen, Urteil bilden~~ — `classifySpoolEntry()` plus
+   `NodeSpoolEntryReader` aus `JR-6-02a`.
+2. **Parsen** mit `parseJournalReport(rawMessage, smtpEnvelope, sourceMode)` aus E5. Das Ergebnis ist
+   eine **Vierer-Union**: `journal_report`, `parse_failed`, `plain_bcc`, `ndr`. Alle vier brauchen
+   Behandlung, und **keine davon lehnt ab** — die Nachricht ist quittiert.
+3. **Owner auflösen** mit `resolveOwner(envelope, domainGroups)`. **Achtung, das ist eine echte Lücke:**
+   `resolveOwner()` ist typisiert auf `OwnerResolutionEnvelope`, also nur auf `journal_report`. Für
+   `plain_bcc` und `ndr` gibt es **keinen** äquivalenten Eingang — E5 hat das ausdrücklich offen gelassen
+   („Whether/how to resolve an owner for those two kinds is an open question left to whichever later
+   slice needs it"). **`JR-6-02b` ist diese Scheibe.** Das ist eine Entscheidung, keine Implementierung —
+   sie braucht eine der reservierten ADR-Nummern (**033–036**).
+4. **Archivieren** über den Port aus ADR-010: eine `ingestion_sources`-Zeile mit
+   `provider = 'smtp_journaling'` und `preserveOriginalFile = true`, dann je aufgelöstem Owner ein
+   `processEmail(email, source, storage, userEmail, /* skipTempFileCleanup */ true)`.
+   **`skipTempFileCleanup` muss `true` sein** — sonst löscht `processEmail()` im `finally` die Datei, auf
+   die `email.tempFilePath` zeigt, und das ist die **Spool-Datei**. Die Freigabe des Spools ist ein
+   eigener, ledger-bewusster Schritt und darf nicht als Nebenwirkung eines Archivierungsaufrufs
+   passieren.
+5. **Indexieren** mit `IndexingService.indexEmailBatch(emails: PendingEmail[])`.
+6. **Spool freigeben** — erst danach, und nur dann.
 
-1. **Der CI-Lauf ist Teil des Belegs, nicht Nachsorge** (F48). `fsyncDirectory()` scheitert auf diesem
-   Windows-Host mit `EPERM`, und `accept()` schreibt den Ledger erst danach — **lokal erreicht kein
-   Lauf den Append.** Nach jedem Push: `gh run list --branch <branch> --limit 1`, bei Rot
-   `gh run view <id> --log-failed`. **Neu dazu:** die `integration`-Suite braucht jetzt zusätzlich ein
-   **gebautes `packages/backend/dist`** (der Worker-Start-Test spawnt die kompilierte Datei). Fehlt es,
-   skippt die Suite sichtbar mit einer Meldung, die zum Bauen auffordert — unter
-   `OA_TEST_REQUIRE_INFRA=1` ist das ein Fehlschlag. **Der lokale Volllauf will also einen Build
-   vorher**, so wie die CI ihn ohnehin macht.
-2. **Wo die Kernaussage einer Suite plattformabhängig ist, gehört ein Zähler dazu**, der den **nicht
-   gezogenen** Zweig ausweist. Sonst sind „grün auf Windows" und „grün, weil nichts geprüft wurde"
-   derselbe Text (`JR-4-10`, F48). `JR-6-01`s SIGTERM-Fall ist das Muster: immer laufen, intern
-   verzweigen, `coverageNotice` mit Namen der ungeprüften Zusage — **kein `skipIf`**, weil
-   `expectedTests` exakt ist und nicht je Plattform abweichen darf.
-3. **Inventar ziehen und committen, sobald die erste Testdatei steht.** Das Nutzungslimit hat in E4
-   sechs Runden getroffen, zwei mit erheblicher uncommitteter Arbeit. Ein Zwischenstand mit gezogenem
-   Inventar ist lauffähig und prüfbar; einer ohne ist wertlos, egal wie viel Code darin liegt. Und:
-   **nie zwei Rollen gleichzeitig auf einer Scheibe** — `tests/support/suite-inventory.ts` trägt exakte
-   Zahlen und verträgt genau einen Bearbeiter.
-
-> **Zwei Dinge liegen zur Entscheidung beim Auftraggeber:**
+> **Vier Dinge, die `JR-6-02b` aus `JR-6-02a` mitbekommt und die im Backlog nicht stehen:**
 >
-> - **F59** (siehe oben): im Produktionscode beheben oder im Test wegprüfen. Empfehlung: beheben. Der
->   Befund macht die CI **sporadisch** rot — der Erstlauf von `JR-6-01` fiel darüber, der
->   Wiederholungslauf war grün. Solange er offen ist, muss ein roter Lauf an
->   `ingress-process-boot.test.ts` **erst gegen F59 geprüft** werden, bevor er als neuer Defekt gilt.
-> - **Die Doku-Diät**, weiterhin offen: Pflichtlektüre auf unter 40 000 Tokens. Verabredet war „nach
->   der E4-Abnahme"; sie ist seit zwei Sitzungen fällig und wächst mit jedem Statuseintrag.
+> **(1) `content_sha256` ist die Autorität, nicht der `Message-ID`-Header.** `processEmail()`s Gate 1
+> und 2 schlüsseln auf `messageIdHeader`; RFC §4.5 und `JR-6-03` verlangen Objekt-Dedupe auf
+> `content_sha256`. **Das ist die Divergenz, vor der ADR-010 warnt** — sie wird nicht dadurch vermieden,
+> dass man den Bestand benutzt, sondern dadurch, dass die Pipeline dem Port eine **hash-abgeleitete
+> Identität** übergibt. Ein Journal-Report mit gefälschtem oder fehlendem `Message-ID` deduped dann
+> dennoch korrekt. Das Tor liefert den verifizierten Hash schon als `contentSha256Hex`.
+>
+> **(2) Das archivierte Objekt ist die rohe **Außen**mail, die Metadaten kommen von innen.** RFC §6.1;
+> `InnerMessagePresent`s Doku sagt es ausdrücklich: der Innenteil ist „**never** the input to hashing or
+> storage". Also `email.tempFilePath` auf die Spool-Datei (außen), `subject`/`from`/`to` aus dem
+> Innenteil und dem Report-Envelope (Bcc und DL-Expansion sind der ganze Zweck von E5).
+> `sizeBytes` und `storageHashSha256` beziehen sich damit auf die **Außen**bytes — und stimmen so mit
+> der Ledger-Receipt überein, was `verify` (E9) später vergleicht.
+>
+> **(3) Ein `null` von `processEmail()` heißt nicht „nichts zu tun".** Es heißt „Objekt existiert
+> bereits" — und für Phase B: jetzt den `duplicate_of`-Eintrag schreiben. Das ist `JR-6-03`, aber die
+> **Stelle** entsteht in `JR-6-02b`, und `processEmail()` unterscheidet in seinem `null` nicht zwischen
+> „dieselbe Mailbox hatte sie schon" und „übersprungen". Wer das nicht auseinanderhält, verliert
+> Receipts.
+>
+> **(4) Der `duplicate_of`-Eintrag darf die `spool_txid` des Originals NICHT wiederverwenden.**
+> `findBySpoolTxIds()` gibt eine **Map** zurück, und ADR-030 lehnt sich schon darauf, dass es je
+> `spool_txid` genau eine Zeile gibt. Eine zweite Zeile mit derselben `spool_txid` würde nicht
+> fehlschlagen, sondern **stillschweigend kollabieren** — der Aufrufer würde auf der Zeile arbeiten, die
+> die Datenbank zuletzt zurückgab. Im Doc-Kommentar des Ports steht es jetzt; wer es doch braucht, ändert
+> zuerst die Signatur.
+
+> **Der Alarmkanal ist gebaut und wartet auf einen Produzenten.** `PhaseBAlertSink` nimmt ein Urteil samt
+> `spoolTxId` und Spool-Pfad; nur `content_mismatch` ist `critical`. **Er ist synchron und darf den Job
+> nie scheitern lassen** — eine Nachricht darf nicht daran hängen, dass der Alarmweg erreichbar ist
+> (dieselbe Umkehr, die ADR-008 für die TSA verbietet). `noopPhaseBAlertSink` ist nie die Produktionswahl.
+
+**Drei Dinge, die beim Weiterarbeiten zählen:**
+
+1. **Der lokale Volllauf braucht jetzt einen Build vorher.** Der Worker-Start-Test spawnt
+   `packages/backend/dist/workers/journal-inbound.worker.js`. Fehlt `dist`, skippt die Suite sichtbar mit
+   einer Meldung, die zum Bauen auffordert — unter `OA_TEST_REQUIRE_INFRA=1` ist das ein Fehlschlag. Also
+   `corepack pnpm --filter @open-archiver/journaling build` und
+   `corepack pnpm --filter @open-archiver/backend build` vor dem Lauf. Der `copy-assets`-Schritt des
+   Backends scheitert auf diesem Host (`pnpm` nicht im PATH, `cp -r`), **nach** dem `tsc` — für die Tests
+   genügt das.
+2. **Der CI-Lauf bleibt Teil des Belegs** (F48), und `fsyncDirectory()` scheitert hier weiterhin mit
+   `EPERM`: **lokal erreicht kein Lauf den Ledger-Append.** Nach jedem Push
+   `gh run list --branch <branch> --limit 1`, bei Rot `gh run view <id> --log-failed`.
+3. **Wo eine Kernaussage plattformabhängig ist, gehört ein Zähler dazu**, der den **nicht gezogenen**
+   Zweig ausweist — kein `skipIf`, weil `expectedTests` exakt ist und nicht je Plattform abweichen darf.
+   `JR-6-01`s SIGTERM-Fall ist das Muster.
+
+> **Zur Entscheidung beim Auftraggeber:**
+>
+> - **F60** (neu): `StorageService.put()` puffert einen Stream, obwohl die Signatur Streams verspricht.
+>   Vorgeschlagene Zuordnung **E7**, wo `S3StorageProvider` für Object Lock ohnehin angefasst wird.
+>   Blockiert `JR-6-02b` nicht — die Vollpufferung ist bewusst hingenommen (bei 50 MB und Concurrency 3
+>   liegen im schlechtesten Fall drei Nachrichten doppelt im Heap).
+> - **F43** (unverändert): soll `JR-3-02`s Speichernachweis nachgemessen werden? Betrifft ein
+>   abgenommenes Epic. Blockiert E6 nicht.
+> - **F39**, **F42**, **F17(b)** — unverändert, blockieren nichts.
+> - **Die Doku-Diät**, weiterhin fällig: Pflichtlektüre unter 40 000 Tokens.
 
 ### Was davor passiert ist — die Historie steht in `06-status.md`
 
@@ -516,13 +565,16 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 **Stand 2026-08-05 — was wirklich offen ist, in dieser Reihenfolge:**
 
-0. **`F59`: `shutting down` kann verlorengehen — im Produktionscode beheben oder im Test wegprüfen?**
-   Neu und die einzige Frage, die **die CI sporadisch rot macht**. `apps/smtp-ingress` schreibt die
-   Zeile mit `console.log` und ruft direkt danach `process.exit(0)`; das leert einen Pipe-stdout auf
-   Linux nicht. **Empfehlung: im Produktionscode beheben** — eine Betriebsmeldung, die ein
-   Supervisor-Log erreichen soll, darf nicht davon abhängen, wie schnell die Maschine gerade ist. Die
-   Alternative macht den Lauf grün und die Zusage unprüfbar. Solange offen: ein roter Lauf an
-   `ingress-process-boot.test.ts` ist **erst gegen F59 zu prüfen**, bevor er als neuer Defekt gilt.
+0. **`F60`: `StorageService.put()` puffert Streams, obwohl die Signatur Streams verspricht** — jetzt
+   beheben oder E7 zuordnen? **Empfehlung: E7**, wo `S3StorageProvider` für Object Lock ohnehin
+   angefasst wird. Zu entscheiden ist dort auch, **wie**: die Verschlüsselung auf einen Stream-Cipher
+   umstellen (`createCipheriv` kann streamen) oder die Signatur ehrlich auf `Buffer` verengen. Die
+   zweite Variante ist kleiner und schlechter — sie macht die Grenze sichtbar, hebt sie aber nicht auf.
+   **Blockiert E6 nicht:** die Vollpufferung ist bewusst hingenommen (bei 50 MB und Concurrency 3 liegen
+   im schlechtesten Fall drei Nachrichten doppelt im Heap).
+    > **~~`F59`~~ ist behoben** (2026-08-05, Variante „im Produktionscode", Entscheidung des
+    > Auftraggebers nach dem zweiten Treffer). Ein roter Lauf an `ingress-process-boot.test.ts` ist damit
+    > **wieder eine Aussage** und nicht mehr zuerst gegen F59 zu prüfen.
 1. **`F43`: soll `JR-3-02`s Speichernachweis nachgemessen werden?** Das ist die einzige Frage, die
    ein **abgenommenes** Epic berührt. `heapUsed` kann Vollpufferung in Node-`Buffer`n nicht sehen —
    gemessen, mit absichtlich eingebauter Regression kalibriert. Der **Code** ist mit hoher

@@ -6,10 +6,11 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-05 (**E6 hat begonnen; `JR-6-01` ist erledigt** — der
-`journal-inbound`-Worker läuft als eigener Prozess. Volllauf: **1214 passed | 8 skipped** bei 98
-Dateien, `unit ci 1019 · integration ci 126 · adversarial ci 69`, Exit 0. Vor der ersten Scheibe sind
-nach **ADR-032** die Nummernkreise reserviert worden: ADR-033–036, F59–F70) · **Branch:**
+**Letzte Aktualisierung:** 2026-08-05 (**E6 läuft: `JR-6-01` und `JR-6-02a` erledigt, ADR-010
+entschieden, F59 behoben, F60 neu und offen.** Volllauf: **1260 passed | 8 skipped** bei 102 Dateien,
+`unit ci 1065 · integration ci 126 · adversarial ci 69`, Exit 0; CI `31003830220` **4 von 4 Versuchen
+success**. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise reserviert worden:
+ADR-033–036, F59–F70 — **F59 und F60 sind daraus vergeben**) · **Branch:**
 `claude/journaling-e6-phase-b-worker` (Epic-Zweig über dem Integrationsbranch
 `claude/enterprise-product-implementation-cxmmqe`; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
 
@@ -267,7 +268,7 @@ eingeschoben (siehe `03-backlog.md`).
 | 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                                                                                                                                                                                                          |
 | 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. **Zählweise am 2026-08-03 berichtigt:** die Zeile zählte bis dahin die Splits `JR-4-05a`–`c` und `JR-4-06a`/`b` im **Zähler** mit, während der Nenner die Backlog-IDs meint. Gezählt werden jetzt die **IDs**; `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a` und `b` (ADR-021) |
 | 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                                                                                                                                                                                                          |
-| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (Zweig `claude/journaling-e6-phase-b-worker`, `JR-6-01` erledigt)                          | 1 / 8                                                                                                                                                                                                                                                                                                          |
+| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (`JR-6-01` und `JR-6-02a` erledigt, ADR-010 entschieden)                                   | 1 / 8 + `JR-6-02a`. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` gilt erst mit `a` **und** `b` als fertig                                                                                                                                                                                           |
 | 8           | E7   | WORM-Storage                       | offen                                                                                                    | 0 / 6                                                                                                                                                                                                                                                                                                          |
 | 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                                                                                                                                                                                                          |
 | 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                                                                                                                                                                                                          |
@@ -444,8 +445,12 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
 
 - [x] `JR-6-01` — `journal-inbound`-Worker als eigener Prozess, `start:journal-worker`, Queue-Parameter
       begründet (2026-08-05, `d0f4840`)
-- [ ] `JR-6-02` — Verarbeitung Spool → Parser → Storage → `archived_emails` → Index → Spool frei.
-      **Hier fällt ADR-010**
+- [~] `JR-6-02` — Verarbeitung Spool → Parser → Storage → `archived_emails` → Index → Spool frei.
+  **Aufgeteilt nach ADR-021:**
+    - [x] `JR-6-02a` — **ADR-010 entschieden** (`41068aa`) plus das Tor, das entscheidet, ob eine
+          Spool-Datei überhaupt archiviert werden darf (`fba499c`)
+    - [ ] `JR-6-02b` — Parser und Owner-Auflösung anschließen, Backend-Adapter auf `processEmail()`,
+          Indexierung, Spool-Freigabe. **Ende-zu-Ende bis zum durchsuchbaren Treffer**
 - [ ] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of`
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
@@ -496,6 +501,65 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
   `probeRedis()` ist absichtlich ein reiner TCP-Connect, damit ein **falsches** Passwort als
   Verbindungsfehler ankommt und nicht als Skip. Wer AUTH in der CI abdecken will, nimmt einen
   `docker run`-Schritt — nicht eine Änderung am geprüften Code.
+
+> **`JR-6-02a` ist erledigt (Rolle DEV, 2026-08-05) und besteht aus einer Entscheidung und einem Tor.**
+>
+> **ADR-010 ist entschieden, und zwar gegen beide im ADR genannten Optionen.** Weder `processEmail()`
+> erweitern noch einen eigenen Pfad daneben stellen, sondern: **unverändert wiederverwenden, hinter einem
+> injizierten Port**, aufgerufen aus einer Pipeline in `packages/journaling`. Der Fund, der die Frage
+> entscheidet, stand in keiner der beiden Optionen — **`processEmail()` ist für genau diesen Aufrufer
+> gebaut**: `skipTempFileCleanup` existiert laut Kommentar „für die journaling fan-out loop",
+> `isJournaled` wird an drei `INSERT`-Stellen aus `provider === 'smtp_journaling'` gesetzt, und Gate 2
+> erzeugt die Fan-out-Form (eine physische Datei, **N** `archived_emails`-Zeilen). Diese Verdrahtung lag
+> im Enterprise-Overlay, das hier fehlt: **der Aufrufer ist weg, die für ihn gebaute Schnittstelle ist
+> da.** „Erweitern" hätte zudem ADR-025 verletzt.
+>
+> **Das ernsteste Gegenargument trägt gemessen nicht**, und daraus ist **F60** geworden:
+> `StorageService.put()` puffert einen übergebenen Stream ohnehin sofort zu einem Buffer, obwohl
+> `IStorageProvider.put()` Streams verspricht. Ein eigener Pfad hätte genauso gepuffert — die
+> Vollpufferung ist eine Eigenschaft der Storage-Schicht, nicht von `processEmail()`. Vorgeschlagene
+> Zuordnung: **E7**, wo `S3StorageProvider` für Object Lock ohnehin angefasst wird.
+>
+> **Das Tor** (`classifySpoolEntry()`) ist eine reine Funktion und entscheidet vor jedem Archivieren:
+> archiviert wird nur, wenn eine `receipt`-Zeile existiert **und** die Datei genau auf deren
+> `content_sha256` hasht. Fünf Urteile, jedes mit eigener Behandlung — `no_receipt` ist der **erwartete**
+> Ausgang eines Absturzes zwischen Spool-fsync und Ledger-Append (dem Sender wurde nie `250` gesagt,
+> Archivieren würde eine Annahme **erfinden**), und `receipt_without_hash` wird ausdrücklich **nicht** als
+> Mismatch gemeldet, weil das einen Betreiber nach Manipulation suchen ließe, wo ein Writer ein Pflichtfeld
+> weggelassen hat. **Größe ist bewusst kein zweites Tor:** der Hash hat schon entschieden, und eine
+> Receipt, deren eigene zwei Felder sich widersprechen, ist eine Frage für `verify` (E9) — sie darf keine
+> angenommene Nachricht unarchivierbar machen.
+>
+> **Der Lese-Port hat zwei Methoden, und die Trennung ist der Zweck.** `measure()` hasht streamend und
+> läuft **vor** dem Urteil, also kommt ein verwaister oder manipulierter 50-MB-Eintrag nie in den Heap.
+> `read()` puffert — weil `parseJournalReport` und `StorageService.put()` beide einen ganzen Buffer
+> verlangen (F60) —, aber nur für Einträge, die das Tor passiert haben.
+>
+> **Dabei einen Fehler eingebaut und vom eigenen Bestandstest gefangen:** `row.size_bytes === null` trifft
+> `undefined` nicht, und das Tor verzweigt auf `contentSha256 === null` — ein durchgereichtes `undefined`
+> hätte eine Receipt **ohne** Hash als **Manipulation** gemeldet. Jetzt `?? null`, mit zwei
+> Regressionsfällen für beide Nullish-Formen. Dass `ledger-lookup.test.ts` seine Zeilen selbst baut, ist
+> genau der Grund, warum es das gefunden hat.
+
+> **F59 ist behoben (2026-08-05), auf Entscheidung des Auftraggebers nach dem zweiten Treffer.** Zwei von
+> drei Pushes dieses Zweigs endeten rot, jedes Mal an demselben Test, jedes Mal an derselben Ursache — ein
+> roter Lauf mit immer derselben bekannten Ursache ist schlimmer als ein flackernder Test, weil er die CI
+> als Beleg entwertet (die Lehre aus **F48**). `writeLineThenFlush()` löst erst auf, wenn der Stream den
+> Schreibvorgang quittiert hat, und `shutdown()` wartet darauf — **nach** dem Drain, nicht davor.
+> Begrenzt auf zwei Sekunden und ohne Ablehnung, weil ein **hängender** Shutdown der schlechtere Tausch
+> wäre: ein Supervisor `SIGKILL`t einen Prozess, der nicht aufhört.
+>
+> **Der Beleg ist eine Rate, nicht ein Lauf** — dieselbe Form, die `JR-4-21` für F54 verlangt hat.
+> Vorher 2 von 3 rot, nachher **4 von 4 grün** (CI `31003830220`, vier Versuche derselben Revision), und
+> in jedem Versuch steht der betroffene Test als **ausgeführt** im Log. Zwei Dinge dazu ehrlich benannt:
+> auf diesem Windows-Host ist die Wirkung **nicht** messbar (die Zusicherung steht hinter
+> `platform !== 'win32'`), und vier Läufe widerlegen einen Wettlauf nicht endgültig — was darüber hinaus
+> trägt, ist die strukturelle Aussage plus ein deterministischer Mechanismus-Test.
+>
+> **Der Helfer liegt in `packages/journaling`, nicht in `apps/smtp-ingress`, und der Grund ist eine
+> Harness-Eigenschaft, die man kennen sollte: kein Projekt-Glob erfasst `apps/`.** Eine Testdatei dort
+> würde von niemandem gesammelt, und der Unclassified-Check würde den Lauf zu Recht rot melden. Prüfbares
+> Verhalten gehört dorthin, wo Tests hinreichen — nicht ein Glob verbreitert.
 
 > **Eine Zusage in `JR-6-01` ist plattformabhängig und sagt das.** Windows kennt kein POSIX-Signal:
 > `child.kill('SIGTERM')` ruft `TerminateProcess`, der Handler im Worker läuft nie. Der
@@ -575,3 +639,22 @@ adversarial 69/69`, der neue `valkey`-Service trägt. **Der erste Versuch dessel
 - **Nicht getan, absichtlich:** die vereinbarte Doku-Diät (Pflichtlektüre unter 40 000 Tokens). Sie
   war „nach der E4-Abnahme" verabredet und ist weiterhin offen; diese Sitzung hat sie nicht angefasst,
   um die erste E6-Scheibe nicht mit einem Umbau der Projektakten zu vermischen
+
+### 2026-08-05 — `JR-6-02a` und der F59-Fix (Fortsetzung derselben Sitzung)
+
+- **Rolle:** DEV (Hauptthread)
+- **Commits:** `41068aa` (ADR-010 entschieden, F60 aufgenommen), `fba499c` (`JR-6-02a`: das Tor),
+  `72509b5` (F59 behoben)
+- **Tests:** 44 neu gegenüber dem Vormittag (35 in `JR-6-02a`, 9 im F59-Fix). Volllauf **1260 passed |
+  8 skipped** bei 102 Dateien, Exit 0, `unit 1065/1065 · integration 126/126 · adversarial 69/69`
+- **CI:** `31003830220`, **4 von 4 Versuchen success**. Die vier Versuche sind der Beleg für den
+  F59-Fix, nicht Bequemlichkeit — vorher waren 2 von 3 Läufen rot
+- **Entscheidungen:** **ADR-010** (siehe oben — die Antwort ist keine der beiden ADR-Optionen);
+  `JR-6-02` nach **ADR-021** in `a`/`b` geteilt; F59 auf Entscheidung des Auftraggebers im
+  Produktionscode behoben statt im Test entschärft
+- **Befunde:** **F59 behoben**, **F60 neu und offen** (`StorageService.put()` puffert Streams,
+  vorgeschlagene Zuordnung E7)
+- **Offen:** `JR-6-02b` — Parser und Owner-Auflösung anschließen, Backend-Adapter auf `processEmail()`,
+  Indexierung, Spool-Freigabe, Ende-zu-Ende bis zum durchsuchbaren Treffer
+- **Nicht getan, absichtlich:** die Doku-Diät, weiterhin. Und der `duplicate_of`-Pfad — er gehört zu
+  `JR-6-03` und wurde bewusst nicht vorgezogen, obwohl das Tor die Stelle schon kennt

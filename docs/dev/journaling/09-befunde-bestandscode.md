@@ -3397,7 +3397,19 @@ gestorben wäre.
 catchbares `SIGTERM` an ein Kind liefert. Der Beleg für die Wirkung ist deshalb dieselbe Form, die
 `JR-4-21` für **F54** verlangt hat: eine **Rate vorher gegen nachher**, nicht ein einzelner grüner Lauf.
 Vorher: **2 von 3 Läufen rot** (`30999645177`, `31002635354`; grün war nur der Wiederholungslauf von
-`30999645177`). Nachher: siehe den Statuseintrag zum F59-Fix in `06-status.md`.
+`30999645177`). Nachher: **4 von 4 Läufen grün** — CI `31003830220`, vier Versuche derselben Revision,
+jeder eine frische Runner-Ausführung. Im Log jedes Versuchs steht der betroffene Test als **ausgeführt**
+(`✓ [ci] apps/smtp-ingress process boot (JR-4-01) > with valid configuration …`) samt
+`Suite inventory verified: unit 73/73, integration 22/22, adversarial 7/7` und
+`[TEST-EXECUTED] unit: ci 1065/1065`. Das ist der Unterschied zwischen „grün" und „grün, weil nichts
+geprüft wurde", und er wird hier ausdrücklich mitgemessen, weil derselbe Test vorher **bestanden aussah**,
+wenn er zufällig gewann.
+
+**Ehrlich benannte Grenze:** vier Läufe widerlegen einen Wettlauf nicht endgültig, sie verschieben nur die
+Rate von „mehrheitlich rot" zu „keiner rot". Was den Fix darüber hinaus trägt, ist die **strukturelle**
+Aussage — der Exit hängt jetzt an einem Promise, das die Quittung des Streams abwartet — und der
+Mechanismus-Test, der deterministisch ist. Die Rate belegt, dass die Struktur in der Umgebung wirkt, in
+der der Befund aufgetreten ist.
 
 ## F60 — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht
 
