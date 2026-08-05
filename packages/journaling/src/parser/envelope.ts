@@ -148,14 +148,21 @@ function addressObjectsOf(value: AddressObject | AddressObject[] | undefined): A
 }
 
 /**
- * Parses a `To`/`Cc`/`Bcc` value's full RFC 5322 address-list grammar via `mailparser`, by building
- * a synthetic one-header message and reading back the corresponding `ParsedMail` field. Never throws
- * -- a `mailparser` failure on this synthetic, deliberately tiny input is treated as "no addresses"
- * rather than failing the whole envelope over one malformed address list (consistent with this
- * parser's overall no-throw contract, see `journal-report.ts`).
+ * Parses a `To`/`Cc`/`Bcc`/`From` value's full RFC 5322 address-list grammar via `mailparser`, by
+ * building a synthetic one-header message and reading back the corresponding `ParsedMail` field. Never
+ * throws -- a `mailparser` failure on this synthetic, deliberately tiny input is treated as "no
+ * addresses" rather than failing the whole envelope over one malformed address list (consistent with
+ * this parser's overall no-throw contract, see `journal-report.ts`).
+ *
+ * **Exported since `JR-6-02b`, and `'From'` added there.** Phase B has to build an
+ * `OwnerResolutionEnvelope` out of the *outer* message's own RFC 5322 headers for the three parse
+ * results that carry no journal-report envelope (`plain_bcc`, `ndr`, `parse_failed` -- **ADR-033**), and
+ * that needs exactly this grammar. Re-implementing it there would have meant two address parsers with
+ * two answers for the same header, which is the shape ADR-027 keeps this package away from: `mailparser`
+ * is the only parsing dependency, and this is the one place that calls it for an address list.
  */
-async function parseHeaderAddressList(
-	headerName: 'To' | 'Cc' | 'Bcc',
+export async function parseHeaderAddressList(
+	headerName: 'To' | 'Cc' | 'Bcc' | 'From',
 	value: string
 ): Promise<string[]> {
 	if (value.trim().length === 0) {
@@ -166,7 +173,13 @@ async function parseHeaderAddressList(
 		const synthetic = Buffer.from(`${headerName}: ${value}\r\n\r\n`, 'utf8');
 		const parsed = await simpleParser(synthetic, ADDRESS_PARSE_OPTIONS);
 		parsedField =
-			headerName === 'To' ? parsed.to : headerName === 'Cc' ? parsed.cc : parsed.bcc;
+			headerName === 'To'
+				? parsed.to
+				: headerName === 'Cc'
+					? parsed.cc
+					: headerName === 'Bcc'
+						? parsed.bcc
+						: parsed.from;
 	} catch {
 		return [];
 	}

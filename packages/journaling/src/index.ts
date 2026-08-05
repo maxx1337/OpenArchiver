@@ -116,7 +116,11 @@ export {
 
 // E5 (journal-report parser) and E4 (SMTP ingress) grew this barrel independently on two branches;
 // the back-merge of E4 keeps both sets of exports.
-export { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './parser/envelope';
+export {
+	KNOWN_ENVELOPE_FIELD_NAMES,
+	parseEnvelope,
+	parseHeaderAddressList,
+} from './parser/envelope';
 export {
 	isSmimeWrappedContentType,
 	isSmimeWrappedMessage,
@@ -277,6 +281,12 @@ export {
 } from './phase-b/spool-entry-gate';
 
 export { NodeSpoolEntryReader, type SpoolEntryReader } from './phase-b/spool-entry-reader';
+
+export {
+	ownerEnvelopeFor,
+	type OwnerEnvelopeFidelity,
+	type OwnerEnvelopeSource,
+} from './phase-b/owner-envelope';
 
 export {
 	alertSeverityFor,

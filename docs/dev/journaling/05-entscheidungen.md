@@ -2380,11 +2380,82 @@ Fehler wäre stumm geblieben.
 nicht, weil die Epic-Nummer im Präfix steht — genau die Eigenschaft, die den anderen drei Kreisen
 fehlt. Wenn ein künftiger Kreis neu entsteht, ist das die Vorlage.
 
-## ADR-033 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
+## ADR-033 — Owner-Auflösung für `plain_bcc`, `ndr` und `parse_failed`: derselbe Resolver, eine zweite Envelope-Quelle
+
+**Status:** **entschieden** (2026-08-05, `JR-6-02b`) · **Entscheider:** PO ·
+**Quelle:** RFC §6.2, `docs/enterprise/journaling/guide.md` („How Owner Resolution Works"), die von E5
+ausdrücklich offen gelassene Frage
+
+`resolveOwner()` ist auf `OwnerResolutionEnvelope` typisiert, also auf `to`/`cc`/`bcc`/`sender` eines
+**Journal-Report-Envelopes** — und nur `JournalReportParsed` trägt einen. E5 hat das bewusst so
+getypt und die Folgefrage ausdrücklich weitergegeben:
+
+> „Whether/how to resolve an owner for those two kinds is an open question left to whichever later
+> slice needs it."
+
+`JR-6-02b` ist diese Scheibe: Phase B muss **jede** Nachricht archivieren, auch eine, die nicht als
+Journal-Report geparst werden konnte — abgelehnt wird nichts, die Receipt existiert schon.
+
+### Was die drei schwächeren Ergebnisarten tatsächlich tragen
+
+| Art            | Vorhanden                                                                        | **Nicht** vorhanden             |
+| -------------- | -------------------------------------------------------------------------------- | ------------------------------- |
+| `plain_bcc`    | `SmtpTransactionEnvelope` (`envelopeFrom`, `envelopeRcpt`), `ExtractableHeaders` | `to`/`cc`/`bcc` als Adressliste |
+| `ndr`          | dasselbe, plus `signals`                                                         | dasselbe                        |
+| `parse_failed` | `ExtractableHeaders` (`subject`, `from`, `messageId`)                            | jede Envelope-Information       |
+
+### Entscheidung
+
+1. **`resolveOwner()` wird nicht verbreitert.** E5s Typisierung bleibt: ein Resolver, der die ganze
+   Union nimmt und zur Laufzeit einen Ersatz errät, ist genau das, was dort verworfen wurde.
+2. **Für die drei Arten wird der Envelope aus den eigenen RFC-5322-Kopfzeilen der Außenmail gebaut**
+   (`To`/`Cc`/`Bcc`/`From` über `splitHeaderAndBody()` plus `parseHeaderAddressList()`) und **derselbe**
+   `resolveOwner()` darüber laufen gelassen. **Ein Resolver, zwei Envelope-Quellen** — dieselbe
+   Begründung wie in ADR-010 für die Dedupe: zwei Implementierungen derselben Zuordnungsregel wären der
+   teuerste denkbare Fehler, und die Regel ist hier „welche Domain gehört uns".
+3. **`envelopeRcpt` wird nie als Owner benutzt.** Das ist die tragende Festlegung. Bei einer
+   Plain-BCC-Kopie ist `RCPT TO` **die Archivadresse selbst** (E5 hat das gemessen und dokumentiert:
+   Postfix spielt die Originalempfänger auf dem `always_bcc`-Zweig nicht nach). Sie als Owner zu nehmen
+   würde jede solche Nachricht **einem Pseudo-Postfach** zuschreiben — und dabei wie eine **gelungene**
+   Auflösung aussehen. Ein falscher Owner, der sich als richtig ausgibt, ist schlimmer als ein
+   eingeräumt unbekannter.
+4. **Die Fidelität wird mitgeführt** (`'journal-report'` / `'rfc5322-headers'` / `'none'`), damit ein
+   kopfzeilen-abgeleiteter Owner nie mit einem report-abgeleiteten verwechselt wird. `resolveOwner()`
+   unterscheidet über `OwnerResolutionMethod` schon, **wie sehr** man `ownerEmail` trauen darf; diese
+   Angabe sagt zusätzlich, **woher der Eingang kam**.
+
+### Warum der kopfzeilen-abgeleitete Envelope schwächer, aber echt ist
+
+- **`plain_bcc`:** `To`/`Cc` der Außenmail **sind** die Empfängerkopfzeilen der Originalnachricht — die
+  BCC-Kopie ist eine Kopie derselben Bytes, Postfix schreibt sie nicht um. Das ist keine Notlösung,
+  sondern die beste vorhandene Quelle.
+- **`ndr`:** die Empfängerkopfzeile eines Bounce ist der **ursprüngliche Absender**, und das ist für
+  einen Bounce der richtige Owner. `extractableHeaders.from` wäre es **nicht** — dort steht der
+  Mailer-Daemon.
+- **`parse_failed`:** was lesbar ist, wird gelesen; was nicht, führt zu `fallback`.
+
+**Ehrlich benannt, weil es kein Resolver behebt:** in Plain-BCC-Betrieb ist ein **reiner
+BCC-Empfänger spurlos verloren** (E5: „any genuine Bcc recipient is gone without a trace"). Das ist
+eine Eigenschaft dieses Betriebsmodus, nicht ein Mangel der Auflösung. Es gehört in die Betreiberdoku
+neben die Empfehlung, echtes Journaling zu benutzen — und es ist der Grund, warum die Fidelität
+mitgeführt wird statt weggeglättet.
+
+### Konsequenz
+
+- `parseHeaderAddressList()` in `parser/envelope.ts` ist jetzt **exportiert** und kennt `'From'`. Kein
+  zweiter Adressparser; ADR-027 bleibt eingehalten (`mailparser` ist die einzige Parsing-Abhängigkeit).
+- Löst die Auflösung nichts auf (`method === 'fallback'`), wird der konfigurierte Unresolved-Owner
+  benutzt, die Zeile markiert und **alarmiert** — nie abgelehnt.
+- **Verworfen: aus `envelopeRcpt` einen Owner machen.** Siehe Punkt 3.
+- **Verworfen: die drei Arten gar nicht auflösen und pauschal in ein Sammelpostfach legen.** Das wirft
+  die `To`/`Cc`-Information weg, die in zwei der drei Fälle vorhanden **und** korrekt ist.
+
+## ADR-034 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
 
 **Status:** **reserviert** (2026-08-05) · **Grundlage:** ADR-032 Punkt 4
 
-Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**.
+Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**;
+**033 ist mit der Owner-Auflösung für die schwächeren Parse-Ergebnisse vergeben** (siehe oben).
 Wer während E6 eine weitere Nummer braucht, ergänzt sie **hier auf dem Integrationszweig** und nicht
 auf dem Epic-Zweig — die Reservierung ist nur wirksam, solange der Vorrat an der Stelle geführt wird,
 die beim Rückmerge gewinnt.

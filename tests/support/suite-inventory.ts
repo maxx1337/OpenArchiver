@@ -231,7 +231,10 @@ export const SUITES: readonly SuiteSpec[] = [
 		// CI runs that F59 had been blamed for twice. EsmtpServer.handleConnection()'s rejection paths
 		// returned without ever attaching a socket 'error' listener, so a client that reset while being
 		// refused crashed the whole receiver with an uncaught ECONNRESET.
-		expectedFiles: 74,
+		//
+		// 75 after JR-6-02b added packages/journaling/src/phase-b/owner-envelope.test.ts (ADR-033: owner
+		// resolution for the three parse results that carry no journal-report envelope).
+		expectedFiles: 75,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -765,7 +768,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// line, blamed on F59 for two rounds); the *cause* is not, so this suite measures it on every host.
 		// `socket.resetAndDestroy()` sends a real RST, which is what makes the peer's next read fail every
 		// time instead of sometimes.
-		expectedTests: { ci: 1070, nightly: 3, manual: 0 },
+		//
+		// 1081 after JR-6-02b added 11 in owner-envelope.test.ts (ADR-033). Four of them are the ones that
+		// matter: a journal_report result is handed misleading raw bytes and must ignore them, and three
+		// build the ADR's central trap -- an `envelopeRcpt` of `archive@ourcompany.com`, whose domain IS
+		// configured, so a resolver that reached for it would report a confident `primary-domain-match` on
+		// the archive mailbox instead of the real recipient. A wrong owner that presents itself as right is
+		// worse than an admittedly unknown one, and that is what those cases hold in place.
+		expectedTests: { ci: 1081, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
