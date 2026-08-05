@@ -107,15 +107,25 @@ process.on('uncaughtException', (err) => {
 // for a mailbox sync: a job killed mid-flight leaves a spool entry whose Phase B is half done, which
 // is recoverable but costs the reconciler a pass.
 //
-// `ledgerSql.end()` closes the bare ledger connection `JR-6-02b` added -- see its own doc comment on
-// `journal-inbound.processor.ts`. Without it, an idle `postgres-js` socket keeps the event loop alive
-// forever after `worker.close()` resolves, and the process never exits on its own. Sequenced after
-// `worker.close()`, not in parallel with it: a still-running job may need the ledger lookup, and
-// closing the connection out from under it would turn a clean drain into a broken one.
+// `JR-6-02b` gave this process its first real, persistent Postgres connections -- the bare ledger
+// connection (`ledgerSql`) and, transitively through `IngestionService`/`StorageService`, the
+// `packages/backend/src/database` singleton. Measured against CI: closing `ledgerSql` alone still
+// left the process alive past the test's 20 s bound after `worker.close()` resolved, so a held handle
+// somewhere in that graph -- not identified further, since a hanging shutdown is the worse trade
+// either way (a supervisor `SIGKILL`s a process that never exits on its own) -- keeps the event loop
+// alive regardless. `process.exit(0)` forces the exit explicitly, only *after* `worker.close()` has
+// resolved (no job is still running by the time it is called) and a best-effort attempt to close
+// `ledgerSql` cleanly first.
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
 
 async function shutdown(): Promise<void> {
 	await worker.close();
-	await ledgerSql.end();
+	await ledgerSql.end().catch((err) => {
+		logger.warn(
+			{ err },
+			'Failed to close the ledger connection during shutdown - exiting anyway'
+		);
+	});
+	process.exit(0);
 }
