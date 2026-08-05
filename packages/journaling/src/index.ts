@@ -295,3 +295,25 @@ export {
 	type PhaseBAlertSeverity,
 	type PhaseBAlertSink,
 } from './phase-b/alerts';
+
+export {
+	type ArchiveObjectInput,
+	type ArchiveObjectOutcome,
+	type ArchiveObjectPort,
+	type ArchiveObjectRecipient,
+} from './phase-b/archive-object-port';
+
+export { type OrganizationDomainsPort } from './phase-b/organization-domains-port';
+
+export { NodeSpoolEntryReleaser, type SpoolEntryReleaser } from './phase-b/spool-entry-releaser';
+
+export {
+	PhaseBArchiveFailedError,
+	PhaseBOwnerConfigMissingError,
+	PhaseBSpoolEntryRefusedError,
+	PhaseBSpoolFileUnreadableError,
+	runPhaseBPipeline,
+	type PhaseBOwnerResult,
+	type PhaseBPipelineDeps,
+	type PhaseBPipelineResult,
+} from './phase-b/pipeline';

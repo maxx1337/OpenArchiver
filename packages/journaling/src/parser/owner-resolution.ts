@@ -183,7 +183,11 @@ function scanInboundMatches(
 }
 
 function winnerOf(candidate: InboundCandidate): OwnerResolutionWinner {
-	return { field: candidate.field, address: candidate.address };
+	return {
+		field: candidate.field,
+		address: candidate.address,
+		normalizedEmail: normalizeOwnerEmail(candidate.address, candidate.match.group),
+	};
 }
 
 function domainMatchResult(
@@ -207,15 +211,21 @@ function domainMatchResult(
  * there is no primary domain to normalize *to*.
  */
 function heuristicResult(envelope: OwnerResolutionEnvelope): OwnerResolutionResult {
+	// No domain group is configured in this branch, so there is nothing to normalize *to* --
+	// `normalizedEmail` equals `address` unchanged, same as the top-level `ownerEmail` below.
 	const winner: OwnerResolutionWinner | null =
 		envelope.to.length > 0
-			? { field: 'to', address: envelope.to[0]! }
+			? { field: 'to', address: envelope.to[0]!, normalizedEmail: envelope.to[0]! }
 			: envelope.cc.length > 0
-				? { field: 'cc', address: envelope.cc[0]! }
+				? { field: 'cc', address: envelope.cc[0]!, normalizedEmail: envelope.cc[0]! }
 				: envelope.bcc.length > 0
-					? { field: 'bcc', address: envelope.bcc[0]! }
+					? { field: 'bcc', address: envelope.bcc[0]!, normalizedEmail: envelope.bcc[0]! }
 					: envelope.sender !== null
-						? { field: 'sender', address: envelope.sender }
+						? {
+								field: 'sender',
+								address: envelope.sender,
+								normalizedEmail: envelope.sender,
+							}
 						: null;
 
 	return {

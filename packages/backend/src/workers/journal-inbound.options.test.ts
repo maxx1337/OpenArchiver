@@ -4,7 +4,9 @@ import {
 	DEFAULT_JOURNAL_INBOUND_CONCURRENCY,
 	JOURNAL_INBOUND_LOCK_DURATION_MS,
 	JOURNAL_INBOUND_MAX_STALLED_COUNT,
+	JOURNAL_SPOOL_ROOT_VAR,
 	resolveJournalInboundConcurrency,
+	resolveJournalSpoolRoot,
 } from './journal-inbound.options';
 
 /**
@@ -79,5 +81,33 @@ suite('ci', 'journal-inbound queue parameters', () => {
 
 	it('pins lockDuration to ten minutes, well above BullMQ 30s default', () => {
 		expect(JOURNAL_INBOUND_LOCK_DURATION_MS).toBe(600_000);
+	});
+});
+
+suite('ci', 'resolveJournalSpoolRoot() (JR-6-02b)', () => {
+	it('returns the trimmed path when set', () => {
+		expect(resolveJournalSpoolRoot('/var/lib/oa-journal-spool')).toBe(
+			'/var/lib/oa-journal-spool'
+		);
+		expect(resolveJournalSpoolRoot('  /var/lib/oa-journal-spool  ')).toBe(
+			'/var/lib/oa-journal-spool'
+		);
+	});
+
+	it.each([
+		['unset', undefined],
+		['empty string', ''],
+		['whitespace only', '   '],
+	])(
+		'throws rather than defaulting when %s -- a guessed spool path is worse than a startup failure',
+		(_label, raw) => {
+			expect(() => resolveJournalSpoolRoot(raw)).toThrow(new RegExp(JOURNAL_SPOOL_ROOT_VAR));
+		}
+	);
+
+	it('names the same variable apps/smtp-ingress reads, not a second one', () => {
+		// The two processes share one physical spool directory; a second, differently-named variable
+		// would let them silently drift apart the way F46 already cost this project once.
+		expect(JOURNAL_SPOOL_ROOT_VAR).toBe('SMTP_INGRESS_SPOOL_ROOT_PATH');
 	});
 });

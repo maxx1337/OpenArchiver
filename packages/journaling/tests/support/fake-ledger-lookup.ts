@@ -70,6 +70,10 @@ export function ledgerEntry(overrides: Partial<LedgerEntryByTxId> = {}): LedgerE
 			createHash('sha256').update(DEFAULT_LEDGER_ENTRY_CONTENT).digest()
 		),
 		sizeBytes: BigInt(DEFAULT_LEDGER_ENTRY_CONTENT.length),
+		// JR-6-02b: null by default, same posture as `journalingSourceId` above -- a caller exercising
+		// the envelope fields overrides them explicitly rather than relying on an arbitrary default.
+		envelopeFrom: null,
+		envelopeRcpt: null,
 		...overrides,
 	};
 }

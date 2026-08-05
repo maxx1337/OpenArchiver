@@ -36,7 +36,11 @@ suite('ci', "resolveOwner() -- the guide's four documented example rows", () => 
 		const result = resolveOwner(envelope({ to: ['alice@old-brand.com'] }), GUIDE_GROUPS);
 		expect(result.ownerEmail).toBe('alice@company.com');
 		expect(result.method).toBe('alias-domain-match');
-		expect(result.winner).toEqual({ field: 'to', address: 'alice@old-brand.com' });
+		expect(result.winner).toEqual({
+			field: 'to',
+			address: 'alice@old-brand.com',
+			normalizedEmail: 'alice@company.com',
+		});
 		expect(result.matchedDomain).toBe('old-brand.com');
 		expect(result.warning).toBeNull();
 	});
@@ -45,7 +49,11 @@ suite('ci', "resolveOwner() -- the guide's four documented example rows", () => 
 		const result = resolveOwner(envelope({ to: ['alice@company.com'] }), GUIDE_GROUPS);
 		expect(result.ownerEmail).toBe('alice@company.com');
 		expect(result.method).toBe('primary-domain-match');
-		expect(result.winner).toEqual({ field: 'to', address: 'alice@company.com' });
+		expect(result.winner).toEqual({
+			field: 'to',
+			address: 'alice@company.com',
+			normalizedEmail: 'alice@company.com',
+		});
 	});
 
 	it('row 3: a recipient at a group with no aliases at all still matches on its own primary domain', () => {
@@ -74,7 +82,11 @@ suite('ci', 'resolveOwner() -- priority order between To, Cc, Bcc and From', () 
 			}),
 			GUIDE_GROUPS
 		);
-		expect(result.winner).toEqual({ field: 'to', address: 'alice@company.com' });
+		expect(result.winner).toEqual({
+			field: 'to',
+			address: 'alice@company.com',
+			normalizedEmail: 'alice@company.com',
+		});
 	});
 
 	it('falls through to Cc when To has no matching recipient', () => {
@@ -82,7 +94,11 @@ suite('ci', 'resolveOwner() -- priority order between To, Cc, Bcc and From', () 
 			envelope({ to: ['external@gmail.com'], cc: ['bob@company.com'] }),
 			GUIDE_GROUPS
 		);
-		expect(result.winner).toEqual({ field: 'cc', address: 'bob@company.com' });
+		expect(result.winner).toEqual({
+			field: 'cc',
+			address: 'bob@company.com',
+			normalizedEmail: 'bob@company.com',
+		});
 	});
 
 	it('falls through to Bcc when neither To nor Cc has a matching recipient', () => {
@@ -94,7 +110,11 @@ suite('ci', 'resolveOwner() -- priority order between To, Cc, Bcc and From', () 
 			}),
 			GUIDE_GROUPS
 		);
-		expect(result.winner).toEqual({ field: 'bcc', address: 'carol@company.com' });
+		expect(result.winner).toEqual({
+			field: 'bcc',
+			address: 'carol@company.com',
+			normalizedEmail: 'carol@company.com',
+		});
 	});
 
 	it('falls through to the sender (outbound check) only once To/Cc/Bcc all miss', () => {
@@ -102,7 +122,11 @@ suite('ci', 'resolveOwner() -- priority order between To, Cc, Bcc and From', () 
 			envelope({ to: ['external@gmail.com'], sender: 'alice@company.com' }),
 			GUIDE_GROUPS
 		);
-		expect(result.winner).toEqual({ field: 'sender', address: 'alice@company.com' });
+		expect(result.winner).toEqual({
+			field: 'sender',
+			address: 'alice@company.com',
+			normalizedEmail: 'alice@company.com',
+		});
 		expect(result.method).toBe('primary-domain-match');
 	});
 
@@ -111,7 +135,11 @@ suite('ci', 'resolveOwner() -- priority order between To, Cc, Bcc and From', () 
 			envelope({ to: ['bob@subsidiary.io'], sender: 'alice@company.com' }),
 			GUIDE_GROUPS
 		);
-		expect(result.winner).toEqual({ field: 'to', address: 'bob@subsidiary.io' });
+		expect(result.winner).toEqual({
+			field: 'to',
+			address: 'bob@subsidiary.io',
+			normalizedEmail: 'bob@subsidiary.io',
+		});
 	});
 
 	it('a sender at an alias domain is normalized just like an inbound alias match', () => {
@@ -121,7 +149,11 @@ suite('ci', 'resolveOwner() -- priority order between To, Cc, Bcc and From', () 
 		);
 		expect(result.ownerEmail).toBe('alice@company.com');
 		expect(result.method).toBe('alias-domain-match');
-		expect(result.winner).toEqual({ field: 'sender', address: 'alice@old-brand.com' });
+		expect(result.winner).toEqual({
+			field: 'sender',
+			address: 'alice@old-brand.com',
+			normalizedEmail: 'alice@company.com',
+		});
 	});
 });
 
@@ -133,7 +165,11 @@ suite('ci', 'resolveOwner() -- no domain groups configured (case 3)', () => {
 		);
 		expect(result.ownerEmail).toBe('first@example.com');
 		expect(result.method).toBe('heuristic-no-groups');
-		expect(result.winner).toEqual({ field: 'to', address: 'first@example.com' });
+		expect(result.winner).toEqual({
+			field: 'to',
+			address: 'first@example.com',
+			normalizedEmail: 'first@example.com',
+		});
 		expect(result.warning).toBeNull();
 	});
 
@@ -141,14 +177,17 @@ suite('ci', 'resolveOwner() -- no domain groups configured (case 3)', () => {
 		expect(resolveOwner(envelope({ cc: ['c@example.com'] }), []).winner).toEqual({
 			field: 'cc',
 			address: 'c@example.com',
+			normalizedEmail: 'c@example.com',
 		});
 		expect(resolveOwner(envelope({ bcc: ['b@example.com'] }), []).winner).toEqual({
 			field: 'bcc',
 			address: 'b@example.com',
+			normalizedEmail: 'b@example.com',
 		});
 		expect(resolveOwner(envelope({ sender: 's@example.com' }), []).winner).toEqual({
 			field: 'sender',
 			address: 's@example.com',
+			normalizedEmail: 's@example.com',
 		});
 	});
 
@@ -184,7 +223,11 @@ suite('ci', 'resolveOwner() -- address comparison edge cases (JR-5-07 hard const
 			envelope({ to: ['not-an-email'], cc: ['bob@company.com'] }),
 			GUIDE_GROUPS
 		);
-		expect(result.winner).toEqual({ field: 'cc', address: 'bob@company.com' });
+		expect(result.winner).toEqual({
+			field: 'cc',
+			address: 'bob@company.com',
+			normalizedEmail: 'bob@company.com',
+		});
 	});
 
 	it('splits on the last "@" when an address has more than one', () => {
@@ -222,10 +265,20 @@ suite(
 				}),
 				GUIDE_GROUPS
 			);
-			expect(result.winner).toEqual({ field: 'to', address: 'alice@company.com' });
+			expect(result.winner).toEqual({
+				field: 'to',
+				address: 'alice@company.com',
+				normalizedEmail: 'alice@company.com',
+			});
+			// JR-6-02b: normalizedEmail is each match's own alias-to-primary-domain mapping, not a
+			// copy of the winner's -- a fan-out caller archives each of these under its own mailbox.
 			expect(result.additionalMatches).toEqual([
-				{ field: 'cc', address: 'bob@subsidiary.io' },
-				{ field: 'bcc', address: 'carol@old-brand.com' },
+				{ field: 'cc', address: 'bob@subsidiary.io', normalizedEmail: 'bob@subsidiary.io' },
+				{
+					field: 'bcc',
+					address: 'carol@old-brand.com',
+					normalizedEmail: 'carol@company.com',
+				},
 			]);
 		});
 

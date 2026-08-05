@@ -36,9 +36,14 @@ export class PostgresLedgerLookup implements LedgerLookup {
 			// which is exactly what that test is for.
 			content_sha256: Uint8Array | null | undefined;
 			size_bytes: string | bigint | null | undefined;
+			// JR-6-02b: same `| undefined` reasoning as above, applied to the two columns Phase B added
+			// this lookup for -- a mock row (or a driver that omits a NULL text[] column) must map to
+			// `null`, not to a mapping crash or a silently-absent property.
+			envelope_from: string | null | undefined;
+			envelope_rcpt: readonly string[] | null | undefined;
 		}>(
 			`SELECT spool_txid, seq, chain_scope_id, journaling_source_id, remote_ip, received_at,
-			        event_type, content_sha256, size_bytes
+			        event_type, content_sha256, size_bytes, envelope_from, envelope_rcpt
 			   FROM journal_ledger
 			  WHERE spool_txid = ANY($1)`,
 			[[...spoolTxIds]]
@@ -66,6 +71,8 @@ export class PostgresLedgerLookup implements LedgerLookup {
 					row.size_bytes === null || row.size_bytes === undefined
 						? null
 						: BigInt(row.size_bytes),
+				envelopeFrom: row.envelope_from ?? null,
+				envelopeRcpt: row.envelope_rcpt ?? null,
 			});
 		}
 		return result;

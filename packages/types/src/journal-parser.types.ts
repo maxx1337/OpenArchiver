@@ -455,6 +455,17 @@ export interface OwnerResolutionWinner {
 	readonly field: OwnerResolutionField;
 	/** Exactly as it appeared in that field -- before alias-to-primary-domain normalization. */
 	readonly address: string;
+	/**
+	 * `<local-part>@<matched group's main>` -- the address to actually archive under (`JR-6-02b`).
+	 *
+	 * Added so a caller fanning out over `winner` *and* `additionalMatches` (JR-5-07 hard constraint
+	 * 4 -- "more than one internal recipient was on the message") does not have to re-implement
+	 * `normalizeOwnerEmail()`'s alias-to-primary-domain mapping for the entries beyond the first. For
+	 * the two cases with no domain group to normalize against (`'heuristic-no-groups'`'s winner, and
+	 * every `winner: null` case) this equals `address` unchanged -- there is no primary domain to
+	 * normalize *to*, same reasoning as `heuristicResult()` in `owner-resolution.ts`.
+	 */
+	readonly normalizedEmail: string;
 }
 
 /**

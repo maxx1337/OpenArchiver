@@ -43,6 +43,8 @@ function receipt(overrides: Partial<LedgerEntryByTxId> = {}): LedgerEntryByTxId 
 		eventType: 'receipt',
 		contentSha256: CONTENT_BYTES,
 		sizeBytes: BigInt(CONTENT.length),
+		envelopeFrom: 'sender@example.com',
+		envelopeRcpt: ['journal@example.com'],
 		...overrides,
 	};
 }
@@ -65,6 +67,10 @@ suite('ci', 'classifySpoolEntry(): the one case that may archive', () => {
 		expect(verdict.receivedAt.toISOString()).toBe('2026-08-05T09:00:00.000Z');
 		expect(verdict.contentSha256Hex).toBe(CONTENT_HEX);
 		expect(verdict.sizeBytes).toBe(CONTENT.length);
+		// JR-6-02b: forwarded verbatim so the Phase-B pipeline can build an SmtpTransactionEnvelope
+		// without a second ledger lookup.
+		expect(verdict.envelopeFrom).toBe('sender@example.com');
+		expect(verdict.envelopeRcpt).toEqual(['journal@example.com']);
 	});
 
 	it('emits lower-case hex, so a comparison cannot fail on casing alone', () => {

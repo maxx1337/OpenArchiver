@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
@@ -84,6 +85,16 @@ import { connection } from '../../src/config/redis';
 const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const compiledWorker = path.resolve(thisDir, '../../dist/workers/journal-inbound.worker.js');
 
+/**
+ * `JR-6-02b`: the processor now resolves `SMTP_INGRESS_SPOOL_ROOT_PATH` at module load (same variable
+ * `apps/smtp-ingress` reads -- one physical spool, one name) and throws if it is unset, per
+ * `journal-inbound.options.ts`'s `resolveJournalSpoolRoot()`. Every spawn in this file needs a valid
+ * value or the worker dies before ever emitting `START_LINE`, so this is supplied by default rather
+ * than left to each call site -- `ingress-process-boot.test.ts` established the same pattern for
+ * `apps/smtp-ingress`'s own spawned-process tests.
+ */
+const defaultSpoolRoot = mkdtempSync(path.join(tmpdir(), 'oa-journal-worker-spool-'));
+
 const redisProbe = await probeRedis();
 const buildProbe = existsSync(compiledWorker)
 	? { available: true, reason: `compiled worker present at ${compiledWorker}` }
@@ -132,7 +143,11 @@ function spawnWorker(extraEnv: Record<string, string> = {}): SpawnedWorker {
 		// A pipe, not `inherit`: the assertions read the log, and an inherited stdio would put the
 		// worker's output into the test runner's own stream where nothing can match on it.
 		stdio: ['ignore', 'pipe', 'pipe'],
-		env: { ...process.env, ...extraEnv },
+		env: {
+			...process.env,
+			SMTP_INGRESS_SPOOL_ROOT_PATH: defaultSpoolRoot,
+			...extraEnv,
+		},
 	});
 
 	let buffer = '';
@@ -247,7 +262,12 @@ suiteRequiring('ci', 'journal-inbound worker process (JR-6-01)', requirement, ()
 		expect(worker!.child.exitCode).toBeNull();
 	});
 
-	it('picks up a job from the queue and fails it -- never reports it as archived', async () => {
+	it('picks up a job from the queue and fails it -- never reports it as archived (JR-6-02b)', async () => {
+		// No ledger row and no spool file exist for this fresh txid, so the gate (`JR-6-02a`)
+		// refuses with `no_receipt` -- the expected result of "nothing was ever accepted under
+		// this transaction id", not a wiring placeholder. `PhaseBSpoolFileUnreadableError` fires
+		// first (the spool file cannot even be measured), which is exactly right: the gate must
+		// never be asked to decide from a measurement that does not exist.
 		const spoolTxId = generateTxId();
 		const jobId = journalInboundJobId(spoolTxId);
 		createdJobIds.push(jobId);
@@ -265,7 +285,7 @@ suiteRequiring('ci', 'journal-inbound worker process (JR-6-01)', requirement, ()
 		expect(state).toBe('failed');
 
 		const reloaded = await queue.getJob(jobId);
-		expect(reloaded?.failedReason ?? '').toContain('Phase B is not implemented yet');
+		expect(reloaded?.failedReason ?? '').toContain('could not be read');
 		// The txid travels through the queue unchanged -- the payload is the one field the
 		// reconciler can reproduce, and a worker that lost it could not act on the job at all.
 		expect(reloaded?.failedReason ?? '').toContain(spoolTxId);

@@ -67,6 +67,20 @@ export interface LedgerEntryByTxId {
 	readonly contentSha256: Uint8Array | null;
 	/** `size_bytes` as stored, or `null` for a row that records no object. */
 	readonly sizeBytes: bigint | null;
+	/**
+	 * `envelope_from` as stored (`JR-6-02b`) -- the `MAIL FROM` of the transaction that delivered this
+	 * receipt, or `null` for a row that records none. Phase B needs this to pass an
+	 * {@link SmtpTransactionEnvelope} to `parseJournalReport()`: without it, the parser's NDR/plain-BCC
+	 * classification loses its strongest signal (the null reverse-path) and falls back to a weaker,
+	 * content-only heuristic for every message this lookup resolves.
+	 */
+	readonly envelopeFrom: string | null;
+	/**
+	 * `envelope_rcpt` as stored, in arrival order, or `null` for a row that records none. Kept as an
+	 * array (matching the `text[]` column and {@link SmtpTransactionEnvelope.envelopeRcpt}) rather than
+	 * joined into a string -- see that type's doc comment for why arrival order is part of the record.
+	 */
+	readonly envelopeRcpt: readonly string[] | null;
 }
 
 /**

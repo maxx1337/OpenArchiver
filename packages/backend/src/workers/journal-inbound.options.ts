@@ -72,3 +72,32 @@ export const JOURNAL_INBOUND_LOCK_DURATION_MS = 10 * 60 * 1000;
  * re-enqueues it under a deterministic job id into a queue where nothing else holds it.
  */
 export const JOURNAL_INBOUND_MAX_STALLED_COUNT = 0;
+
+/**
+ * Environment variable naming the spool root -- deliberately the **same** variable
+ * `apps/smtp-ingress/src/config-from-env.ts` reads (`SMTP_INGRESS_SPOOL_ROOT_PATH`), not a
+ * second, equivalent-but-differently-named one. The two processes must agree on the same physical
+ * directory (Phase A writes there, Phase B reads and releases from there); giving each its own
+ * variable name would be exactly the F46 shape -- two things that have to match, matching only by an
+ * operator remembering to set both env vars to the same value, and nothing failing when they stop.
+ */
+export const JOURNAL_SPOOL_ROOT_VAR = 'SMTP_INGRESS_SPOOL_ROOT_PATH';
+
+/**
+ * Resolve the spool root the `journal-inbound` worker reads Phase-B entries from and releases them
+ * back to. Unlike {@link resolveJournalInboundConcurrency}, there is no safe default: a path chosen
+ * for the operator would either not exist or, worse, silently point at the wrong directory on a host
+ * that happens to have something at the default path already. Failing loudly at worker startup is the
+ * documented convention (CLAUDE.md section 5.6) for exactly this situation.
+ *
+ * @throws if unset or blank.
+ */
+export function resolveJournalSpoolRoot(raw: string | undefined): string {
+	if (raw === undefined || raw.trim() === '') {
+		throw new Error(
+			`${JOURNAL_SPOOL_ROOT_VAR} must be set to the same spool root apps/smtp-ingress uses -- ` +
+				`there is no default, because a guessed path is worse than a startup failure.`
+		);
+	}
+	return raw.trim();
+}

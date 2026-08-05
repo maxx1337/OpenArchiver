@@ -234,7 +234,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		//
 		// 75 after JR-6-02b added packages/journaling/src/phase-b/owner-envelope.test.ts (ADR-033: owner
 		// resolution for the three parse results that carry no journal-report envelope).
-		expectedFiles: 75,
+		//
+		// 77 after JR-6-02b's second slice added packages/journaling/src/phase-b/pipeline.test.ts (the
+		// orchestration: gate -> parse -> resolve -> archive -> index -> release, ADR-034) and
+		// packages/journaling/src/phase-b/spool-entry-releaser.test.ts (spool-file deletion, ADR-034).
+		expectedFiles: 77,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -775,7 +779,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// configured, so a resolver that reached for it would report a confident `primary-domain-match` on
 		// the archive mailbox instead of the real recipient. A wrong owner that presents itself as right is
 		// worse than an admittedly unknown one, and that is what those cases hold in place.
-		expectedTests: { ci: 1081, nightly: 3, manual: 0 },
+		//
+		// 1102 after JR-6-02b's second slice (the pipeline itself, ADR-034): +11 in the new
+		// pipeline.test.ts (orchestration order, all four parse kinds, five refusal/error paths), +3 in
+		// the new spool-entry-releaser.test.ts, +2 in ledger-lookup.test.ts (envelope_from/envelope_rcpt
+		// null-normalisation, widening LedgerEntryByTxId for the same reason JR-6-02a widened it once
+		// already), +5 in journal-inbound.options.test.ts (resolveJournalSpoolRoot()). owner-resolution.test.ts
+		// and spool-entry-gate.test.ts changed (normalizedEmail on OwnerResolutionWinner; envelope forwarding
+		// on SpoolEntryArchive) without adding tests, so they do not appear in this delta.
+		expectedTests: { ci: 1102, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',

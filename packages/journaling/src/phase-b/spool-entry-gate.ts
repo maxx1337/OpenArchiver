@@ -58,6 +58,15 @@ export interface SpoolEntryArchive {
 	/** Lower-case hex of the verified `content_sha256`. Verified, so hex is now safe to hand on. */
 	readonly contentSha256Hex: string;
 	readonly sizeBytes: number;
+	/**
+	 * The receipt's `envelope_from`/`envelope_rcpt`, forwarded verbatim (`JR-6-02b`) -- the pipeline
+	 * needs them to build the {@link SmtpTransactionEnvelope} `parseJournalReport()` takes as its
+	 * strongest NDR/plain-BCC signal. Forwarded here rather than re-fetched, for the same reason
+	 * `chainScopeId`/`journalingSourceId` already are: one ledger lookup, one verdict, no second
+	 * source for values the caller already has proven correct.
+	 */
+	readonly envelopeFrom: string | null;
+	readonly envelopeRcpt: readonly string[] | null;
 }
 
 /**
@@ -200,6 +209,8 @@ export function classifySpoolEntry(
 		receivedAt: entry.receivedAt,
 		contentSha256Hex: expectedHex,
 		sizeBytes: measured.sizeBytes,
+		envelopeFrom: entry.envelopeFrom,
+		envelopeRcpt: entry.envelopeRcpt,
 	};
 }
 
