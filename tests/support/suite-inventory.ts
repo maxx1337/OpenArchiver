@@ -208,7 +208,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// doc comment for the three near-misses it replaces).
 		//
 		// 67 = 23 (shared base) + 5 (E5) + 39 (E4), see the fork note above.
-		expectedFiles: 67,
+		//
+		// 69 after JR-6-01 (E6) added two: packages/journaling/src/phase-b/queue-contract.test.ts (the
+		// Phase-B queue contract -- names, payload width, deterministic job id) and
+		// packages/backend/src/workers/journal-inbound.options.test.ts (the worker's queue parameters,
+		// including that maxStalledCount stays 0). The worker entry point itself has no unit test on
+		// purpose: importing it constructs a BullMQ Worker and opens a Redis connection, so it is
+		// measured by spawning the compiled process in the integration suite instead.
+		expectedFiles: 69,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -706,7 +713,16 @@ export const SUITES: readonly SuiteSpec[] = [
 		// JournalAcceptancePort.accept() actually received.
 		//
 		// 991 ci = 371 (shared base) + 141 (E5) + 479 (E4), see the fork note above.
-		expectedTests: { ci: 991, nightly: 3, manual: 0 },
+		//
+		// 1019 after JR-6-01 (E6) added 28: 13 in queue-contract.test.ts (the two pinned wire names, the
+		// one-field payload width, and 10 on journalInboundJobId() -- determinism, no collision over
+		// 2000 ULIDs, and 7 malformed inputs each rejected rather than encoded, because a colliding job
+		// id makes BullMQ *drop* an enqueue silently); 15 in journal-inbound.options.test.ts (13 on the
+		// concurrency override -- 6 of them malformed forms a real shell or compose file can produce,
+		// none of which may fall back to the default -- and 2 that pin maxStalledCount to 0 and
+		// lockDuration to ten minutes, the two parameters whose values JR-6-03's dedup correctness and
+		// long synchronous MIME parsing respectively depend on).
+		expectedTests: { ci: 1019, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -748,7 +764,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// attacker-controlled ehloName cannot be represented in Postgres text -- 3 cases: the direct
 		// PostgresLedgerWriter.append() rejection, that the chain still accepts a normal append
 		// afterward, and the real wire protocol producing 451, never a crash or a silent 250).
-		expectedFiles: 21,
+		// 22 after JR-6-01 (E6) added journal-inbound-worker.int.test.ts: the compiled worker spawned
+		// as its own process, proven to bind the queue and to *fail* a Phase-B job rather than report an
+		// unarchived message as completed. First suite in the repository that needs Redis rather than
+		// Postgres -- see probeRedis() in tests/support/infra.ts.
+		expectedFiles: 22,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -785,7 +805,16 @@ export const SUITES: readonly SuiteSpec[] = [
 		// producing a promotion however many retries elapse.
 		// 121 after JR-4-15 added 3 to smtp-ingress-envelope-hostile-values.int.test.ts (see the
 		// expectedFiles comment above for what each proves).
-		expectedTests: { ci: 121, nightly: 0, manual: 0 },
+		// 126 after JR-6-01 added 5 in journal-inbound-worker.int.test.ts, each spawning the compiled
+		// worker: it comes up and logs the parameters it chose; it picks a job off the queue and *fails*
+		// it (the load-bearing one -- a completed Phase-B job claims a message is archived); an unknown
+		// job name fails too rather than completing; a malformed concurrency override aborts startup
+		// before the "started" line (which is what proves the entry point calls the validator its own
+		// unit test covers -- F46 was two things verified separately and never together); and SIGTERM.
+		// The last one always executes but branches on the platform: Windows has no POSIX signals, so
+		// the graceful path is verified on the Linux CI runner only and a coverageNotice says so on
+		// Windows. Deliberately not a skipIf -- these numbers are exact and must not differ per platform.
+		expectedTests: { ci: 126, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

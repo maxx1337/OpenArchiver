@@ -45,11 +45,46 @@ jobs:
                     --health-timeout 5s
                     --health-retries 5
 
+            # JR-6-01. The `journal-inbound` worker is a BullMQ consumer, and proving that the process
+            # starts means starting it -- which needs a broker. Until E6 every suite got by with
+            # Postgres alone, which is why this service is new here.
+            #
+            # `OA_TEST_REQUIRE_INFRA: '1'` below is what makes it mandatory rather than nice to have: a
+            # `suiteRequiring(probeRedis())` suite would *fail* this job if nothing were listening,
+            # instead of skipping quietly. Adding the service and setting the variable are therefore one
+            # change, not two.
+            #
+            # Same image as docker-compose.yml, but **without** its `--requirepass`, and that difference
+            # is a limitation rather than a simplification. A GitHub Actions service container takes
+            # `image`, `env`, `ports`, `volumes` and `options` (docker *create* flags) -- there is no way
+            # to append a server argument, and `valkey-server --requirepass …` is exactly that. So this
+            # broker is password-less and `REDIS_PASSWORD` stays unset in this job's env.
+            #
+            # What that costs: the AUTH path is not exercised here. It is exercised locally, where
+            # docker-compose.yml does set `--requirepass` -- and `probeRedis()` is deliberately a plain
+            # TCP connect so a wrong password arrives as a connection error rather than as a skip. If the
+            # AUTH path ever needs to be covered in CI, the way to do it is a `docker run` step instead of
+            # a service container, not a change to the code under test.
+            valkey:
+                image: valkey/valkey:8-alpine
+                ports:
+                    - 6379:6379
+                options: >-
+                    --health-cmd "valkey-cli ping"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
         env:
             # Server *and* credentials for the test harness. No `STORAGE_*` variables: the
             # integration suite never touches `config/storage.ts`.
             DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
             PGPASSWORD: postgres
+            # JR-6-01: the same variables `packages/backend/src/config/redis.ts` reads, so the spawned
+            # `journal-inbound` worker and `probeRedis()` in the harness point at the service container
+            # above. `REDIS_PASSWORD` is deliberately absent -- see the note on that service.
+            REDIS_HOST: localhost
+            REDIS_PORT: '6379'
             # JR-1-05b. This job *provisions* Postgres, so a suite skipping because Postgres is
             # unreachable is a broken job, not a legitimate skip. With this set, `suiteRequiring()`
             # emits a failing test instead of a visible skip. Positive expectation, in the suite --

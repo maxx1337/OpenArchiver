@@ -249,3 +249,10 @@ export {
 	PerSourceConnectionLimiter,
 	PerSourceTransactionRateLimiter,
 } from './ingress/connection-rate-limiter';
+
+export {
+	JOURNAL_INBOUND_JOB_NAME,
+	JOURNAL_INBOUND_QUEUE_NAME,
+	journalInboundJobId,
+	type JournalInboundJobData,
+} from './phase-b/queue-contract';

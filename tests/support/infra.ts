@@ -83,3 +83,51 @@ export function probePostgres(timeoutMs = 1500): Promise<Probe> {
 	cache.set(key, result);
 	return result;
 }
+
+/**
+ * Is there a reachable Redis/Valkey for a suite that needs BullMQ (`JR-6-01`)?
+ *
+ * Added for the `journal-inbound` worker: proving that the worker process *starts* means starting it,
+ * and a BullMQ `Worker` needs a broker. Until E6 every suite got by with Postgres, which is why this
+ * did not exist.
+ *
+ * Reads the same variables as `packages/backend/src/config/redis.ts` and applies the same defaults, so
+ * a probe that says "reachable" is a statement about the connection the code under test will actually
+ * open. Duplicating the defaults is deliberate: importing that module would pull `dotenv/config` and a
+ * `bullmq` type into the harness for two `??`s, and the harness stays free of the packages it tests.
+ * The `unit`-suite rule (no `src/database` import) is the same instinct.
+ *
+ * A plain TCP connect, like `probePostgres()`: it proves something is listening, not that the password
+ * is right. A wrong `REDIS_PASSWORD` therefore reaches the test as a connection error rather than a
+ * skip -- which is the correct split. "Nothing is running here" is a legitimate reason to skip;
+ * "credentials are wrong" is a broken environment and must not be disguised as an absent one.
+ */
+export function probeRedis(timeoutMs = 1500): Promise<Probe> {
+	const host = process.env.REDIS_HOST || 'localhost';
+	const port = Number(process.env.REDIS_PORT || '6379');
+	const key = `redis:${host}:${port}`;
+	const cached = cache.get(key);
+	if (cached) {
+		return cached;
+	}
+	const result = (async (): Promise<Probe> => {
+		const target = `${host}:${port}`;
+		if (!Number.isInteger(port) || port < 1 || port > 65535) {
+			return {
+				available: false,
+				reason: `REDIS_PORT is not a valid port number (${JSON.stringify(process.env.REDIS_PORT)})`,
+				target,
+			};
+		}
+		const reachable = await probeTcp(host, port, timeoutMs);
+		return reachable
+			? { available: true, reason: `Redis reachable at ${target}`, target }
+			: {
+					available: false,
+					reason: `no Redis/Valkey listening at ${target} -- BullMQ suite skipped`,
+					target,
+				};
+	})();
+	cache.set(key, result);
+	return result;
+}
