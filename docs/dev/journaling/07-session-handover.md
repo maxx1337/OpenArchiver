@@ -69,9 +69,17 @@ sed -r 's/\x1b\[[0-9;]*m//g' /tmp/run.log \
   | grep -E 'Test Files|Tests +[0-9]|TEST-EXECUTED|Suite inventory|FAIL|✗' | tail -12
 ```
 
-**Das `sed` davor ist nicht Kosmetik:** vitest schreibt ANSI-Farbcodes zwischen `Tests` und die Zahl,
-weshalb ein naives `grep 'Tests +[0-9]'` genau die Zeile mit der Testzahl **verschluckt** — bei der
-ersten Fassung dieses Rezepts am 2026-08-04 passiert.
+Das `sed` entfernt nur die ANSI-Farbcodes, damit die Zeilen lesbar sind; **ohne es funktioniert das
+`grep` auch** — am 2026-08-04 nachgemessen, nachdem eine erste Vermutung das Gegenteil behauptet hatte.
+
+> **Für einen CI-Log gilt dasselbe Rezept nicht ganz.** `gh run view <id> --log` enthält **keine**
+> `Tests …`-Summenzeile — dort nachgesehen, 1 462 Zeilen, kein einziges `passed |`. Wer sie dort sucht
+> und nicht findet, darf **nicht** schließen, der Lauf habe nichts ausgeführt. Die tragenden Zeilen im
+> CI-Log sind `Test Files`, `[TEST-EXECUTED]` und `Suite inventory verified`:
+>
+> ```bash
+> gh run view <id> --log | grep -E 'Test Files|TEST-EXECUTED|Suite inventory'
+> ```
 
 `[TEST-EXECUTED]` und `Suite inventory verified` sind die Zeilen, die zählen — sie unterscheiden „grün"
 von „grün, weil nichts geprüft wurde". **`--silent` ist verboten:** es unterdrückt die
