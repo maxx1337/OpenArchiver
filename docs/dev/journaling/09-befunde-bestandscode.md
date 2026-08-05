@@ -30,7 +30,7 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                     |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                        |
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                             |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46                         |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46, F58, F59               |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -3305,3 +3305,49 @@ ein Test hält `' Company.COM '` ⇒ `alice@Company.COM` fest). Und ein `main`, 
 (`'admin@company.com'` ⇒ `default_fallback@admin@company.com`), wird **nicht** repariert: zu raten,
 welche Hälfte der Betreiber meinte, hieße aus einer kaputten Eingabe einen Wert zu erfinden. Ein Test
 hält diese Grenze fest. Sie gehört in die Konfigurationsprüfung im Backend.
+
+## F59 — `shutting down` kann verlorengehen: `console.log` und direkt danach `process.exit(0)` auf einem Pipe-stdout
+
+**Schwere:** niedrig (Diagnostik, kein Datenverlust) · **Kategorie:** Neuer Code ·
+**Ort:** `apps/smtp-ingress/src/index.ts` `shutdown()` (Zeilen 332 und 349–352) ·
+**Gefunden:** 2026-08-05 in `JR-6-01`, durch einen roten CI-Lauf (`30999645177`) an einem Test, den
+diese Scheibe nicht angefasst hat · **Status:** **offen, Entscheidung des Auftraggebers ausstehend**
+
+Der Shutdown-Pfad schreibt seine einzige Bestätigungszeile mit `console.log` und ruft danach in
+beiden Zweigen von `server.close()` `process.exit(0)`:
+
+```ts
+console.log(`smtp-ingress: received ${signal}, shutting down`); // Zeile 332
+// …
+server.close().then(
+	() => closeConnections().finally(() => process.exit(0)),
+	() => closeConnections().finally(() => process.exit(0))
+);
+```
+
+**`process.exit()` leert keine noch anstehenden asynchronen `stdout`-Schreibvorgänge.** Wenn `stdout`
+ein **Pipe** ist — genau der Fall, sobald ein Elternprozess die Ausgabe mitliest, also in jedem Test
+und unter jedem Prozess-Supervisor —, sind Schreibvorgänge auf Linux asynchron. Zwischen Zeile 332 und
+dem `exit` liegt normalerweise genug Zeit; unter CPU-Konkurrenz nicht zwangsläufig.
+
+**Wie es aufgefallen ist, und warum das die interessantere Hälfte ist.** `JR-6-01` hat 33 Tests
+hinzugefügt, davon fünf, die Prozesse starten und wieder abräumen. Auf dem CI-Runner ist damit
+`packages/journaling/tests/unit/ingress-process-boot.test.ts` rot geworden —
+`expected '[dotenv@17.2.0] injecting env (0) fro…' to contain 'shutting down'` —, ein Test aus
+`JR-4-01`, den diese Scheibe nicht berührt. Der Prozess **war** beendet (`waitUntil(() => exited)`
+lief durch), nur seine letzte Zeile fehlte. Der Befund ist damit **nicht** durch neue Last entstanden,
+sondern von ihr **sichtbar gemacht**: die Zusage „ein SIGTERM erzeugt eine Shutdown-Meldung" war schon
+vorher nur wahrscheinlich, nicht sicher.
+
+**Zwei Wege, und sie sind nicht gleichwertig:**
+
+1. **Im Produktionscode.** Auf das `exit` verzichten, wenn der Ereignis-Loop von allein leerläuft, oder
+   vor dem `exit` auf das `drain` von `process.stdout` warten. Das behebt die Ursache — eine
+   Betriebsmeldung, die ein Supervisor-Log erreichen soll, darf nicht davon abhängen, wie schnell die
+   Maschine gerade ist.
+2. **Im Test.** Auf die Zeile nicht mehr prüfen. Das macht den Lauf grün und die Zusage unprüfbar; die
+   Meldung bleibt verlierbar. **Nicht empfohlen.**
+
+**Nicht mitentschieden:** derselbe Prozess loggt über `pino` **und** `console.log` auf denselben
+Dateideskriptor (in **F49** ausdrücklich offen gelassen). Der Fix für (1) sollte diese Stelle nicht
+stillschweigend mitumbauen — das ist eine eigene Entscheidung.

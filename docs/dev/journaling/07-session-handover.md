@@ -125,123 +125,100 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-04 (**E4 ist abgenommen und zurückgemergt; E5 ebenfalls — beide Parallelzweige
-sind zusammengeführt**) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
-(Integrationsbranch) · Volllauf **gegen den gemergten Baum**: **1181 Tests** bei 95 Dateien —
-`unit ci 991 · integration ci 121 · adversarial ci 69`, `[TEST-EXECUTED]` vorhanden
+**Stand:** 2026-08-05 (**E6 hat begonnen, `JR-6-01` ist erledigt**) · **Branch:**
+`claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf: **1214 passed
+| 8 skipped** bei 98 Dateien — `unit ci 1019/1019 · integration ci 126/126 · adversarial ci 69/69`,
+Exit 0
 
-> **E4 ist abgenommen (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung).** Urteil: angenommen mit zwei
-> Auflagen, **beide in derselben Sitzung erledigt**. Das Protokoll mit einem Beleg je Kriterium steht
-> in **`16-abnahme-e4.md`** (`71d2b85`, nachgeführt `c79aff4`). Erledigt sind alle 21 IDs
-> (`JR-4-01`…`JR-4-12`, `JR-4-14`…`JR-4-21` samt `JR-4-21a`) **und** die Abnahme.
+> **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
+> **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
+> der Reservierung — sie trägt ihre Nummer seit dem 2026-07-27 und wird in `JR-6-02` gefüllt, nicht neu
+> vergeben.
 
-> **Aus E4 ist kein Befund offen.** F42–F51 behoben oder aufgelöst; F52/F53/F54 in `JR-4-21`,
-> F50/F55/F56 in `JR-4-21a`, **F47** bei der Abnahme als längst behoben erkannt und korrigiert.
+> **E4 und E5 sind abgenommen und zurückgemergt** — E4 mit `JR-4-13`/`9503bc8` (Protokoll
+> `16-abnahme-e4.md`, 21 IDs plus Abnahme), E5 mit `JR-5-09`/`107346d`, E3 mit `JR-3-08`/`185e9bd`.
+> **Aus E4 ist kein Befund offen.** Beim E4-Rückmerge kollidierten drei Nummernkreise; aufgelöst nach
+> „der eingehende Zweig gibt nach", die Regel daraus ist **ADR-032**.
 
-> **Der Rückmerge ist vollzogen** (`9503bc8`, `--no-ff`, kein Squash), freigegeben vom Auftraggeber am
-> 2026-08-04. Der Epic-Branch ist vorher gepusht worden, damit die Abnahmehistorie nicht nur im
-> Container liegt.
-
-> **Beim Rückmerge sind drei Nummernkreise kollidiert**, weil E4 und E5 parallel auf zwei Zweigen
-> entstanden sind: ADR-Nummern (026/027/028 doppelt, plus eine von E4 verschobene 026),
-> Befundnummern (F42/F43 doppelt) und Dateinamen (`12-`). Aufgelöst nach dem Grundsatz **der
-> eingehende Zweig gibt nach**; E4s ADRs heißen jetzt **029/030/031**, E5s Befunde **F57/F58**, und
-> `12-parallelbetrieb.md` heißt **`17-parallelbetrieb.md`**. Die Regel dazu ist **ADR-032** — wer
-> einen Epic-Zweig eröffnet, reserviert seine Nummern vorab auf dem Integrationsbranch.
-
-> **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
+> **Ein Befund ist neu und offen: `F59`.** `apps/smtp-ingress` schreibt seine Shutdown-Zeile mit
+> `console.log` und ruft direkt danach `process.exit(0)` — das leert einen **Pipe**-stdout auf Linux
+> nicht, die Zeile kann verlorengehen. Aufgefallen ist er **nicht** durch eine Änderung an diesem Code,
+> sondern weil `JR-6-01`s 33 neue Tests (fünf davon starten Prozesse) den Wettlauf auf dem CI-Runner
+> wahrscheinlich genug gemacht haben: `ingress-process-boot.test.ts` aus `JR-4-01` wurde rot, obwohl
+> diese Scheibe ihn nicht angefasst hat. Der Prozess **war** beendet, nur seine letzte Zeile fehlte.
+> **Er braucht eine Entscheidung des Auftraggebers** — Empfehlung steht in
+> `09-befunde-bestandscode.md`: im Produktionscode beheben, nicht im Test wegprüfen.
 
 ### Der Stand in einem Satz
 
-**Der SMTP-Empfangspfad steht und nimmt an.** `apps/smtp-ingress` spricht ESMTP mit `PIPELINING`,
-`8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`, `STARTTLS` und `AUTH`, prüft Quell- und Empfänger-ACL gegen
-`journaling_sources`, fährt beim Start den Crash-Recovery-Scan, und antwortet auf das Ende von `DATA`
-bzw. `BDAT … LAST` mit **`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append
-durch sind. Seit `JR-4-19` übersteht er auch einen Start ohne erreichbare Ledger-Datenbank: er
-antwortet `451`, holt die Verdrahtung im Hintergrund nach und nimmt danach **ohne Neustart** an.
-**Offen sind `JR-4-21` (Härtung, läuft), `JR-4-15` (Sicherheitsdurchsicht) und die Abnahme.**
-
-Seit `JR-4-10` ist die zentrale Zusage nicht mehr nur strukturell begründet, sondern **gemessen**:
-unter echtem `SIGKILL` während einer 50-MB-Übertragung haben in CI-Lauf `30862834098` sieben von
-zwanzig Runden den `250`-Zweig gezogen — und **alle sieben** hatten eine passende, byteexakt geprüfte,
-korrekt verkettete Ledger-Zeile. Kein Fall von „teilweise".
-
-**`JR-4-14` hat drei Defekte gefunden, und sie haben eine gemeinsame Wurzel** (`F52`, `F53`, `F54` in
-`09-befunde-bestandscode.md`): Die Zeilenlängengrenze wird in der **Parselogik** geprüft statt beim
-Hereinkommen der Bytes. Deshalb hängt ihr Ergebnis von der Chunk-Zerlegung ab — ~2 000 Byte ⇒
-falsches `250` · **100 KB ⇒ korrekt `500` in 25 ms** · ~200 KB ⇒ Fehlschlag · 2 MB ⇒ keine Antwort.
-**Dass der Fall bei 100 KB funktioniert, ist der Beleg**, nicht die Ausnahme: dort greift der intakte
-`idx === -1`-Zweig, weil Node in mehreren `data`-Ereignissen liefert.
-
-**Daraus ist `JR-4-21` entstanden (Rolle DEV, läuft), und mit ihr eine Änderung an ADR-029.** Der
-Auftraggeber hat die Eigenimplementierung ein zweites Mal angezweifelt, diesmal mit Go-Kandidaten —
-und traf eine echte Lücke: die Kandidatentabelle der ADR prüft **ausschließlich npm-Pakete**.
-Gemessen: `go-smtp` kann `BDAT` vollständig serverseitig. **Die Entscheidung bleibt trotzdem**, aber
-aus einem anderen Grund als bisher: nicht das Protokoll ist der Blocker, sondern der
-Acceptance-Contract — ein Go-Ingress müsste Spool (E3) und Ledger (E2) mitnehmen, also die Hash-Kette
-zweimal implementieren. **Was sich ändert:** Der Eigenbau hört auf, seine Härtung selbst zu erfinden;
-`go-smtp` ist ab jetzt die Vorlage (`lineLimitReader` — Grenze im **Reader** statt im Parser).
-Vollständig im Nachtrag zu ADR-029, `05-entscheidungen.md`.
-
-> **Ein Fehler, aus dem eine Regel geworden ist:** Nachdem der Tester am Nutzungslimit ausgefallen
-> war, hat der PO einen Ersatz gestartet — und nach dem Limit-Reset bauten **zwei** Tester dieselbe
-> Scheibe im selben Arbeitsbaum. `tests/support/suite-inventory.ts` trägt exakte Zahlen und verträgt
-> genau einen Bearbeiter. **Nie zwei Rollen gleichzeitig auf einer Scheibe, auch nicht nach einem
-> Ausfall** — erst prüfen, ob die erste Rolle zurück ist. Der Doppellauf hat zwar F52 unabhängig
-> bestätigt und über einen ungeklärten roten Fall F54 zutage gefördert, aber das rechtfertigt ihn
-> nicht.
+**Der Empfangspfad steht, der Parser steht, und Phase B hat jetzt einen Prozess — aber noch keinen
+Inhalt.** `apps/smtp-ingress` spricht ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`,
+`CHUNKING`, `STARTTLS` und `AUTH`, prüft Quell- und Empfänger-ACL, fährt beim Start den
+Crash-Recovery-Scan und antwortet auf das Ende von `DATA` bzw. `BDAT … LAST` mit
+**`250 … queued as <seq>`** — erst nachdem Spool-fsync **und** Ledger-Append durch sind. Seit
+`JR-6-01` gibt es dahinter den `journal-inbound`-Worker als eigenen Prozess mit begründeten
+Queue-Parametern; **was fehlt, ist `JR-6-02`** — die Verarbeitung selbst, von der Spool-Datei bis zum
+durchsuchbaren Treffer.
 
 ### Was diese Session gemacht hat
 
-> **Neun Scheiben abgeschlossen:** `JR-4-01` (Prozessskelett, zod-Config, Import-Graph-Nachweis),
-> `JR-4-02` (ESMTP-Server — **und ADR-029**), `JR-4-03` (`CHUNKING`/`BDAT`), `JR-4-16` (F44),
-> `JR-4-04` (STARTTLS/TLS), `JR-4-05a`/`b`/`c` (Quell-ACL und erste Datenbankanbindung,
-> Empfänger-ACL, `AUTH` über TLS), `JR-4-17` (ADR-030), `JR-4-06a` (`accept()` verdrahtet, erstes
-> `250`), `JR-4-18` (Crash-Recovery-Scan verdrahtet), `JR-4-20` (F46), `JR-4-06b` (ganze Codetabelle,
-> Graceful Drain), `JR-4-07` (kein Relaying, Byte-Treue), `JR-4-08` (Verbindungs- und Ratengrenzen).
->
-> **Zwei ADRs:** **ADR-029** — der SMTP-Server ist **selbst gebaut**, weil kein Node-Paket `BDAT`
-> beherrscht; der Auftraggeber hat die Entscheidung zu Recht angezweifelt, und der **Nachtrag** hat
-> die Begründung ausgetauscht: „Exchange benutzt BDAT" trägt nicht (RFC 3030 verlangt `DATA`-Fallback),
-> tragend ist, dass Microsoft **bare line feeds** nicht mehr entfernt und solche Nachrichten über
-> `DATA` **nicht übertragbar** sind. **ADR-030** — eine Transaktion bleibt genau **einer** Kette
-> zugeordnet; ein zweiter `RCPT TO` für eine andere Kette bekommt `452 4.5.3`.
->
-> **Sieben Befunde: F42–F48.** Die vier, die zählen:
->
-> - **F44** (hoch, behoben in `JR-4-16`): nach einem `552` las der Server den Nachrichtenrumpf als
->   SMTP-Kommandos — gemessen, drei Rumpfzeilen mit `250` beantwortet. Mit `JR-4-06` wäre daraus ein
->   falscher Ledger-Eintrag geworden, denn `envelope_from` ist ein gehashtes Feld.
-> - **F46** (hoch, behoben in `JR-4-20`): `RecipientAclEvaluator.evaluate` und
->   `SourceAclEvaluator.evaluate` hießen gleich, TypeScript typisiert strukturell — jeder `RCPT TO`
->   lief gegen die IP-Allowlist, der Empfang war **funktionsunfähig**. Kein Test sah es, weil **jeder**
->   ein Fake statt der produktiven Verdrahtung benutzte.
-> - **F48** (hoch, aufgelöst): **alle zwölf CI-Läufe zwischen 07:22 und 11:08 sind fehlgeschlagen**,
->   am Lint-Schritt, vierzehn Scheiben lang unbemerkt — und damit lief in der CI **weder Build noch
->   Suite**. Das wog schwer, weil `fsyncDirectory()` auf diesem Windows-Host mit `EPERM` scheitert und
->   `accept()` den Ledger erst danach anfasst: **lokal erreicht kein Lauf den Append.** Der Kern des
->   Projekts war lokal unprüfbar und in der CI ungeprüft. Beides ist zu.
-> - **F43** (mittel, offen): `heapUsed` sieht Node-`Buffer` nicht — ein Speichernachweis muss über
->   `arrayBuffers` laufen und **kalibriert** sein. Setzt ein Fragezeichen hinter `JR-3-02`s
->   abgenommene Zusicherung; zu prüfen ist der **Nachweis**, nicht der Code.
->
-> **Vier neue Tasks aus diesen Funden:** `JR-4-16` (F44), `JR-4-17` (ADR-030), `JR-4-18`
-> (Crash-Recovery-Scan — war gebaut, getestet, abgenommen und **von niemandem aufgerufen**),
-> `JR-4-19` (Ledger-Verbindung erholt sich nach Startfehler nicht), `JR-4-20` (F46). E4 hat damit
-> **20** Tasks, das Projekt 117.
->
-> **Verfahren geändert (Entscheidung des Auftraggebers, Kostenprüfung):** die wiederkehrende
-> Auftrags-Boilerplate steht jetzt in `.claude/agents/senior-dev.md` und `tester.md` statt in jedem
-> Auftrag (~40 % jedes Prompts), das Berichtsformat ist eine feste Struktur, und **nach jedem Push
-> wird der CI-Lauf geprüft**. Dabei zwei veraltete Rollenanweisungen korrigiert — `tester.md` behauptete
-> „zero tests and no test runner", seit E1 falsch, und `senior-dev.md` verlangte `pnpm lint`, das auf
-> diesem Host nicht grün werden kann.
->
-> **Vereinbart, aber nicht begonnen: die Doku-Diät.** Die Pflichtlektüre (README + Status + Handover +
-> Backlog + Skill) ist auf **689.000 Zeichen ≈ 170.000 Tokens** gewachsen; einzelne
-> Sessionprotokollzeilen in `06-status.md` sind bis 8.531 Zeichen lang. Sie soll **nach der
-> E4-Abnahme** auf unter 40.000 Tokens gebracht werden: Protokolle abgeschlossener Epics ins Archiv,
-> Statuseinträge als Felder statt Prosa.
+> **Eine Scheibe: `JR-6-01`** (`d0f4840`), plus die Nummernreservierung nach ADR-032 auf dem
+> Integrationszweig (`fc15edc`). Volllauf **1214 passed | 8 skipped** bei 98 Dateien, Exit 0.
+
+**Der Plan, auf den der Auftraggeber verwiesen hat, war leer.** `C:\Users\Maxim\.claude\plans\e6-phase-B-worker.md`
+existiert mit 0 Byte. Gearbeitet wurde deshalb aus diesem Handover, der den nächsten Schritt eindeutig
+festlegte. Wer dieselbe Datei noch einmal genannt bekommt, sollte sie nicht für maßgeblich halten.
+
+**Drei Festlegungen sind im Code begründet und keine ADR** — sie folgen aus bereits entschiedenen ADRs,
+statt neue Fragen zu öffnen:
+
+1. **Der Queue-Vertrag liegt in `packages/journaling`** (`src/phase-b/queue-contract.ts`), nicht neben
+   dem `Queue`-Objekt im Backend. `apps/smtp-ingress` reiht den Phase-B-Hinweis nach dem `250` ein
+   (Architektur §3 Schritt 7) und darf nicht aus `packages/backend` importieren — eine Konstante dort
+   hätte beide Seiten über ein **kopiertes Stringliteral** übereinstimmen lassen, also über nichts.
+   Das ist die Form von **F46**. Das Modul hat bewusst **keinen** BullMQ-Import: der Reconciler muss
+   entscheiden können, was einzureihen ist, ohne einen Redis-Client dafür zu brauchen.
+2. **Die Payload trägt genau ein Feld** (`spoolTxId`). Die Queue ist Optimierung, nicht Autorität, also
+   darf nichts darin stehen, was Spool und Ledger nicht selbst hergeben. Eine Kopie von `seq` wäre eine
+   **zweite Quelle** für einen Wert, den der Ledger hält — und eine Payload, die ihrer Ledger-Zeile
+   widerspricht, wäre **nicht entdeckbar**, weil niemand die beiden vergleicht. Ein Test hält die
+   Feldbreite strukturell fest, damit ein zweites Feld eine Entscheidung kostet.
+3. **Der Processor wirft, statt zu quittieren.** Ein **fertiger** Phase-B-Job behauptet, die Nachricht
+   sei archiviert und durchsuchbar — genau das liest `JR-6-04`s Reconciler, um einen Spool-Eintrag
+   liegen zu lassen. Ein Platzhalter, der loggt und zurückkehrt, stellte diese Behauptung **falsch und
+   grün** auf. `JR-4-10` und F48 sind zweimal dieselbe Lehre: die Abwesenheit von Arbeit und ihr Erfolg
+   drucken gleich.
+
+**Die Queue hat eigene Job-Optionen, und das ist Absicht.** Die geteilten `defaultJobOptions`
+(5 Versuche in ~31 s) sind für Phase B falsch: ein gewöhnlicher Storage-Aussetzer würde damit jede
+wartende Nachricht an den Reconciler übergeben — und ein Sicherheitsnetz, das bei jedem Neustart einer
+Abhängigkeit greift, **ist** der Normalpfad, hinter dem ein echter Reconciler-Defekt verschwindet.
+Jetzt 10 Versuche ab 5 s (≈ 85 min), `removeOnFail` groß, weil ein gescheiterter Phase-B-Job der
+billigste Beleg dafür ist, woraus der Backlog bestand.
+
+**Der Worker ist absichtlich nicht in `pnpm start:workers`**, wie `apps/smtp-ingress` nicht in
+`start:oss` steckt: Opt-in-Subsystem. **Der Preis ist benannt:** wer den Ingress ausrollt und diesen
+Prozess vergisst, bekommt Post, die **angenommen und nie archiviert** wird — nichts bricht laut, das
+`250` ist ehrlich, der Spool wächst. Gegenmittel sind **E10** (Monitoring) und **E11** (Verdrahtung).
+
+**Neu im Harness: `probeRedis()`** — die erste Suite des Repositorys, die Redis statt Postgres braucht.
+Dazu ein `valkey`-Service in der CI. Er hat **kein Passwort**, und das ist eine Einschränkung, keine
+Vereinfachung: ein Actions-Service-Container nimmt kein `command`, `--requirepass` ist dort nicht
+setzbar. Der AUTH-Pfad wird lokal ausgeübt; `probeRedis()` ist ein reiner TCP-Connect, damit ein
+**falsches** Passwort als Verbindungsfehler ankommt und nicht als Skip.
+
+**Eine Zusage ist plattformabhängig und sagt das.** Windows kennt kein POSIX-Signal, `child.kill()`
+beendet statt zu signalisieren — der Graceful-Shutdown-Nachweis ist nur auf dem Linux-CI-Runner
+erbringbar. Der Test läuft trotzdem **immer** (`expectedTests` ist exakt und darf nicht je Plattform
+abweichen), prüft auf Windows das tatsächliche Windows-Verhalten und gibt eine `coverageNotice` aus,
+die die ungeprüfte Zusage **namentlich** benennt. Kein `skipIf`.
+
+**Ein neuer Befund, F59, und er ist nicht von dieser Scheibe verursacht** — sondern von ihr sichtbar
+gemacht. Siehe den Kasten oben; er braucht eine Entscheidung des Auftraggebers.
+
+**Weiterhin offen und nicht angefasst: die Doku-Diät.** Sie war „nach der E4-Abnahme" verabredet
+(Pflichtlektüre unter 40 000 Tokens). Diese Sitzung hat sie bewusst liegen gelassen, um die erste
+E6-Scheibe nicht mit einem Umbau der Projektakten zu vermischen.
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -419,18 +396,7 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **E6, der Phase-B-Worker**
-
-**E4 und E5 sind beide abgenommen und zurückgemergt.** `JR-4-13` ist am 2026-08-04 in einer
-unabhängigen TEST-Sitzung durchgeführt worden (24 Kriterienzeilen mit Beleg, zwei Auflagen, beide
-sofort erledigt, Protokoll **`16-abnahme-e4.md`**), der Rückmerge ist `9503bc8`. E5 war bereits über
-`107346d` gemergt (`JR-5-09`) — beide Statusdateien hatten das nur nicht nachgetragen.
-
-**Damit ist der Empfangspfad vollständig und der Parser steht.** Was fehlt, ist das Stück dazwischen:
-**E6 — der Phase-B-Worker**, der eine gespoolte Nachricht aufnimmt, den Journal-Report parst und den
-Archiveintrag erzeugt. Er ist der erste Verbraucher **beider** eben zusammengeführter Epics, und die
-erste Stelle, an der ihr Zusammenspiel überhaupt ausgeführt wird — bisher existiert es nur als
-Schnittstelle.
+### Nächster konkreter Schritt — **`JR-6-02`, und mit ihr fällt ADR-010**
 
 Der Prompt für die nächste Sitzung:
 
@@ -439,141 +405,86 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-> **Vor der ersten E6-Scheibe: die Nummern reservieren.** Nach **ADR-032** legt ein neuer Epic-Zweig
-> seine ADR- und Befundnummern **vorab auf dem Integrationsbranch** an. Das ist die Gegenmaßnahme zu
-> genau der Kollision, die der E4-Rückmerge gekostet hat — drei Nummernkreise gleichzeitig, 98
-> Referenzen in 15 Dateien. Ein Platzhalter-Commit kostet eine Minute.
+**Der Zweig steht schon:** `claude/journaling-e6-phase-b-worker`, mit eigenem Upstream, `JR-6-01`
+gepusht, CI-Lauf `30999645177` **success** (98 Dateien, `unit 1019/1019 · integration 126/126 ·
+adversarial 69/69`). Nicht neu abzweigen, nicht neu reservieren — die Nummern liegen bereit.
 
-> **Die Abnahme selbst ist erledigt und wird nicht wiederholt.** Der frühere Prompt „Nimm E4
-> unabhängig ab" steht nur noch als Muster oben unter „Wie eine Session gestartet wird".
+`JR-6-02` ist die Verarbeitung: **Spool lesen → Journal-Report parsen → Außenobjekt in den Storage →
+Metadaten nach `archived_emails` → indexieren → Spool freigeben.** Sie ist der erste Verbraucher
+**beider** in E4/E5 zusammengeführter Epics und die erste Stelle, an der ihr Zusammenspiel überhaupt
+ausgeführt wird. Der Einstiegspunkt ist eine einzige Funktion:
+`packages/backend/src/jobs/processors/journal-inbound.processor.ts` — sie wirft heute und ist genau dafür
+so gebaut, dass `JR-6-02` sie **füllt** statt den Prozess umzubauen.
 
-| Scheibe                  | Ergebnis                                                                                                    |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| ~~`JR-4-10`~~            | CI `30862834098`: 7 von 20 Runden zogen den `250`-Zweig, alle 7 mit passender Ledger-Zeile                  |
-| ~~`JR-4-11`, `JR-4-12`~~ | CI `30864243188`: `BDAT` byteidentisch zu `DATA`, `SIZE`-Grenzmatrix mit Alarm-Nachweis über beide Wege     |
-| ~~`JR-4-14`~~            | CI `30900280611`: 25 adversariale Fälle, **TLS-1.1-Nachweis erbracht**, drei Defekte gefunden (F52/F53/F54) |
-| ~~`JR-4-21`~~            | CI `30902593426`: Grenze an die Transportschicht verlegt; alle vier Größen einheitlich in 1–11 ms           |
-| ~~`JR-4-15`~~            | CI `30905525089`: alle sechs Punkte beantwortet, zwei Befunde (F55/F56)                                     |
-| ~~`JR-4-21a`~~           | CI `30914997638`: F50/F55/F56 behoben; Durchsatzverhältnis kurz/lang von ≈ 13,9× auf ≈ 1,48× gefallen       |
-| ~~`JR-4-13`~~            | **Abnahme durchgeführt 2026-08-04, unabhängige TEST-Sitzung: E4 ABGENOMMEN.** Protokoll `16-abnahme-e4.md`  |
-
-> **Zwei Dinge, die `JR-4-21` mitbringen muss, sonst ist der Fix nicht belegt:**
+> **Was `JR-6-01` an Material mitgibt, das nicht im Backlog steht — und der Reihe nach das Wichtigste:**
 >
-> 1. **Der F54-Testfall ist nicht deterministisch.** Er trifft ein Rennen nur manchmal — CI-Lauf
->    `30900280611` ist mit ihm **zufällig** grün durchgelaufen. Ein einzelner grüner Lauf belegt den
->    Fix deshalb **nicht**. Verlangt ist eine **Wiederholung** (mindestens zehn Läufe) mit
->    Vorher/Nachher-Rate gegen den ungefixten Stand.
-> 2. **Die vier Größen müssen sich danach gleich verhalten**: ~2 000 Byte, 100 KB, ~200 KB, 2 MB.
->    Die **Stabilität** über alle vier ist der eigentliche Beweis, dass die Grenze jetzt an der
->    Transportschicht sitzt. Ein Ergebnis, das noch von der Chunk-Zerlegung abhängt, ist nicht
->    deterministisch geworden, sondern nur seltener falsch.
+> **(1) ADR-010 ist die Scheibe, nicht ein Nebenprodukt.** Die Frage lautet: `processEmail()`
+> erweitern oder einen journaling-spezifischen Pfad daneben stellen? Die ADR hält als Abwägung fest,
+> dass Wiederverwendung **divergierende Dedupe-Semantik vermeidet — der teuerste denkbare Fehler in
+> diesem Projekt** — und ein separater Pfad genau diese Divergenz riskiert. Sie sollte erst
+> entschieden werden, „wenn der Parser zeigt, wie stark die Metadatenform abweicht". **Der Parser ist
+> jetzt da** (E5, `packages/journaling/src/parser/`), die Bedingung ist erfüllt.
 >
-> **Danach zurück an TEST** (Nacharbeit an `JR-4-14`): F54 innerhalb des Tests ~10× wiederholen statt
-> einmal, die Größenreihe vollständig abbilden, die `RED UNTIL JR-4-21`-Marker entfernen und bei F54
-> den Zusatz „Vorschlag, noch nicht vom Auftraggeber bestätigt" streichen — **der PO hat ihn
-> bestätigt**.
+> **(2) Es gibt einen echten Widerspruch zwischen Architektur §6 und ADR-025, und `JR-6-01` hat ihn
+> auf eine Weise aufgelöst, die `JR-6-02` fortsetzen muss.** §6 sagt „neuer Worker-Prozess **in
+> `packages/backend`**". ADR-025 sagt, journaling-spezifische Logik dürfe **nie so in
+> `packages/backend` entstehen, dass sie sich nur mit ihm zusammen betreiben lässt** — und begründet
+> das nicht ästhetisch, sondern damit, dass eine spätere Herauslösung eine **Verpackungsentscheidung**
+> bleiben soll. Beides gilt, und beides ist erfüllbar: **das Prozessgerüst gehört ins Backend, die
+> Pipeline nach `packages/journaling`, mit injizierten Ports.** So liegt es nach `JR-6-01` — der
+> Worker im Backend, der Vertrag in `packages/journaling`, keine Journaling-Logik im Backend außer
+> Verdrahtung. `StorageService`, `IndexingService` und `IngestionService` sind Backend-Dienste und
+> werden **hineingegeben**, nicht importiert. **Das ist die eigentliche Vorentscheidung zu ADR-010:**
+> „`processEmail` erweitern" heißt zwangsläufig, Journaling-Semantik in `packages/backend` zu legen.
+> Wer sich dafür entscheidet, muss ADR-025 ausdrücklich adressieren, nicht übersehen.
+>
+> **(3) Hashing vor Verschlüsselung ist Bestand und muss Bestand bleiben.** `content_sha256` über die
+> **Plaintext-Wire-Bytes**, `StorageService` verschlüsselt danach — damit der Hash gegen einen
+> Re-Export prüfbar bleibt (CLAUDE.md §5.5, Architektur §7). `JR-6-05` schreibt es fest und testet es;
+> `JR-6-02` darf die Reihenfolge nicht vorher schon umdrehen.
+>
+> **(4) Parse-Fehler lehnen nichts ab.** Sie setzen `parse_failed`, indexieren was extrahierbar ist
+> und alarmieren (Architektur §6). Eine Nachricht, die schon quittiert ist, kann nicht nachträglich
+> abgelehnt werden — der Ledger-Eintrag existiert.
+>
+> **(5) Der Reconciler (`JR-6-04`) liest den Job-Zustand.** Deshalb wirft der Processor heute, statt zu
+> quittieren, und deshalb ist die Payload ein Feld breit. Wer in `JR-6-02` einen Zwischenzustand
+> einführt („Objekt liegt, Metadaten fehlen"), muss sagen, **woran der Reconciler ihn erkennt** — aus
+> Spool und Ledger, nicht aus Redis.
+>
+> **(6) `JR-6-03` kommt gleich danach und teilt sich die Dedupe-Stelle.** Ein Objekt, **zwei**
+> Ledger-Einträge, der zweite mit `duplicate_of`. Empfangsereignis ≠ Nachricht. Wer die Dedupe in
+> `JR-6-02` baut, sollte diese Trennung schon dort anlegen, statt sie danach nachzurüsten.
 
-> **Zwei TEST-Scheiben nie parallel an zwei Bearbeiter.** `tests/support/suite-inventory.ts` trägt
-> **exakte** Zahlen für Dateien und Tests. Zwei gleichzeitige Bearbeiter auf demselben Branch
-> überschreiben sich dort zwangsläufig, und das Ergebnis ist ein Inventar, das zu keinem der beiden
-> Stände passt. `JR-4-11` und `JR-4-12` sind deshalb als **ein** Auftrag vergeben.
-
-> **Die Lehre aus `JR-4-10`, und sie gilt für jede weitere TEST-Scheibe:** die Suite war zweimal
-> hintereinander **auf jeder Plattform** untauglich und meldete trotzdem grün — einmal ein zu früher
-> Kill, einmal eine 945-Byte-Füllzeile, die jede Nachricht mit Null-Bytes auffüllte, sodass `DATA` nie
-> abgeschlossen wurde. Beide Male lautete das Symptom „keine Antwort, dann Kill", und das ist von F48
-> **nicht unterscheidbar**. Sichtbar wurden sie erst durch einen Zähler, der den **nicht gezogenen**
-> Zweig ausweist („0 Versuche" vs. „N Versuche, alle gescheitert"). **Wo die Kernaussage einer Suite
-> plattformabhängig ist, gehört diese Zählung dazu** — sonst ist „grün auf Windows" und „grün, weil
-> nichts geprüft wurde" derselbe Text.
-
-**Was `JR-4-13` an Material mitbekommt, das nicht im Backlog steht:**
-
-- **Zwei Kriterien sind aus ihren Scheiben herausgewandert.** „Version und Cipher stehen **im
-  Ledger-Eintrag**" (`JR-4-04`) ist nur zur Hälfte erfüllt gewesen — die Ledger-Seite prüft `JR-4-13`
-  gegen `JR-4-06a`. Und „**TLS 1.1 wird abgelehnt**" war offen und ist an `JR-4-14` übergegangen —
-  **dort erbracht** (2026-08-04): ein von Hand auf Byte-Ebene gebauter TLS-1.1-`ClientHello` nach
-  echtem `STARTTLS` auf den rohen Socket, Antwort ein fataler `protocol_version`-Alert
-  (`15 03 02 00 02 02 46`), nie ein `ServerHello`. **Mit einer Einschränkung, die die Abnahme kennen
-  muss:** Senkt man `TLS_MIN_VERSION` testweise auf `'TLSv1.1'`, bleibt die Ablehnung bestehen, weil
-  dieses OpenSSL (3.5.6) TLS 1.0/1.1 unterhalb der Node-Konfigurationsebene abschaltet. **Dass** TLS
-  1.1 abgewiesen wird, ist bewiesen; **dass die Konfiguration die Ursache ist**, in dieser Umgebung
-  nicht isolierbar. So auch im Dateikommentar vermerkt.
-- **Sechs Befunde sind nach der jeweiligen Scheibe entstanden und alle behoben** — die Abnahme prüft
-  also einen Stand, den keine der ursprünglichen Scheiben so getestet hat: **F52/F53/F54** (`JR-4-21`,
-  Zeilenlängengrenze an der falschen Schicht), **F55/F56** (`JR-4-21a`, `RCPT`-Limit und
-  Cipher-Filter), **F50** (`JR-4-21a`, Durchsatz). Die zugehörigen Regressionstests liegen in
-  `smtp-protocol-robustness.adv.test.ts` (F54 mit **vier Größen à zehn Wiederholungen**) und den
-  TLS-/Empfänger-Suiten.
-- **Zwei Fixes waren zuerst wirkungslos oder schädlich, und beide Male hat es nur eine Prüfung
-  gefangen, die man hätte weglassen können.** `JR-4-21`s erste Fassung zerschoss die Byte-Treue
-  (`JR-4-07`), gefunden vom **Volllauf**. `JR-4-21a`s erste F56-Fassung setzte `ciphers` auf
-  Socket-Ebene, was Node **ignoriert**, sobald ein `secureContext` übergeben wird — gefunden allein
-  daran, dass der **Kalibrierungslauf grün blieb, obwohl er rot werden musste**. Wer diese Scheiben
-  nachprüft, sollte beide Stellen als Erstes ansehen.
-- **Vom PO ausdrücklich nicht nachgemessen** (steht auch im Statuseintrag zu `JR-4-05b`): die drei
-  Wege, über die ein Catch-all doch konfigurierbar sein könnte, die Adressvergleichs-Entscheidung
-  samt Sonderfällen und die bewusste `postmaster`-Abweichung von RFC 5321 §4.5.1.
-- **Vom PO entschieden und nicht als Lücke zu werten:** „Object-Store nicht erreichbar ⇒ `250`" ist
-  **strukturell** belegt (kein Codepfad) statt per Fehlerinjektion. Das ist der stärkere Nachweis — eine
-  Injektion würde einen Ausfall simulieren, den es in diesem Prozess nicht geben kann.
-- **Bewusst hingenommen:** pausiert ein Sender beim Shutdown exakt zwischen zwei `BDAT`-Chunks, läuft
-  der Drain in den regulären Idle-Timeout statt sofort abzuschließen. Kein Datenverlust, nur langsamer.
-
-> **~~Zuerst, vor jeder neuen Scheibe: `F49`~~ — erledigt am 2026-08-03.** Die Invariante **hält**
-> (gerade `async`-Sequenz in `main()`: `await`-Scan vor `await server.listen()`); untauglich war nur
-> das Instrument. Der Test hält den Scan jetzt **von außen** an — er nimmt selbst
-> `pg_advisory_xact_lock(crashRecoveryScanLockKey(spoolRoot))` — und messt am **Port** statt am Log:
-> ungewährter Waiter in `pg_locks` ⇒ `ECONNREFUSED`, nach Freigabe `220` auf demselben Port. Gegen
-> eine nicht-`await`ete Scan-Variante kalibriert (`expected 'connected' to be 'refused'`). Kein
-> Produktionscode geändert, Testzahl unverändert. Details in `09-befunde-bestandscode.md` unter F49,
-> inklusive der einen bewusst offen gelassenen Kleinigkeit (`pino` und `console.log` schreiben
-> weiterhin auf denselben Dateideskriptor — kein Test hängt mehr daran).
-
-**Drei Dinge, die beim Weiterarbeiten zählen:**
+**Drei Dinge, die beim Weiterarbeiten zählen** — unverändert gültig, jedes einmal teuer bezahlt:
 
 1. **Der CI-Lauf ist Teil des Belegs, nicht Nachsorge** (F48). `fsyncDirectory()` scheitert auf diesem
-   Windows-Host mit `EPERM`, und `accept()` schreibt den Ledger erst danach — **lokal erreicht kein Lauf
-   den Append.** Ein Ergebnis ohne grünen CI-Lauf sagt über den Acceptance-Contract nichts. Nach jedem
-   Push: `gh run list --branch <branch> --limit 1`, bei Rot `gh run view <id> --log-failed`.
-2. **Die zwei Lint-Ausfälle heute hatten dieselbe Ursache** und werden wiederkommen: die
-   Per-Datei-Prettier-Prüfung läuft über LF-normalisierte Kopien (F35-Umgehung), und wer zu viel
-   normalisiert, verdeckt einen echten Verstoß. `scratchpad/lintfix.cjs` formatiert über die
-   Prettier-API und **erhält die Zeilenenden** — das ist der verlässliche Weg.
-3. **Das Nutzungslimit hat in diesem Epic sechs Runden getroffen**, zwei davon mit erheblicher
-   uncommitteter Arbeit. Deshalb steht in der Rollendatei: **Inventar ziehen und committen, sobald die
-   erste Testdatei steht.** Ein Zwischenstand mit gezogenem Inventar ist lauffähig und prüfbar; einer
-   ohne ist wertlos, egal wie viel Code darin liegt.
+   Windows-Host mit `EPERM`, und `accept()` schreibt den Ledger erst danach — **lokal erreicht kein
+   Lauf den Append.** Nach jedem Push: `gh run list --branch <branch> --limit 1`, bei Rot
+   `gh run view <id> --log-failed`. **Neu dazu:** die `integration`-Suite braucht jetzt zusätzlich ein
+   **gebautes `packages/backend/dist`** (der Worker-Start-Test spawnt die kompilierte Datei). Fehlt es,
+   skippt die Suite sichtbar mit einer Meldung, die zum Bauen auffordert — unter
+   `OA_TEST_REQUIRE_INFRA=1` ist das ein Fehlschlag. **Der lokale Volllauf will also einen Build
+   vorher**, so wie die CI ihn ohnehin macht.
+2. **Wo die Kernaussage einer Suite plattformabhängig ist, gehört ein Zähler dazu**, der den **nicht
+   gezogenen** Zweig ausweist. Sonst sind „grün auf Windows" und „grün, weil nichts geprüft wurde"
+   derselbe Text (`JR-4-10`, F48). `JR-6-01`s SIGTERM-Fall ist das Muster: immer laufen, intern
+   verzweigen, `coverageNotice` mit Namen der ungeprüften Zusage — **kein `skipIf`**, weil
+   `expectedTests` exakt ist und nicht je Plattform abweichen darf.
+3. **Inventar ziehen und committen, sobald die erste Testdatei steht.** Das Nutzungslimit hat in E4
+   sechs Runden getroffen, zwei mit erheblicher uncommitteter Arbeit. Ein Zwischenstand mit gezogenem
+   Inventar ist lauffähig und prüfbar; einer ohne ist wertlos, egal wie viel Code darin liegt. Und:
+   **nie zwei Rollen gleichzeitig auf einer Scheibe** — `tests/support/suite-inventory.ts` trägt exakte
+   Zahlen und verträgt genau einen Bearbeiter.
 
-> **`JR-4-09` ist erledigt (2026-08-03) — und eine Entscheidung daraus gilt weiter.** Der Helfer
-> **holt** die Endpunktliste nicht: sie kommt als Datei oder über `stdin`, der Download ist ein
-> dokumentierter `curl`-Schritt in der Betreiberdoku. Grund: der erste Entwurf benutzte `fetch` und
-> wurde von `JR-4-07`s Wächter „kein ausgehender Aufruf im Empfängerquelltext" zu Recht rot gemeldet.
-> Von drei Auswegen (Ausnahme im Wächter, eigenes Workspace-Paket, nicht holen) hat der Auftraggeber
-> **„nicht holen"** gewählt — der Wächter bleibt unangetastet und der Mail-Host braucht keinen
-> ausgehenden Internetzugang. **Wer diesen Wächter künftig rot sieht, weicht ihn nicht auf**, sondern
-> legt die Alternativen vor.
-
-> **`JR-4-19` ist erledigt (2026-08-03), und zwei Dinge daraus gelten weiter.** **(1)**
-> `EsmtpServer` nimmt seit ADR-031 einen **Provider** statt eines Werts für `journalAcceptance`,
-> aufgelöst **genau einmal je Transaktion** bei `MAIL FROM` und für deren Dauer festgehalten. Wer das
-> anfasst, muss wissen: dieselbe Auflösung entscheidet, ob überhaupt eine `SpoolWriteBridge` geöffnet
-> wird — ein Provider, der mitten in der Transaktion neu gelesen wird, führt zu einer Quittung ohne
-> Spool-Datei oder zu einem hängenden Transfer (beides ist als Kalibrierung gemessen). **(2)** Der
-> Retry-Timer endet beim **ersten** Erfolg; ein späterer Ausfall ist bereits durch `accept()` →
-> `451` abgedeckt und braucht keine Wiederverdrahtung.
-
-**Der Einstiegsprompt für die nächste Session:**
-
-```
-Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
-und arbeite E4 weiter ab — als Nächstes die TEST-Scheiben JR-4-10 bis JR-4-12.
-```
-
-> **Für die Abnahme `JR-4-13` eine eigene Sitzung starten**, mit dem Prompt: „Nimm E4 unabhängig ab —
-> Rolle Tester, Kriterien aus `03-backlog.md`." Die Sitzung, die gebaut hat, kann nicht abnehmen; in E2
-> hat der Auftraggeber genau darauf bestanden, und die erzwungene zweite Runde hat zwei echte Lücken und
-> einen weiteren Befund gefunden.
+> **Zwei Dinge liegen zur Entscheidung beim Auftraggeber:**
+>
+> - **F59** (siehe oben): im Produktionscode beheben oder im Test wegprüfen. Empfehlung: beheben. Der
+>   Befund macht die CI **sporadisch** rot — der Erstlauf von `JR-6-01` fiel darüber, der
+>   Wiederholungslauf war grün. Solange er offen ist, muss ein roter Lauf an
+>   `ingress-process-boot.test.ts` **erst gegen F59 geprüft** werden, bevor er als neuer Defekt gilt.
+> - **Die Doku-Diät**, weiterhin offen: Pflichtlektüre auf unter 40 000 Tokens. Verabredet war „nach
+>   der E4-Abnahme"; sie ist seit zwei Sitzungen fällig und wächst mit jedem Statuseintrag.
 
 ### Was davor passiert ist — die Historie steht in `06-status.md`
 
@@ -603,18 +514,27 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Stand 2026-08-03 — was wirklich offen ist, in dieser Reihenfolge:**
+**Stand 2026-08-05 — was wirklich offen ist, in dieser Reihenfolge:**
 
+0. **`F59`: `shutting down` kann verlorengehen — im Produktionscode beheben oder im Test wegprüfen?**
+   Neu und die einzige Frage, die **die CI sporadisch rot macht**. `apps/smtp-ingress` schreibt die
+   Zeile mit `console.log` und ruft direkt danach `process.exit(0)`; das leert einen Pipe-stdout auf
+   Linux nicht. **Empfehlung: im Produktionscode beheben** — eine Betriebsmeldung, die ein
+   Supervisor-Log erreichen soll, darf nicht davon abhängen, wie schnell die Maschine gerade ist. Die
+   Alternative macht den Lauf grün und die Zusage unprüfbar. Solange offen: ein roter Lauf an
+   `ingress-process-boot.test.ts` ist **erst gegen F59 zu prüfen**, bevor er als neuer Defekt gilt.
 1. **`F43`: soll `JR-3-02`s Speichernachweis nachgemessen werden?** Das ist die einzige Frage, die
    ein **abgenommenes** Epic berührt. `heapUsed` kann Vollpufferung in Node-`Buffer`n nicht sehen —
    gemessen, mit absichtlich eingebauter Regression kalibriert. Der **Code** ist mit hoher
    Wahrscheinlichkeit korrekt (`writeDurableSpoolFile()` streamt), der **Nachweis** trägt nicht. Der
    Aufwand ist klein (dieselbe Kalibrierung einmal dort fahren), aber es ist Nacharbeit an E3 und
-   damit eine Entscheidung, keine Aufgabe. **Blockiert E4 nicht.**
+   damit eine Entscheidung, keine Aufgabe. **Blockiert E6 nicht.**
 2. **`F39`** (niedrig, Testharness) und **`F42`** (niedrig, totes `tsconfig.build.json`) — beheben
    oder bewusst akzeptieren? Beide blockieren nichts. Sinnvoller Ort für F39 wäre die nächste Arbeit
-   an `packages/journaling`, also E4 oder E5.
-3. **`F17(b)`** — Rollen-Bootstrap reparieren? Unverändert eine Produktentscheidung, kein Teil von E4.
+   an `packages/journaling`, also E6.
+3. **`F17(b)`** — Rollen-Bootstrap reparieren? Unverändert eine Produktentscheidung, kein Teil von E6.
+4. **Die Doku-Diät** — verabredet „nach der E4-Abnahme", seit zwei Sitzungen fällig, nicht begonnen.
+   Pflichtlektüre auf unter 40 000 Tokens. Keine Entscheidung nötig, nur eine Freigabe der Zeit dafür.
 
 **Beantwortet und nicht mehr offen:** die Rückfrage des Auftraggebers vom 2026-08-03, ob statt des
 Eigenbaus eine fertige SMTP-Bibliothek (`smtp-server`) genommen werden sollte. Geprüft, verneint, und

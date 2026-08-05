@@ -6,12 +6,12 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-04 (**E4 und E5 sind abgenommen und zurückgemergt** — E5 mit
-`JR-5-09`/`107346d`, E4 mit `JR-4-13`/`9503bc8`. Volllauf gegen den gemergten Baum: **1181 Tests** bei
-95 Dateien, `unit ci 991 · integration ci 121 · adversarial ci 69`, CI-Lauf `30967766605` **success**.
-Beim Rückmerge sind drei Nummernkreise kollidiert und nach **ADR-032** aufgelöst worden.
-**Nächstes Epic: E6**) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
-(Integrationsbranch; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
+**Letzte Aktualisierung:** 2026-08-05 (**E6 hat begonnen; `JR-6-01` ist erledigt** — der
+`journal-inbound`-Worker läuft als eigener Prozess. Volllauf: **1214 passed | 8 skipped** bei 98
+Dateien, `unit ci 1019 · integration ci 126 · adversarial ci 69`, Exit 0. Vor der ersten Scheibe sind
+nach **ADR-032** die Nummernkreise reserviert worden: ADR-033–036, F59–F70) · **Branch:**
+`claude/journaling-e6-phase-b-worker` (Epic-Zweig über dem Integrationsbranch
+`claude/enterprise-product-implementation-cxmmqe`; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
 
 > **Am 2026-08-01 zusätzlich entschieden: `ADR-025` — der Fork wird weitergeführt.** Die Frage des
 > Auftraggebers, ob angesichts einer kostenpflichtigen Upstream-Lizenz eine eigenständige Anwendung
@@ -267,7 +267,7 @@ eingeschoben (siehe `03-backlog.md`).
 | 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                                                                                                                                                                                                          |
 | 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. **Zählweise am 2026-08-03 berichtigt:** die Zeile zählte bis dahin die Splits `JR-4-05a`–`c` und `JR-4-06a`/`b` im **Zähler** mit, während der Nenner die Backlog-IDs meint. Gezählt werden jetzt die **IDs**; `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a` und `b` (ADR-021) |
 | 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                                                                                                                                                                                                          |
-| 7           | E6   | Phase-B-Worker                     | offen                                                                                                    | 0 / 8                                                                                                                                                                                                                                                                                                          |
+| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (Zweig `claude/journaling-e6-phase-b-worker`, `JR-6-01` erledigt)                          | 1 / 8                                                                                                                                                                                                                                                                                                          |
 | 8           | E7   | WORM-Storage                       | offen                                                                                                    | 0 / 6                                                                                                                                                                                                                                                                                                          |
 | 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                                                                                                                                                                                                          |
 | 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                                                                                                                                                                                                          |
@@ -435,6 +435,78 @@ F50 (`JR-4-21a`), F47 bei der Abnahme als längst behoben erkannt.
 > vollständige Sessionprotokoll liegt seit dem 2026-08-04 in `18-archiv-e4-e5.md`**, inhaltlich
 > unverändert: alle 21 Scheiben, die Befunde F42–F58 in ihrer Entstehung, und die Zahlen je Lauf.
 
+## E6 — Phase-B-Worker (**in Arbeit**, Zweig `claude/journaling-e6-phase-b-worker`)
+
+Kriterien in `03-backlog.md`. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise auf dem
+Integrationszweig reserviert worden (`fc15edc`): **ADR-033–036** und **F59–F70**. `ADR-010` ist
+ausdrücklich **nicht** Teil der Reservierung — die Entscheidung „`processEmail` erweitern oder eigener
+Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` gefüllt.
+
+- [x] `JR-6-01` — `journal-inbound`-Worker als eigener Prozess, `start:journal-worker`, Queue-Parameter
+      begründet (2026-08-05, `d0f4840`)
+- [ ] `JR-6-02` — Verarbeitung Spool → Parser → Storage → `archived_emails` → Index → Spool frei.
+      **Hier fällt ADR-010**
+- [ ] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of`
+- [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
+- [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
+- [ ] `JR-6-06` — TEST: Object-Store-Ausfall
+- [ ] `JR-6-07` — TEST: Soak, 100.000 Nachrichten (`nightly` plus `ci`-Smoke, F13-Frist heben)
+- [ ] `JR-6-08` — Abnahme E6
+
+> **`JR-6-01` ist erledigt (Rolle DEV, 2026-08-05), und drei Entscheidungen daraus gelten weiter.**
+>
+> **(1) Der Queue-Vertrag liegt in `packages/journaling`, nicht neben der Queue.** `apps/smtp-ingress`
+> reiht den Phase-B-Hinweis nach dem `250` ein (Architektur §3 Schritt 7) und darf nicht aus
+> `packages/backend` importieren — eine Konstante neben dem `Queue`-Objekt hätte beide Seiten über ein
+> kopiertes Stringliteral übereinstimmen lassen. Das ist die Form von **F46**: zwei Dinge, die passen
+> mussten, passten nur per Konvention, und nichts schlug fehl, als sie aufhörten zu passen.
+> `packages/journaling/src/phase-b/queue-contract.ts` hat **keinen** BullMQ-Import — der Reconciler
+> muss entscheiden können, was einzureihen ist, ohne einen Redis-Client zu brauchen.
+>
+> **(2) Die Payload trägt genau ein Feld, und das ist eine Zusicherung, keine Sparsamkeit.** Nur
+> `spoolTxId`. Alles Weitere — `seq`, `chainScopeId`, `journalingSourceId` — kommt über
+> `LedgerLookup.findBySpoolTxIds` aus derselben txid. Eine Kopie von `seq` in der Payload wäre eine
+> **zweite Quelle** für einen Wert, den der Ledger schon hält, und eine Payload, die ihrer Ledger-Zeile
+> widerspricht, wäre **nicht entdeckbar**: der Worker archivierte gegen den kopierten Wert und niemand
+> verglich die beiden. Der Reconciler, der Jobs allein aus Platte und Ledger baut, könnte diese Felder
+> ohnehin nicht anders herleiten — eine breitere Payload würde also bedeuten, dass die beiden
+> Einreihungswege **verschiedene Jobs** für denselben Spool-Eintrag erzeugen.
+>
+> **(3) Der Processor wirft, statt zu quittieren.** Phase B existiert noch nicht (`JR-6-02`, ADR-010
+> offen). Ein **fertiger** Phase-B-Job behauptet, die Nachricht sei archiviert und durchsuchbar — und
+> genau das liest `JR-6-04`s Reconciler, um einen Spool-Eintrag liegen zu lassen. Ein Platzhalter, der
+> loggt und zurückkehrt, wäre kein harmloses Gerüst, sondern würde diese Behauptung **falsch und grün**
+> aufstellen. Das ist die Form von `JR-4-10` (zwei nutzlose Testfassungen, beide grün) und von **F48**
+> (zwölf rote CI-Läufe hinter einem Schritt, der nie lief): die Abwesenheit von Arbeit und ihr Erfolg
+> drucken gleich.
+
+**Zwei Dinge, die `JR-6-01` an Nebenwirkungen hat und die eine Folgesitzung kennen muss:**
+
+- **Der Worker ist absichtlich nicht in `pnpm start:workers`.** Begründung wie bei
+  `apps/smtp-ingress`, das nicht in `start:oss` steckt: der Journaling-Empfänger ist ein
+  Opt-in-Subsystem, die drei Worker in `start:workers` braucht jede Installation. **Der Preis ist
+  benannt, nicht verschwiegen:** wer den Ingress ausrollt und diesen Prozess vergisst, bekommt Post,
+  die **angenommen und nie archiviert** wird — nichts bricht laut, das `250` ist ehrlich, der Spool
+  wächst. Die Gegenmittel liegen bewusst anderswo: Spool-Tiefe und Phase-B-Backlog sind
+  Monitoring-Signale (**E10**), die Verdrahtung, die beide zusammen startet, ist **E11**.
+- **Die CI hat jetzt einen `valkey`-Service** — die erste Suite des Repositorys, die Redis statt
+  Postgres braucht, mitsamt `probeRedis()` im Harness. Er hat **kein Passwort**, und das ist eine
+  Einschränkung: ein Actions-Service-Container nimmt kein `command`, also ist `--requirepass` dort
+  nicht setzbar. Der AUTH-Pfad wird lokal ausgeübt (`docker-compose.yml` setzt das Passwort), und
+  `probeRedis()` ist absichtlich ein reiner TCP-Connect, damit ein **falsches** Passwort als
+  Verbindungsfehler ankommt und nicht als Skip. Wer AUTH in der CI abdecken will, nimmt einen
+  `docker run`-Schritt — nicht eine Änderung am geprüften Code.
+
+> **Eine Zusage in `JR-6-01` ist plattformabhängig und sagt das.** Windows kennt kein POSIX-Signal:
+> `child.kill('SIGTERM')` ruft `TerminateProcess`, der Handler im Worker läuft nie. Der
+> Graceful-Shutdown-Nachweis ist damit **nur auf dem Linux-CI-Runner** erbringbar — dieselbe Lage wie
+> `fsyncDirectory()` (F48), dieselbe Regel: der Test läuft **immer** (`expectedTests` ist exakt und
+> darf nicht je Plattform abweichen), prüft auf Windows das tatsächliche Windows-Verhalten und gibt eine
+> `coverageNotice` aus, die die ungeprüfte Zusage **namentlich** benennt. Kein `skipIf` — ein
+> übersprungener Assert druckt wie ein bestandener.
+
+---
+
 ## E3 – E12 (offen)
 
 Tasklisten stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics
@@ -480,3 +552,26 @@ Offene ADRs, die vor bzw. während der Epics zu entscheiden sind:
 > Zelle aus, und bei Einträgen dieser Länge kostet das Padding ein Vielfaches des Inhalts — damals
 > gemessen: 147 908 Zeichen Inhalt, 346 564 nach dem Ausrichten. Ein Eintrag ist deshalb ein Abschnitt.
 > **Neue Einträge kurz und in Feldform** (Task, Commit, Testzahl, CI-Lauf, Entscheidungen, offen).
+
+### 2026-08-05 — E6 eröffnet, `JR-6-01`
+
+- **Rolle:** DEV (Hauptthread, kein Subagent — der Auftraggeber hat keinen angefordert)
+- **Commits:** `fc15edc` (Nummernreservierung, auf dem **Integrationszweig**), `d0f4840` (`JR-6-01`,
+  auf dem Epic-Zweig)
+- **Zweig:** `claude/journaling-e6-phase-b-worker`, mit `git push -u` sofort auf eigenen Upstream
+  gesetzt — die Falle aus E3 (`git checkout -b <epic> origin/<integration>` setzt den Upstream auf den
+  **Integrationszweig**, und ein `git push` landet dort)
+- **Tests:** 33 neu (28 `unit`, 5 `integration`). Volllauf **1214 passed | 8 skipped** bei 98 Dateien,
+  Exit 0, `unit ci 1019/1019 · integration ci 126/126 · adversarial ci 69/69`
+- **CI:** `30999645177` **success** — 98 Dateien, `unit 1019/1019 · integration 126/126 ·
+adversarial 69/69`, der neue `valkey`-Service trägt. **Der erste Versuch desselben Laufs war rot**,
+  an einem Test, den diese Scheibe nicht angefasst hat: daraus ist **F59** geworden, der
+  Wiederholungslauf war grün. Auf dem Linux-Runner meldet der Plattform-Zähler
+  `SIGTERM graceful-shutdown branch exercised on linux: exit code 0, no terminating signal` — die
+  Zusage, die auf Windows nachweislich unprüfbar ist, ist dort also **erbracht**
+- **Entscheidungen:** keine neue ADR. Drei Festlegungen im Code begründet (Queue-Vertrag in
+  `packages/journaling`, Ein-Feld-Payload, werfender Processor) — siehe den E6-Abschnitt oben
+- **Offen:** `JR-6-02`, und mit ihr **ADR-010**
+- **Nicht getan, absichtlich:** die vereinbarte Doku-Diät (Pflichtlektüre unter 40 000 Tokens). Sie
+  war „nach der E4-Abnahme" verabredet und ist weiterhin offen; diese Sitzung hat sie nicht angefasst,
+  um die erste E6-Scheibe nicht mit einem Umbau der Projektakten zu vermischen
