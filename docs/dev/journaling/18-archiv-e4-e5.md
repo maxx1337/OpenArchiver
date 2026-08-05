@@ -1,0 +1,1115 @@
+# Archiv — Protokolle der abgenommenen Epics E4 und E5
+
+**Inhaltlich unverändert aus `06-status.md` ausgegliedert am 2026-08-04**, nachdem beide Epics
+abgenommen und zurückgemergt waren (E5: `JR-5-09`, Merge `107346d` · E4: `JR-4-13`, Merge `9503bc8`).
+Die Diät-Regel aus `README.md` verlangt die Ausgliederung **sobald** ein Epic zurückgemergt ist, nicht
+irgendwann später — `06-status.md` war auf 230 000 Zeichen (~64 000 Tokens) gewachsen, davon rund
+195 000 diese beiden Protokolle.
+
+> **Diese Datei ist Historie.** Für die nächste Task wird sie **nicht** gebraucht. Wer den aktuellen
+> Stand sucht: `06-status.md` (Gesamtübersicht) und `07-session-handover.md` (nächster Schritt). Wer
+> das Abnahmeprotokoll von E4 sucht: `16-abnahme-e4.md`.
+
+> **ADR- und Befundnummern in diesem Archiv sind die Nummern nach dem Rückmerge.** E4s ADRs heißen hier
+> `ADR-029`/`030`/`031` (nicht mehr 026/027/028) und E5s Befunde `F57`/`F58` (nicht mehr F42/F43) —
+> die Umnummerierung und ihr Grund stehen in **ADR-032**. Ältere Commit-Nachrichten nennen noch die
+> alten Nummern.
+
+---
+
+## E5 — Journal-Report-Parser (Parallelsession B, seit 2026-08-02)
+
+> **Dieser Abschnitt gehört einer zweiten, gleichzeitig laufenden Session.** Regeln, Kollisionsflächen
+> und Merge-Richtung stehen in `17-parallelbetrieb.md`. Session B fasst weder `07-session-handover.md`
+> noch die Abschnitte der E3-Session in dieser Datei an — auch nicht die Kopfzeile
+> „Letzte Aktualisierung", die der E3-Session gehört.
+
+**Branch:** `claude/journaling-e5-parser`, abgezweigt vom Integrationsbranch bei `9725a5d`, am
+2026-08-02 auf `d201612` rebased (E3 abgenommen und zurückgemergt). **Kein E5-Commit ist je auf dem
+Integrationsbranch gelandet** — mit `git merge-base --is-ancestor` für alle drei geprüft, nachdem
+`d201612` die Upstream-Falle beschrieben hat; `git push -u` lief hier direkt nach dem Anlegen.
+**Warum parallel möglich:** E3 lebt in `packages/journaling/src/spool/*`, E5 in
+`packages/journaling/src/parser/*` — kein geteiltes Byte. E5 ist reine Logik über Bytes: keine
+Datenbank, kein Storage, kein SMTP. Die Backlog-Abhängigkeit E5 → E4 betrifft **eine** Task
+(`JR-5-05`), und die SMTP-Envelope ist dort ein Eingabeparameter, kein Code aus E4.
+
+| Task      | Stand                                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `JR-5-01` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
+| `JR-5-02` | **[x] erledigt** 2026-08-02 (S1 + Review-Nacharbeit)                                                                             |
+| `JR-5-03` | **[x] erledigt** 2026-08-02 (S2 + Review-Nacharbeit)                                                                             |
+| `JR-5-04` | **[~] parserseitig erledigt, Rest hängt an E6** — der Ledger-Eintrag, der Storage, die Indexierung und der Alarm sind E6s Arbeit |
+| `JR-5-05` | **[x] erledigt** 2026-08-02 (S3 + drei Runden Review)                                                                            |
+| `JR-5-06` | **[x] erledigt** 2026-08-02 (S3)                                                                                                 |
+| `JR-5-07` | **[x] erledigt** 2026-08-02 (S4) — mit einem Befund an E6, siehe unten                                                           |
+| `JR-5-08` | **[x] erledigt** 2026-08-02 (S5 Korpus + S6 Reparatur) — zwei Befunde, alle behoben                                              |
+| `JR-5-09` | **[x] erledigt** 2026-08-02 — **angenommen mit Auflage**, Auflage geschlossen (F58)                                              |
+
+### Was `JR-5-01`/`JR-5-02` liefern
+
+`packages/journaling/src/parser/` zerlegt einen Exchange-Journal-Report in Außenobjekt, Innenmail und
+Envelope, ohne die übergebenen Bytes anzufassen. `Recipient:` wird als eigene, **reihenfolgetreue und
+nicht deduplizierte** Liste geführt statt in `to`/`cc` gefaltet — dort erscheinen Blindkopie-Empfänger
+und Verteilerlisten-Mitglieder, und das ist die Existenzberechtigung des Features. An der Fixture
+gemessen: der Bcc-Empfänger und alle drei DL-Mitglieder stehen in `recipients` und in **weder** `to`
+**noch** `cc`. Feldzeilen, die der Parser nicht modelliert, bleiben unter ihrem Namen erhalten statt
+verworfen zu werden. Der Parser **wirft nicht** — jeder Fehlerpfad wird zu `kind: 'parse_failed'`
+(RFC §5.3).
+
+### Der Befund, der die Scheibe geprägt hat: `mailparser` und `Content-Disposition: inline`
+
+Der erste DEV-Entwurf begründete einen handgeschriebenen MIME-Splitter damit, `mailparser` steige
+durch die `message/rfc822`-Grenze durch. **Die Begründung stimmt, aber nur unter einer Bedingung**,
+die der Kommentar unterschlug. Gegen `mailparser@3.7.4` gemessen:
+
+```
+disposition=(keine)    | Innentext in .text = false | attachments = 1
+disposition=inline     | Innentext in .text = TRUE  | attachments = 0
+disposition=attachment | Innentext in .text = false | attachments = 1
+```
+
+Bei `inline` mischt `mailparser` den Körper der Innenmail in dieselbe `.text` wie den Reportteil — der
+Envelope-Parser läse seine Feldzeilen dann aus einem Text, in dem die Innenmail steht, **ohne Fehler
+und ohne Spur**. Die Entwurfsentscheidung ist damit richtig; ausgeschrieben ist sie im **Nachtrag zu
+ADR-027**, samt Quellstellen (`mailsplit/lib/message-splitter.js:373-378`, `mail-parser.js:806`), und
+die drei Zeilen laufen als Test bei jedem CI-Lauf mit — **damit die nächste Session das Modul nicht
+als überflüssige Komplexität löscht**, nachdem sie den harmlosen Fall geprüft hat.
+
+### Das PO-Review, weil es vier weitere Punkte gefunden hat
+
+Der DEV-Bericht war ehrlich und die Zahlen reproduzierten exakt — die Mängel lagen trotzdem im Code:
+`splitAddressList()` zerlegte `"Doe, John" <john@contoso.com>` in fünf Trümmer (jetzt über
+`mailparser`s eigenen Adressparser), eine Feldnamen-Liste konnte vom `switch` wegdriften (jetzt aus
+einer Dispatch-Tabelle abgeleitet), `undisclosedRecipients` verlor als einzelnes Bool, welches Feld den
+Platzhalter trug (jetzt eine Feldliste), und `findLineStarts()` hielt eine Körperzeile `--B1EXTRA` bei
+Boundary `B1` für einen Trenner (jetzt mit RFC-2046-Prüfung des Zeilenrests).
+
+**Die Lehre ist nicht „prüfe Berichte".** Alle vier waren aus dem Diff lesbar, keiner davon hätte einen
+Test rot gemacht, und drei hätten still falsche Metadaten erzeugt.
+
+### Was `JR-5-03`/`JR-5-04` liefern
+
+**S/MIME:** `contentEncrypted` wird am **Content-Type des Innenteils** entschieden, nicht daran, ob
+`mailparser` gestolpert ist — die Bibliothek wirft bei verschlüsseltem Körper nämlich gar nicht, das
+Signal wäre also wertlos gewesen. `multipart/signed` bleibt ausdrücklich ausgenommen: ein
+**signierter** Innenteil ist lesbar und indexierbar, ein **verschlüsselter** nicht, und die beiden zu
+verwechseln hieße entweder Chiffrat zu indexieren oder lesbare Post nicht.
+
+**Kein Innenteil:** `kind: 'journal_report'` mit `innerMessage: { present: false }` — der Envelope
+bleibt **vollständig** erhalten. Der Aufrufer erkennt am `present === false`, dass zusätzlich ein
+`parse_failed`-Ereignis fällig ist.
+
+**Nicht-Wurf:** sieben absichtlich kaputte Eingaben (abgeschnitten, falsche Boundary, verschachtelte
+Multiparts, 8-Bit-Müll, leerer Puffer, nur Header, Boundary ohne Abschluss) — keine erzeugt eine
+Ausnahme.
+
+**Was `JR-5-04` parserseitig beiträgt:** `JournalParseFailed` trägt `extractableHeaders`, damit E6s
+„Extrahierbares wird indexieren" überhaupt etwas hat. Ein `parse_failed`, das nur einen `reason`
+trägt, macht Indexierung unmöglich.
+
+### Der Befund aus dem S2-Review: eine grüne Suite, die den Envelope verlor
+
+Der erste S2-Entwurf gab im Fall „Reportteil in Ordnung, Innenteil fehlt" ein `parse_failed` zurück
+und reduzierte den zu diesem Zeitpunkt **vollständig geparsten** Envelope auf drei Felder
+(`subject`/`from`/`messageId`). Verloren gingen dabei `bcc`, `recipients` samt
+Verteilerlisten-Expansion, `onBehalfOf` und `unknownFields` — also genau das, was RFC §6.1 „the entire
+justification for this feature" nennt und woran `JR-5-02` abgenommen wird. Ein fehlender **Innen**teil
+ist kein Grund, den **Außen**-Envelope zu verwerfen.
+
+Verschärfend: `InnerMessageAbsent { present: false }` steht seit S1 im Typ und wurde von **nichts**
+mehr erzeugt. Für einen Fall gab es zwei Mechanismen, und der ungenutzte war der, der die Daten
+behält.
+
+> **Die Lehre ist nicht „prüfe Berichte", sondern etwas Unangenehmeres: die Suite war grün.**
+> `582 passed`, kein einziger roter Test — weil keiner geprüft hat, ob der Envelope einen fehlenden
+> Innenteil überlebt. Der Befund lag nicht im Code, sondern in der Abwesenheit einer Behauptung.
+> **Für `JR-5-08` (Korpus, Rolle TEST) ist das die eigentliche Vorgabe:** jede Fixture muss eine
+> Aussage darüber tragen, was **erhalten bleibt**, nicht nur darüber, was erkannt wird.
+
+Festgelegte Invariante, ab jetzt gültig für jeden Pfad im Parser: **ist der Envelope einmal geparst,
+darf ihn kein Rückgabeweg fallen lassen.**
+
+Zwei weitere Punkte aus demselben Review: `ParseFailedAlert`/`ParseFailedAlertSink` waren ohne
+Erzeuger und ohne Aufrufer entstanden — eine Naht, die keine ist, mit dem Risiko, dass E6 sie
+übernimmt, **weil es sie gibt**. Gestrichen; die Alarmierung definiert E6, wenn sie ihren Kontext
+kennt. Und die veraltete S/MIME-Form `application/x-pkcs7-mime` hatte keine Fixture („aus
+Zeitgründen") — nachgezogen.
+
+### Was `JR-5-05`/`JR-5-06` liefern
+
+Die Union kennt jetzt vier Arten: `journal_report`, `plain_bcc`, `ndr`, `parse_failed`. Der SMTP-Envelope
+kommt als **injizierter Parameter** herein — unter genau den Feldnamen, die E3 schon vergeben hat
+(`envelopeFrom`, `envelopeRcpt` aus `JournalTransactionInput` und der Ledger-Zeile), damit derselbe
+Sachverhalt nicht unter zwei Namen durch Ingress, Ledger und Parser läuft. Das ist zugleich die Naht,
+an der E4 andockt, ohne dass E5 auf E4 warten musste.
+
+`plain_bcc` trägt `reducedEnvelopeFidelity: true` — bei einer Plain-BCC-Kopie fehlen die
+Blindkopie-Empfänger **strukturell**, weil kein Journal-Report sie liefert, und das Ergebnis sagt das,
+statt es zu verschweigen. Postfix-`always_bcc` und Google-Routing werden bewusst **nicht**
+unterschieden: aus den Bytes ist der Unterschied nicht ableitbar, eine Unterscheidung hätte Information
+vorgetäuscht.
+
+NDR-Erkennung wiegt drei Signale und sagt im Code, welches das stärkste ist: der **Null-Absender**,
+weil er aus der SMTP-Transaktion kommt und nicht aus einem Header, den der Absender selbst setzt.
+
+### Der teuerste Befund des Epics: dreimal aus der Form auf die Art geschlossen
+
+`JR-5-05` hat drei Review-Runden gebraucht, und alle drei waren **dieselbe** Ursache auf einer anderen
+MIME-Ebene:
+
+| Runde | Was als Beleg galt                      | Was in Wirklichkeit dieselbe Form hat |
+| ----- | --------------------------------------- | ------------------------------------- |
+| R1    | `multipart/mixed` mit `text/plain`-Teil | jede Mail mit Anhang                  |
+| R3    | mindestens ein erkanntes Envelope-Feld  | jede zitierte Weiterleitung           |
+| R4    | ein `message/rfc822`-Teil ist vorhanden | „Als Anlage weiterleiten"             |
+
+Gemessen, nicht vermutet. R1 ließ eine Plain-BCC-Kopie als Journal-Report durchgehen und den
+Nachrichtenkörper als `_unparsed` in die Envelope-Metadaten wandern. R3 war **schlimmer**: die zitierten
+`To:`/`Cc:`-Zeilen einer Weiterleitung wurden zu Envelope-Empfängern — aus **verlorenem** Nachweis wurde
+**erfundener**. R4 behauptete bei „als Anlage weiterleiten" einen maßgeblichen, aber **leeren** Envelope,
+also „dieser Report hatte keine Empfänger" über eine Nachricht, die welche hatte.
+
+> **Die Regel, die daraus im Modulkommentar steht:** Die MIME-Struktur belegt **nie**, dass eine
+> Nachricht ein Journal-Report ist — jede ihrer Formen entsteht auch bei gewöhnlicher Post. Beleg ist
+> ausschließlich der **Inhalt** des Reportteils: eine `Recipient:`-Zeile (die Exchange immer schreibt und
+> die eine zitierte Weiterleitung nie reproduziert, weil sie kein RFC-5322-Header ist) **und** ein
+> Feldzeilenanfang. Die Struktur entscheidet danach nur noch, was **zusätzlich** verfügbar ist.
+>
+> **Und die Richtungsregel für jede Klassifikation:** die Fehlerrichtung ist immer „reduzierte
+> Fidelity", nie „erfundener Nachweis". Im Zweifel `plain_bcc` — das sagt „unvollständig", was bei
+> Unsicherheit wahr ist; `journal_report` behauptet „maßgeblich", was dann falsch ist.
+
+Die Prüfung sitzt seit R4 **vor** der Verzweigung über den Innenteil. Der Innenteil entscheidet nur noch,
+ob `innerMessage.present` gesetzt wird — nicht mehr, _ob_ es ein Journal-Report ist.
+
+**Zwei Dinge daran sind für die Abnahme wichtiger als die Korrektur selbst.** Erstens: Über die
+Akzeptanzkriterien war nichts davon erreichbar. `JR-5-01` bis `JR-5-06` waren einzeln erfüllt, während
+der Parser Alltagspost falsch einordnete. Zweitens: Die Suite war in **jeder** der drei Runden grün.
+Sichtbar wurde es nur, indem reale Nachrichtenformen durchprobiert wurden — sieben Formen, gegen das
+gebaute Paket gefahren, nicht gegen die Absicht.
+
+**Damit ist `JR-5-08` keine Fixture-Sammelaufgabe mehr, sondern die eigentliche Prüfarbeit des Epics.**
+Der Korpus muss Alltagsformen enthalten, die **keine** Journal-Reports sind — Weiterleitung zitiert,
+Weiterleitung als Anlage, Mail mit Anhang, Autoreply, Kalendereinladung, `multipart/alternative` —, und
+je Fixture aussagen, **was erhalten bleibt**, nicht nur, was erkannt wird.
+
+### Was `JR-5-07` liefert
+
+`resolveOwner(envelope, domainGroups)` in `packages/journaling/src/parser/owner-resolution.ts` — rein,
+synchron, ohne Datenbank, ohne Konfiguration, **ohne Logger**. Die von Kriterium 4 verlangte Warnung ist
+ein **Wert** im Ergebnis (`warning: string | null`, nicht-null genau bei `method === 'fallback'`); den
+Logaufruf macht der Aufrufer in E6. `packages/journaling` bekommt keinen Logger, auch nicht für „nur eine
+Zeile".
+
+Die vier dokumentierten Tabellenzeilen aus `docs/enterprise/journaling/guide.md` sind gegen das gebaute
+Paket nachgefahren, dazu vier eigene Fälle:
+
+```
+OK  Tabelle Z1 alice@old-brand.com -> alice@company.com            method=alias-domain-match
+OK  Tabelle Z2 alice@company.com   -> alice@company.com            method=primary-domain-match
+OK  Tabelle Z3 bob@subsidiary.io   -> bob@subsidiary.io            method=primary-domain-match
+OK  Tabelle Z4 external@gmail.com  -> default_fallback@company.com method=fallback
+OK  ohne Gruppen (Heuristik)       -> x@fremd.tld                  method=heuristic-no-groups
+OK  GROSS in Domain                -> alice@company.com            method=alias-domain-match
+OK  Ausgang: nur sender passt      -> alice@company.com            method=primary-domain-match
+OK  Reihenfolge To vor Cc          -> a@company.com                method=primary-domain-match
+```
+
+**Der Weg steht im Ergebnis, nicht nur das Ziel.** `method` unterscheidet vier Wege — exakter Treffer,
+Alias-Normalisierung, Heuristik ohne Gruppen, Fallback —, die nicht gleich viel wert sind. Das ist die
+Richtungsregel aus S3 auf dieses Problem angewandt: aus einer passenden Domain auf Eigentümerschaft zu
+schließen ist eine Annahme, und ein geratener Eigentümer, der als sicher ausgegeben wird, wäre der
+verbotene Fall. `additionalMatches` führt außerdem mit, wenn **mehrere** Teilnehmer gepasst haben.
+
+Die Signatur nimmt bewusst nur `OwnerResolutionEnvelope` (ein `Pick` aus `ParsedEnvelope`), sodass
+`plain_bcc`- und `ndr`-Ergebnisse **gar nicht erst kompilieren** statt zur Laufzeit geraten zu werden.
+
+### Befund aus `JR-5-07`: die dokumentierte Reihenfolge kennt `Recipient:` nicht
+
+Die veröffentlichte Seite bestimmt den Eigentümer aus `To`/`Cc`/`Bcc`/`From` — also aus den Feldern, die
+die **Header spiegeln**. Sie erwähnt `Recipient:` an keiner Stelle, obwohl genau dieses Feld die wahre
+SMTP-Empfängerliste trägt und im Typ selbst als „the entire justification for this feature" beschrieben
+ist.
+
+Folge: Ein Empfänger, der **nur** in der Envelope steht — der klassische Fall ist die
+Verteilerlisten-Expansion —, beeinflusst die Eigentümerbestimmung nicht. Eine Nachricht an eine Liste
+wird unter der **Listenadresse** abgelegt, nicht unter dem expandierten Mitglied.
+
+**Entscheidung des PO (2026-08-02): der Code folgt der Doku, der Widerspruch geht an E6.** Begründung:
+Die veröffentlichte Seite still zu unterlaufen wäre die schlechtere Hälfte beider Welten, und **erst in
+E6 entscheidet sich, was `archived_emails.userEmail` überhaupt bedeutet** — ob je Nachricht ein
+Archiveintrag entsteht oder je betroffenem Postfach. Ohne diese Festlegung ist nicht entscheidbar, ob
+das expandierte Mitglied den Eigentümer stellen soll. **`JR-6-02` muss das mitentscheiden** (dort steht
+ohnehin ADR-010 offen: `processEmail` erweitern vs. eigener Pfad).
+
+Die naheliegende Zwischenform, falls E6 sie will: `recipients` als **Auffang vor** dem
+`default_fallback`-Zweig. Das ändert **keine** der vier dokumentierten Tabellenzeilen und macht keine
+Aussage der Seite falsch — es fügt einen Schritt hinzu, wo die Seite heute aufgibt.
+
+### Zweiter offener Punkt aus `JR-5-07`: doppelt konfigurierte Alias-Domain
+
+Steht dieselbe Domain in **zwei** Gruppen als Alias, gewinnt die erste in Array-Reihenfolge; innerhalb
+einer Gruppe `main` vor `aliases`. Das ist dokumentiert und getestet, aber es ist ein **Tie-Break, keine
+Prüfung** — beanstanden kann der Parser es nicht, weil er per Architekturregel keine Konfiguration
+bekommt, sondern nur die fertigen Gruppen.
+
+**Vorgeschlagene Folgeaufgabe für `packages/backend`** (Nummer vergibt der Auftraggeber, die JR-Folge ist
+zwischen den Sessions geteilt): eine Validierung dort, wo `journaling_sources.organizationDomains`
+tatsächlich geschrieben wird — eine Domain in zwei Gruppen ist ein Bedienfehler, der beim Speichern
+auffallen sollte und nicht erst bei der Ablage einer Nachricht.
+
+### `JR-5-08`: der Korpus hat geliefert, wofür er gebaut wurde
+
+Acht neue Fixtures, und zwar **nicht nur** die Journal-Formen aus dem Backlog, sondern Alltagspost, die
+**keine** Journal-Reports ist: Kalendereinladung, Newsletter, Abwesenheitsnotiz, Mail mit Anhang,
+zitierter Report im Fließtext. Diese Ergänzung war der Zweck — alle drei Fehlklassifikationen aus
+`JR-5-05` kamen von gewöhnlicher Post, die als Journal-Report durchging.
+
+Die Rolle TEST hat **drei Tests rot gelassen**, statt den Korpus um die Befunde herumzubauen. Genau
+richtig: ein Korpus, der sich am Fehler vorbeischreibt, ist wertlos.
+
+**Befund A — die Suche nach dem Reportteil geht nur eine Ebene tief.**
+`multipart/mixed(multipart/alternative(text/plain, text/html), Anhang)` ist das, was **jeder**
+HTML-schreibende Client für „Mail mit Anhang" erzeugt. Auf oberster Ebene gibt es kein `text/plain`,
+also kam `parse_failed` heraus — mit Ledger-Ereignis **und** Operator-Alarm, für Alltagsverkehr. In
+einem `always_bcc`-Postfach wäre das die Mehrheit. **Ein Alarm, der ständig feuert, ist derselbe
+Ausfall wie einer, der nie feuert.**
+
+Behoben in der besseren der beiden Richtungen: Wo es gar keinen Kandidaten für einen Reportteil gibt,
+kann der Diskriminator **nicht einmal laufen** — dann ist „das ist kein Journal-Report" die einzige
+Aussage, die der Parser stützen kann, und `parse_failed` („da war ein kaputter Versuch") behauptet mehr,
+als er weiß. Die Suche bleibt bewusst flach: sie in `multipart/alternative` hineinzulehren hätte den
+Fehler „Struktur belegt die Art" nur eine Ebene tiefer verschoben.
+
+**Befund B — der inhaltliche Diskriminator ist vom Absender fälschbar.** Die fünfte Ausprägung
+derselben Ursache, und die, die das **Verfahren** widerlegt statt nur ein Kriterium. Führt zu
+**ADR-028**. Die Ausnutzbarkeit ist gemessen und ungleich verteilt:
+
+| Betriebsart         | greift der Angriff? | warum                                                                        |
+| ------------------- | ------------------- | ---------------------------------------------------------------------------- |
+| Exchange-Journaling | **nein**            | Exchange wickelt ein; der gefälschte Inhalt sitzt im nie befragten Innenteil |
+| Plain BCC / Routing | **ja**              | kein Wrapper — die Angreifernachricht **ist** die oberste Ebene              |
+
+Er greift also genau dort, wo Journal-Reports gar nicht vorkommen — und das ist der Beweis der
+Reparatur: `parseJournalReport(raw, smtpEnvelope, sourceMode)`. Gemessen an denselben Bytes:
+
+```
+content-forged-fake-report-as-attachment.eml    infer=journal_report  plain-bcc=plain_bcc
+content-forged-fake-report-with-fake-inner.eml  infer=journal_report  plain-bcc=plain_bcc
+```
+
+**Die Grenze ist nicht weggeschrieben worden.** Unter `'infer'` behaupten beide Fixtures weiterhin
+messbar `journal_report` mit absenderbestimmtem `sender` — als **dokumentierte Grenze**, im Test und im
+Kommentar so benannt. Was der Parser nicht leisten kann, steht dort ausdrücklich: wer wirklich
+zugestellt hat, entscheidet sich an der SMTP-Transaktion (`JR-4-05`), und keine Inhaltsprüfung ersetzt
+das.
+
+**Befund C — eine Abwesenheitsnotiz wurde als `ndr` ausgegeben**, weil `Auto-Submitted` als
+eigenständiges Signal zählte. Ein Archiv, das eine Urlaubsantwort unter „Unzustellbarkeit" ablegt,
+behauptet ein Zustellproblem, das es nie gab.
+
+> **Hier hat der DEV den PO widerlegt, und das ist der Eintrag wert.** Meine Vorgabe lautete, RFC 3834
+> unterscheide `auto-generated` (DSN) von `auto-replied` (Autoresponder), man müsse also nur den Wert
+> auswerten. Der Agent hat den RFC geholt statt sie zu glauben: **§7 setzt `auto-replied` in seinem
+> eigenen Beispiel auf einen Urlaubsautoresponder**, und §5 erlaubt denselben Token auf einer echten
+> DSN. **Der Wert kann die beiden Fälle nicht trennen.** Die gewählte Lösung ist deshalb besser als die
+> vorgegebene: tragend sind allein die RFC-3464-Struktur und der **Null-Absender** aus der
+> SMTP-Transaktion; `Auto-Submitted` ist Bestätigung, nie Beleg. Dabei fiel ein **vorhandener** Test aus
+> `JR-5-06` auf, der das widerlegte Verhalten festgeschrieben hatte.
+
+### Gegenprobe nach der Reparatur
+
+Sechzehn Formen gegen das gebaute Paket, nicht gegen die Absicht — alle wie erwartet: echte Reports
+(vollständig, Innenteil fehlt, Bcc-only, Report umschließt NDR) bleiben `journal_report`;
+Weiterleitung zitiert, Weiterleitung als Anlage, Mail mit Anhang, Kalendereinladung, Newsletter,
+Abwesenheitsnotiz sind `plain_bcc`; der DSN bleibt `ndr`. Die sieben kaputten Eingaben aus S3 werfen
+weiterhin nicht, und die vier Tabellenzeilen aus S4 sind unberührt.
+
+### `JR-5-09`: Abnahme durch die Rolle TEST — **angenommen mit Auflage**
+
+Die Prüferin hat die Basiszahlen selbst nachgefahren statt sie zu glauben (deckungsgleich), die acht
+Kriterien einzeln am **gebauten** Paket gemessen, und die zwei Fallen, die ich ihr vorgelegt habe, beide
+eingehalten:
+
+- **Reichweite über E5 hinaus:** `JR-5-01` (Storage), `JR-5-03` (Indexierung) und `JR-5-04`
+  (Ledger, Alarm) verlangen Dinge, die es in einem reinen Parser nicht gibt. Sie hat sie als
+  **teilweise** ausgewiesen und per `grep` belegt, dass **kein** Test etwas davon behauptet — statt
+  Häkchen für nicht vorhandene Strecken zu setzen.
+- **ADR-028s Grenze:** keine Beschönigung gefunden. Die Fälschungs-Fixtures liefern unter `'infer'`
+  weiterhin messbar `journal_report`, und Kommentar wie Test benennen das.
+
+Sechs Kriterien erfüllt, zwei teilweise mit benannter Reichweite, eines (`JR-5-07`) mit einem **neuen
+Befund**. Bemerkenswert an ihrer Arbeit ist ein Schritt, der selten vorkommt: Ihre erste
+Quoted-Printable-Sonde schlug an, und sie hat **das eigene Werkzeug** geprüft, nicht den Parser
+beschuldigt — das Fixture enthielt einen QP-Soft-Linebreak, der zwei Zeilen verschmolz. Ein Fehlalarm,
+den sie selbst abgefangen hat.
+
+### F58 — Whitespace in einer konfigurierten Domain landete in der Eigentümeradresse
+
+> **Hieß bis zum E4-Rückmerge F43.** Umnummeriert am 2026-08-04, weil E4 dieselbe Nummer parallel
+> für einen anderen Befund vergeben hatte; der vollständige Abschnitt steht jetzt in
+> `09-befunde-bestandscode.md`, wo Befundnummern laut **ADR-032** ausschließlich vergeben werden.
+
+Vergeben 2026-08-02 (PO), gefunden von `JR-5-09`. Der Vergleich lief über `normalizedConfiguredDomain()`
+(trimmt), die **Ausgabe** benutzte die rohe Zeichenkette. Ein versehentliches Leerzeichen in
+`organizationDomains` passte damit weiterhin — und wanderte in die Adresse. Nachgemessen, und in einem
+Punkt schlimmer als gemeldet:
+
+```
+'company.com '   -> "alice@company.com "            Whitespace am Ende
+' company.com'   -> "alice@ company.com"            Whitespace MITTEN in der Adresse
+'company.com\t'  -> "alice@company.com\t"
+```
+
+Eine solche Adresse ist nie zustellbar und vergleicht sich mit nichts — und sie wäre nach E6 in
+`archived_emails.userEmail` gelandet. **Behoben** an beiden Ausgabestellen (Treffer- und Fallback-Pfad),
+mit acht Regressionstests.
+
+**Zwei Dinge sind dabei bewusst _nicht_ passiert.** Die **Groß-/Kleinschreibung** wird weiter erhalten —
+das ist entworfen, nicht versehentlich, und Trimmen ist eine andere Frage als Kleinschreiben; ein Test
+hält beides zugleich fest (`' Company.COM '` ⇒ `alice@Company.COM`). Und ein `main`, der **gar keine
+Domain** ist (`'admin@company.com'` ⇒ `default_fallback@admin@company.com`, zwei `@`), wird **nicht
+repariert**: zu raten, welche Hälfte der Betreiber meinte, wäre genau der verbotene Zug — aus einer
+kaputten Eingabe einen Wert erfinden. Ein Test hält diese Grenze fest, statt sie später entdecken zu
+lassen. Sie gehört in die Konfigurationsprüfung im Backend, zusammen mit der doppelt konfigurierten
+Domain aus `JR-5-07`.
+
+### Zwei Abdeckungslücken, bewusst offen
+
+`Recipient:` mit spitzen Klammern und eine semikolongetrennte `Recipient:`-Liste werden nicht
+normalisiert. Beides sind **Lücken, keine Defekte**: Sie hängen an der Annahme, Exchange schreibe eine
+nackte Adresse pro Zeile — und die ist ohne echtes Exchange-Sample nicht überprüfbar. **Die Prüferin hat
+das ausdrücklich als unverifiziert gemeldet, statt eine Exchange-Struktur plausibel zu erfinden.** Das
+war die Vorgabe, und sie ist der Grund, warum diese beiden Lücken hier stehen und nicht als geprüft
+gelten.
+
+### E5 ist zurückgemergt
+
+`107346d` auf dem Integrationsbranch, `--no-ff`, kein Squash, nach `JR-5-09` — wie ADR-014 und
+`17-parallelbetrieb.md` §4 es verlangen. Vorher geprüft: der Integrationsbranch stand unverändert auf
+`18a9175`, E5 null Commits zurück. Der Volllauf ist **auf dem Merge-Ergebnis** gefahren, nicht auf dem
+Epic-Branch, und erst danach gepusht.
+
+> **Und dabei ist die Falle aus `CLAUDE.md` §5.1 zweimal zugeschnappt.** Nach `pnpm install` war
+> Postgres weg; der erste Lauf meldete `534 passed | 117 skipped` und `integration: ci 0/97`. Das sieht
+> grün aus und ist es nicht. Erst der zweite Lauf mit laufender Datenbank war ein Nachweis. Genau
+> deshalb wird hier **`integration: ci 97/97` zitiert und nicht „grün"** — F57 oben ist die
+> Bequemlichkeitsursache dieser Falle, und deshalb ist er jetzt behoben.
+
+### Korrektur an meiner eigenen Entscheidung aus `JR-5-07`
+
+In `JR-5-07` habe ich die Validierung der Domaingruppen „dorthin, wo `journaling_sources.
+organizationDomains` tatsächlich geschrieben wird" verwiesen — nach `packages/backend`. **Diese Stelle
+existiert nicht.** Nachgesehen: Die Tabelle ist in
+`packages/backend/src/database/schema/journaling-sources.ts` definiert, aber **kein einziger Schreib-
+oder Lesepfad** im OSS-Backend berührt `journalingSources`; der Zugriff gehörte zum
+Enterprise-Overlay, der hier fehlt (`CLAUDE.md` §2).
+
+Damit ist die Validierung **keine eigenständige Backend-Folgeaufgabe**, sondern Teil des Epics, das den
+Schreibpfad überhaupt erst anlegt: **E4, `JR-4-05`** (Quellenkonfiguration). Dort ist sie zusammen mit
+ADR-028s `sourceMode` zu erledigen — beides sind Zusagen, die an derselben Stelle entstehen. Eine Task
+gegen `packages/backend` anzulegen hätte auf nichts gezeigt.
+
+Offen bleibt damit für E4/E6:
+
+| Was                                                                                                               | wohin                |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `sourceMode` durchreichen (ADR-028) — sonst ist die Zusage verschenkt                                             | `JR-4-05`, `JR-6-02` |
+| Domain zweimal konfiguriert; `main` ist keine Domain (F58s Restgrenze)                                            | `JR-4-05`            |
+| Was `archived_emails.userEmail` bedeutet — und damit die `Recipient:`-Frage aus `JR-5-07`                         | `JR-6-02` (ADR-010)  |
+| Zwei Abdeckungslücken (`Recipient:` in spitzen Klammern, semikolongetrennt) — brauchen ein echtes Exchange-Sample | offen, kein Defekt   |
+
+### Zahlen
+
+| Stand                         | Volllauf                                            |
+| ----------------------------- | --------------------------------------------------- |
+| Basis `9725a5d` (vor E5)      | 40 Dateien, `486 passed \| 3 skipped`, unit 371/371 |
+| nach `JR-5-01`/`JR-5-02`      | 43 Dateien, `525 passed \| 3 skipped`, unit 410/410 |
+| nach der Review-Nacharbeit    | 43 Dateien, `540 passed \| 3 skipped`, unit 425/425 |
+| nach dem Rebase auf `d201612` | 45 Dateien, `559 passed \| 5 skipped`, unit 425/425 |
+| nach `JR-5-03`/`JR-5-04`      | 45 Dateien, `582 passed \| 5 skipped`, unit 448/448 |
+| nach `JR-5-05`/`JR-5-06`      | 45 Dateien, `602 passed \| 5 skipped`, unit 468/468 |
+| nach `JR-5-07`                | 46 Dateien, `625 passed \| 5 skipped`, unit 491/491 |
+| `JR-5-08` Korpus, 3 rot       | 47 Dateien, `633 passed \| 3 failed`, unit 502/502  |
+| nach der Reparatur (S6)       | 47 Dateien, `638 passed \| 5 skipped`, unit 504/504 |
+| nach `JR-5-09` + F58          | 47 Dateien, `646 passed \| 5 skipped`, unit 512/512 |
+
+Bis zur Review-Nacharbeit jeweils `integration 97/97 · adversarial 18/18`, nach dem Rebase
+`integration 97/97 · adversarial 37/37` (E3s zwei adversariale Dateien kamen mit), Exit 0. Die `398 passed | 2 skipped` bei 30 Dateien
+aus dem E2-Handover sind **überholt** — die Differenz zur Basis sind E3s zehn Dateien.
+
+### Drei Punkte für den Auftraggeber
+
+0. ~~**Der Integrationsbranch ist lint-rot in E3s Gebiet**~~ — **erledigt**.
+   `packages/journaling/src/spool/acceptance.ts` hat Session A beim E3-Abschluss selbst formatiert.
+   Nach dem Rebase auf `d201612` ist `pnpm lint` repo-weit grün. Session B hat die Datei nie
+   angefasst (fremdes Gebiet, `17-parallelbetrieb.md` §5) — die Meldung hat gereicht.
+1. **`pnpm test` ist nicht in `dotenv --` gewickelt** (`package.json:28`), anders als `CLAUDE.md` §4
+   für alle Root-Skripte behauptet. Ohne exportiertes `DATABASE_URL` überspringt die gesamte
+   `integration`-Suite sichtbar, aber der Lauf sieht unverdächtig aus. **Aufgenommen als F57 und behoben**
+   (2026-08-02, PO) — damals als **F42** vergeben, weil nach E3s **F40** und **F41** das die nächste
+   freie Nummer schien; auf dem E4-Zweig war sie zur selben Zeit anders belegt, daher die
+   Umnummerierung beim Rückmerge (**ADR-032**). Nach dem
+   E5-Rückmerge gab es kein gemeinsames Gebiet mehr zu schonen, also gleich mitgenommen: alle sieben
+   `test*`-Skripte sind jetzt in `dotenv --` gewickelt, womit `CLAUDE.md` §4 wieder stimmt.
+   **Vorher geprüft, statt gehofft:** `dotenv-cli` verträgt eine **fehlende** `.env` (Exit 0), und
+   vorhandene Umgebungsvariablen behalten **Vorrang** vor der Datei — CI setzt `DATABASE_URL` im
+   Workflow und bleibt daher unberührt. Beides an der installierten Version gemessen, nicht aus der
+   Dokumentation geschlossen. **Beleg der Wirkung:** `pnpm test` **ohne** exportiertes `DATABASE_URL`
+   liefert jetzt `integration: ci 97/97` statt `0/97`.
+2. ~~**Die ADR-Nummer 027 könnte kollidieren**~~ — **gegengeprüft, sie tut es nicht**. Session A hat
+   im gesamten E3-Abschluss keine ADR geschrieben; ADR-027 ist nach dem Rebase die einzige mit dieser
+   Nummer.
+
+---
+
+---
+
+## Sessionprotokoll E4 (2026-08-02 bis 2026-08-04)
+
+#### 2026-08-02 — `JR-4-01` erledigt (Rolle DEV, `26ab34f`, ungeprüft — noch keine Abnahme)
+
+**`JR-4-01` erledigt (Rolle DEV, `26ab34f`, ungeprüft — noch keine Abnahme).** `apps/smtp-ingress` existiert als eigener Prozess. Konfiguration: ein zod-Schema in `packages/journaling/src/ingress/config.ts` (`smtpPort`, das bestehende `SpoolConfig` aus `JR-3-01`, ein optionales `logLevel`) — bewusst **ohne** TLS/ACL/Rate-Limit-Felder, die erst `JR-4-04`/`JR-4-05`/`JR-4-08` brauchen. `apps/smtp-ingress/src/index.ts` liest die Umgebung (`SMTP_INGRESS_PORT`, `SMTP_INGRESS_SPOOL_ROOT_PATH`, `SMTP_INGRESS_SPOOL_HIGH_WATER_BYTES`, optional `SMTP_INGRESS_LOG_LEVEL` — neu in `.env.example`, bewusst getrennt von den unbenutzten `SMTP_JOURNALING_*`/`JOURNAL_*`-Variablen der fehlenden Enterprise-Doku), ruft `ensureSpoolLayout()` auf und bindet einen bloßen `net.createServer()` auf dem konfigurierten Port als Platzhalter für den echten ESMTP-Server aus `JR-4-02`. **Die beiden nicht-offensichtlichen Akzeptanzkriterien sind gemessen, nicht behauptet:** `ingress-import-graph.test.ts` läuft den Import-Graphen von `apps/smtp-ingress/src/index.ts` statisch ab (eigener, klein gehaltener Resolver für relative und `@open-archiver/*`-Importe) und schlägt fehl, sobald irgendetwas unter `packages/backend/` auftaucht — insbesondere `packages/backend/src/config/*` oder `src/database/index.ts`. `ingress-process-boot.test.ts` baut den echten Prozess (`tsc` für `types`, `journaling`, `smtp-ingress-app`, defensiv in `beforeAll`) und startet ihn zweimal wirklich: ohne Konfiguration `exit 1`, eine lesbare Meldung ohne Stack-Trace, kein gebundener Port; mit gültiger Konfiguration entstehen `incoming/`/`quarantine/`, der Port nimmt eine echte TCP-Verbindung an, und der Prozess bleibt oben, bis er gestoppt wird. **Eine Windows-Einschränkung dabei gemessen, nicht angenommen:** `SIGTERM` an einen Node-Kindprozess terminiert ihn auf diesem Host direkt, ohne den eigenen Handler laufen zu lassen (`ChildProcess.kill()` ruft unter Windows `TerminateProcess()` auf) — die striktere Zusicherung (Log-Zeile plus `exit 0` nach `SIGTERM`) läuft deshalb nur auf POSIX, in der CI also auf jedem Lauf. **Entscheidung zum Transactor-Umzug:** `postgres-transactor.ts` bleibt unter `packages/backend/tests/support/` — diese Scheibe schreibt nichts in den Ledger, ein Umzug jetzt hätte eine unbenutzte DB-Abhängigkeit in genau die Konfigurationsfläche eingeführt, die die Akzeptanzkriterien dieser Aufgabe vermeiden sollen. Verschoben nach `JR-4-06`. **Volllauf:** vorher `505 passed | 5 skipped` bei 42 Dateien (`unit 371/371 · integration 97/97 · adversarial 37/37`, selbst nachgemessen auf unverändertem `HEAD`), nachher `527 passed | 5 skipped` bei 45 Dateien (`unit 393/393 · integration 97/97 · adversarial 37/37`), Exit 0 beide Male, `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`. `pnpm --filter @open-archiver/backend build`: `tsc` grün, der anschließende `copy-assets`-Schritt scheitert an einem bereits dokumentierten Umgebungsproblem (`pnpm` fehlt auf `PATH`, `corepack pnpm` nötig) — vorbestehend, nicht durch diese Änderung verursacht. Bewusst **nicht** getan: keine TLS/ACL/Rate-Limit-Konfiguration, kein Ledger-Anschluss, kein echter SMTP-Server (alles Folgetasks). `tsconfig.build.json` im Repo-Wurzelverzeichnis referenziert `packages/journaling` weiterhin nicht und wird von keinem Skript benutzt — vermutlich totes Aggregat, Kandidat **F42**, außerhalb dieser Scheibe.
+
+**Nächster Schritt:** **Abnahme durch TEST** (frische Sitzung), dann `JR-4-02`
+
+#### 2026-08-02 — `JR-4-02` erledigt (Rolle DEV, `b6f79bc`, ungeprüft — noch keine Abnahme)
+
+**`JR-4-02` erledigt (Rolle DEV, `b6f79bc`, ungeprüft — noch keine Abnahme).** Der ESMTP-Server ist von Hand auf `node:net` gebaut, **keine dritte Bibliothek** — das ist die Bibliothekswahl für das ganze Produkt, gemessen statt behauptet: `smtp-server` (nodemailer, v3.19.2, gepackt und den Quelltext direkt geprüft) hat laut eigenem Kommentar in `smtp-connection.js` **kein** `BDAT`/`CHUNKING` ("BINARYMIME is not supported as it requires BDAT command"); `simplesmtp` (unbenutzt seit 2015) ebenso nicht; `haraka` (MIT, gepackt und geprüft) hat ebenfalls kein `BDAT`/`CHUNKING` **und** bringt ein volles `outbound/`-Modul mit (Queueing, Relay, Bounces) — disqualifiziert `JR-4-07` unabhängig von der ersten Lücke. Da `JR-4-03` `BDAT` verbindlich braucht (Projekt-README, erster Absatz: ohne `BDAT` ist das Produkt für Exchange Online wertlos), ist damit jede gefundene Bibliothek ausgeschlossen, bevor die übrigen Kriterien überhaupt greifen. **Die Paket-vs-App-Frage aus dem Auftrag löst sich dadurch von selbst:** `node:net`/`node:tls` sind Node-Kernmodule, keine npm-Abhängigkeit — `packages/journaling` hängt nach wie vor **nur** von `@open-archiver/types` und `zod` ab. Umfang dieser Scheibe: `EHLO` kündigt `PIPELINING`, `8BITMIME`, `SMTPUTF8` und `SIZE <konfigurierter Wert>` an, über einen echten Client geprüft (`tests/unit/smtp-server-protocol.test.ts`), inklusive eines vom 150-MB-Default **abweichenden** Werts (12 345) — ein Test gegen ein Optionsobjekt hätte nur den eigenen Aufruf belegt, nicht was der Client sieht. Drei unabhängig konfigurierbare Timeouts (Connection/Command/Data), jeder mit einer kurzen Frist im Test zum Ablaufen gebracht und aus Client-Sicht beobachtet: `421 4.4.2` (Postfix' eigener Wortlaut für dieselbe Bedingung) plus geschlossene Verbindung — nie `5xx`, da ein hängengebliebener Peer ein lokaler/Netz-Zustand ist. `MAIL FROM`s `SIZE=`-Parameter (RFC 1870) wird sofort gegen das konfigurierte Limit geprüft; `DataScanner` macht Dot-Unstuffing und Terminator-Erkennung, ohne die Nachricht je vollständig zu puffern. **Ende von `DATA` antwortet immer `451 4.3.0`, nie `250`** — `JournalAcceptance.accept()` wird erst in `JR-4-06` verdrahtet, ein Kommentar an der Stelle (`SmtpConnection.finishData`) nennt das ausdrücklich. **`logLevel` (seit `JR-4-01` validiert, aber ungelesen) bekommt einen echten Leser:** `apps/smtp-ingress/src/index.ts` baut jetzt eine `pino`-Instanz mit `level: config.logLevel` und reicht sie als `IngressLogger`-Port in `EsmtpServer` hinein — `pino` ist eine Abhängigkeit der App, nicht des Pakets, aus demselben Grund wie die SMTP-Engine selbst: eine dritte Bibliothek in `packages/journaling` wäre dieselbe Frage noch einmal gewesen. Fünf neue `SIZE`/Timeout/Hostname-Env-Variablen dazu in `.env.example`, alle optional mit eigenem Default. **Testzuordnung bewusst:** `tests/unit/smtp-server-protocol.test.ts` öffnet echte TCP-Sockets in-process — dieselbe Einordnung als `unit` wie `ingress-process-boot.test.ts` eine Scheibe zuvor, aus demselben Grund (kein `DATABASE_URL`, keine externe Infrastruktur, deterministisch unter der 5-Sekunden-Grenze). **Volllauf:** vorher `527 passed | 5 skipped` bei 45 Dateien, nachher `586 passed | 5 skipped` bei 48 Dateien (`unit 452/452 · integration 97/97 · adversarial 37/37`), Exit 0 beide Male, `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`, selbst gemessen. `pnpm --filter @open-archiver/journaling build` und `pnpm --filter smtp-ingress-app build` beide grün; `corepack pnpm exec prettier --check` auf allen geänderten Dateien grün (CRLF-bereinigt geprüft, F35). Bewusst **nicht getan**: `CHUNKING`/`BDAT` (`JR-4-03`), `STARTTLS`/TLS (`JR-4-04`), Quell-/Empfänger-ACL (`JR-4-05`), echte Ledger-Anbindung (`JR-4-06`), die präzise `SIZE`-Grenzmatrix (exakt am Limit / ein Byte drüber / weit drüber — bleibt `JR-4-12`s Kriterium; diese Scheibe hat nur den Mechanismus, nicht die Matrix).
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann `JR-4-03`
+
+#### 2026-08-02 — `ADR-029` entschieden (PO) — der SMTP-Server wird selbst gebaut, und
+
+**`ADR-029` entschieden (PO) — der SMTP-Server wird selbst gebaut, und das erzeugt zwei neue Tasks.** `JR-4-02` hat die Bibliothekslage gemessen; der PO hat sie **unabhängig nachgeprüft**, weil die Entscheidung weit über E4 hinausreicht: `npm pack smtp-server` (3.19.2) und die Kommando-Handler aus dem ausgelieferten Quelltext gezählt — **17 Handler** (`AUTH`, `DATA`, `EHLO`, `HELO`, `HELP`, `KILL`, `MAIL`, `NOOP`, `QUIT`, `RCPT`, `RSET`, `SHELL`, `STARTTLS`, `VRFY`, `WIZ`, `XCLIENT`, `XFORWARD`), **kein `handler_BDAT`**; dazu die Registry durchsucht: unter „smtp server" 20 Treffer, davon genau drei Produktionskandidaten (`smtp-server`, `haraka`, `simplesmtp` — alle drei ohne `BDAT`, `haraka` zusätzlich mit vollem `outbound/`), der Rest Testattrappen auf `smtp-server`-Basis; die Suche nach `bdat` liefert zwei Treffer ohne SMTP-Bezug. **Es gibt in Node keinen SMTP-Server mit `BDAT`** — damit ist die Wahl nicht Geschmack, sondern Folge der Randbedingung „ohne `BDAT` kein Exchange Online". **Die dritte Option — `smtp-server` forken und `BDAT` nachrüsten — ist in der ADR ausdrücklich als _abgewogen, nicht gemessen_ ausgewiesen** und mit drei Gründen verworfen; der stärkste: das Hauptargument für einen Fork (geerbte Härtung) trägt gerade an der nachgerüsteten Stelle nicht. **Was die Entscheidung kostet, steht als Auflage im Backlog statt als Anmerkung in der ADR:** wer selbst baut, erbt keine Härtung gegen Protokollmissbrauch — neu sind deshalb **`JR-4-14`** (adversariale Protokollrobustheit: Zeilen ohne `CRLF` über jede Puffergrenze, abgeschnittene Kommandos, Kommandoflut, ungültige Sequenzen, NUL/8-Bit in der Kommandozeile, `BDAT` mit unsinniger Länge, Verbindungen über das Limit) und **`JR-4-15`** (Sicherheitsdurchsicht des Empfangspfads: TLS-Parameter, Ressourcengrenzen, Informationsgehalt der Antworten, Envelope-Werte auf dem Weg in Protokoll **und** Ledger, Speicherverhalten bei 150 MB, keine Pfadableitung aus Angreiferdaten). **`JR-4-13` nimmt beide in seine Kriterien auf; E4 hat damit 15 Tasks statt 13.** Ebenfalls in der ADR festgeschrieben, weil es sonst niemand nachhält: **`VRFY`/`EXPN` und `XCLIENT`/`XFORWARD` werden bewusst nicht gebaut** — die ersten beiden sind ein Informationsleck ohne Nutzen für dieses Produkt, die letzten beiden ließen eine Gegenstelle die protokollierte Herkunft setzen, also genau die Felder (`remote_ip`, `ehlo_name`), die der Ledger hasht.
+
+**Nächster Schritt:** `JR-4-03` (`CHUNKING`/`BDAT`)
+
+#### 2026-08-02 — `JR-4-03` erledigt (Rolle DEV, `54acf36`, ungeprüft — noch keine Abnahme)
+
+**`JR-4-03` erledigt (Rolle DEV, `54acf36`, ungeprüft — noch keine Abnahme).** `CHUNKING`/`BDAT` vollständig, byteidentisch zum `DATA`-Pfad. `EHLO` kündigt jetzt `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE <Wert>`, **`CHUNKING`** an — `JR-4-02` hatte es bewusst weggelassen, damit kein Client versucht, was es noch nicht gab. Der neue Zustandsautomat (`BdatContentTracker`, das `BDAT`-Gegenstück zu `DataScanner`) deckt alle vier geforderten Fälle ab: Einzel-Chunk, Multi-Chunk, `BDAT 0 LAST` (allein und als Abschluss vorheriger Chunks), und Chunk-Grenzen an beliebiger Stelle inklusive **zwischen `\r` und `\n`** einer CRLF — `BDAT` hat keinerlei Zeilen-Interpretation, ein Split dort kann per Konstruktion nicht schiefgehen, weil nichts nach einer Zeile sucht. **RFC 3030 zur Mischung von `DATA`/`BDAT`:** „If a DATA statement is issued after a BDAT for the current transaction, a 503 ... MUST be issued" — geprüft direkt am RFC-Text, nicht aus dem Gedächtnis. Die bestehende Zustandsprüfung in `handleDataCommand` (`state !== 'rcpt'`) liefert diesen `503` bereits, sobald ein `BDAT` den Zustand auf `'bdat'` gesetzt hat — kein Sonderfall nötig. Der umgekehrte Fall (`BDAT` nach abgeschlossenem `DATA`) ist strukturell unerreichbar, da `DATA`-Inhalt zeilenweise verschluckt wird, bevor er als Kommando geparst werden könnte. `RSET` räumt Chunking-Zustand über denselben `resetEnvelope()` ab, den jeder Envelope-Neustart schon aufrief. **Statuscode-Tabelle, jeder Fall geprüft:** nicht-numerische/negative/fehlende Chunk-Länge → `501 5.5.4`; `BDAT` ohne vorheriges `MAIL`/`RCPT` → `503 5.5.1`; Chunk-Summe über dem `SIZE`-Limit → `552 5.3.4` mit lautem `logger.error` (erst nach vollständigem Abfluss der deklarierten Chunk-Länge, nie mitten im Chunk — dadurch bleibt die Byte-Ausrichtung für den nächsten Befehl auch im Fehlerfall korrekt, anders als `DataScanner`s Sofort-Abbruch, der kein deklariertes Ziel kennt); Client sendet weniger Bytes als angekündigt und verstummt → `421 4.4.2` über den bestehenden Data-Timeout; erfolgreicher Zwischen-Chunk → `250 2.0.0` (RFC 3030 §2 verlangt das je Chunk — **eine bewusst schwächere Zusage** als das finale `250`: „Chunk gelesen", nicht „Nachricht durabel angenommen"); `DATA` nach nicht-letztem `BDAT` bzw. ein weiteres `BDAT` nach bereits abgeschlossenem `BDAT ... LAST` → je `503 5.5.1`. **Ende bleibt `451 4.3.0`, für `BDAT ... LAST` genau wie für `DATA`** — beide Pfade laufen jetzt durch eine gemeinsame `completeTransfer()`, der eine Anschlusspunkt, den `JR-4-06` finden soll. **Byteidentisch-Nachweis:** Testkorpus mit einer Zeile, die genau ein `.` ist (eingebetteter Terminator-Look-alike), einer mit führendem Punkt, und Chunk-Grenzen mitten in einer Zeile **und** zwischen `\r`/`\n` sowie einer zweiten, maximal fragmentierten Variante (Ein-Byte-Chunks, jede mögliche Grenze wird getroffen). **Zwei Mutationsproben, beide durchgeführt und zurückgebaut:** Unstuffing im `DATA`-Pfad entfernt → beide Vergleichstests rot; spurious Unstuffing in `BdatContentTracker` eingefügt → der grobkörnige (Ein-Byte-Grenzen-)Test rot, der erste (gezielte) Test blieb dabei grün, weil seine gewählten Splitpunkte zufällig nicht auf einem führenden Punkt lagen — ehrlich festgehalten, nicht verschwiegen; der erste Test wurde danach um einen dritten Splitpunkt genau auf dem führenden Punkt der zweiten Dot-Zeile verstärkt. **Heap-Nachweis mit Befund:** 150 MB über 150 `BDAT`-Chunks (nightly), zunächst mit `process.memoryUsage().heapUsed` gemessen — der Kennzahl aus `JR-3-02`s Durable-Write-Nachweis. Eine gezielt eingebaute Voll-Pufferungs-Regression (jeder Chunk zusätzlich in ein Array kopiert) blieb darin **unsichtbar**: `heapUsed` verharrte bei 13–17 MB, korrekter Lauf wie regressierter Lauf gleichermaßen, weil Node-`Buffer`-Inhalte typischerweise außerhalb des V8-JS-Heaps liegen. `arrayBuffers` zeigte den Unterschied klar: ~2,5–40 MB Schwankung (GC, kein Leck) im korrekten Lauf gegen monoton wachsende ~157 MB bis zum letzten Chunk in der Regression. Test auf `arrayBuffers` umgestellt, Budget 100 MB, in beiden Richtungen nachgewiesen (Regression rot bei 166 MB, korrekter Lauf grün), Regression danach sauber zurückgebaut. **Das ist ein Befund, der auch `JR-3-02`s eigenen Nachweis betrifft** — dieselbe blinde Stelle dürfte dort ebenso bestehen, außerhalb dieser Aufgabe belassen, aber vermerkt. **Testzahlen:** vorher `586 passed | 5 skipped` bei 48 Dateien (`unit 452/452 · integration 97/97 · adversarial 37/37`); nachher `ci` `622 passed | 6 skipped`, mit `nightly` zusätzlich `625 passed | 3 skipped`, unverändert 48 Dateien (`unit ci 488/488 · nightly 2/2`, `integration 97/97`, `adversarial ci 37/37 · nightly 1/1`), Exit 0, `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`, selbst gemessen — `suite-inventory.ts` entsprechend auf `unit: { ci: 488, nightly: 2 }` gezogen. `pnpm --filter @open-archiver/journaling build` und `pnpm --filter smtp-ingress-app build` beide grün, `corepack pnpm exec tsc --noEmit` (Quelltext **und** Tests) grün, `corepack pnpm exec prettier --check` auf allen vier geänderten Dateien grün (drei davon brauchten `--write`, gezielt nur auf diese Dateien, F35). **Bewusst nicht getan:** kein proaktiver Kurzschluss für eine `BDAT`-Länge, die allein schon über dem `SIZE`-Limit liegt — sie wird erst abgelehnt, nachdem die volle deklarierte Länge tatsächlich abgeflossen ist (speichersicher, da nie gepuffert, aber langsames Feedback; durch den bestehenden Data-Timeout begrenzt, falls die Gegenstelle dabei verstummt). Kein `STARTTLS`/ACL/Ledger-Anschluss (`JR-4-04`/`JR-4-05`/`JR-4-06`, eigene Folgetasks). **Für `JR-4-14` vorgemerkt:** (1) die genannte fehlende proaktive Kurzschluss-Prüfung bei absurd großer deklarierter `BDAT`-Länge; (2) ein **vorbestehender** Befund im `DATA`-Pfad aus `JR-4-02`, hier nicht angefasst: `finishData()` setzt bei Oversize sofort `state = 'ready'` zurück, obwohl die Gegenstelle — die von der Ablehnung noch nichts weiß — unter Umständen noch weitere Inhaltsbytes sendet, die dann als Kommandozeilen fehlinterpretiert werden; der `BDAT`-Pfad dieser Aufgabe vermeidet genau diesen Fall durch vollständigen Abfluss der deklarierten Länge vor der Reaktion, aber die allgemeine Klasse „früh ablehnen, Rest kommt trotzdem" verdient einen eigenen adversarialen Testfall.
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann weiter mit `JR-4-04`…`JR-4-15`
+
+#### 2026-08-02 — `JR-4-16` erledigt (Rolle DEV, F44 behoben, ungeprüft — noch keine Abnahme)
+
+**`JR-4-16` erledigt (Rolle DEV, F44 behoben, ungeprüft — noch keine Abnahme).** `DataScanner` bricht bei einem `SIZE`-Überlauf nicht mehr mitten im Strom ab. Beide Abbruchstellen — die zeilenweise Byte-Zählung in `scan()` und die `carry`-Deckelung für eine „Zeile" ohne jedes `CRLF` in `push()` — setzen jetzt nur noch `oversize = true` und wechseln in einen neuen Verwerfungs-Scan (`scanDiscard()`), der über beliebig viele weitere `push()`-Aufrufe hinweg liest und verwirft, bis der echte `<CRLF>.<CRLF>`-Terminator gefunden ist — `BDAT`s eigene Disziplin (deklarierte Länge immer vollständig abzählen, bevor reagiert wird) als Vorbild, wie vom PO verlangt. `handleDataChunk()` ruft `finishData()`/`completeTransfer()` jetzt erst bei `done: true` auf, nicht mehr bei `oversize` allein; `completeTransfer()` bleibt dabei unverändert der eine Anschlusspunkt für `JR-4-06`. **Ressourcengrenze der verworfenen Bytes, wie vom PO verlangt beschrieben:** `scanDiscard()` puffert nichts — ein Vier-Skalare-Automat (`discardSawCr`/`discardLineDisqualified`/`discardLineLength`/`discardFirstByte`) muss pro Zeile nur deren erste zwei Bytes kennen, um zu wissen, ob sie ein einzelner Punkt war; der Speicherbedarf zwischen den `push()`-Aufrufen bleibt damit O(1), unabhängig von der Menge weiterer Bytes. Sendet die Gegenstelle nie einen Terminator, bleibt `state` auf `'data'`, und der bereits vorhandene, bei jedem Chunk neu gestellte `dataTimeoutMs`-Timer (`armDataTimer()` in `handleDataChunk()`, unverändert) beendet die Verbindung mit `421 4.4.2` — kein neuer Mechanismus, keine neue Erschöpfungslücke; eigens dafür ein Testfall (siehe unten). **Beide Abbruchstellen einzeln geprüft**, nicht nur die vom PO gemessene: in `packages/journaling/src/ingress/smtp-server.test.ts` je ein Fall, der nach der Byte-Zählung bzw. nach der CRLF-losen Deckelung noch einen später eintreffenden Terminator findet. **Rot-Nachweis wie gefordert** (Fix zurückgenommen, Tests rot gesehen, Fix wiederhergestellt): die drei `DataScanner`-Fälle mit `expected { done: true, ... } to deeply equal { done: false, ... }`, die drei Socket-Fälle in `tests/unit/smtp-server-protocol.test.ts` u. a. mit `promise resolved "[ '552 5.3.4 ...' ]" instead of rejecting` und `expected '552 ...' to match /^421 4\.4\.2/` — jede Meldung nennt die erwartete Zusicherung, nicht nur „irgendetwas ist anders" (F41s Nachtrag). **Die Rot-Probe des PO als Regressionstest im Repository**, exakt wie gemessen nachgebaut: Rumpf und „geschmuggelte" Kommandozeilen in **getrennten** `writeRaw()`-Aufrufen (ein kombinierter Write hätte den Befund nicht reproduziert, wie der PO selbst notiert hat); dazu ein Test für den legitimen Fall (Sender sendet nach der Überschreitung bis zum echten Terminator weiter — genau ein `552`, danach ist die Verbindung realigned) und einer für die Ressourcengrenze. **Testzahlen:** vorher `622 passed | 6 skipped` bei 48 Dateien (`unit ci 488/488`), nachher `628 passed | 6 skipped`, unverändert 48 Dateien (`unit ci 494/494`), Exit 0, `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`, selbst gemessen — `suite-inventory.ts` auf `unit: { ci: 494 }` gezogen (+3 in `ingress/smtp-server.test.ts`, +3 in `tests/unit/smtp-server-protocol.test.ts`). `pnpm --filter @open-archiver/journaling build` grün, `corepack pnpm exec prettier --check` auf allen geänderten Dateien grün (F35 betrifft nur `09-befunde-bestandscode.md`, eine vorbestehende CRLF-Warnung, keine eigene Formatierungsabweichung). **Bewusst nicht getan:** kein Verhalten am Nicht-Oversize-Pfad geändert; keine Verbindung nach der Antwort geschlossen (das „Weiterlesen und Verwerfen" aus der PO-Vorgabe umgesetzt, nicht die zugelassene Alternative). **Für `JR-4-14`/`JR-4-15` vorgemerkt:** `scanDiscard()`s Automat ist der erste Ort im `DATA`-Pfad, der bewusst _nichts_ vom Rumpf zurückhält, sobald `oversize` feststeht — eine gute Schablone, falls `JR-4-14`s adversariale Matrix einen ähnlichen „lies weiter, aber verwirf"-Fall für eine andere Abbruchbedingung braucht.
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann weiter mit `JR-4-04`…`JR-4-15`
+
+#### 2026-08-03 — `JR-4-04` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme)
+
+**`JR-4-04` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme). Diese Zeile beschreibt zwei Sitzungen, nicht eine:** eine erste wurde vom Nutzungslimit mitten in der Arbeit beendet und ihr unverändert gesicherter Stand als `397c842` (`wip(journaling): JR-4-04 partial`) committet — Code, Testdateien und `tsc` grün, aber `tests/support/suite-inventory.ts` **nicht** gezogen, wodurch `globalSetup` jeden Lauf abbrach und **nichts davon je ausgeführt worden war**. Diese zweite Sitzung hat den vorliegenden Code als ungeprüfte Fremdarbeit behandelt, ihn gegen die vier vom PO gesetzten Punkte und den RFC-Text geprüft und dabei **keinen Korrekturbedarf gefunden** — belegt durch einen tatsächlich ausgeführten, grünen Lauf, nicht durch Vertrauen in `tsc`. **STARTTLS/`EHLO`, wörtlich:** vor dem Handshake (Zertifikat konfiguriert) endet die `EHLO`-Antwort auf `250-CHUNKING\r\n250 STARTTLS\r\n`; nach einem abgeschlossenen Handshake fehlt die `STARTTLS`-Zeile, die Antwort endet auf `250 CHUNKING\r\n` — `buildEhloResponseLines()`s `tls.available && !tls.active`-Gate, über einen echten Client geprüft (`tests/unit/smtp-starttls-protocol.test.ts`), nicht nur am Optionsobjekt. **Kommandoabgrenzung für `530 5.7.0`, gegen RFC 3207 §4 geprüft statt geraten:** der RFC-Text nennt „every command other than NOOP, EHLO, STARTTLS, or QUIT"; `HELO` ist bewusst zu `EHLO` hinzugefügt (ein Client ohne sichtbares `STARTTLS` unter `HELO` muss es trotzdem blind versuchen dürfen), `RSET` ist bewusst **im** gesperrten Satz (der RFC nimmt es nicht aus, und ein Envelope-Reset braucht keine Verschlüsselung), `AUTH` steht für `JR-4-05` vorgemerkt, ohne heute erreichbar zu sein. Die Prüfung läuft einmal, vor dem Kommando-Switch, und kann daher von keinem einzelnen Befehlshandler umgangen werden. **Zwei getrennte Nachweise zur Sitzungsrücksetzung nach RFC 3207 §4.2, wie vom PO verlangt:** (1) `MAIL` direkt nach einem abgeschlossenen Handshake, ohne erneutes `EHLO`, ergibt `503` — der Zustand fiel auf `'initial'` zurück, das Envelope wurde verworfen; (2) die F44-Verwandte: Kommandozeilen, die im **selben** TCP-Segment wie `STARTTLS\r\n` mitgeschickt werden, werden vor der `220`-Antwort aus `commandCarry` geleert und laufen **nie** durch `processCommandLine` — weder vor noch nach dem Handshake; ein eigener Test schickt Rumpf und „geschmuggelte" `MAIL`/`RCPT`-Zeilen tatsächlich in einem Puffer (nicht nur behauptet) und prüft, dass vor **und** nach dem Handshake keine einzige unaufgeforderte Antwort ankommt, die Verbindung danach aber mit einem echten `EHLO`/`MAIL` normal weiterfunktioniert. **Version/Cipher, gemessen statt konfiguriert:** `onTlsHandshakeComplete()` liest `secureSocket.getProtocol()`/`secureSocket.getCipher()?.name` vom echten, gerade aufgebauten `tls.TLSSocket` und legt sie auf `this.tlsVersion`/`this.tlsCipher` ab, genau dort, wo `completeTransfer()`s Dokumentationskommentar `JR-4-06`s künftigen Zugriff bereits ankündigt; ein Test vergleicht den geloggten Wert direkt gegen `secureSocket.getProtocol()` auf der Client-Seite derselben Verbindung. **Die Ledger-Seite dieses Kriteriums bleibt ausdrücklich offen** — `JR-4-06` verdrahtet `JournalAcceptance.accept()` und muss `tlsVersion`/`tlsCipher` tatsächlich in `JournalTransactionInput` übernehmen (die Felder existieren dort bereits, ungenutzt); diese Aufgabe liefert nur den bereitstehenden Wert, keinen Ledger-Eintrag. **TLS ≥ 1.2, mit offen benannter Grenze (F43-Lehre angewendet):** ein Ende-zu-Ende-Beweis „TLS 1.1 wird vom Server abgelehnt" ist in dieser Umgebung nicht ehrlich konstruierbar — weder Node's `tls.connect()` noch `openssl s_client -tls1_1` können hier überhaupt ein TLS-1.1-`ClientHello` erzeugen (beide scheitern mit „no protocols available", gemessen auch mit absichtlich auf `'TLSv1.1'` gesenktem Server-`minVersion`), sodass ein grüner Test nichts über den Server aussagen würde. Bewiesen wird stattdessen, was ehrlich geht: `buildTlsSocketOptions()` — eine reine, socket-freie Funktion, extra dafür herausgezogen — gibt exakt `minVersion: 'TLSv1.2'` zurück, direkt geprüft ohne `tls.TLSSocket` nachzubauen; dass Node diesen Wert tatsächlich durchsetzt, ist Node's eigene, unabhängig getestete Verantwortung. Zusätzlich Ende-zu-Ende bewiesen: TLS 1.2 **und** 1.3 (die Versionen, die diese Umgebung anbieten kann) schließen den Handshake über `STARTTLS` erfolgreich ab. **`require_tls` bleibt Prozesskonfiguration, mit Erweiterungspunkt für `JR-4-05`:** ein Test injiziert einen `requireTlsResolver`, der `true` liefert, obwohl der Prozess-Default `false` ist, und beweist damit konkret die „verschärfen, nie aufweichen"-Regel, die `RequireTlsResolver`s Dokumentationskommentar für `JR-4-05` vorschreibt. **Testzahlen:** vorher `628 passed | 6 skipped` bei 48 Dateien (`unit ci 494/494`); nachher `672 passed | 6 skipped` bei 50 Dateien (`unit ci 538/538 · integration ci 97/97 · adversarial ci 37/37`), Exit 0, `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`, selbst gemessen (Rechnerlaufzeit ≈126 s) — `suite-inventory.ts` auf `unit: { ci: 538 }`, `expectedFiles: 31` gezogen (neu: `ingress/tls-config.test.ts` mit 10 Fällen, `tests/unit/smtp-starttls-protocol.test.ts` mit 21 Fällen über eine echte TCP+TLS-Loopback-Verbindung, `+8` in `ingress/smtp-server.test.ts`). `corepack pnpm --filter @open-archiver/journaling exec tsc --noEmit` grün. **Bewusst nicht getan, weil außerhalb dieser Aufgabe:** keine Ledger-Verdrahtung von `tlsVersion`/`tlsCipher` (`JR-4-06`); keine byte-genaue, bibliotheksunabhängige TLS-1.1-`ClientHello`-Probe (für `JR-4-14`/`JR-4-15` vorgemerkt, wie im Testdateikommentar selbst festgehalten); keine adversariale Fuzzing-Matrix um `STARTTLS` herum (Garbage-Bytes während des Handshakes, mehrfach gepipelinete `STARTTLS`-Versuche mit variierender Fragmentierung, überlange `ClientHello`s) — das bleibt `JR-4-14`s Aufgabe, mit `scanDiscard()`s O(1)-Verwerfungsdisziplin (F44/`JR-4-16`) als Schablone für einen ähnlichen Fall am `STARTTLS`-Handshake, falls dort ein „lies weiter, aber verwirf" gebraucht wird.
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann weiter mit `JR-4-05`…`JR-4-15`
+
+#### 2026-08-03 — `JR-4-05a` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme)
+
+**`JR-4-05a` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme).** Der PO hat `JR-4-05` in drei Scheiben zerlegt (ADR-021, je eine Fehlerklasse): diese Aufgabe ist ausschließlich die **Quell-ACL über CIDR** — `allowed_sources` als CIDR-Liste, Abweisung mit `554 5.7.1` beim Connect. Empfänger-ACL (`JR-4-05b`) und `AUTH` (`JR-4-05c`) sind **nicht** Teil dieser Scheibe. **Erste Datenbankanbindung des Prozesses:** bis `JR-4-04` hat `apps/smtp-ingress` nie eine Verbindung geöffnet; ADR-002 gibt dem Prozess `SELECT` auf `journaling_sources` und den Ledger-Kopf, kein `UPDATE`/`DELETE`. Umgesetzt als eigener Port `SourceAclLookup` (`packages/journaling/src/ingress/source-acl-port.ts`) nach dem Muster von `LedgerLookup`/`ledger-lookup-port.ts` — bewusst über den bereits existierenden, generischen `LedgerQuery`-Vertrag injiziert, keine zweite, gleich geformte Schnittstelle. `PostgresSourceAclLookup` (`./source-acl.ts`) implementiert ihn mit einem einzigen `SELECT ... WHERE status = 'active'`; die Filterung auf `status` sitzt in der Abfrage, nicht im Cache, damit eine pausierte Quelle ab dem nächsten Refresh keine IP mehr zulässt, ohne einen Sonderfall zu brauchen. **F38 beachtet:** `packages/backend/tests/integration/source-acl-lookup.int.test.ts` liest mindestens einmal über einen selbst konstruierten `postgres(harness.url, ...)`-Client, der nie an `drizzle()` übergeben wird — `bareLedgerQuery(harness.sql)` in den bestehenden Ledger-Lookup-Tests bleibt trotz des Namens ein über `harness.sql` (drizzle-gepatcht) laufender Client, was diese Aufgabe nicht wiederholt. **CIDR-Vergleich (`./cidr.ts`), jeder vom PO genannte Fall geprüft:** IPv4 und IPv6, einzelne Adressen ohne Präfix (implizit `/32`/`/128`), `::ffff:`-abgebildetes IPv4 auf einem Dual-Stack-Socket (über `normalizeRemoteIp()` aus `canonical-encoding.ts` wiederverwendet, nicht neu geschrieben — `parseIPv4`/`parseIPv6` dort für diese Wiederverwendung `export`iert), Präfixlänge `0` als eigens markierter Catch-all (`isCatchAll`), unsinnige Präfixe (`/33`, `/129`, negativ, nicht-numerisch — alle werfen `RangeError`, ein negativer oder nicht-numerischer Suffix wird nie als Zahl gelesen, weil das Präfixmuster nur Ziffern erfasst und der ganze String dann als „keine parsbare Adresse" scheitert), Adresse in der falschen Familie gegen ein Präfix der anderen Familie (kein Treffer, kein Fehler — dieselbe Semantik wie ein gewöhnliches `/24`, das eine andere Subnetzadresse einfach nicht trifft). **Eine ungültige CIDR-Angabe macht die ganze Quelle unbenutzbar, nicht nur den einen Eintrag:** `compileSourceAcl()` (`./source-acl-cache.ts`) gibt bei einem einzigen fehlerhaften Eintrag `null` für die gesamte Quelle zurück und loggt laut — ein still übersprungener Eintrag hätte eine Zulassungsliste unbemerkt verengt, was schlimmer ist als eine Quelle, die bis zur Korrektur gar nichts zulässt. Ein `/0`-Eintrag wird ebenfalls geloggt (Warnung), bleibt aber gültig. **Cache-Entscheidung, alle drei vom PO gestellten Fragen beantwortet (Dokumentationskommentar in `source-acl-config.ts`):** (1) ein Eintrag gilt bis zum nächsten erfolgreichen Refresh, höchstens `refreshIntervalMs` (Default 30 s) danach; (2) eine Datenbankänderung wirkt spätestens nach einem Refresh-Zyklus, kein Neustart nötig; (3) scheitert ein Refresh, während ein alter Stand vorliegt, gilt der alte Stand **bis zu `staleAfterMs`** seit dem letzten _erfolgreichen_ Refresh weiter (Verfügbarkeit) — danach meldet `evaluate()` für jede Verbindung `'unavailable'` (Sicherheit), niemals unbegrenzt. Bewusst **verfügbarkeitsvorrangig, dann sicherheitsschließend** statt sofort schließend gewählt: ein einzelner fehlgeschlagener Poll darf keine Empfangspfad-Unterbrechung auslösen, aber eine Konfigurationsänderung (kompromittierte Quelle sperren) darf nicht durch eine dauerhaft tote Datenbank unbegrenzt verzögert bleiben. **Vor dem allerersten erfolgreichen Refresh gilt weiterhin Fail-Closed**, nicht „alles zulassen" (ADR-002). **Leitungsnachweis, nicht nur Vergleichsfunktion:** `tests/unit/smtp-source-acl-protocol.test.ts` verbindet über einen echten `net.Socket` und beobachtet wörtlich `554 5.7.1 Access denied` gefolgt vom Verbindungsabbau, **ohne** dass je eine `220`-Begrüßung ankommt (`EsmtpServer.handleConnection()` prüft die ACL, bevor `SmtpConnection` überhaupt konstruiert wird); ein zweiter Fall belegt `421 4.3.2` beim nicht bekannten ACL-Zustand; zwei weitere belegen, dass eine zugelassene IP bzw. ein Prozess ganz ohne konfiguriertem `sourceAclEvaluator` weiterhin die gewohnte `220`-Begrüßung erhält (Rückwärtskompatibilität). **Datenbankausfall beim Connect:** gemessen über `evaluate()` → `{ kind: 'unavailable' }` → `421 4.3.2 <hostname> Service temporarily unavailable`, nie `554`, nie ein bloßes `5xx` — Skill §1/§2 eingehalten. `apps/smtp-ingress/tests/unit/ingress-process-boot.test.ts`s Grünfall musste dafür `SMTP_INGRESS_DATABASE_URL` auf einen tatsächlich geschlossenen lokalen Port setzen (`ECONNREFUSED` beim allerersten Refresh) — der Prozess startet trotzdem und bindet den SMTP-Port, weil `SourceAclCache.start()` auch bei fehlgeschlagenem ersten Ladeversuch auflöst. **`require_tls` pro Quelle in dieser Scheibe mitgeliefert, nicht auf `JR-4-05b` verschoben:** da die Quellen ohnehin geladen werden, komponiert `createSourceAclRequireTlsResolver()` das quellenspezifische `require_tls` **nur verschärfend** mit dem Prozess-Default (`processDefault |  | quellenRequireTls`), nie umgekehrt — dieselbe Vertragsform, die `RequireTlsResolver`s Dokumentationskommentar seit `JR-4-04`vorschreibt; ein nicht zugeordneter oder`null`-`remoteIp`trägt`false` bei und lockert damit nie. **`sourceAcl.databaseUrl` ist ein Pflichtfeld ohne Default** (`ingress/config.ts`/`source-acl-config.ts`) — anders als `smtp`/`tls`genügt`{}`hier nicht: „keine Datenbank konfiguriert" muss ein Startfehler mit klarer Meldung sein, kein stilles Zulassen aller Verbindungen. Neue Env-Variablen in`.env.example`: `SMTP_INGRESS_DATABASE_URL`(Pflicht, eigene Rolle, nicht`DATABASE_URL`), optional `SMTP_INGRESS_SOURCE_ACL_REFRESH_MS`/`SMTP_INGRESS_SOURCE_ACL_STALE_AFTER_MS`. `apps/smtp-ingress`bekommt dafür seine erste eigene`postgres`-Abhängigkeit (`^3.4.7`, wie `packages/backend`) und einen dünnen `LedgerQuery`-Adapter (`src/postgres-query.ts`) über einen bewusst nie durch `drizzle()`laufenden Client — dieselbe Begründung wie beim Testnachweis. **Testzahlen:** vorher`672 passed | 6 skipped` bei 50 Dateien (`unit ci 538/538 · integration ci 97/97 · adversarial ci 37/37`); nachher `735 passed | 6 skipped` bei 56 Dateien (`unit ci 597/597 · integration ci 101/101 · adversarial ci 37/37`), Exit 0 beide Male, `DATABASE_URL`+`OA_TEST_REQUIRE_INFRA=1`, selbst gemessen (Rechnerlaufzeit ≈116 s) — `suite-inventory.ts`entsprechend gezogen (neu:`ingress/cidr.test.ts`18,`ingress/source-acl.test.ts`6,`ingress/source-acl-cache.test.ts`16,`ingress/source-acl-config.test.ts`9,`tests/unit/smtp-source-acl-protocol.test.ts`4,`+6`direkt in`ingress/config.test.ts`, `packages/backend/tests/integration/source-acl-lookup.int.test.ts`4).`pnpm --filter @open-archiver/journaling build`, `pnpm --filter @open-archiver/backend build` (`tsc`-Teil) und `pnpm --filter smtp-ingress-app build`alle grün;`corepack pnpm --filter @open-archiver/backend test:types`grün;`corepack pnpm exec prettier`auf allen geänderten/neuen Dateien grün (CRLF-bereinigt geprüft, F35; mehrere Zeilenumbrüche direkt an`printWidth: 100` angepasst). **Bewusst nicht getan, weil außerhalb dieser Scheibe:** Empfänger-ACL/kein-Catch-all (`JR-4-05b`), `AUTH` PLAIN/LOGIN nur über TLS mit bcrypt (`JR-4-05c`), keine adversariale Protokollrobustheit um den ACL-Pfad herum (bleibt `JR-4-14`), keine Sicherheitsdurchsicht des neuen Datenbank-Anschlusses selbst (bleibt `JR-4-15`; insbesondere: Verbindungslimits/`connect_timeout`des neuen`postgres()`-Clients sind unkonfiguriert außer `onnotice`, ein Punkt für die dortige Durchsicht). Der Rechteentzug auf Datenbankebene (eigene, nur lesende Postgres-Rolle statt eines Superusers) bleibt wie für den ganzen Ledger-Anschluss E11 zugeordnet (ADR-009/F37) — diese Scheibe setzt nur den Code voraus, der mit einer eingeschränkten Rolle auskommt, richtet die Rolle selbst aber nicht ein.
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann weiter mit `JR-4-05b`/`JR-4-05c`/`JR-4-06`…`JR-4-15`
+
+#### 2026-08-03 — `JR-4-05b` erledigt (Rolle DEV, `df30f00` + WIP `aa0bceb`) — aber oh
+
+**`JR-4-05b` erledigt (Rolle DEV, `df30f00` + WIP `aa0bceb`) — aber ohne DEV-Bericht, und dieser Eintrag ist die Lesart des PO aus dem Diff plus einem eigenen Volllauf.** Die Scheibe brauchte **zwei** Anläufe: der erste starb an einem API-Fehler (`Connection closed mid-response`) mit 380 geänderten Zeilen und drei neuen Dateien **uncommittet** — vom PO als `aa0bceb` gesichert, mit dem ausdrücklichen Vermerk, dass das Inventar nicht gezogen war und damit **nichts davon je ausgeführt** wurde. Der zweite Anlauf hat committet und das Inventar gezogen, endete aber im Leerlauf, bevor er den Statuseintrag schrieb; nur die Fortschrittstabelle war geändert. **Was der PO selbst geprüft hat:** Volllauf \*\*756 passed | 6 skipped** bei 58 Dateien, Exit 0, `unit ci 618 · integration ci 101 · adversarial ci 37`, gegen das Docker-Postgres mit `OA_TEST_REQUIRE_INFRA=1` — und den Code an den zwei Stellen, an denen die Scheibe scheitern konnte. **Erstens die Codetrennung, und sie sitzt:** ein Empfänger, der auf keine aktive Quelle zeigt, bekommt `550 5.1.1` (endgültig, Sache des Senders), eine **unbekannte Quellenlage** dagegen `451 4.3.0` — und zwar mit der richtigen Begründung im Kommentar: `RCPT` ist eine Antwort je Kommando, also bleibt die Sitzung offen, anders als beim Connect-Gate (`421`, das die ganze Verbindung schließt, weil dort noch gar nichts entscheidbar ist). **Zweitens der Fall, den die Scheibe nicht selbst lösen durfte** — eine Transaktion adressiert Journal-Empfänger **verschiedener** Ketten —, **und er ist korrekt offen gelassen:** `recordMatchedRecipient()` zeichnet jeden Treffer in `matchedRecipients` auf, führt `matchedChainScopeIds` als Menge und **protokolliert laut**, sobald eine zweite Kette dazukommt; es gibt **kein** stilles „zuletzt gewinnt", kein Überschreiben eines einzelnen `chainScopeId`-Feldes, und `JR-4-06` findet die Liste vor. Doppelte Empfänger und zwei Empfänger derselben Quelle vergrößern die Menge nicht und lösen keine Meldung aus. **Daraus ist `ADR-030` entschieden** (`452 4.5.3` für jeden Empfänger, der eine zweite Kette einführt) mit `JR-4-17` als Umsetzung **vor `JR-4-06`**; die verworfene Variante „eine Receipt je Kette" ist an einer gemessenen Eigenschaft gescheitert, nicht an einer Vermutung: `findBySpoolTxIds()` liefert **genau einen** Eintrag je `spool_txid`, die Crash-Recovery aus `JR-3-05` wäre also blind für einen fehlenden zweiten. **Was ausdrücklich ungeprüft bleibt und deshalb `JR-4-13` zufällt:** die drei Wege, über die ein Catch-all doch konfigurierbar sein könnte (Wildcard, leere Empfängermenge, Quelle ohne `routing_address`), die Entscheidung zum Adressvergleich (Local-Part case-sensitiv oder nicht) samt Sonderfällen, und die bewusste Abweichung von RFC 5321 §4.5.1 bei `postmaster`. Der PO hat sie **nicht\*\* einzeln nachgemessen — der grüne Lauf belegt, dass die Tests der Scheibe laufen, nicht, dass sie diese Fälle abdecken.
+
+**Nächster Schritt:** `JR-4-05c` (`AUTH`), dann `JR-4-17` (ADR-030), dann `JR-4-06`
+
+#### 2026-08-03 — `JR-4-05c` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme)
+
+**`JR-4-05c` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme).** Die dritte und letzte Scheibe von `JR-4-05`: `AUTH` PLAIN/LOGIN, nur über TLS, bcrypt gegen `journaling_sources.smtp_password_hash`. `AUTH` ist **zusätzlicher** Nachweis, nicht der primäre — die Zugangskontrolle bleibt die Quell-ACL aus `JR-4-05a`. **„Über Plaintext unmöglich" ist strukturell, beide Seiten geprüft:** `buildEhloResponseLines()` bekommt ein viertes, optionales Argument (`authAvailable`) und hängt `AUTH PLAIN LOGIN` an die `EHLO`-Antwort nur an, wenn `authAvailable && tls.active` — vor dem Handshake fehlt die Zeile immer, über einen echten Client geprüft. Unabhängig davon weist `handleAuthCommand()` ein blindes `AUTH` auf einer noch unverschlüsselten Verbindung **unbedingt** ab, unabhängig von `require_tls`: `538 5.7.11 Encryption required for requested authentication mechanism` (RFC 4954 §4, wörtlich gemessen: `AUTH PLAIN AGpvaG4Ac2VjcmV0` vor `STARTTLS` ergibt exakt diese Zeile). Das ist eine _zweite_, unabhängige Sperre neben der bereits seit `JR-4-02`/`JR-4-04` bestehenden `530 5.7.0`-Sperre (`TLS_MANDATED_VERBS` enthielt `AUTH` schon, griff aber nur bei `require_tls: true`) — beide zusammen schließen jede Konfiguration. **Der interessanteste Teil, wie verlangt begründet und über die Leitung belegt:** eine authentifizierte Quelle, die `RCPT TO` an die `routing_address` einer **anderen** Quelle richtet, wird abgewiesen, nicht stillschweigend zusammengeführt. `handleRcpt()` prüft nach einem `'allowed'`-Treffer der Empfänger-ACL zusätzlich, ob `this.authenticatedSourceId` gesetzt ist **und** vom ACL-Treffer abweicht; wenn ja, `550 5.7.1 Recipient address rejected: not authorized for this authenticated session` statt Aufnahme in `matchedRecipients`. Begründung: der Empfänger ist real und konfiguriert (also nicht `5.1.1`, „unbekannter Nutzer"), aber die anmeldete Identität hat keinen Anspruch auf diese Kette — Zulassen würde einer authentifizierten Quelle erlauben, in ein fremdes Archiv zu schreiben, genau das, was ADR-007/die Quell-Empfänger-Trennung verhindern soll. Empfänger der **eigenen** Quelle bleiben unberührt (eigener Testfall `authenticated source addressing its own recipient is accepted normally`); eine nicht authentifizierte Verbindung ist von der Prüfung unberührt (dritter Testfall). Authentifizierung überlebt `EHLO`/`RSET` innerhalb derselben Verbindung (nicht in `resetEnvelope()` gelöscht) — sonst wäre „ein zweites `AUTH` ⇒ `503`" bedeutungslos. **bcrypt: Port im Paket, Implementierung in der App, wie bei `SourceAclLookup`/`IngressLogger`.** `packages/journaling` bleibt bei `@open-archiver/types`/`zod`; `PasswordVerifier` (`compare(password, hash): Promise<boolean>`) ist ein neuer Port in `smtp-server.ts`, `apps/smtp-ingress/src/bcrypt-password-verifier.ts` implementiert ihn mit **`bcryptjs`** — derselben Bibliothek, die `packages/backend`s `AuthService`/`UserService` bereits benutzen (`bcryptjs@^3.0.2`), keine zweite eingeführt. `journaling_sources.smtp_username`/`smtp_password_hash` werden über denselben Lade- und Refresh-Zyklus gelesen, den `JR-4-05a`/`b` schon für die Quell-/Empfänger-ACL aufgebaut haben (`SourceAclCache` bekommt ein drittes Feld `authIndex`, `buildAuthIndex()` neben `buildRecipientIndex()`, dieselbe Erst-gewinnt-Deduplizierung bei doppeltem `smtp_username`) — kein zweiter Datenbankzugang. **Mechanismen und Fehlerfälle, mit gemessenen Codes:** `PLAIN` als Initial-Response (`AUTH PLAIN <b64>`) und als Antwort auf eine leere `334`-Challenge, `LOGIN` als Zwei-Schritt-Dialog (`334` Base64 „Username:"/„Password:") — beide über echte Sockets geprüft, nicht nur an Parsern. Unbekannter Mechanismus `504 5.5.4 Unrecognized authentication type` (RFC 4954 §5s eigener Wortlaut); ungültiges Base64 (Regex auf das Alphabet plus Längenprüfung, `Buffer.from` allein hätte kaputte Eingaben stillschweigend geschluckt) `501 5.5.2 Cannot Base64-decode response`; eine SASL-PLAIN-Nutzlast mit nicht genau drei NUL-getrennten Feldern ebenfalls `501 5.5.2`; falsche Zugangsdaten **und** unbekannter Benutzername identisch `535 5.7.8 Authentication credentials invalid` — bewusst ununterscheidbar; Client-Abbruch mit `*` `501 5.7.0 Authentication cancelled` (RFC nennt nur „501", der Zusatzcode folgt Postfix/Exim-Praxis, wie schon `454 4.7.0` bei `STARTTLS` ohne Zertifikat); zweites `AUTH` auf bereits angemeldeter Verbindung `503 5.5.1 Already authenticated`; `AUTH` nach `MAIL FROM` `503 5.5.1 Bad sequence of commands`; ACL-Cache `'unavailable'` `454 4.7.0` (nie `535` — Skill §1). **Zeitunterschied bei unbekanntem Benutzernamen bewusst geschlossen:** `lookupCredential()` liefert `'not_found'`, aber `verifyCredentials()` ruft `passwordVerifier.compare()` trotzdem auf — gegen die neue Konstante `AUTH_DUMMY_PASSWORD_HASH` (ein echter, mit `bcryptjs.hashSync(..., 10)` erzeugter Hash derselben Kostenstufe wie `packages/backend`s `hash(password, 10)`), das Ergebnis wird verworfen. Ohne diesen Aufruf wäre die _Abwesenheit_ des bcrypt-Vergleichs selbst ein Zeitorakel. Ein Wire-Test (`RecordingPasswordVerifier`) belegt strukturell, dass der Vergleich bei unbekanntem Nutzernamen tatsächlich mit `AUTH_DUMMY_PASSWORD_HASH` lief — Wall-Clock-Timing selbst wird bewusst nicht gemessen (umgebungsabhängig, wäre flaky). **Obergrenze:** `MAX_AUTH_ATTEMPTS_PER_CONNECTION = 3` — großzügig genug für einen Tippfehler, klein genug, um automatisiertes Raten auf einer einzelnen Verbindung nach wenigen Runden zu beenden; das eigentliche verbindungsübergreifende Rate-Limit bleibt `JR-4-08`s Aufgabe, das ist nur der Verbindungs-Backstop. Beim Überschreiten ersetzt `rejectAuthAttempt()` die sonst fällige Fehlerantwort durch `421 4.7.0 <hostname> Error: too many authentication failures` und schließt die Verbindung (kein `5xx`) — über die Leitung geprüft (drei reguläre `535`, der vierte Versuch `421`). **Geheimnisse im Log ausgeschlossen:** kein Log-Aufruf in diesem Pfad erhält ein Passwort, eine rohe Base64-SASL-Antwort oder einen bcrypt-Hash als Argument; nur Benutzernamen, Quellen-IDs und Ergebnis-/Statuscode-Felder werden geloggt — geprüft durch Durchsicht jedes neuen `logger.*`-Aufrufs in `smtp-server.ts`. **Testzahlen:** vorher `756 passed | 6 skipped` bei 58 Dateien (`unit ci 618 · integration ci 101 · adversarial ci 37`); nachher **`809 passed | 6 skipped`** bei 59 Dateien (`unit ci 669/669 · integration ci 103/103 · adversarial ci 37/37`), Exit 0 beide Male, `DATABASE*URL`+`OA_TEST_REQUIRE_INFRA=1`, selbst gemessen (Rechnerlaufzeit ≈125 s) — `suite-inventory.ts`entsprechend gezogen (neu:`tests/unit/smtp-auth-protocol.test.ts`mit 21 Fällen über eine echte TCP+TLS-Loopback-Verbindung;`+1`in`ingress/source-acl.test.ts`, `+10`in`ingress/source-acl-cache.test.ts`, `+19`in`ingress/smtp-server.test.ts`, `+2`in`packages/backend/tests/integration/source-acl-lookup.int.test.ts`). `pnpm --filter @open-archiver/journaling build`, `pnpm --filter smtp-ingress-app build`und`pnpm --filter @open-archiver/backend`s `tsc --noEmit`alle grün;`corepack pnpm exec prettier --check`/`--write`gezielt nur auf den geänderten Dateien (F35; drei Dateien brauchten`--write`wegen`printWidth: 100`). `apps/smtp-ingress/package.json`bekommt`bcryptjs@^3.0.2`als neue eigene Abhängigkeit. **Bewusst nicht getan, weil außerhalb dieser Scheibe:** kein dedizierter Unit-Test für`bcrypt-password-verifier.ts`selbst (dieselbe Konvention wie`postgres-query.ts`s `createLedgerQuery()`— ein Drei-Zeilen-Adapter, dessen Korrektheit an der bereits getesteten Drittbibliothek hängt, nicht an eigener Logik); keine adversariale Fuzzing-Matrix um`AUTH`herum (garbage-Bytes mitten im SASL-Dialog, gepipelinete`AUTH`-Versuche, extrem lange Base64-Antworten) — bleibt `JR-4-14`/`JR-4-15`, mit dem gleichen Hinweis wie schon bei `STARTTLS`: der Zustandsautomat hier (`authContinuation`/`commandProcessingSuspended`) ist die Schablone, falls dort ein „lies weiter, aber verwirf" für den SASL-Dialog gebraucht wird; keine Prüfung, ob eine IP, die über die Quell-ACL bereits einer Quelle zugeordnet ist, mit einer \_anderen\* authentifizierten Quelle kollidieren kann (nur der Empfänger-Konflikt war Auftrag dieser Scheibe) — als offene, plausible Frage für die dortige Sicherheitsdurchsicht vermerkt, nicht selbst entschieden.
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann `JR-4-17` (ADR-030), dann `JR-4-06`…`JR-4-15`
+
+#### 2026-08-03 — `JR-4-17` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): ADR-
+
+**`JR-4-17` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): ADR-030 umgesetzt — ein zweiter, andere Kette einführender `RCPT TO` wird abgewiesen, nicht mehr nur protokolliert.** `SmtpConnection.handleRcpt` (`packages/journaling/src/ingress/smtp-server.ts`) prüft jetzt, nach den bestehenden Verdikten für unbekannten Empfänger (`550 5.1.1`), unbekannte ACL-Lage (`451 4.3.0`) und Konflikt mit der angemeldeten Quelle (`550 5.7.1`, `JR-4-05c`), aber **vor** `recordMatchedRecipient()`: löst `decision.chainScopeId` eine noch nicht in `matchedChainScopeIds` enthaltene Kette aus, während die Menge bereits nicht leer ist, wird mit `452 4.5.3` abgewiesen — der Code, für den Sender bereits eine Empfänger-Aufspaltung implementiert haben (Begründung als Kommentar an der Stelle, mit Verweis auf ADR-030s „Restrisiko"-Abschnitt). Diese Reihenfolge ist bewusst: ein ohnehin unbekannter oder für die Sitzung nicht autorisierter Empfänger behält seinen spezifischeren Code, statt durch `452` verdeckt zu werden. Die Abweisung erfolgt **vor** dem Aufruf von `recordMatchedRecipient()`, sodass ein abgewiesener Empfänger nie in `rcptTo`, `matchedRecipients` oder `matchedChainScopeIds` landet — belegt durch eine Zusicherung im Test (die Ablehnungs-Log-Zeile enthält `matchedRecipients` mit genau einem Eintrag, dem der ersten, akzeptierten Kette, nie dem abgewiesenen). Der Fall bleibt **protokolliert** (`logger.error`, wie von der ADR gefordert — volle Betriebssichtbarkeit ist E10s Auflage 2, nicht dieser Scheibe). `recordMatchedRecipient()` selbst wurde vereinfacht: der frühere „mehr als eine Kette“-Log-Zweig ist jetzt unerreichbar (die Prüfung in `handleRcpt` fängt jeden Fall ab, bevor er dorthin gelangt) und wurde entfernt, die Methode fügt nur noch hinzu. `resetEnvelope()` leerte `matchedChainScopeIds` bereits vor dieser Aufgabe (Teil des bestehenden Envelope-Resets) — durch einen eigenen Leitungstest belegt: nach `RSET` wird ein Empfänger der zuvor abgewiesenen Kette in der nächsten Transaktion angenommen. **Leitungsnachweis (`packages/journaling/tests/unit/smtp-recipient-acl-protocol.test.ts`, real über TCP, nicht nur Funktionslogik):** zweiter Empfänger einer anderen Quelle ⇒ `452 4.5.3`, erster behält `250 2.1.5`; ein dritter Empfänger der _ersten_ Kette nach der Abweisung bekommt weiterhin `250` und löst keine weitere Ablehnung aus (Beleg, dass der Zustand nicht verdorben ist); `RSET` + neue Transaktion ⇒ die zuvor abgewiesene Kette wird jetzt angenommen; zwei Empfänger derselben Quelle und derselbe Empfänger zweimal bleiben beide `250`, keine Ablehnung. Alle vier von der Aufgabe geforderten Akzeptanzkriterien sind damit über die Leitung bewiesen, nicht nur unit-logisch. **Test/Harness:** `tests/support/suite-inventory.ts` in derselben Änderung aktualisiert (`unit` `ci` 669 → 670 Tests, `expectedFiles` unverändert 39 — kein neuer Dateiname, der bestehende `smtp-recipient-acl-protocol.test.ts` wurde erweitert/umgeschrieben, nicht dupliziert). Voller Lauf **`810 passed | 6 skipped`**, 59 Dateien, `unit ci 670 · integration ci 103 · adversarial ci 37` (Ausgangsstand war `809 passed | 6 skipped`, `unit ci 669`; Netto +1 Test: das bestehende „zwei Ketten"-Testfall wurde umgeschrieben statt gezählt, zwei neue Fälle — `RSET`-Freigabe und die explizite Prüfung auf `250` bei gleicher Quelle/gleichem Empfänger — kommen hinzu, ein alter Fall wurde ohne Neuzählung erweitert). `pnpm --filter @open-archiver/journaling build` sauber, `prettier --check` auf allen geänderten Dateien grün (kein `--write` auf dem Repo, F35). **Was für `JR-4-06` liegen bleibt:** die eigentliche Verdrahtung von `completeTransfer()` in `JournalAcceptance.accept()` — diese Scheibe entscheidet nur, welche Empfänger eine Transaktion erreichen dürfen, sie liest `matchedRecipients` noch nicht. **Was für E10 liegen bleibt:** ADR-030s Auflage 2 (Betreiber-Sichtbarkeit jenseits des Logs) und Auflage 3 (`JR-12-08`, Messung, ob Exchange tatsächlich aufspaltet).
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann `JR-4-06`…`JR-4-15`
+
+#### 2026-08-03 — `JR-4-17` erledigt (Rolle DEV, `65ae891`) und `JR-4-06` zerlegt; dab
+
+**`JR-4-17` erledigt (Rolle DEV, `65ae891`) und `JR-4-06` zerlegt; dabei eine Lücke gefunden, die keine Task nannte.** `JR-4-17` setzt **ADR-030** um: der zweite `RCPT TO`, der eine andere Kette einführen würde, bekommt `452 4.5.3`; die Prüfung sitzt **nach** den drei spezifischeren Verdikten (`550 5.1.1` unbekannt, `451 4.3.0` ACL-Lage unbekannt, `550 5.7.1` Konflikt mit angemeldeter Quelle), damit keines davon von einem `452` verdeckt wird. Der Nachweis ist besser als verlangt: dass ein abgewiesener Empfänger den Zustand **nicht** verändert, wird nicht durch Hinsehen behauptet, sondern über das Log-Objekt zum Zeitpunkt der Abweisung belegt, das `matchedRecipients` mitführt — Länge 1, nur der akzeptierte Eintrag; der abgewiesene erscheint ausschließlich in eigenen `rejected*`-Feldern. Dazu ein `RSET`-Leitungstest: nach `452` → `RSET` → neue Transaktion wird derselbe Empfänger angenommen, die Verbindung ist also nicht dauerhaft beschädigt. Der alte `JR-4-05b`-Log-Zweig für „mehr als eine Kette" ist entfernt, weil er **unerreichbar** wurde — richtig so, und der Fall bleibt trotzdem protokolliert, nur an der Abweisungsstelle. Volllauf \*\*810 passed | 6 skipped**, 59 Dateien, `unit ci 670/670 · integration ci 103/103 · adversarial ci 37/37`. **Zwei PO-Entscheidungen daneben:** (1) `JR-4-06` ist nach ADR-021 in **`JR-4-06a`** (`accept()` verdrahten, fünf Ergebnisarten, Transactor-Umzug, erstmals `250`) und **`JR-4-06b`** (jede Zeile der Codetabelle, Shutdown mit Graceful Drain, Oversize-Alert) zerlegt. (2) **`JR-4-18` neu angelegt, und das ist der eigentliche Fund:** `runCrashRecoveryScan()` ist in `JR-3-05` gebaut, getestet und **mit E3 abgenommen** — aber ein `grep` über `apps/` und den Produktionscode findet **keinen Aufrufer**. Die Crash-Semantik aus Skill §3 ist gebaut und **unwirksam**: nach einem Absturz bleibt eine Spool-Datei ohne Ledger-Eintrag liegen, statt quarantäniert und alarmiert zu werden. Der Kommentar in `apps/smtp-ingress/src/index.ts` benennt die offene Verdrahtung sogar, aber **keine E4-Task hat sie beauftragt\*\* — ohne diese Task wäre sie durch die Abnahme gefallen. E4 hat damit 18 Tasks, das Projekt 116.
+
+**Nächster Schritt:** `JR-4-06a` (läuft), dann `JR-4-18`, `JR-4-06b`
+
+#### 2026-08-03 — `JR-4-06a` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme)
+
+**`JR-4-06a` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme). `JournalAcceptance.accept()` ist verdrahtet — ab dieser Scheibe sendet der Server zum ersten Mal `250`.** Der PO hat `JR-4-06` zweigeteilt (ADR-021): diese Scheibe verdrahtet `accept()` und bildet die fünf Ergebnisarten korrekt auf SMTP-Codes ab; die **vollständige** Prüfung jeder Zeile der Codetabelle, der Graceful-Drain-Shutdown und der laute Oversize-Alarm bleiben `JR-4-06b`. **Die Streaming-Brücke, der eigentliche Kern der Aufgabe:** `accept()` erwartet ein `AsyncIterable<Uint8Array>`, aber `DataScanner`/`BdatContentTracker` liefern Inhalt synchron aus `Socket`-`data`-Ereignissen, ohne ein einziges `await` in diesem Aufrufpfad — die naheliegende Lösung (alle Chunks sammeln, `accept()` erst am Ende mit einem Array/Generator aufrufen) hätte `JR-3-02`s Streaming-Eigenschaft für jede Nachricht zunichtegemacht. `SpoolWriteBridge` (neu, `packages/journaling/src/ingress/spool-write-bridge.ts`) ist die Brücke: ein `node:stream.Readable` im Objektmodus, `push()` schreibt hinein, `writeDurableSpoolFile()`s `for await` zieht heraus, mit echtem Gegendruck — `SpoolWriteBridge.push()` gibt `false` zurück, sobald der interne Puffer voll ist, `SmtpConnection.tryBeginAcceptance()` verdrahtet das auf `socket.pause()`, und `read()` (Node ruft es, sobald der Konsument wieder etwas will) auf `socket.resume()`. **Kalibrierte Messung, nicht nur behauptet:** `process.memoryUsage().heapUsed` sieht `Buffer`-Inhalte nicht (F43) — `arrayBuffers` schon. Drei Kalibrierungsversuche maßen zunächst die falsche Sache, alle im Testkopf von `smtp-acceptance-wiring.test.ts` festgehalten: (1) ein künstliches `setTimeout`-Delay maß Windows' eigene Timer-Auflösung (~15 ms-Kachelung) statt irgendetwas an der Brücke; (2) `FakeSpoolFileSystem` bei ~40 MB maß `Buffer.concat()`s eigene wachsende Kopien (240 MB Ausschlag bei 40 MB Nachricht, unverändert durch häufigeres `global.gc()`); (3) echte Platte bei 40 MB lag mit dem natürlichen Rauschboden (22–36 MB über mehrere Läufe) zu nah an der ~41–42 MB-Regressionsschwelle. Die vierte Konstruktion — echte Platte, 150 MB, `NodeSpoolFileSystem` — hält: korrekte Implementierung durchgängig deutlich unter 48 MB, eine absichtlich wieder eingebaute volles-Puffern-Regression (Array statt `Readable`) maß **~157 MB**, fast die gesamte Nachricht — Regression rot gesehen, dann sauber zurückgebaut (nie committet). **Oversize hält mitten im laufenden Spool-Write, `552` gewinnt immer:** `writeDurableSpoolFile()` legt Verzeichnis und Datei an, bevor auch nur ein Chunk gezogen wird (`durable-write.ts`) — „warten, bis feststeht, dass die Nachricht nicht zu groß ist" ist also ohne Volles-Puffern gar nicht erreichbar, geprüft und verworfen. Stattdessen bricht `finalizeAcceptance()` die Brücke ab (`SpoolWriteBridge.abort()`), was `writeDurableSpoolFile()`s `for await` zum Scheitern bringt. **Dabei ein eigenständiger Befund (F45, kein offizielles Aktenzeichen vergeben — der PO/TEST-Rolle entscheidet, ob eines nötig ist):** die Iterator-Verwerfung verließ `durable-write.ts` bislang als **nackten** `Error`, nicht als `DurableWriteError` — kein bisheriger Aufrufer hatte je eine wirklich fehlschlagende `chunks`-Quelle, die Lücke war nie sichtbar. `JournalAcceptance.accept()`s eigener Nicht-`DurableWriteError`-Zweig hätte das als „Programmierfehler in der Dateisystem-Nahtstelle" ungefangen weitergeworfen. Behoben durch Erweiterung des `try`/`catch` um die gesamte `for await`-Schleife (nicht nur `handle.write()`), mit Regressionstest. Damit landet Oversize sauber als `'spool-write-failed'` (`accept()`s eigene Quarantäne unter `'write-failed'`, `JR-3-09`, greift unverändert), und **`finalizeAcceptance()` überstimmt dieses Ergebnis an der einen erlaubten Stelle im ganzen System** mit `552 5.3.4` — begründet im Code, bewiesen über `runCrashRecoveryScan()` direkt im Test: nichts bleibt in `incoming/` zurück, kein neuer Alarm entsteht. **Eine mit dieser Scheibe neu entstehende Rennbedingung, gefunden und geschlossen, bevor sie in Produktion sichtbar geworden wäre:** `RSET`/ein frisches `EHLO`/ein `STARTTLS`-Handshake können mitten in einer `BDAT`-Transaktion feuern, nachdem der erste `BDAT` bereits eine Brücke und einen `accept()`-Aufruf gestartet hat, aber vor `BDAT ... LAST`. `abandonInFlightAcceptance()` (aufgerufen aus `resetEnvelope()`) bricht diese Brücke genauso ab wie der Oversize-Fall — sonst hätte die zugehörige `writeDurableSpoolFile()`-Promise für immer auf nie ankommende Chunks gewartet, ein offener Dateideskriptor für die Lebensdauer der Verbindung. Über die Leitung bewiesen (`RSET` zwischen zwei `BDAT`-Chunks, danach Quarantäne unter `'write-failed'` und eine funktionierende Folgetransaktion). **Ein pipelinierter Befehl darf nie an der eigenen Transaktionsantwort vorbeirasen:** `accept()` ist der erste echte asynchrone Schritt, den `DATA`/`BDAT`-Abschluss je hatte. `runCompleteTransfer()` verwendet dafür `commandProcessingSuspended` — denselben Mechanismus, den `verifyCredentials()` (`JR-4-05c`) für sein eigenes bcrypt-`await` bereits etabliert hat — und `onData()` prüft dieses Flag jetzt **vor** jeder Weiterleitung roher Bytes, nicht nur vor dem Parsen einer Befehlszeile, sonst hätte ein pipeliniertes `BDAT`/Kommando gegen noch nicht zurückgesetzten Zustand gelesen werden können. **Wo jedes Feld von `JournalTransactionInput` herkommt:** `chainScopeId`/`journalingSourceId` aus `matchedRecipients` (ADR-030 garantiert eine Kette je Transaktion strukturell — hier trotzdem in `singleMatchedChainScopeId()` als Zusicherung geprüft, nicht nur angenommen, falls `journalAcceptance` je ohne `recipientAclEvaluator` konfiguriert würde); `receivedAtMicros` als `BigInt(Date.now()) * 1000n` (ADR-006 §3.1: Mikrosekunden, ganze Millisekunde — durch die Konstruktion selbst garantiert); `remoteIp`/`ehloName` von der Verbindung; `tlsVersion`/`tlsCipher` seit `JR-4-04` bereitliegend, hier zum ersten Mal tatsächlich gelesen; `envelopeFrom`/`envelopeRcpt` in Ankunftsreihenfolge, nie sortiert. **Der Transactor zieht nach `apps/smtp-ingress/src/`** (`./postgres-transactor.ts`, zweimal auf diese Aufgabe datiert seit `JR-2-06`): `apps/smtp-ingress/src/index.ts` baut jetzt `PostgresLedgerWriter` + `JournalAcceptance` und reicht sie als `journalAcceptance` an `EsmtpServer` — ein zweiter, wieder eigener Datenbankzugang (`SMTP_INGRESS_LEDGER_DATABASE_URL`, `ledger-config.ts`), ein **nackter** `postgres()`-Client (F38, nie an `drizzle()` übergeben). Die Test-Support-Kopie in `packages/backend/tests/support/postgres-transactor.ts` bleibt bestehen — `packages/backend`s eigene Integrations-/Adversarial-Suiten testen `PostgresLedgerWriter` aus ihrem eigenen Testbaum, der laut ADR-025 keine Abhängigkeit auf `apps/smtp-ingress` bekommen darf; die neue **`250`-Beweis-Datei** (`packages/backend/tests/integration/journal-smtp-accept-e2e.int.test.ts`) importiert dagegen bewusst `apps/smtp-ingress/src/postgres-transactor.ts` direkt (relativer Dateipfad, keine `package.json`-Abhängigkeit) — sie soll die tatsächliche Produktionsdatei prüfen, nicht eine strukturell identische Kopie. **Ledger-Konfiguration bewusst anders als Quell-ACL:** `ledger.databaseUrl` ist **optional** (`ledger-config.ts`) — unkonfiguriert oder beim Start nicht erreichbar bleibt `journalAcceptance` `undefined` (altes `451`-Verhalten, kein Startabbruch), lauter geloggt statt eines Crash-Loops. **Ausdrücklich dem PO vorgelegt statt selbst entschieden:** das ist eine bewusst schmalere Toleranz als `SourceAclCache`s Verfügbarkeit-zuerst-dann-fail-closed mit Hintergrund-Retry — ein Fehlschlag beim Start bleibt bis zum nächsten Prozessneustart `451`, kein Nachziehen. Ob ein Retry-/Beförderungspfad für den Ledger-Anschluss gebaut werden soll, war außerhalb dieser Scheibe. **Der `250`-Nachweis, wörtlich:** ein echter `net.Socket`-Client spricht mit einem echten `EsmtpServer`, der an eine echte `JournalAcceptance` (echte Platte, `PostgresLedgerWriter` über die neue Produktions-Transactor-Datei gegen echtes Postgres) angeschlossen ist; nach `250 2.0.0 Ok: queued as <seq>` wird die Ledger-Zeile über den `spool_txid` zurückgelesen und ihr `content_sha256`/`size_bytes` gegen die tatsächlich gesendeten Bytes geprüft, **und** die Spool-Datei auf der echten Platte gelesen und ihr Hash unabhängig neu berechnet — beides muss übereinstimmen, sonst ist die Behauptung hinter `250` nicht bewiesen. Ein zweiter Fall zeigt `seq + 1` für eine zweite Transaktion derselben Kette und dass ein von der ACL abgelehnter Empfänger `accept()` nie erreicht (Aufrufzähler bleibt bei 2). **Windows-Einschränkung ehrlich behandelt, nicht verschwiegen:** Verzeichnis-`fsync` schlägt auf Windows mit `EPERM` fehl (`fs-port.ts`s dokumentierte Grenze, `durable-write.test.ts`s eigenes Präzedens) — jeder echte-Platte-Test in dieser Aufgabe unterscheidet `process.platform === 'win32'` explizit (erwartet `451`/keine Ledger-Zeile) vom Linux-Verhalten (erwartet `250`), statt den Fall stillschweigend zu ignorieren; das Produktionsziel ist Linux (Architekturdoku §7). **Testzahlen, alle selbst gemessen gegen das Docker-Postgres mit `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`:** vorher `810 passed | 6 skipped` bei 59 Dateien (`unit ci 670 · integration ci 103 · adversarial ci 37`); nachher **`832 passed | 7 skipped`** bei 62 Dateien (`unit ci 690/690 · nightly 3/3 · integration ci 105/105 · adversarial ci 37/37 · nightly 1/1`), Exit 0, voller ungefilterter Lauf ≈146 s (`ci`) bzw. das nightly-Segment separat mit `-t` gegengeprüft — `suite-inventory.ts` entsprechend auf `unit: { ci: 690, nightly: 3 }`, `expectedFiles: 41`; `integration: { ci: 105 }`, `expectedFiles: 16` gezogen (neu: `ingress/spool-write-bridge.test.ts` 5, `tests/unit/smtp-acceptance-wiring.test.ts` 10 `ci` + 1 `nightly`, `+1` in `spool/durable-write.test.ts` (F45), `+4` in `ingress/config.test.ts`, `packages/backend/tests/integration/journal-smtp-accept-e2e.int.test.ts` 2). `pnpm --filter @open-archiver/journaling build`, `pnpm --filter smtp-ingress-app build` und `corepack pnpm --filter @open-archiver/backend test:types` alle grün (`@open-archiver/backend`s eigener `build`-Schritt scheitert am `copy-assets`-Folgebefehl an einer bereits bekannten PATH-Einschränkung dieser Umgebung — `pnpm` ohne `corepack`-Präfix —, nicht an `tsc`, das sauber durchlief); `corepack pnpm exec prettier --check`/`--write` gezielt nur auf den geänderten Dateien (F35: sechs vorbestehende CRLF-Warnungen unangetastet gelassen, gegen eine mit dem Projekt-`.prettierrc` formatierte Vergleichskopie außerhalb des Repos verifiziert als reines Zeilenenden-Rauschen, keine echte Formatierungsabweichung). **Bewusst nicht getan, weil außerhalb dieser Scheibe (`JR-4-06b`):** die erschöpfende Prüfung jeder Zeile der Codetabelle (diese Scheibe deckt eine repräsentative Teilmenge ab, keine Vollabdeckung); Graceful-Drain beim Shutdown (`421 4.3.2` für laufende Sitzungen — `EsmtpServer.close()`s Dokumentationskommentar verweist jetzt ausdrücklich auf `JR-4-06b`, nicht mehr auf diese Aufgabe); der laute Oversize-Alarm über den bestehenden `logger.error`-Aufruf hinaus. **Für E10/`JR-4-18` unverändert offen:** der nie in `apps/smtp-ingress` verdrahtete `runCrashRecoveryScan()`-Aufruf beim Start — diese Scheibe hat keinen Anlass gefunden, das zu ändern, aber auch keinen Fortschritt daran gemacht.
+
+**Nächster Schritt:** **Abnahme durch TEST**, dann `JR-4-06b` (Codetabelle vollständig, Graceful Drain, lauter Alarm), parallel `JR-4-14`/`JR-4-15`
+
+#### 2026-08-03 — `JR-4-18` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): der
+
+**`JR-4-18` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): der seit `JR-3-05` nie aufgerufene `runCrashRecoveryScan()` läuft jetzt in `apps/smtp-ingress` vor `server.listen()`.** Neue Datei `packages/journaling/src/spool/crash-recovery-lock.ts` (`runExclusiveCrashRecoveryScan()`, `crashRecoveryScanLockKey()`) wrappt den unveränderten `JR-3-05`-Scan in `LedgerTransactor.transaction()` mit `pg_advisory_xact_lock`, keyed über `advisoryLockKey('crash-recovery-scan:' + spoolRoot)` (dieselbe Funktion, die `ledger-writer.ts` schon für den Ketten-Lock exportiert — kein zweiter Ableitungsmechanismus). `apps/smtp-ingress/src/index.ts`s `buildJournalAcceptance()` ruft ihn direkt nach dem `deployment_identity`-Read auf, im selben `try`, vor dem Bau von `PostgresLedgerWriter`/`JournalAcceptance` — noch innerhalb `main()`s linearem `async`-Ablauf, also strukturell vor `server.listen()`. **Exklusivitätsentscheidung, wie verlangt begründet:** Architekturdoku §5 lässt „nur ein Prozess" oder „beide koordinieren über eine Sperre" offen. Gewählt: **Sperre**, transaktionsgebunden (`pg_advisory_xact_lock`, nicht die Session-Variante) — dieselbe Begründung, die `ledger-writer.ts` schon für den Ketten-Lock gibt (eine Session-Sperre leckt bei jedem Absturzpfad, eine Transaktions-Sperre nie). Das schließt **Scan-gegen-Scan** vollständig (zwei gleichzeitig startende Prozesse serialisieren echt, keine Rennbedingung mehr, nicht nur die vorbestehende `ENOENT`-Toleranz aus `JR-3-05`). **Was die Sperre bewusst nicht schließt:** Scan gegen eine bereits laufende Annahme im **anderen** Prozess (der Worker startet neu, während `apps/smtp-ingress` seit Stunden Mail annimmt) — das würde eine spool-weite Sperre pro SMTP-Transaktion verlangen, eine Verfügbarkeits-/Durchsatz-Regression außer Verhältnis zum Risiko, das Architekturdoku §5 selbst als tolerierbar einstuft („Verloren ist dabei nichts"). Verbindliche Vorgabe für den noch nicht gebauten `journal-inbound`-Worker (E6): er muss `runExclusiveCrashRecoveryScan()` mit einem Transactor auf dieselbe Datenbank und denselben `spoolRoot` aufrufen, nicht das rohe `runCrashRecoveryScan()`. **Gescheiterter Scan:** sitzt im selben `try`/`catch` wie der bestehende `deployment_identity`-Read — ein Fehler (Datenbank weg, Spool unlesbar) lässt `journalAcceptance` `undefined`, loggt laut, und der Prozess bindet den Port trotzdem, beantwortet aber jede Transaktion `451` (dieselbe, bereits akzeptierte Rückfallregel aus `JR-4-06a`, keine neue Fehlerklasse). **Ein signifikanter, nicht dieser Aufgabe zugehöriger Befund beim Bau des eigenen Beweises:** `RecipientAclEvaluator.evaluate` und `SourceAclEvaluator.evaluate` heißen **beide** `evaluate` — `SourceAclCache implements` beide Interfaces strukturell über dieselbe eine Methode (die CIDR-Prüfung), nie über die separat existierende `evaluateRecipient()`. In Produktion (`recipientAclEvaluator: sourceAclCache`) läuft damit **jedes** `RCPT TO` durch die IP-CIDR-Prüfung statt durch die Empfängeradress-Prüfung; `normalizeRemoteIp()` wirft auf eine E-Mail-Adresse, wird zu `{ kind: 'unavailable' }`, jedes `RCPT TO` bekommt `451`, nie `550`, nie `250` — unabhängig davon, was in `journaling_sources.routing_address` steht. Kein bisheriger Test hatte `SourceAclCache` je als echten `recipientAclEvaluator` verdrahtet (`smtp-recipient-acl-protocol.test.ts`s eigener Kommentar: „A hand-written fake stands in for `SourceAclCache`"; `journal-smtp-accept-e2e.int.test.ts` benutzt ebenfalls ein Inline-Objekt) — dieser Aufgabe eigener Prozess-Integrationstest ist der erste, der das tut, und fand es empirisch (erst per In-Prozess-Vergleich isoliert: `evaluate()`/`evaluateRecipient()` liefern beide korrekt gegeneinander getestet, aber nur `evaluate()` wird über die reale `EsmtpServer`-Verdrahtung je erreicht). **Nicht behoben** (außerhalb dieser Aufgabe, gehört zu `JR-4-05b`) — nur gemeldet, mit Kommentar an der betroffenen Testzeile. Der eigene dritte Testfall wurde entsprechend angepasst: kein Versuch mehr, über `RCPT` bis `DATA` zu gelangen, sondern der direkte Nachweis, dass `RCPT` selbst nie `250` liefert, was für „nimmt nichts an" genügt. **Testzahlen:** vorher **`832 passed | 7 skipped`** bei 62 Dateien (`unit ci 690/690 · integration ci 105/105 · adversarial ci 37/37`, plus 3 `nightly`/1 `manual` übersprungen); nachher **`843 passed | 7 skipped`** bei 65 Dateien (`unit ci 695/695 · integration ci 111/111 · adversarial ci 37/37`, dieselben 3 `nightly`/1 `manual` übersprungen), Exit 0, `DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`, selbst gemessen (Rechnerlaufzeit ≈159 s) — `suite-inventory.ts` entsprechend gezogen (neu: `packages/journaling/src/spool/crash-recovery-lock.test.ts` 5 Fälle — Schlüsselableitung, Sperre-vor-Ledger-Abfrage, Durchreichen des Scan-Ergebnisses, Fehlerausbreitung nach bereits erteilter Sperre, ein Fake-Transactor-Modell realer `pg_advisory_xact_lock`-Semantik, das Scan-gegen-Scan-Serialisierung auf demselben Schlüssel und Nicht-Serialisierung auf verschiedenen Schlüsseln beweist; `packages/backend/tests/integration/journal-crash-recovery-lock.int.test.ts` 3 Fälle gegen echtes Postgres/echte Platte — Nachreihung/Quarantäne, eine zweite Verbindung, die auf der echten Sperre **gemessen** blockiert (337 ms) und nach Freigabe weiterläuft, zwei verschiedene `spoolRoot`s ohne gegenseitige Serialisierung; `packages/backend/tests/integration/smtp-ingress-crash-recovery-boot.int.test.ts` 3 Fälle gegen den echten kompilierten Prozess — die Scan-Log-Zeile liegt nachweislich vor der Listen-Log-Zeile im selben Stdout-Strom, zwei gleichzeitig gestartete Prozesse quarantänisieren dieselbe verwaiste Datei genau einmal (nie beide, nie keiner) und binden trotzdem beide ihren Port, ein mit `DROP TABLE journal_ledger` erzeugter Scan-Fehlschlag lässt den Prozess binden und nie `250` antworten). `pnpm --filter @open-archiver/journaling build`, `pnpm --filter smtp-ingress-app build` und `corepack pnpm --filter @open-archiver/backend test:types` alle grün; `corepack pnpm exec prettier --check`/`--write` gezielt nur auf den sieben geänderten/neuen Dateien (kein Repo-weites `--write`, F35). `corepack pnpm --filter @open-archiver/journaling test:types` bleibt an einem **vorbestehenden**, unveränderten Fehler in `tests/unit/smtp-acceptance-wiring.test.ts:408` rot (`Record<string, unknown> | null`nicht zuweisbar an`CanonicalJsonValue`) — per `git stash`gegen den unveränderten HEAD verifiziert, nicht diese Aufgabe. **Bewusst nicht getan:** keine Korrektur des`evaluate`-Namenskollisions-Befunds (gehört zu `JR-4-05b`/E4-Abnahme, nicht zu `JR-4-18`); kein `journal-inbound`-Worker (existiert erst in E6 — diese Aufgabe legt nur die Regel fest, die er befolgen muss); keine begrenzte Nebenläufigkeit für die Quarantäne-`rename()`-Schleife selbst (unverändert von `JR-3-05` übernommen, dort bereits als zukünftige Verbesserung vermerkt).
+
+**Nächster Schritt:** **Abnahme durch TEST** (der `evaluate`-Namenskollisions-Befund gehört in die E4-Abnahme oder eine eigene Task), parallel `JR-4-06b`/`JR-4-14`/`JR-4-15`
+
+#### 2026-08-03 — `JR-4-20` erledigt (Rolle DEV) -- F46 behoben: RecipientAclEvaluator
+
+**`JR-4-20` erledigt (Rolle DEV) -- F46 behoben: RecipientAclEvaluator/SourceAclEvaluator trugen denselben Methodennamen, so dass SourceAclCache beide strukturell erfuellte und jeder produktive RCPT TO ueber den IP-Matcher lief statt ueber die Empfaenger-ACL (immer 451, nie 550/250).** Behoben in zwei Teilen: (1) RecipientAclEvaluator.evaluate -> evaluateRecipient (packages/journaling/src/ingress/smtp-server.ts), mit tests/unit/acl-evaluator-port-shapes.test.ts als @ts-expect-error-Nachweis, dass ein Vertauscher jetzt nicht mehr kompiliert -- die anderen Ports desselben Prozesses (AuthCredentialEvaluator, PasswordVerifier, SourceAclLookup, LedgerBackend, IngressLogger) tragen dieselbe Falle nicht, geprueft. (2) Die zuvor untestete Verdrahtung in apps/smtp-ingress/src/index.ts: bindSourceAclCache() (neu, packages/journaling/src/ingress/source-acl-cache.ts) ist die eine Funktion, die Produktion UND tests/unit/source-acl-cache-wiring.test.ts jetzt beide aufrufen -- ein echter EsmtpServer ueber eine echte Loopback-Verbindung, kein Fake mehr an der Stelle, die den Befund verursacht hat. smtp-ingress-crash-recovery-boot.int.test.ts (JR-4-18) dritter Fall lief bisher am eigentlichen Ziel vorbei (RCPT erreichte wegen F46 nie 250) -- jetzt: RCPT TO einer gesaeten Route 250 2.1.5, DATA bleibt 451 4.3.0 (journalAcceptance unverdrahtet), beides ueber den echten kompilierten Prozess. Voller Lauf: 846 passed | 7 skipped, 67 Dateien (vorher 843 passed
+
+**Nächster Schritt:** 7 skipped, 65 Dateien); unit ci 698/698, integration ci 111/111, adversarial ci 37/37 -- exakt, Suite-Inventur (tests/support/suite-inventory.ts) im selben Commit aktualisiert. Vorgefunden, nicht behoben (ausserhalb des Taskumfangs): packages/journaling/tests/unit/smtp-acceptance-wiring.test.ts(408) hat einen vorbestehenden CanonicalJsonValue-Typfehler, der `pnpm --filter @open-archiver/journaling test:types` unabhaengig von diesem Fix rot macht -- per git stash bestaetigt, dass er vor JR-4-20 bereits da war.\*\*
+
+#### 2026-08-03 — `JR-4-06b` erledigt (Rolle DEV, ungeprueft -- noch keine Abnahme)
+
+**`JR-4-06b` erledigt (Rolle DEV, ungeprueft -- noch keine Abnahme). Skill `journal-ledger` Section 2s Codetabelle vollstaendig, Graceful Drain beim Shutdown, lauter Oversize-Alarm, plus F47 (beide Teile).\*\_ **1. 5xx-Inventar (`tests/unit/smtp-5xx-inventory.test.ts`, neu):** ein statischer Scan ueber `smtp-server.ts` (dieselbe Technik wie `ingress-import-graph.test.ts`, JR-4-01) findet **jeden** literalen `writeResponse(<code>,...)`/`rejectAuthAttempt(<code>,...)`-Aufruf mit Code 5xx (31 an der Zahl, ueber 12 Code/Enhanced-Paare) plus den einen `socket.end('554 5.7.1 ...')`-Literal vor `SmtpConnection`-Konstruktion (`EsmtpServer.handleConnection`), und prueft die exakte Multimenge gegen eine begruendete Inventarliste (neun feste Kategorien: Syntax, falsche Sequenz, Protokoll-Praeliminaerbedingung nicht erfuellt, nicht unterstuetzte Anfrage, bewiesener Auth-Fehlschlag, deklarierte Uebergroesse, unbekannter Empfaenger, nicht autorisierter Empfaenger, Quelle nicht zugelassen) -- **Gleichheit in beiden Richtungen**, wie `suite-inventory.ts`s eigene Zaehlung: ein kuenftiger 5xx-Aufruf ohne passenden Eintrag macht den Test rot, eine veraltete Inventarzeile ebenso. Zusaetzlich geprueft: `source-acl-cache.ts` schreibt keinen eigenen Code (kein zweiter unaudierter Ursprung). **2. Object-Store-/Redis-Ausfall ⇒ `250`:** strukturell, nicht per Fehlerinjektion -- der Ingress hat nach ADR-002 gar keinen Object-Store-Zugriff, gepruft ueber einen skalierten Re-Lauf von `ingress-import-graph.test.ts`s eigenem Import-Walk (kein `@open-archiver/backend`, nirgendwo, transitiv). Metadaten-DB nicht erreichbar: dieses Deployment haelt den Ledger in **derselben** Datenbank (`PostgresLedgerWriter.append()` **ist** der DB-Aufruf), also ist die Skill-Tabellenzeile hier die `451`-Haelfte, nicht die `250`-Haelfte -- identisch zu `'ledger-append-failed'`, mit einem verbindungsabbruchfoermigen `cause` end-to-end bewiesen statt behauptet. **3. Lauter Oversize-Alarm -- Befund: die Prüfung ergab, der Alarm existierte schon, war aber falsch beschriftet.** `tryBeginAcceptance()` startet `accept()` **vor** dem ersten Inhaltsbyte (JR-4-06a), also ist beim Erkennen von Oversize waehrend `DATA`/`BDAT` so gut wie immer schon ein echter Spool-Write im Gange; `finalizeAcceptance()` bricht die Bruecke ab, was als `DurableWriteError` in `acceptance.ts`s bereits **verpflichtendem** `alertSink` quarantaeniert und alarmiert wird (`JR-3-09`) -- der Alarm feuerte also strukturell schon immer, nur unter `reason: 'write-failed'`, ununterscheidbar von einem echten Platten-/fsync-Fehler. Entscheidung (begruendet, kein zweiter Alarmmechanismus wie vom PO gefordert): `QuarantineReason` um `'oversize-rejected'` erweitert (`spool/quarantine.ts`), `SmtpConnection.finalizeAcceptance()` markiert den Abbruch-Error jetzt als `ProtocolRejectionAbort` (neue Klasse, `quarantine.ts`), `JournalAcceptance.accept()`s `catch`-Zweig unterscheidet per `cause.cause instanceof ProtocolRejectionAbort` -- derselbe Mechanismus, praeziserer Grund, in `smtp-acceptance-wiring.test.ts`s bestehendem Oversize-Test direkt nachgezogen (Assertion von `'write-failed'` auf `'oversize-rejected'` geaendert) und in `smtp-response-code-table.test.ts`s Zeile 10 end-to-end erneut bewiesen. **4. Graceful Drain (`421 4.3.2`), mit offener Windows-Grenze.** `EsmtpServer.connections` (vormals ein nie gelesenes `Set<net.Socket>`, seit `JR-4-02` bewusst fuer diese Aufgabe vorgehalten) ist jetzt eine `Map<net.Socket, SmtpConnection>`; `close()` ruft `beginShutdown()` auf jeder offenen Verbindung. `SmtpConnection.armCommandTimer()` ist der eine Ankerpunkt, den jeder Befehls-Handler nach seiner eigenen Antwort erreicht -- geprueft auf `shuttingDown` und schliesst dort mit `421 4.3.2` statt den Idle-Timer neu zu setzen; `beginShutdown()` selbst schliesst eine **bereits** untaetige Verbindung sofort (kein Warten auf einen Befehl, der nie kommt), waehrend eine Verbindung mit `isAsyncWorkInFlight()` (`commandProcessingSuspended` -- AUTH/`accept()` laufend -- oder offener `spoolBridge`) unangetastet bleibt, bis sie von selbst antwortet. **Die wichtigste Zusicherung -- eine Transaktion, die ihr `250` verdient hat, verliert es nicht durch den Shutdown -- ist mit einer deterministischen, kontrolliert haengenden Fake-`accept()` bewiesen** (`tests/unit/smtp-graceful-shutdown.test.ts`, neu, 5 Faelle: Idle-Verbindung sofort `421`, Verbindung zwischen `MAIL`/`RCPT` ebenso, neue Verbindungsversuche nach `close()` abgelehnt, eine `DATA`-Transaktion mit haengendem `accept()` bekommt ihr echtes `250` **vor** dem Shutdown-Hinweis, dieselbe Zusicherung fuer ein abgelehntes -- `451` -- Ergebnis). **Windows-Luecke, ausdruecklich benannt statt verschwiegen:** `ingress-process-boot.test.ts` (JR-4-01) hatte bereits gemessen, dass `ChildProcess.kill()` unter Windows `TerminateProcess()` direkt aufruft -- der Prozess-eigene `SIGTERM`-Handler laeuft nie, `close` liefert ein Signal statt eines Exit-Codes. Diese Aufgabe hat deshalb **keinen** neuen Test hinzugefuegt, der einen echten `SIGTERM` waehrend einer laufenden Transaktion gegen den kompilierten Prozess prueft -- die Klassenebene (`smtp-graceful-shutdown.test.ts`) ist plattformunabhaengig und deckt die eigentliche Zusicherung ab; die Prozess-/Signal-Kopplung selbst bleibt nur durch `ingress-process-boot.test.ts`s bestehenden, POSIX-gegateten "shutting down"-Log-Check belegt (Linux/CI), nicht durch diese Aufgabe erweitert. **`apps/smtp-ingress/src/index.ts` unveraendert im Verhalten** -- `server.close()` heisst weiterhin so, nur sein Vertrag ist gewachsen; ein Kommentar an der Aufrufstelle verweist jetzt auf den neuen Vertrag. **5. F47 behoben, beide Haelften.\*\* Typfehler in `smtp-acceptance-wiring.test.ts:408` (`Record<string, unknown> | null`nicht zuweisbar an`CanonicalJsonValue`) behoben mit demselben Cast-Muster, das `ledger-writer.ts`/`in-memory-ledger.ts`/`ledger-backend-contract.ts` bereits verwenden -- **vor** dem Fix per Bash rot reproduziert (`tsc -p tsconfig.test.json` schlaegt exakt an dieser Zeile fehl), **nach** dem Fix sauber. CI (`.github/workflows/ci.yml`) bekommt einen neuen Schritt "Typecheck journaling test files" (`pnpm --filter @open-archiver/journaling test:types`), eingefuegt direkt nach "Build journaling" und vor "Build backend" (journaling braucht nur `@open-archiver/types`s `dist`, nichts von `backend`) -- der bestehende Backend-Schritt umbenannt zu "Typecheck backend test files" zur Unterscheidung. **Testzahlen, selbst gemessen** (`DATABASE*URL`+`OA_TEST_REQUIRE_INFRA=1`, Docker-Postgres): vorher `846 passed | 7 skipped`, 67 Dateien, `unit ci 698/698 · integration ci 111/111 · adversarial ci 37/37`; nachher **`867 passed | 7 skipped`**, 70 Dateien (drei neue: `smtp-5xx-inventory.test.ts`5,`smtp-graceful-shutdown.test.ts`5,`smtp-response-code-table.test.ts`11 -- macht 719 statt 698`unit`/`ci`), `unit ci 719/719 · nightly 3/3 · integration ci 111/111 · adversarial ci 37/37`, Exit 0, keine verwaisten `oa*test**`-Datenbanken (per `docker exec postgres psql`gegengeprueft).`suite-inventory.ts` im selben Commit aktualisiert (`expectedFiles: 47`, `unit.expectedTests.ci: 719`). `corepack pnpm --filter @open-archiver/journaling build`/`test:types`und`corepack pnpm --filter @open-archiver/backend test:types`alle gruen;`prettier --check`auf allen sieben geaenderten und drei neuen Dateien gruen -- fuer die drei neuen Dateien wurde`prettier --write`direkt (sicher, da unversioniert und nicht Teil der F35-CRLF-Alt-Last) angewendet, fuer die sieben vorbestehenden getrackten Dateien **kein**`--write`, ihre Rot-Meldung per `git stash`gegen den unveraenderten HEAD als vorbestehend (F35) bestaetigt. **Bewusst nicht getan:** kein zweiter Alarmmechanismus fuer Oversize (Entscheidung oben); keine erschoepfende Multi-Chunk-BDAT-Drain-Optimierung -- eine Verbindung, die genau zwischen zwei`BDAT`-Chunks pausiert wenn `close()` faellt, wartet auf ihren regulaeren Idle-Timeout statt sofort geschlossen zu werden (dokumentierte, bewusste Vereinfachung, kein Datenverlust); kein echter Prozess-Ebene-`SIGTERM`-Mid-Transaktions-Test (Windows-Grenze oben).
+
+**Nächster Schritt:** **Abnahme durch TEST**
+
+#### 2026-08-03 — `JR-4-07` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): kein
+
+**`JR-4-07` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): kein Relaying, keine Byte-Transformation — strukturell ausgeschlossen, nicht nur unterlassen.** Zwei neue Dateien, beide `packages/journaling/tests/unit/`. **1. Kein ausgehender Mailpfad (`no-outbound-mail-path.test.ts`, 5 Fälle).** Ein Quelltextscan über **jede** `.ts`-Datei unter `packages/journaling/src` und `apps/smtp-ingress/src` (nicht nur die von `apps/smtp-ingress/src/index.ts` erreichbaren — bewusst weiter als `ingress-import-graph.test.ts`s Walk, da "strukturell ausgeschlossen" eine Aussage über das ganze Paket ist, nicht nur über den aktuell verdrahteten Pfad) gegen eine feste, begründete Merkmalsliste: `net.connect`/`net.createConnection`/`tls.connect`/`http(s).request`/`http(s).get`/ein unqualifiziertes globales `fetch(`/`XMLHttpRequest`/nodemailer-förmige `createTransport(`/`.sendMail(`. Dazu ein zweiter, unabhängiger Kanal: beide `package.json` gegen eine Sperrliste bekannter Mail-/HTTP-Client-Pakete (`nodemailer`, `@sendgrid/mail`, `axios`, `node-fetch`, `undici`, u.a.) — nötig, weil eine Bibliothek ihre eigene Socket-Arbeit in sich selbst kapselt und im eigenen Quelltext gar kein `net.*`/`tls.*` auftauchen müsste. **Die legitime Ausnahme, an der die Prüfung nicht zahnlos werden durfte:** dieser Prozess verbindet sich zweimal zu Postgres (Quell-ACL, Ledger, beide `apps/smtp-ingress/src/index.ts`) — das ist kein Mailversand, wird aber durch die Musterwahl selbst getrennt, nicht durch eine Sonderregel: die Verbindung läuft über den `postgres()`-Fabrikaufruf des Treibers (dessen eigene Socket-Arbeit unter `node_modules` liegt und nie gescannt wird), nirgends steht im eigenen Quelltext ein rohes `net.connect`/`tls.connect` dafür. Ein eigener Kalibrierungstest belegt das direkt: eine Fixture mit genau der Postgres-Verbindungszeile und der echten `net.createServer`/`tls.createSecureContext`-Inbound-Zeile aus `smtp-server.ts` löst **keins** der Muster aus. **Kalibrierung mit echter Probe, nicht nur Fixture-Text:** vor dem Commit wurde `packages/journaling/src/ingress/_tmp_outbound_probe.ts` (`net.connect(25, 'mail.example.com')`) probeweise angelegt, der Lauf schlug korrekt fehl (Fund benennt exakt Datei und Muster), die Datei wurde danach gelöscht und der Lauf war wieder grün — beide Läufe im Bericht mit Befehl und Ausgabe belegt. **2. Byteidentische Speicherung (`byte-fidelity-roundtrip.test.ts`, 18 Fälle).** Ein echter `EsmtpServer` über eine echte Loopback-Verbindung, `JournalAcceptance` über die echte `NodeSpoolFileSystem` gegen ein echtes temporäres Verzeichnis (keine Fake-Implementierung — die soll ja gerade zeigen, dass die Bytes, die auf der Leitung ankommen, dieselben sind wie die, die auf echter Platte liegen). Korpus: fünf zeilenorientierte Fälle (einfacher Rumpf, eine Zeile mit führendem Punkt, eine Zeile die exakt "." ist, mehrere Leerzeilen, UTF-8-Mehrbytezeichen) über **beide** Übertragungswege gesendet — `DATA` (mit Punkt-Stuffing) **und** `BDAT` (roh) —, weil nur `DATA` stuffed/unstuffed und eine Gleichheitsprüfung über nur einen Weg "wird nie verändert" nicht von "wird auf diesem einen Weg zufällig nicht verändert" unterscheiden könnte. Dazu sieben Fälle, die **nur** über `BDAT` laufen, weil `DATA`s zeilenorientierte Rahmung sie strukturell nicht tragen kann: reines LF ohne jedes CR (genau der ADR-029-Fall — Exchange entfernt es nicht mehr, und über `DATA` ist es nicht übertragbar), reines CR ohne LF, gemischte CRLF/LF/CR-Folgen ohne Terminator am Ende, eine sehr lange Zeile ganz ohne Zeilenumbruch, ungültige-UTF-8-Latin-1-Bytes, eingebettete NUL-Bytes, und zufällige Binärdaten über den vollen Bytebereich. **Der Vergleich läuft auf Bytes:** `Buffer.compare()`/`Buffer.equals()`, kein `.toString()` an irgendeiner Stelle der Prüfkette. **Eine Plattformfalle unterwegs gefunden und sauber gelöst, nicht umgangen:** `NodeSpoolFileSystem.fsyncDirectory()` schlägt auf Windows mit `EPERM` fehl (dokumentiert seit `JR-3-03`) — `JournalAcceptance.accept()` ruft `backend.append()` erst **nach** erfolgreichem Verzeichnis-fsync auf, also erreicht auf diesem Host **kein** Ledger-Append je diesen Punkt, und ein an `spoolTxId` aus dem Ledger-Request geankertes Dateisuche (wie `smtp-acceptance-wiring.test.ts`s eigene `InMemoryLedgerAndLookup`) würde auf diesem Host **nichts** finden. Gelöst über eine `RecordingSpoolFileSystem`, die nur `createFile()`s Pfad mitschneidet — bekannt, sobald die Datei angelegt wird, unabhängig vom fsync-Ausgang — und danach zuerst in `incoming/`, dann in `quarantine/` nach den Bytes sucht; die Antwortcode-Erwartung selbst ist bewusst plattformabhängig (`250` überall außer Windows, `451` auf Windows, exakt wie `smtp-acceptance-wiring.test.ts`s eigener 150-MB-Fall es schon vormacht), die Byte-Identität aber nicht — sie gilt und wurde auf diesem (Windows-)Host tatsächlich über den `quarantine/`-Zweig bewiesen. **Testzahlen, selbst gemessen** (`DATABASE_URL` + `OA_TEST_REQUIRE_INFRA=1`, Docker-Postgres): vorher `867 passed | 7 skipped`, 70 Dateien, `unit ci 719/719 · integration ci 111/111 · adversarial ci 37/37`; nachher **`890 passed | 7 skipped`**, 72 Dateien (zwei neue Dateien, +23 Tests), `unit ci 742/742 · nightly 3/3 · integration ci 111/111 · adversarial ci 37/37`, Exit 0, Laufzeit ≈152 s. `suite-inventory.ts` im selben Commit gezogen (`expectedFiles: 49`, `unit.expectedTests.ci: 742`). `corepack pnpm --filter @open-archiver/journaling build`/`test:types` grün; `prettier --check` (mit `--end-of-line lf` gegen eine Kopie außerhalb des Repos, da beide Dateien neu und unversioniert sind — F35 betrifft nur vorbestehende getrackte Dateien) auf beiden neuen Dateien grün. **Bewusst nicht getan:** kein Test für sehr lange Zeilen **mit** Zeilenende (nur ohne, da das der interessantere Fall für `DATA`s Rahmung ist); keine Prüfung von 8BITMIME/SMTPUTF8 in der Envelope selbst (Umfang von `JR-4-02`, nicht dieser Aufgabe); die Sperrliste bekannter Mail-/HTTP-Client-Pakete ist eine feste, von Hand gepflegte Liste, kein Paket-Ökosystem-Scan — eine bewusste Grenze, dokumentiert im Testkommentar.
+
+**Nächster Schritt:** **Abnahme durch TEST**
+
+#### 2026-08-03 — `JR-4-08` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): Per-
+
+**`JR-4-08` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): Per-Source Connection- und Rate-Limits.** `journaling_sources` hat keine Limit-Spalte (geprüft) — Entscheidung für Prozesskonfiguration mit tighten-only-Sitz, dieselbe Form wie `require_tls` (`JR-4-04`/`JR-4-05a`), statt einer Migration ohne Betreiberoberfläche. Neue Datei `packages/journaling/src/ingress/rate-limit-config.ts` (zod-Schema, in `ingress/config.ts` als siebtes Feld `rateLimit` eingebettet, `{}` gültig). Zwei unabhängige Grenzen: **`ConnectionLimiter`** (`tryAcquire`/`release`, keyed by `sourceId` aus dem Connect-Zeit-ACL-Treffer `JR-4-05a`) — Überschreitung antwortet `421 4.7.0` und schließt die _neue_ Verbindung sofort (`socket.end(text)`, dieselbe Antwort-dann-Schließen-Reihenfolge wie die bestehenden `554`/`421`-Fälle in `handleConnection`); **`TransactionRateLimiter`** (`tryConsume`, fixed window) — Überschreitung antwortet `450 4.7.1` bei `MAIL FROM` selbst, die Verbindung bleibt offen. Beide Ports in `smtp-server.ts` deklariert, implementiert in neuer Datei `packages/journaling/src/ingress/connection-rate-limiter.ts` (`PerSourceConnectionLimiter`, `PerSourceTransactionRateLimiter`). Eine laufende Transaktion wird nie abgebrochen — die Rate-Prüfung sitzt ausschließlich in `handleMail`, vor jedem Parsing, nie in `RCPT`/`DATA`/`BDAT`; per Wire-Test bewiesen (Budget nach `MAIL FROM` erschöpft, `RCPT`/`DATA` derselben Transaktion laufen trotzdem bis zum gewöhnlichen `451` durch). Speicher ist in beiden Zählern durch die Anzahl aktiver `sourceId`s begrenzt (eine endliche, vom Betreiber verwaltete Menge), nicht durch IP oder Verbindung — und strukturell unerreichbar für eine vom Connect-Zeit-ACL abgelehnte IP, da `handleConnection` `tryAcquire` erst nach `decision.kind === 'allowed'` aufruft (per Wire-Test mit geteiltem Limiter zwischen einem „denied"- und einem „allowed"-Server bewiesen). Neue Tests: `ingress/rate-limit-config.test.ts` (10), `ingress/connection-rate-limiter.test.ts` (13), `tests/unit/smtp-rate-limit-protocol.test.ts` (8), +6 in `ingress/config.test.ts` — macht `unit` 52 Dateien / `ci 779` (`suite-inventory.ts` mitgezogen). Voller Lauf lokal: `927 passed | 7 skipped`, 75 Dateien (`unit ci 779 · integration ci 111 · adversarial ci 37`) gegen echte Infra (`DATABASE_URL`, `OA_TEST_REQUIRE_INFRA=1`). CI-Lauf nach dem Push noch zu prüfen (Pflicht seit F48).
+
+**Nächster Schritt:** **Abnahme durch TEST; CI-Ergebnis dieses Pushes prüfen**
+
+#### 2026-08-03 — `JR-4-08` erledigt (Rolle DEV, `e0d79ec`) — und zum ersten Mal ist die CI Teil des Belegs
+
+**`JR-4-08` erledigt (Rolle DEV, `e0d79ec`) — und zum ersten Mal ist die CI Teil des Belegs.** Verbindungs- und Transaktionsratengrenzen je Quelle. Der DEV-Lauf endete am Nutzungslimit **nach** dem Commit, aber **vor** Bericht und CI-Prüfung; der PO hat beides nachgeholt. **Und dabei greift die heute eingeführte Pflicht sofort:** der CI-Lauf zu `e0d79ec` (`30810161147`) war **rot** — Schritt 7, Lint, vier Dateien (`config-from-env.ts`, `index.ts`, `06-status.md`, `config.test.ts`), also **dieselbe Klasse wie F48** am selben Tag ein zweites Mal. Formatiert in `4795688` über `lintfix.cjs` (Prettier-API, Zeilenenden erhalten), danach gegengeprüft. **Der Lauf `30822606272` auf `4795688` ist `success`:** 75 Dateien, `unit ci 779/779 · integration ci 111/111 · adversarial ci 37/37` — **927 Tests**, Inventar verifiziert (unit 52/52, integration 18/18, adversarial 5/5, 0 unklassifiziert), `No oa_test_* databases left behind.` Damit ist `JR-4-08` belegt, und zwar **auf der Plattform, auf der der Annahmepfad überhaupt existiert** — auf dem Windows-Host scheitert `fsyncDirectory()` mit `EPERM`, und `accept()` schreibt den Ledger erst danach. **Was fehlt und der Abnahme zufällt:** ein DEV-Bericht zu `JR-4-08` liegt **nicht** vor. Die Entscheidungen dieser Scheibe — Konfigurationsform der Grenzen (Prozess statt Migration, weil `journaling_sources` keine Limit-Spalten hat und eine Betreiberoberfläche zu E11/E12 gehört), die gewählten Codes, die Reihenfolge Antwort-dann-Schließen, die Unumgehbarkeit und Begrenztheit des Zählers — sind **aus dem Code zu prüfen**, nicht aus einem Bericht. `JR-4-13` weiß das hiermit.
+
+**Nächster Schritt:** Pause bis zum Limit-Reset; danach `JR-4-09` und `JR-4-19`, dann die TEST-Scheiben
+
+#### 2026-08-03 — Doku-Diät: Pflichtlektüre von ~172k auf ~75k Tokens
+
+**Auftrag:** Auftraggeber, nach einer Kostenprüfung. **Nichts gekürzt, alles verschoben** — jede
+Verschiebung maschinell gegengeprüft: jeder ausgegliederte Block muss im Ziel wörtlich ankommen, und
+jede noch offene Task-ID muss im Backlog geblieben sein.
+
+**Bilanz der Pflichtlektüre** (README + `06-status.md` + `07-session-handover.md` + `03-backlog.md` +
+Skill `journal-ledger`): **689 441 → 298 849 Zeichen**, also rund 172k → 75k Tokens. Einzeln:
+`06-status.md` 456 370 → 144 631, `03-backlog.md` 168 050 → 86 369, `07-session-handover.md`
+69 531 → 49 237, `README.md` 19 390 → 10 059.
+
+**Neu angelegt:** `12-archiv-e13-e2.md` (die vier E13- und die zwei E2-Abnahmerunden),
+`13-archiv-sessionprotokoll-bis-e3.md` (56 Protokolleinträge, E0 bis E3), `14-archiv-backlog-abgeschlossen.md`
+(die Task-Tabellen von E1, E13, E2, E3) und `15-fallstricke.md` (34 Fallstricke — **Nummerierung
+unverändert**, weil projektweit als „Fallstrick N" darauf verwiesen wird). `JR-1-05c`s Protokoll ist
+nach `11-archiv-e1.md` gewandert.
+
+**Der eigentliche Fund kam beim Messen, nicht beim Planen.** Nach dem Ausgliedern stand
+`06-status.md` bei 147 908 Zeichen — und wuchs durch `prettier --write` wieder auf **346 564**.
+Ursache: Prettier richtet Markdown-Tabellen auf die **längste Zelle** aus, und das Sessionprotokoll
+war eine Tabelle mit Zellen von bis zu 8 531 Zeichen. Das Padding kostete mehr als der Inhalt.
+Deshalb ist jeder Protokolleintrag jetzt ein **Abschnitt** statt einer Tabellenzeile (74 umgewandelt,
+18 hier und 56 im Archiv) — danach bleibt die Datei auch nach dem Formatieren stabil.
+
+**Zwei Regeln, damit es so bleibt** (stehen auch im README): ein Statuseintrag ist **Feldform, nicht
+Prosa**, und das Protokoll eines Epics wandert ins Archiv, **sobald** das Epic zurückgemergt ist —
+nicht irgendwann später. Dieser Eintrag ist als Vorbild für die gemeinte Kürze gedacht.
+
+**Ungeprüft geblieben:** ob die 19 offenen Befunde in `09-befunde-bestandscode.md` archivreif sind.
+Befundnummern werden über das ganze Projekt zitiert, deshalb ist dort **nur ein Index** entstanden
+(48 Zeilen, Nummer / Titel / Schwere / Status) und **nichts verschoben**.
+
+**Nächster Schritt:** neue Session, `JR-4-09` und `JR-4-19`.
+
+#### 2026-08-03 — **F49 behoben** (Rolle DEV): der Reihenfolgenachweis hängt jetzt am Port, nicht am Log
+
+**Auftrag:** Handover — „zuerst, vor jeder neuen Scheibe: F49". **Ergebnis:** die Zusicherung „Scan vor
+`listen()`" hält (strukturell: gerade `async`-Sequenz in `main()`, `await`-Scan vor `await server.listen()`);
+untauglich war **nur das Instrument** — ein Byte-Offset-Vergleich zwischen einer `pino`- und einer
+`console.log`-Zeile auf demselben Dateideskriptor.
+
+**Geändert:** ein Testfall in `packages/backend/tests/integration/smtp-ingress-crash-recovery-boot.int.test.ts`
+(neuer Name „does not bind its port until the scan is done …"), plus Kommentar in `tests/support/suite-inventory.ts`.
+**Kein Produktionscode.** Testzahl unverändert (3 in dieser Datei), also keine Inventar-Zahlen berührt.
+
+**Der neue Nachweis:** der Test nimmt selbst `pg_advisory_xact_lock(crashRecoveryScanLockKey(spoolRoot))` und
+hält damit den Scan des Kindprozesses an. In diesem Zustand — der Prozess steht in `pg_locks` als
+**ungewährter** Waiter auf genau diesem Schlüssel, kein `sleep` — wird der Port **abgelehnt**
+(`ECONNREFUSED`), und die Orphan-Datei liegt noch in `incoming/`. Nach Freigabe antwortet **derselbe** Port
+`220`. Diese Gegenprobe ist das, was die Ablehnung zu einem Reihenfolgebeleg macht.
+
+**Kalibriert:** mit nicht-`await`etem Scan (Port bindet, während er läuft) schlägt der Fall mit
+`expected 'connected' to be 'refused'` fehl; Regression danach zurückgenommen. **4 × 4 grün** in Folge.
+**Volllauf lokal:** `927 passed | 7 skipped`, 75 Dateien, `unit ci 779/779 · integration ci 111/111 ·
+adversarial ci 37/37`, Typcheck `test:types` grün, Prettier über LF-normalisierte Kopien grün.
+
+**Nicht gemessen und benannt:** welche der zwei Schreibpfade im roten CI-Lauf nachhing — auf diesem
+Windows-Host nicht reproduzierbar (3 × 60 Läufe einer Nachbildung, 0 Umkehrungen; Node behandelt Pipes auf
+Windows asynchron, auf Linux synchron, und der rote Lauf war Linux). Für den Fix gleichgültig, weil keine
+Logreihenfolge mehr geprüft wird. Als kleine Betriebsunschönheit offen in F49 dokumentiert.
+
+**Nächster Schritt:** `JR-4-09` und `JR-4-19`, dann die TEST-Scheiben; CI-Lauf dieses Pushes prüfen (F48).
+
+**CI-Nachtrag:** Lauf `30827457559` auf `670b65f` ist **success** (2m25s) — damit ist F49 auf der
+Plattform belegt, auf der der rote Lauf auftrat (Linux), nicht nur lokal.
+
+#### 2026-08-03 — `JR-4-09` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme): der M365-Range-Helfer
+
+**Neu:** `packages/journaling/src/ingress/m365-ip-ranges.ts` (reine Logik: Feed lesen, Diff, Bericht),
+`apps/smtp-ingress/src/refresh-m365-ranges.ts` (Entrypoint, `refresh-m365-ranges`-Skript),
+Betreiberabschnitt in `docs/enterprise/journaling/guide.md`. **Tests:**
+`ingress/m365-ip-ranges.test.ts` (18, `unit`), `m365-range-refresh-cli.int.test.ts` (5,
+`integration`) — Inventar auf `unit` 53 Dateien / `ci 797` und `integration` 19 / `ci 116` gezogen.
+
+**Die Entscheidung, die diese Scheibe geprägt hat:** der erste Entwurf holte die Liste per `fetch` —
+und `JR-4-07`s Wächter `no-outbound-mail-path.test.ts` meldete das **zu Recht rot** (er verbietet
+jeden ausgehenden Aufruf im Quelltext von `apps/smtp-ingress/src`, `fetch` ausdrücklich). Drei
+Auswege wurden dem PO vorgelegt (Ausnahme im Wächter / eigenes Workspace-Paket / nicht holen);
+**gewählt: nicht holen.** Der Wächter bleibt unangetastet, und der Mail-Host braucht keinen
+ausgehenden Internetzugang — in einer Compliance-Umgebung ist er dort meist ohnehin gesperrt. Der
+Download ist ein dokumentierter `curl`-Schritt; `M365_ENDPOINTS_BASE_URL` ist die einzige Stelle, an
+der die URL steht (Usage-Text und Betreiberdoku zitieren sie).
+
+**Zwei fachliche Festlegungen, beide sicherheitsrelevant:** (a) es werden **nur** Exchange-Einträge
+mit **Port 25** übernommen — die Web-Frontends (80/443) würden die ACL um eine Größenordnung
+weiten, ohne je Mail zu liefern (eigener Test); (b) ein ACL-Eintrag, den die offizielle Liste nicht
+kennt, wird **nie** als Löschvorschlag gemeldet, nur als Rückfrage — ein On-Prem-Connector oder
+Smart Host gehört legitim dorthin. Verglichen wird **bitweise** über `parseCidr` (dasselbe Parser
+wie die Live-ACL), nicht textuell.
+
+**Kalibriert:** mit einem absichtlich eingebauten `update journaling_sources` (die „hilfreiche"
+Auto-Anwendung, die RFC §4.3 verbietet) schlägt der Integrationstest genau an der
+`allowed_ips`-Gleichheit fehl; Regression zurückgenommen, danach grün. Exit-Codes sind Teil des
+Vertrags: `0` nichts zu tun, `2` handeln, `1` Helfer konnte nicht arbeiten — eine unlesbare Liste
+wird **nie** als „ACL ist in Ordnung" gemeldet.
+
+**Benannte Grenze:** Abdeckung wird gegen **einzelne** Einträge geprüft; zwei `/17`, die zusammen ein
+`/16` abdecken, führen zu einer Übermeldung („fehlt"). Das kostet einen Blick und kann die ACL nie
+still weiten — die Richtung, um die es RFC §4.3 geht.
+
+**Volllauf lokal:** `950 passed | 7 skipped`, 77 Dateien, `unit ci 797/797 · integration ci 116/116 ·
+adversarial ci 37/37`; `test:types` grün, beide Builds grün, Prettier über LF-normalisierte Kopien
+grün. CI-Lauf nach dem Push zu prüfen (Pflicht seit F48).
+
+**CI-Nachtrag:** Lauf `30830897752` auf `1bea369` ist **success** (2m34s) — 77 Dateien, Zählwerke wie
+oben. Damit sind beide Scheiben dieser Sitzung auf der CI-Plattform belegt.
+
+**Nächster Schritt:** `JR-4-19` (Ledger-Verbindung erholt sich nicht), dann die TEST-Scheiben
+`JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme `JR-4-13` in eigener Sitzung.
+
+#### 2026-08-03 — `JR-4-19` erledigt (Rolle DEV, ungeprüft — noch keine Abnahme) und **ADR-031**
+
+**Der Defekt:** die Ledger-Anbindung wurde **einmal** beim Start gebaut; war die Datenbank dann nicht
+erreichbar oder nicht migriert, blieb `journalAcceptance` **dauerhaft** `undefined` — Port gebunden,
+Prozess sieht gesund aus, jede Transaktion `451`, bis jemand neu startet. **Behoben, ohne den
+Acceptance-Contract zu weichen.**
+
+**Der Kern war nicht der Timer, sondern ein Seam.** `journalAcceptance` war zweifach eingefroren
+(Serverfeld `readonly` plus Kopie je Verbindung), eine nachträgliche Verdrahtung also unmöglich.
+`EsmtpServer` nimmt jetzt einen **Provider** (`journalAcceptanceProvider`), aufgelöst **genau einmal
+je Transaktion** bei `MAIL FROM` und für deren Dauer festgehalten — dieselbe Antwort entscheidet, ob
+überhaupt eine `SpoolWriteBridge` geöffnet wird. Der Wert-Parameter bleibt und wird im Konstruktor in
+einen konstanten Provider gehoben (Muster `requireTlsResolver`), weshalb **alle 161 Bestandstests des
+Pakets ohne eine Änderung grün blieben**.
+
+**Neu:** `packages/journaling/src/ingress/journal-acceptance-bootstrap.ts` (`start`/`tryNow`/`stop`/
+`provider`/`isWired`, Vorbild `SourceAclCache`), `ledger.retryIntervalMs` (zod, Default 30 s,
+`SMTP_INGRESS_LEDGER_RETRY_INTERVAL_MS`). `buildJournalAcceptance()` **wirft** jetzt statt `undefined`
+zurückzugeben — der Fehlerfall gehört dem Bootstrap.
+
+**ADR-031 (PO):** Wiederholung **bis zum ersten Erfolg**, dann Timer aus (ein späterer Ausfall wird
+schon heute von `accept()` auf `451` abgebildet); der **Crash-Recovery-Scan läuft in jedem Versuch
+mit** (zulässig, weil vor der ersten Verdrahtung kein Byte in den Spool gelangt — Architektur §5s
+Vorbedingung; und weil der Timer beim ersten Erfolg endet, gibt es kein Scan-gegen-Annahme-Rennen).
+
+**Tests:** `ingress/journal-acceptance-bootstrap.test.ts` (7, `unit`, über `tryNow()` statt
+ausgesessener Timer), `tests/unit/smtp-acceptance-promotion.test.ts` (7, `unit`, **der `451`→`250`-
+Nachweis am Draht auf derselben offenen Verbindung**, plus beide Richtungen der
+Mitten-in-der-Transaktion-Stabilität, `BDAT 0 LAST`, werfender Provider, Wert-Form),
+`smtp-ingress-ledger-recovery.int.test.ts` (2, `integration`, echter Prozess). Inventar auf `unit` 55
+Dateien / `ci 811` und `integration` 20 / `ci 118`.
+
+**Warum der `250`-Nachweis im Unit-Test liegt und nicht im Integrationstest:** auf diesem Windows-Host
+scheitert der Directory-fsync mit `EPERM`, also antwortet auch eine **verdrahtete** Acceptance `451`
+(`spool-write-failed`) — am Antwortcode sind die beiden Zustände hier nicht unterscheidbar. Der
+Integrationstest prüft deshalb, was plattformunabhängig trägt: `451` bei **völlig leerem** `incoming/`
+(Beleg für ADR-031s Scan-Argument), die Promotion-Logzeile **genau einmal**, und dass die Transaktion
+nach der Promotion die „not yet wired"-Zeile **nicht mehr** erzeugt; auf Linux zusätzlich `250` und
+genau eine Ledger-Zeile.
+
+**Kalibriert, zweimal:** liest `completeTransfer` den Provider direkt statt des eingefrorenen Feldes,
+werden zwei Wire-Tests rot — einer davon **hängt** (Timeout), was genau zeigt, warum die Auflösung
+gekapselt sein muss. Entfernt man den Retry-Timer, scheitern beide Integrationsfälle mit
+„never logged its promotion" bzw. „did not keep retrying". Beide Regressionen zurückgenommen.
+
+**Ein Bestandstest musste angepasst werden** (`smtp-ingress-crash-recovery-boot.int.test.ts`): er prüfte
+den Wortlaut der alten Fehlermeldung, die „bis zur Neustart"-Aussage enthielt und nicht mehr stimmt.
+Der Anspruch des Tests selbst ist unberührt.
+
+**Volllauf lokal:** `966 passed | 7 skipped`, 80 Dateien, `unit ci 811/811 · integration ci 118/118 ·
+adversarial ci 37/37`; beide `test:types` und beide Builds grün.
+
+**Der erste Push war rot — und daraus ist Fallstrick 35 geworden.** Schritt `Typecheck journaling test
+files`, zwei Typfehler in `smtp-acceptance-promotion.test.ts`. Ursache: es gibt **zwei**
+`test:types`-Schritte in der CI (`@open-archiver/backend` **und** `@open-archiver/journaling`), lokal
+war nur der erste gefahren — und ein grüner Volllauf prüft **keinen** von beiden, weil `vitest` ohne
+Typprüfung transpiliert. Behoben: `JournalTransactionInput` kommt aus `spool/acceptance.ts` statt aus
+`smtp-server.ts` (das ihn nur importiert), und der Fake liefert alle Felder von
+`AcceptedJournalTransaction` statt eines `as never`-Casts — der hätte genau diesen Fehler verdeckt.
+
+**Der zweite Push war ebenfalls rot, und diesmal hat der Testharness selbst zugeschlagen:** alle 966
+Tests grün, aber `The run ended with 1 test database(s) still acquired … an afterAll teardown did not
+run` (F16/F24). Ursache: der zweite Integrationsfall rief `acquireTestDatabase()` **innerhalb** von
+`it()` auf, während der Teardown des Harness **je Datei** registriert wird — `CLAUDE.md` §5.1 verlangt
+Modulscope, und genau dafür ist der Rückstandswächter gebaut. Behoben, indem die zweite Datenbank wie
+die erste im Modulscope liegt. **Lokal wäre das nie aufgefallen**: der Wächter meldet Rückstände am
+Ende eines **vollen** Laufs, und der lief hier zwar, aber die Datei war beim ersten Volllauf noch nicht
+in dieser Form dabei.
+
+**CI grün im dritten Lauf:** `30838566875` auf `36c207b` **success** (2m26s), 80 Dateien,
+`unit ci 811/811 · integration ci 118/118 · adversarial ci 37/37`. **Damit ist der eigentliche
+Nachweis erbracht**, denn der Linux-Zweig des Integrationstests ist der, der `250` **und** genau eine
+Ledger-Zeile nach der Promotion verlangt — auf dem Windows-Host ist dieser Pfad wegen `EPERM` beim
+Directory-fsync gar nicht erreichbar.
+
+**Nächster Schritt:** die TEST-Scheiben `JR-4-10`–`JR-4-12`, `JR-4-14`, `JR-4-15`, dann Abnahme
+`JR-4-13` in eigener Sitzung.
+
+#### 2026-08-03 — `JR-4-10` erledigt (Rolle TEST, vom PO nachgeprüft — keine Epic-Abnahme)
+
+**Erster Eintrag in der ab heute vorgeschriebenen Feldstruktur** (README, Abschnitt „Am 2026-08-03 auf
+Diät gesetzt"). Prosa steht in den Einträgen darüber, nicht mehr in den darunter.
+
+| Feld               | Inhalt                                                                                                                                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task**           | `JR-4-10` — Kill-during-DATA, aus Client-Sicht bewertet (Testplan §12.1)                                                                                                                                                                                              |
+| **Rolle**          | TEST (Subagent), delegiert vom PO; PO hat Commits, CI-Log und Inventar selbst nachgesehen                                                                                                                                                                             |
+| **Commits**        | `ad9c278` (Gerüst), `584987a` (Fix 1: Abschluss-Rennen), `708c212` (Fix 2: Füllzeilenlänge) — alle auf `origin`                                                                                                                                                       |
+| **Neu**            | `tests/support/kill-during-data-invariant.ts` (`checkNeverPartial()`), `tests/unit/kill-during-data-invariant.test.ts` (7 Kalibrierungsfälle), `tests/adversarial/smtp-ingress-kill-during-data.adv.test.ts` (`ci` 20 Runden / `nightly` 500)                         |
+| **Testzahlen**     | Volllauf lokal `974 passed \| 8 skipped` bei 82 Dateien; `unit ci 818/818` (vorher 811), `integration ci 118/118` (unverändert), `adversarial ci 38/38` (vorher 37). Inventar gezogen: `unit` 55→56, `adversarial` 5→6 Dateien                                        |
+| **CI**             | `30861572278`, `30862156070`, `30862834098` — alle **success**; letzter Lauf 82/82 Dateien, Inventar `unit 56/56 · integration 20/20 · adversarial 6/6`, „No `oa_test_*` databases left behind"                                                                       |
+| **Der Nachweis**   | CI-Log `30862834098`, Seed `3368319771`: von 20 Runden zogen **7** den Abschluss-Rennen-Zweig, **alle 7 sahen `250`**, **alle 7** erzeugten eine passende, byteexakt geprüfte, korrekt verkettete `journal_ledger`-Zeile                                              |
+| **Kalibrierung**   | 7/7 in `kill-during-data-invariant.test.ts`: 3 saubere Fälle bleiben sauber, 4 kaputte werden erkannt (fehlende Ledger-Zeile trotz `250`, fehlende Spool-Datei, verkürzte Datei, falscher Hash). Ohne Prozess/Socket/DB, also unabhängig vom Windows-Host             |
+| **lokal vs. CI**   | Lokal löst **jede** Runde `451` aus (F48, `fsyncDirectory()` `EPERM`) — der `250`-Zweig ist auf diesem Host unerreichbar. Die Coverage-Notiz unterscheidet „kein Versuch" von „Versuch gescheitert"; nur deshalb waren die zwei Bugs unten überhaupt sichtbar         |
+| **`nightly`**      | 500 Runden **nicht vollständig gelaufen** (Zeitbudget); Mechanik mit 3 bzw. 8 Runden verifiziert, Wert vor dem Commit auf 500 zurückgesetzt. Der Codepfad ist mit `ci` identisch. Es gibt in diesem Repo **keinen** Nightly-Job — `nightly` läuft nur von Hand        |
+| **Entscheidungen** | Die Kalibrierung des Prüfers liegt als `unit`-Suite **ohne** Prozess/DB vor, weil der echte Kill-Test auf dem Windows-Host strukturell keinen Verstoß erzeugen **kann** — sie ist damit die einzige Stelle, die zeigt, dass `checkNeverPartial()` nicht fail-open ist |
+| **Befund**         | **F50** (neu, mittel, offen) — `DATA` schreibt einmal **je SMTP-Zeile** auf die Platte. 50 MB mit 60-Byte-Zeilen ≈ 54 s, dieselben 50 MB mit 998-Byte-Zeilen ≈ 4 s. Nicht behoben, Entscheidung liegt beim Auftraggeber                                               |
+| **Offen**          | F50; `nightly` nie vollständig gelaufen; Statusdokumente durch den PO gepflegt (der Tester hat sie nicht angefasst)                                                                                                                                                   |
+
+**Zwei Fehlschläge der Testrolle an sich selbst — und der Grund, warum sie auffielen.** Die erste
+Fassung war **auf jeder Plattform** untauglich, meldete aber grün: (1) der Kill im Abschluss-Rennen
+kam nach festem 0–50-ms-Jitter, also kürzer als ein echter fsync+Hash+Ledger-Zyklus dauert; (2) die
+Füllzeile war 945 statt 998 Byte (`slice()` polstert nicht), worauf `Buffer.concat(…, TOTAL)` jede
+Nachricht mit Null-Bytes auffüllte — der `.`-Terminator kam nie nach einer echten CRLF-Zeile, `DATA`
+wurde **nie** abgeschlossen. **Beide Male war das Symptom „keine Antwort, dann Kill" — von F48 allein
+nicht unterscheidbar.** Getrennt hat sie erst ein Zähler, der „0 Versuche" von „N Versuche, alle
+gescheitert" unterscheidet. Das ist die Lehre für die restlichen TEST-Scheiben: eine Zählung, die den
+**nicht gezogenen** Zweig sichtbar macht, gehört in jede Suite, deren Kernaussage plattformabhängig ist.
+
+**Nächster Schritt:** `JR-4-11` und `JR-4-12` (beauftragt, ein Auftrag statt zwei parallele — das
+Suite-Inventar trägt exakte Zahlen und verträgt keine zwei gleichzeitigen Bearbeiter), danach
+`JR-4-14`, `JR-4-15`, dann Abnahme `JR-4-13` in eigener Sitzung.
+
+#### 2026-08-03 — `JR-4-11` und `JR-4-12` erledigt (Rolle TEST, vom PO nachgeprüft), Befund **F51**
+
+| Feld               | Inhalt                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Tasks**          | `JR-4-11` (BDAT-Pfad, Testplan §12.7) und `JR-4-12` (SIZE-Grenzmatrix, §12.9)                                                                                                                                                                                                                                                                                                                                            |
+| **Commits**        | `e3e0369` (`JR-4-11`), `3100818` (`JR-4-12`) — beide auf `origin`                                                                                                                                                                                                                                                                                                                                                        |
+| **Neu**            | `packages/journaling/tests/unit/bdat-data-byte-fidelity.test.ts`, `packages/journaling/tests/unit/smtp-oversize-boundary.test.ts` (beide `ci`, echter `EsmtpServer` und echte Platte, In-Memory-Ledger — Muster von `byte-fidelity-roundtrip.test.ts`)                                                                                                                                                                   |
+| **Testzahlen**     | `unit ci` 818 → 826 → **833**, Dateien 56 → 57 → **58**; Volllauf lokal `989 passed \| 8 skipped` bei 84 Dateien                                                                                                                                                                                                                                                                                                         |
+| **CI**             | `30864243188` **success**, 84 Dateien, Inventar `unit 58/58 · integration 20/20 · adversarial 6/6`, keine DB-Rückstände. Davor `30863769294` **rot** — Ursache außerhalb beider Scheiben, siehe **F51**                                                                                                                                                                                                                  |
+| **`JR-4-11`**      | Vier benannte Fälle: Einzel-Chunk, Multi-Chunk (4 `BDAT`), `BDAT 0 LAST`, Chunk-Grenze **mitten im Wort**. Jeder Fall vergleicht sein Spool-Objekt direkt gegen das **`DATA`-Objekt derselben Nachricht**, nicht gegen einen selbstgebauten Puffer                                                                                                                                                                       |
+| **`JR-4-12`**      | Am Limit: angenommen, byteidentisch, **kein** Oversize-Alarm. Ein Byte darüber: `552 5.3.4` über **beide** Wege — angekündigt via `MAIL FROM … SIZE=` (Warnung, noch keine Spool-Datei) und während der Übertragung (`QuarantineAlertSink`, `reason: 'oversize-rejected'`, Datei in `quarantine/`, nicht mehr in `incoming/`). Weit darüber: zusätzlich bleibt die Verbindung synchron, und es fällt **genau ein** Alarm |
+| **Die Grenze**     | `contentOfLength(n)` baut eine Zeile von exakt `n-2` Byte, sodass `DataScanner`s eigene Zählung (`contentLine.length + 2`) exakt `n` ergibt — die echte Grenze, nicht „ungefähr"                                                                                                                                                                                                                                         |
+| **Kalibrierung**   | `expectStoredBytesIdentical()` gegen drei Mutationen eines echten Puffers (gekipptes, fehlendes, zusätzliches Byte) — alle drei werfen. Alarmform gegen vier synthetische Fälle (null Alarme, zwei Alarme, falscher Grund, richtiger Fall)                                                                                                                                                                               |
+| **lokal vs. CI**   | `JR-4-11` **vollständig lokal belegt** — `writeDurableSpoolFile()` schreibt und synct die Datei **vor** dem scheiternden Verzeichnis-Sync, die Bytes sind also unabhängig von `250`/`451`. `JR-4-12`: beide Oversize-Fälle lokal belegt (Abbruch geschieht beim Streamen, vor der fsync-Stufe); **nur** „exakt am Limit" antwortet lokal `451` statt `250` und trägt dafür einen expliziten Plattform-Zweig              |
+| **Entscheidungen** | Beim „exakt am Limit"-Fall wurde die Assertion **geschärft statt aufgeweicht**: F48 lässt auch eine gültige Nachricht an der Datei-Sync-Stufe scheitern, was `JR-3-09`s korrekten `'write-failed'`-Quarantänepfad auslöst. Geprüft wird jetzt „kein **Oversize**-Alarm" — plattformunabhängig — statt pauschal „keine Alarme"                                                                                            |
+| **Offen**          | F50 (unverändert beim Auftraggeber), F51 (Testinstabilität, Fix beauftragt)                                                                                                                                                                                                                                                                                                                                              |
+
+**F51 — der rote CI-Lauf `30863769294`, und warum er kein Zufall ist.** Fehlgeschlagen ist
+`smtp-ingress-ledger-recovery.int.test.ts:314` (`JR-4-19`), **nicht** eine der neuen Dateien. Die
+Testrolle hat ihn als Rennbedingung um eine Retry-Logzeile gemeldet; nachgesehen ist es eine andere
+Zeile und eine schärfere Ursache: die funktionalen Assertions davor waren **grün** (`451 4.3.0` kam
+an, `incoming/` war leer), gefehlt hat allein die `UNWIRED_LINE` in `stdout`. Der Serverprozess hatte
+über den **Socket** längst geantwortet, während seine **stdout-Pipe** den Testprozess noch nicht
+erreicht hatte. Zeile 288 derselben Datei macht es richtig — `waitFor(() => output.stdout()
+.includes(…))` —, Zeile 313 zählt sofort ab. **Das ist exakt der Fallstrick, den `F49` in dieser
+Sitzung gelernt hat: am Verhalten messen, nicht am Log.** Kein Produktionsdefekt; der Fix ist als
+Testcode-Änderung freigegeben und beauftragt, mit Kalibrierung gegen ein `waitFor`, das nie
+fehlschlagen kann.
+
+**Nächster Schritt:** F51-Fix und `JR-4-14` (beauftragt), danach `JR-4-15` als **eigener** Auftrag —
+bewusst abgeschnitten, damit `JR-4-14` mit zwölf Fallgruppen plus dem offenen TLS-1.1-Nachweis nicht
+unter Zeitdruck abgekürzt wird. Dann Abnahme `JR-4-13` in eigener Sitzung.
+
+#### 2026-08-04 — `F51` und `JR-4-14` erledigt, **drei Befunde F52/F53/F54**, **ADR-029-Nachtrag**, `JR-4-21` neu
+
+| Feld              | Inhalt                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tasks**         | `F51` (Testinstabilität, behoben), `JR-4-14` (adversariale Protokollrobustheit, ADR-029 Auflage 1) — beide TEST                                                                                                                                                                                                                                      |
+| **Commits**       | `5e85cda` (F51), `b06245a` (`JR-4-14`, 19 Fälle + TLS-1.1), `7aaf2f7` (Aufnahme der zweiten Suite, F53/F54), `a87c7ca` (ADR-029-Nachtrag, PO)                                                                                                                                                                                                        |
+| **Neu**           | `tests/adversarial/smtp-protocol-robustness.adv.test.ts` (25 Fälle), `tests/unit/smtp-tls11-clienthello-rejection.test.ts` (2 Fälle)                                                                                                                                                                                                                 |
+| **Testzahlen**    | `unit ci 835 · integration ci 118 · adversarial ci 57`; 86 Dateien, Inventar `unit 59/59 · integration 20/20 · adversarial 7/7`                                                                                                                                                                                                                      |
+| **CI**            | `30897110694` auf `b06245a` **success**. Danach `30899111832` und `30899178778` **rot** — **ein** Test, der F54-Fall (s. u.). Alles andere grün                                                                                                                                                                                                      |
+| **TLS 1.1**       | **erbracht** — der Nachweis, an dem `JR-4-04` ehrlich gescheitert war. Von Hand auf Byte-Ebene gebauter TLS-1.1-`ClientHello` nach echtem `STARTTLS` auf den rohen Socket; der Server antwortet mit fatalem `protocol_version`-Alert (`15 03 02 00 02 02 46`), nie mit `ServerHello`                                                                 |
+| **Einschränkung** | Kalibriert durch Senken von `TLS_MIN_VERSION` auf `'TLSv1.1'` (zurückgenommen): die Ablehnung blieb **unverändert**, weil OpenSSL 3.5.6 TLS 1.0/1.1 unterhalb der Node-Ebene abschaltet. **Dass** TLS 1.1 abgelehnt wird, ist bewiesen; **dass die Konfiguration der Grund ist**, in dieser Umgebung nicht isolierbar. So im Dateikommentar vermerkt |
+| **Offen**         | F52/F53/F54 → `JR-4-21` (DEV, läuft); F50 beim Auftraggeber; `JR-4-15`; Abnahme `JR-4-13`                                                                                                                                                                                                                                                            |
+
+**Drei Befunde, eine Wurzel.** `F52` — `MAX_COMMAND_LINE_BYTES` wird in `drainCommandCarry()` nur
+geprüft, wenn **kein** CRLF im Puffer steht; eine überlange, in einem Stück terminierte Zeile umgeht
+das Limit (gemessen: `250` statt `500`). `F53` — `commandCarry` wächst während eines suspendierten
+Fensters (AUTH-bcrypt, settling `accept()`) ungeprüft, weil die Prüfung in der von `onData()`
+übersprungenen Schleife liegt (gemessen: 6,0 MB gesendet, `arrayBuffers` **+76,6 MB**; die
+Größenordnung ist reproduzierbar, der Wert **nicht** — über mehrere Läufe 54,6 bis 135,0 MB).
+`F54` — der Abbruchpfad ist nicht idempotent (`ECONNRESET` bzw. Stillstand statt sauberem `500`).
+
+**Die Größenmatrix, aus zwei unabhängigen Testern und dem CI-Log — sie ist die eigentliche
+Diagnose:** ~2 000 Byte ⇒ falsches `250` (F52) · **100 KB ⇒ korrekt `500` in 25 ms** · ~200 KB ⇒ der
+rote CI-Fall · 2 MB ⇒ keine Antwort, dauerhaft. **Ein Limit, dessen Ergebnis von der Chunk-Zerlegung
+abhängt, sitzt an der falschen Schicht.** Dass es bei 100 KB _funktioniert_, ist der Beleg dafür:
+dort greift der intakte `idx === -1`-Zweig, weil Node in mehreren `data`-Ereignissen liefert.
+
+**Der rote CI-Lauf bleibt bewusst stehen.** Der F54-Fall ist gegen das **richtige** Verhalten
+geschrieben statt als Charakterisierungstest mit `Expected RED`-Marker. Man könnte ihn umdrehen; der
+PO hat es abgelehnt. In dieser Form ist er das **Abnahmekriterium** für `JR-4-21`: Der Fix macht ihn
+von selbst grün, ohne dass jemand an ihm dreht. `JR-4-21` gilt nicht als fertig, solange die CI nicht
+insgesamt `success` meldet.
+
+**Ein Fehler des PO, der hier hingehört: zwei Tester haben `JR-4-14` gleichzeitig gebaut.** Nachdem
+der erste am Nutzungslimit ausgefallen war, hat der PO einen Ersatz gestartet; nach dem Limit-Reset
+kam der erste zurück und begann dieselbe Scheibe. Beide arbeiteten im selben Arbeitsbaum an
+`suite-inventory.ts`. Aufgelöst durch PO-Entscheidung: `b06245a` bleibt maßgeblich, die zweite Suite
+wird aufgenommen statt behalten, ein Autor für `09-befunde-bestandscode.md`, Befundnummern vom PO
+vergeben. **Der Doppellauf hat trotzdem etwas geliefert, das ein Einzellauf nicht hätte:** F52 wurde
+von beiden unabhängig getroffen, F53 stammt allein vom ersten, und F54 kam aus einem roten Fall, den
+der PO **nicht löschen ließ**, bevor er erklärt war. Die Lehre ist trotzdem die alte: nie zwei
+Bearbeiter auf einer Scheibe.
+
+**ADR-029-Nachtrag (`a87c7ca`) — der Auftraggeber hat die Eigenimplementierung ein zweites Mal
+angezweifelt**, diesmal mit Go-Kandidaten. Die Rückfrage traf eine echte Lücke: die Kandidatentabelle
+prüft **ausschließlich npm-Pakete**, und das stand nirgends. Gemessen: `go-smtp` kann `BDAT`
+vollständig serverseitig (`handleBdat()`, `conn.go:993`), `net/smtp` ist ein Client und eingefroren,
+`microbus/smtpingress` hat kein `BDAT` und setzt NATS voraus. **Die Entscheidung bleibt** — nicht
+wegen des Protokolls, sondern wegen des Acceptance-Contracts: `250` folgt fsync von Spool **und**
+Ledger, also müsste ein Go-Ingress `spool` (1 684 Zeilen, E3, abgenommen) und `ledger` (1 154 Zeilen,
+E2, abgenommen) mitnehmen — die Hash-Kette zweimal implementiert, wo ein Byte Abweichung in der
+kanonischen Kodierung **genau der Befund ist, den das Produkt als Manipulation meldet**.
+
+**Was sich dadurch ändert:** Der Eigenbau hört auf, seine Härtung selbst zu erfinden. `go-smtp` löst
+F52, F53 und F54 **strukturell** über einen `lineLimitReader`, der die Grenze im **Reader** durchsetzt
+statt in der Parselogik — damit greift sie unabhängig von Chunkgrenzen und unabhängig davon, ob die
+Verarbeitungsschleife läuft. Dazu: Limit für `BDAT` gezielt abschalten und exakt wiederherstellen,
+`ParseUint` statt `Atoi` gegen negative Längen, bei Oversize den Chunk verwerfen statt die Verbindung
+zu desynchronisieren. MIT und AGPL sind verträglich; übernommen werden **Ansätze, nicht Quelltext**,
+mit Attribution im Dateikommentar.
+
+**Nächster Schritt:** `JR-4-21` (DEV, läuft) — F52/F53/F54 beheben nach der `go-smtp`-Vorlage, CI
+muss danach grün sein. Dann `JR-4-15` (Sicherheitsdurchsicht, prüft dann den gehärteten Stand), dann
+Abnahme `JR-4-13` in eigener Sitzung.
+
+**Beide Punkte, die beim Auftraggeber lagen, sind am 2026-08-04 entschieden:**
+
+- **Die doppelte ADR-Nummer wird umnummeriert** (erledigt): Die Task-ID-Schreibweise heißt jetzt
+  **ADR-026**, der SMTP-Empfangspfad behält **ADR-029**. Umnummeriert wurde die Task-ID-ADR, weil sie
+  **fünf** Referenzen trug, die SMTP-ADR dagegen **40** — darunter Produktivcode
+  (`smtp-server.ts`), zwei Testdateien, `suite-inventory.ts`, und ihre beiden **Auflagen**
+  (`JR-4-14`, `JR-4-15`) werden unter der Nummer zitiert. Alle fünf Stellen sind umgestellt
+  (`05-entscheidungen.md`, `03-backlog.md`, dreimal `13-archiv-sessionprotokoll-bis-e3.md`), im
+  Archiv zeilengenau statt global, damit die SMTP-ADR im selben Dokument unberührt bleibt. Gegenprobe:
+  null verbleibende Task-ID-Treffer unter der alten Nummer.
+- **F50 wird behoben**, als Fortsetzung von `JR-4-21` (Entscheidung des Auftraggebers). **Nicht
+  parallel zu `JR-4-15`** — beide würden `tests/support/suite-inventory.ts` und
+  `09-befunde-bestandscode.md` anfassen, und dieselbe Konstellation hat heute schon einmal zwei
+  Bearbeiter kollidieren lassen. Reihenfolge: erst `JR-4-15` fertig, dann F50.
+
+#### 2026-08-04 — `JR-4-21` erledigt (DEV) und die `JR-4-14`-Nacharbeit (TEST)
+
+| Feld             | Inhalt                                                                                                                                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task**         | `JR-4-21` (neu am 2026-08-04): F52, F53 und F54 beheben nach der `go-smtp`-Vorlage aus ADR-029s Nachtrag                                                                                                                     |
+| **Commits**      | `3b2bc66` (Fix), `4e08fbf` (Befunde auf behoben), `4d19225` (TEST-Nacharbeit)                                                                                                                                                |
+| **CI**           | `30902132955`, `30902593426`, `30903678696` — alle **success**. Zuletzt `1019 passed \| 8 skipped`, 86 Dateien, `unit ci 835/835 · integration ci 118/118 · adversarial ci 66/66`, Inventar verifiziert, keine DB-Rückstände |
+| **Der Nachweis** | 10 Läufe je Größe gegen den echten kompilierten Server, „vorher" per `git stash` auf **nur** `smtp-server.ts` zurückgesetzt (siehe Tabelle unten). Nach dem Fix alle vier Größen **einheitlich in 1–11 ms** beantwortet      |
+| **F53 nachher**  | 2,0 MB gesendet ⇒ `arrayBuffers` **+4,0 MB** (CI) bzw. **+5,1 MB** (lokal), gegen **+28,3 MB** (CI) bzw. +76,6/83,7 MB (lokal) im ungefixten Zustand                                                                         |
+| **Offen**        | F50 (entschieden, nach `JR-4-15`), `JR-4-15`, Abnahme `JR-4-13`                                                                                                                                                              |
+
+| Größe   | vorher                       | nachher           |
+| ------- | ---------------------------- | ----------------- |
+| ~2000 B | 10/10 falsches `250`         | 10/10 `500 5.5.1` |
+| 100 KB  | 10/10 `500` (war nie kaputt) | 10/10 `500`       |
+| ~200 KB | 10/10 Reset/Hänger           | 10/10 `500`       |
+| 2 MB    | 10/10 Reset/Hänger           | 10/10 `500`       |
+
+**Die Regression, die diese Scheibe eigentlich lehrreich macht.** Die **erste** Fassung des Fixes hat
+„Grenze im Reader" naiv umgesetzt — ein eifriger Scan über den ganzen Puffer — und damit `JR-4-07`s
+**Byte-Treue zerschossen**: ein pipeliniertes `BDAT <n> LAST` samt Inhalt in einem Paket sah aus wie
+eine überlange Zeile. **Gefunden hat das der Volllauf, nicht die Tests der drei Befunde.** Genau davor
+schützt `go-smtp`s `LineLimit = 0`-Escape um `BDAT`, den ADR-029s Nachtrag als Punkt 2 der Vorlage
+nennt. Die endgültige Lösung trennt deshalb: **zeilenweise** Prüfung in `drainCommandCarry()` (F52,
+kann nie Inhaltsbytes sehen, weil die Schleife bei `DATA`/`BDAT` sofort aussteigt), **eifriger Scan
+nur** im `commandProcessingSuspended`-Zweig (F53, dort sind Inhaltsbytes protokollbedingt unmöglich),
+plus ein `oversizedLineRejected`-Latch mit `writableEnded`-Prüfung in `writeResponse`/`writePlain`
+(F54). **Die Trennung ist die Lösung — wer sie später verwischt, bekommt die Regression zurück.**
+
+**Ein Verfahrensfehler des PO, aus dem eine Regel wurde.** Der Entwickler ging 17 Minuten idle, ohne
+zu berichten, während 195 Zeilen ungesichert im Arbeitsbaum lagen; der PO hat den Stand daraufhin
+selbst committet (`3b2bc66`) — mit ausdrücklicher Kennzeichnung als Sicherung, nicht als
+Fertigmeldung, und mit einer Liste dessen, was noch **nicht** belegt war. Zwei Minuten später kam der
+Bericht: Er hatte alles längst gemessen, die Nachricht war nur noch unterwegs. **Die Sicherung war
+nicht falsch, ihre Begründung war es teilweise** — die Commit-Nachricht behauptet, die
+Wiederholungsmessung fehle, und das stimmte zu diesem Zeitpunkt schon nicht mehr. Korrigiert wird das
+hier und nicht durch Umschreiben der Historie. **Regel daraus:** vor einem Sicherungscommit **fragen
+und die Antwort abwarten**, solange keine akute Gefahr besteht; und wenn doch gesichert wird, das
+Fehlende als „mir nicht bekannt" formulieren statt als „nicht vorhanden".
+
+**Die Nacharbeit an `JR-4-14` (`4d19225`) hat den Nachweis verschärft:** Aus dem einen ~200-KB-Fall
+wurden **vier — einer je Größe**, jeder mit zehn internen Wiederholungen und derselben Prüfung.
+**Damit ist die Gleichheit über die Größen die Prüfung selbst**, kein Zusatzcheck. Kalibriert wurde
+gegen den **echten** Vorher-Stand (`smtp-server.ts` aus `27edf81` eingesetzt), der das erwartete
+größenabhängige Muster exakt reproduziert hat, danach zurückgesetzt und dreimal grün nachgefahren.
+
+**Nächster Schritt:** `JR-4-15` (läuft), dann F50 als Fortsetzung von `JR-4-21`, dann Abnahme
+`JR-4-13` in eigener Sitzung.
+
+#### 2026-08-04 — `JR-4-15` erledigt (TEST): **E4 ist inhaltlich vollständig**, zwei neue Befunde F55/F56
+
+| Feld         | Inhalt                                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Task**     | `JR-4-15` — Sicherheitsdurchsicht des Empfangspfads (**ADR-029 Auflage 2**), letzte Scheibe vor der Abnahme                                                                                |
+| **Commit**   | `157292b`                                                                                                                                                                                  |
+| **CI**       | `30905525089` **success** — `1022 passed \| 8 skipped`, 87 Dateien, `unit ci 835/835 · integration ci 121/121 · adversarial ci 66/66`, Inventar verifiziert, keine DB-Rückstände           |
+| **Neu**      | `packages/backend/tests/integration/smtp-ingress-envelope-hostile-values.int.test.ts` (3 Fälle, echtes Postgres)                                                                           |
+| **Ergebnis** | Alle **sechs** Punkte des Umfangs beantwortet — vier „unauffällig" **mit Begründung**, zwei mit Befund. Kein Punkt bleibt unbeantwortet, damit ist das Akzeptanzkriterium wörtlich erfüllt |
+| **E4**       | **21 / 21 Tasks erledigt.** Offen ist allein die Abnahme `JR-4-13` — plus die Behebung von F50/F55/F56 in `JR-4-21a`                                                                       |
+
+**Die sechs Punkte im Einzelnen:**
+
+1. **TLS-Parameter** → **F56**: kein expliziter Cipher-Filter. `buildTlsSocketOptions()` setzt nur
+   `minVersion`; ein Client, der ausschließlich `AES128-SHA` anbietet (RSA-Schlüsselaustausch, **kein
+   Forward Secrecy**, SHA-1-MAC), bekommt ihn unter TLS 1.2 ausgehandelt — gemessen gegen einen echten
+   `tls.TLSSocket` mit der exakten Produktions-Optionsmenge. Die Versionsgrenze selbst ist unbetroffen.
+2. **Ressourcengrenzen je Verbindung** → **F55**: kein Limit für `RCPT TO` je Transaktion. 1 000 000
+   gepipelinete `RCPT TO` (~30 MB gesendet) ⇒ Heap **+~395 MB** (~13× Verstärkung), alle korrekt mit
+   `250` beantwortet, unter 4 s. Funktional richtig, aber ohne Deckel.
+3. **Informationsgehalt der Antworttexte** → **unauffällig, begründet.** Jede
+   `writeResponse()`/`writePlain()`-Stelle ist ein literaler String, mechanisch bestätigt durch den
+   erschöpfenden Scan in `smtp-5xx-inventory.test.ts`. Keine Fehlermeldung, kein Pfad, kein Stacktrace
+   erreicht je einen unauthentifizierten Peer.
+4. **Envelope-Werte in Protokoll und Ledger** → **unauffällig, aber der interessanteste Fall.** Ein
+   NUL-Byte in `ehloName` ist **angreifererreichbar** (`JR-4-14`) und in einer Postgres-`text`-Spalte
+   nicht darstellbar — gemessen `22021`. Ende-zu-Ende über den echten Draht: das generische
+   `try`/`catch` in `JournalAcceptance.accept()` fängt es, klassifiziert als `ledger-append-failed`,
+   antwortet **`451`** — kein Absturz, **kein `5xx`**, die Kette bleibt danach benutzbar. Log-Injection
+   strukturell ausgeschlossen (echtes `pino`, JSON-Escaping).
+5. **Speicherverhalten bei 150 MB** → geprüft am **`BDAT`**-Pfad (bestehender Nightly-Test); der
+   **`DATA`-Pfad ist nicht separat gemessen** (strukturell identisch gepuffert, aber nicht empirisch
+   bestätigt). **Als Lücke benannt, nicht verschwiegen**, mit F50 verknüpft.
+6. **Keine Dateipfad-Ableitung aus Angreiferdaten** → **unauffällig, begründet.** Alle Spool-Pfade sind
+   reine Funktionen von `spool_txid` (`crypto.randomBytes` + Zeitstempel); mechanisch bestätigt, dass
+   kein `path.join`/`path.resolve` `mailFrom`, `rcptTo`, `ehloName` oder `remoteAddress` referenziert.
+
+**Eine Kalibrierungsnotiz der Testrolle, die den Befund erst belastbar macht:** Die erste F55-Messung
+schien schon bei 5 000 Wiederholungen zu hängen — das war ein Fehler im **eigenen Testklienten**
+(zeichenkettenbasierte Zeilenpufferung wurde selbst zum Engpass), **nicht** am Server. Erst mit einem
+zählbasierten Klienten lief es glatt durch, und **erst danach** wurde F55 als Befund geführt. Ohne
+diese Selbstprüfung wäre ein Testartefakt als Serverdefekt in die Abnahme gegangen.
+
+**Nebenbei korrigiert:** F54s Statuszeile in der Übersichtstabelle stand noch auf „offen", während der
+ausführliche Abschnitt bereits „behoben in `JR-4-21`" sagte — ein Nachpflegefehler, jetzt synchron.
+
+**Entscheidung des PO zu F55/F56:** beide werden **behoben**, zusammen mit F50 in **`JR-4-21a`**
+(DEV, beauftragt) — statt sie offen in die Abnahme zu tragen. Begründung: derselbe Typ Härtungsbefund
+wie F52–F54, beide klein, und für ein Compliance-Archiv ist TLS **ohne Forward Secrecy** schwer zu
+vertreten. Auflagen an die Umsetzung: `RCPT`-Limit **≥ 100** (RFC 5321 §4.5.3.1.8), Antwort
+`452 4.5.3` unterscheidbar von ADR-030s gleichlautendem Fall; Cipher-Filter darf TLS 1.3 nicht
+berühren und **Exchange Online nicht aussperren** — ein zu strenger Filter ist hier gefährlicher als
+ein zu laxer.
+
+**Nächster Schritt:** `JR-4-21a` (F50, F55, F56 — läuft), dann Abnahme `JR-4-13` **in eigener,
+frischer Sitzung**.
+
+#### 2026-08-04 — `JR-4-21a` erledigt (DEV): F50, F55, F56 behoben. **E4 ist abnahmebereit**
+
+| Feld        | Inhalt                                                                                                                                                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task**    | `JR-4-21a` — F50 (Durchsatz), F55 (`RCPT`-Limit), F56 (Cipher-Filter)                                                                                                                                                                                               |
+| **Commits** | F56 `819403f`+`3925dd3` · F55 `8755d9b`+`5fb9b1d` · F50 `543d73d`+`f34f3b8` (je ein Fix- und ein Nachtrags-Commit, wie beauftragt nach jedem Befund einzeln gesichert)                                                                                              |
+| **CI**      | `30912736332`, `30913563209`, `30914997638` — alle **success**. Zuletzt `1038 passed \| 8 skipped`, 89 Dateien, `unit ci 848/848 · integration ci 121/121 · adversarial ci 69/69`, Inventar `unit 61/61 · integration 21/21 · adversarial 7/7`, keine DB-Rückstände |
+| **F56**     | `TLS_CIPHERS` erzwingt Forward Secrecy und AEAD; `AES128-SHA` wird abgelehnt (`no shared cipher`, fataler Alert), TLS 1.3 unverändert, gewöhnliche Clients verhandeln weiterhin `ECDHE-RSA-AES128-GCM-SHA256`                                                       |
+| **F55**     | `maxRecipientsPerTransaction` (Default 1000, **Floor 100** nach RFC 5321 §4.5.3.1.8), `452 4.5.3` mit von ADR-030 unterscheidbarem Text, Transaktion läuft danach weiter. Gemessen: 100 akzeptiert, 101. abgewiesen, Transaktion schließt ab                        |
+| **F50**     | `SpoolWriteBridge` puffert bis **128 KiB** vor der Weitergabe an den Stream                                                                                                                                                                                         |
+
+**Die F50-Durchsatztabelle — die Kernaussage ist nicht die Beschleunigung, sondern das Verhältnis:**
+
+| Zeilenlänge | vorher                | nachher              | Faktor |
+| ----------- | --------------------- | -------------------- | ------ |
+| 60 Byte     | 58 720 ms (0,88 MB/s) | 629 ms (82,14 MB/s)  | ≈ 93×  |
+| 998 Byte    | 4 110 ms (12,19 MB/s) | 425 ms (117,88 MB/s) | ≈ 9,7× |
+
+**Der Unterschied zwischen kurzen und langen Zeilen fällt von ≈ 13,9× auf ≈ 1,48×** — das war die
+Aussage von F50, und sie ist damit beantwortet. „Vorher" reproduziert die Originalmessung des Befunds
+fast exakt (53 816/4 288 ms dort gegen 58 720/4 110 ms hier), was den Vergleich belastbar macht.
+Zusätzlich läuft `spool-write-bridge-throughput.test.ts` als **dauerhafte Coverage-Notiz ohne
+Assertion** in jedem `ci`-Lauf mit; im CI-Lauf `30914997638` steht dort 124,80 MB/s gegen 250,50 MB/s
+(Verhältnis 2,0 statt 1,48 — andere Maschine, dieselbe Aussage).
+
+**Der wichtigste Teil dieser Scheibe ist ein Fix, der keiner war.** Die erste F56-Fassung setzte
+`ciphers`/`honorCipherOrder` im Optionsobjekt von `buildTlsSocketOptions()` — direkt neben
+`minVersion`, die naheliegende Stelle. **Gemessen wirkungslos:** Sobald ein `secureContext` übergeben
+wird — in diesem Prozess immer —, ignoriert Node einen Cipher-Parameter auf Socket-Ebene vollständig.
+Ein Client mit ausschließlich `AES128-SHA` verhandelte ihn weiterhin. **Aufgefallen ist es allein
+daran, dass der Kalibrierungslauf grün blieb, obwohl er rot werden musste.** Der wirksame Fix sitzt
+jetzt im Konstruktor von `EsmtpServer`: `tls.createSecureContext({ cert, key, ciphers: TLS_CIPHERS,
+honorCipherOrder: true })`, beide Richtungen empirisch belegt. **Ohne die Pflicht zur Kalibrierung
+wäre ein wirkungsloser Sicherheitsfix als erledigt in die Abnahme gegangen** — das ist der stärkste
+Beleg für diese Regel, den das Projekt bisher hat.
+
+**Und zum zweiten Mal in Folge hat der Volllauf etwas gefangen, das kein Einzeltest sah:** Die
+`TLS_CIPHERS`-Dokumentation enthielt den Literal-String `tls.connect(`, worauf der Textscanner von
+`no-outbound-mail-path.test.ts` (`JR-4-07`s Wächter „kein ausgehender Aufruf im Empfängerquelltext")
+ansprang. In `JR-4-21` war es die Byte-Treue-Regression, hier ein Kommentar — **beide Male der
+Volllauf, nie die eingegrenzte Suite.**
+
+**Bewusst nicht getan** (vom DEV benannt, vom PO akzeptiert): kein zweiter End-to-End-Test, der
+ADR-030s Cross-Chain-`452` gegen F55 abgrenzt — die Texte sind getrennt und per `not.toMatch` geprüft,
+ADR-030s eigener Test existiert bereits. Kein expliziter 3DES/RC4-Fall — dieses OpenSSL 3.5.5
+verweigert 3DES schon beim Aufbau des Client-Kontexts, wie der Befund selbst notiert.
+
+---
+
+#### 2026-08-04 — `JR-4-13` durchgeführt (TEST, unabhängige Sitzung): **E4 ist abgenommen**
+
+| Feld                | Inhalt                                                                                                                                                                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Task**            | `JR-4-13` — Abnahme E4, Rolle TEST, eigene Sitzung (hat keine E4-Scheibe selbst geschrieben)                                                                                                                                                                                                  |
+| **Geprüfter Stand** | `b951be2`, Branch `claude/journaling-e4-smtp-ingress`                                                                                                                                                                                                                                         |
+| **Urteil**          | **angenommen mit zwei Auflagen**, beide in derselben Sitzung erledigt → **abgenommen**                                                                                                                                                                                                        |
+| **Protokoll**       | `16-abnahme-e4.md` (`71d2b85`, nachgeführt in `c79aff4`) — 24 Kriterienzeilen mit Beleg je Kriterium                                                                                                                                                                                          |
+| **Commits**         | Protokoll `71d2b85` · Auflage 1 (Test) `a28b6af` · Protokollnachführung `c79aff4`                                                                                                                                                                                                             |
+| **Volllauf**        | **1040 passed \| 8 skipped** (1048) bei **90 Dateien**, 164 s — `unit ci 850/850 · integration ci 121/121 · adversarial ci 69/69`. **Zweimal unabhängig gefahren:** vom Tester und vom PO, identische Zahlen, `[TEST-EXECUTED]` vorhanden (kein `verified NOTHING`). Inventar `62`/`850`      |
+| **CI**              | `30915618389` für `b951be2` **success** — vom Tester heruntergeladen und ausgewertet, nicht nur der Status geglaubt. Dort zog `JR-4-10` den `250`-Zweig **8×/20, alle 8 mit passender Ledger-Zeile**; lokal auf Windows 0×/20 (F48) und korrekt als „Zweig nicht genommen" ausgewiesen        |
+| **Auflage 1**       | „TLS-Version/Cipher stehen im Ledger-Eintrag" (`JR-4-04`) war **inhaltlich korrekt, aber ohne committeten Test**. Auf Entscheidung des Auftraggebers **nachgezogen** statt als Auflage weitergeschoben: `smtp-tls-fields-reach-acceptance.test.ts` (`a28b6af`), 2 Fälle → erledigt            |
+| **Auflage 2**       | F47 stand als „offen", war seit `JR-4-06b`/`25a7e91` behoben → in `09-befunde-bestandscode.md` korrigiert (PO). Dabei fiel auf, dass **F50/F52/F53/F55/F56** dasselbe Problem hatten: Detailabschnitt „behoben", Übersichtstabelle „offen" — alle sechs Zeilen berichtigt                     |
+| **PO-Nachvollzug**  | Eigener Volllauf; `test:types` Exit 0; alle fünf genannten Fix-Commits per `git log` und der CI-Schritt per `git log -S` verifiziert; **alle zehn** `Datei:Zeile`-Belege des Protokolls mechanisch aufgelöst und inhaltlich geprüft; F46-Wächter und TLS-1.1-`ClientHello` selbst nachgelesen |
+| **Offen**           | Rückmerge in den Integrationsbranch (Entscheidung des Auftraggebers), kein Push bisher                                                                                                                                                                                                        |
+
+**Zwei Dinge sind an dieser Abnahme bemerkenswert, und beide betreffen das Verfahren, nicht den Code.**
+
+**Erstens: Auflage 1 ist der Beleg dafür, dass „gemessen korrekt" und „dauerhaft gesichert" zwei
+verschiedene Aussagen sind.** Das Kriterium war erfüllt — der Tester hat es mit einer eigenen Probe
+nachgewiesen, in der er zuerst einen Buffer-Bug seines eigenen Zeilen-Lesers finden und beheben musste,
+sonst hätte die Probe „hängt" statt „falsch" gemeldet. Aber kein committeter Test hielt es fest: die
+vorhandenen prüften die Logzeile oder hartcodierten `'TLSv1.3'`. Genau diese Konstellation — richtiges
+Verhalten, kein Wächter — war die Wurzel von F46, und der Auftraggeber hat deshalb entschieden, den
+Test **vor** der Abnahme nachzuziehen statt ihn ins nächste Epic zu schieben.
+
+**Zweitens: die Übersichtstabelle in `09-befunde-bestandscode.md` war eine zweite Fassung derselben
+Wahrheit, und sie war veraltet.** Sechs Befunde standen dort auf „offen", während ihre eigenen
+Detailabschnitte sie mit Commit-Hash als behoben führten. Das ist dasselbe Muster wie die doppelte
+Statusfassung in `README.md`, die am 2026-08-03 entfernt wurde, und wie der Handover-Fehler vom
+2026-07-28. **Eine Statusangabe an zwei Stellen veraltet an einer davon** — die Regel „wer einen Status
+ändert, ändert beide Stellen" steht jetzt im F47-Abschnitt.
+
+---
+
+### Stand von E4 zum Abschluss dieser Sitzung
+
+**E4 ist abgenommen** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung): 21 von 21 Tasks, alle
+Kriterien belegt, beide Abnahmeauflagen in derselben Sitzung erledigt. **Noch nicht zurückgemergt** —
+der Rückmerge in `claude/enterprise-product-implementation-cxmmqe` ist nach ADR-014 die nächste
+Handlung und wartet auf die Freigabe des Auftraggebers. Nichts ist gepusht; `origin` steht auf
+`b951be2`, lokal liegen `71d2b85`, `a28b6af`, `c79aff4` und der Statuscommit darüber.
+
+**Befundlage E4:** F42–F51 behoben oder aufgelöst, **F52/F53/F54** (`JR-4-21`), **F55/F56**
+(`JR-4-21a`), **F50** und **F47** behoben. Offen bleibt aus E4 **kein** Befund. Außerhalb von E4 bleiben
+**F42** (totes `tsconfig.build.json`, niedrig) und **F43** (Heap-Nachweis aus E3, mittel) als bewusst
+offene Fragen an den Auftraggeber.

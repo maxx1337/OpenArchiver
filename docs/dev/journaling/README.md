@@ -47,6 +47,7 @@ SEC 17a-4, FINRA 4511, MiFID II).
 | 15    | `15-fallstricke.md`          | Die 34 Fallstricke, die Zeit gekostet haben — **Referenz, nicht Lektüre** | wenn ein Werkzeug sich unerwartet verhält  |
 | 16    | `16-abnahme-e4.md`           | Abnahmeprotokoll E4 (`JR-4-13`): Kriterium → Beleg → Urteil               | nur bei Fragen zur E4-Abnahme              |
 | 17    | `17-parallelbetrieb.md`      | Regeln für zwei gleichzeitig laufende Sessions                            | **sobald eine zweite Session läuft**       |
+| 18    | `18-archiv-e4-e5.md`         | Protokolle der abgenommenen Epics E4 und E5                               | nur für Historie, nie für die nächste Task |
 | 11–14 | Archivdateien                | Protokolle und Task-Tabellen der **abgenommenen** Epics (E1, E13, E2, E3) | nur für Historie, nie für die nächste Task |
 
 > **`17-parallelbetrieb.md` hieß bis zum Rückmerge von E4 `12-parallelbetrieb.md`.** Sie kollidierte
