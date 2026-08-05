@@ -97,7 +97,7 @@ findet es hier.
 | **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                                 | niedrig | offen     |
 | **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                           | niedrig | offen     |
 | **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                            | niedrig | offen     |
-| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | offen     |
+| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | behoben   |
 | **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                           | keine   | widerlegt |
 | **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                        | mittel  | offen     |
 | **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                        | hoch    | behoben   |
@@ -1668,8 +1668,32 @@ hier ohne Schaden.
 
 **Kategorie:** Entwicklungsumgebung (kein Produktdefekt, kein Testharness-Defekt) · **Schwere:** mittel
 für die Arbeitsfähigkeit, **null** für das Produkt · **Ort:** fehlende `.gitattributes`, `.prettierrc`
-ohne `endOfLine` · **Status:** offen, Task-Vorschlag unten · **Herkunft:** PO, 2026-07-29, beim
-Sessionabschluss von E13
+ohne `endOfLine` · **Status:** **behoben am 2026-08-04, Commit `9c60f32`** (PO, auf Freigabe des
+Auftraggebers) · **Herkunft:** PO, 2026-07-29, beim Sessionabschluss von E13
+
+> **Behoben.** `.gitattributes` setzt `* text=auto eol=lf`, `.prettierrc` nennt `endOfLine: "lf"` jetzt
+> ausdrücklich. **`corepack pnpm lint` ist auf diesem Windows-Host von 481 gemeldeten Dateien auf
+> `All matched files use Prettier code style!` gegangen, Exit 0.** Am Repository hat sich dabei **kein
+> Byte** geändert: `git add --renormalize .` erzeugte einen leeren Diff, weil der Index immer schon LF
+> hielt — die Änderung betrifft ausschließlich, was beim Auschecken im Arbeitsbaum landet.
+>
+> **Die Ausnahme ist der eigentliche Inhalt dieses Fixes.** Ein pauschales `eol=lf` hätte die 28
+> `.eml`-Fixtures unter `packages/journaling/tests/fixtures/` auf LF normalisiert. Die liegen dort
+> **absichtlich mit CRLF**: RFC 5321/5322 definieren CRLF als Zeilenende, und diese Dateien sind die
+> Wire-Bytes, gegen die der Parser aus E5 und der Byte-Treue-Roundtrip aus `JR-4-07` messen. Eine
+> Normalisierung hätte nicht „Formatierung korrigiert", sondern **die Eingabe verändert, gegen die der
+> Byte-Treue-Nachweis geführt wird** — und zwar ohne dass ein Test rot geworden wäre, der es meldet.
+> Deshalb `*.eml -text` (keine Konversion in beide Richtungen). **Vorher gemessen statt angenommen:**
+> genau 42 getrackte Blobs enthalten CR, das sind 28 `.eml` und 14 `.png` — nichts sonst.
+>
+> **Was der Befund gekostet hat, bevor er behoben war:** Am 2026-08-04 hat die Ambiguität einen
+> **Fehlbefund** erzeugt. Bei der E4-Abnahme habe ich Kopien von Planungsdokumenten im Scratchpad
+> gegen Prettier geprüft — außerhalb des Repositorys findet Prettier die `.prettierrc` nicht und misst
+> gegen Defaults (2 Leerzeichen statt Tabs, doppelte Anführungszeichen, Breite 80). Ergebnis: die
+> Meldung an den Auftraggeber, zwei Dokumente seien schon vor meinen Änderungen nicht konform gewesen.
+> Sie war falsch; aufgefallen ist es nur, weil der CI-Lauf gegen denselben Commit grün war und dieser
+> Widerspruch nicht auflösbar blieb. **Eine Prüfung, deren Rotmeldung man gewohnheitsmäßig ignorieren
+> muss, prüft nichts** — das ist derselbe Mechanismus wie bei F48, nur mit umgekehrtem Vorzeichen.
 
 Das Repository hat **keine `.gitattributes`**, und `.prettierrc` setzt `endOfLine` nicht — Prettiers
 Standard ist `"lf"`. Auf einem Windows-Host mit `core.autocrlf=true` (dem Git-for-Windows-Default) wird

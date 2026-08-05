@@ -281,13 +281,18 @@ origin/<integration>` — the natural way to branch off — sets the **epic bran
 - `git push -u origin <branch>`; retry network failures with backoff.
 - Run `pnpm lint` before committing — Prettier covers `.ts`, `.svelte`, `.json`, and `.md`. `JR-1-05a`
   made the repository lint-clean on 2026-07-28.
-    > **On Windows it is red anyway, and that is not your doing.** With no `.gitattributes` in the
-    > repository and Git-for-Windows' default `core.autocrlf=true`, every text file is checked out with
-    > CRLF while Prettier defaults to `endOfLine: "lf"` — so `pnpm lint` reports ~388 files. The index and
-    > `origin` hold LF; nothing is actually misformatted. **Never "fix" this with `prettier --write`** —
-    > that rewrites the whole repository. Check your own files instead:
-    > `corepack pnpm exec prettier --check <paths>`. Tracked as **F35** in
-    > `docs/dev/journaling/09-befunde-bestandscode.md` with a proposed fix.
+    > **A red `pnpm lint` is a real finding again — as of 2026-08-04.** Until then this note said the
+    > opposite: with no `.gitattributes` and Git-for-Windows' `core.autocrlf=true`, every text file was
+    > checked out as CRLF while Prettier defaults to `endOfLine: "lf"`, so `pnpm lint` reported 481
+    > files on such a host while the index, `origin` and CI were clean. **F35 fixed that** (`9c60f32`):
+    > `.gitattributes` pins `eol=lf`, `.prettierrc` states it explicitly, and `pnpm lint` now exits 0
+    > on Windows too. Not a single repository byte changed — the index always held LF.
+    >
+    > Two things still hold. **Never "fix" a red lint with a repo-wide `prettier --write`**; check your
+    > own files, `corepack pnpm exec prettier --check <paths>`. And **`packages/journaling/tests/fixtures/*.eml`
+    > keep CRLF on purpose** (`*.eml -text`): RFC 5321/5322 make CRLF the line terminator, and those
+    > files are the wire bytes the E5 parser and `JR-4-07`'s byte-fidelity roundtrip measure against.
+    > Normalising them would silently change what those tests assert on.
 - `pnpm` may not be on `PATH` on a Windows host. `corepack pnpm …` runs the pinned 10.13.1.
 
 > **Do not remove `srcExclude: ['dev/**']`from`docs/.vitepress/config.mts`.** VitePress turns every

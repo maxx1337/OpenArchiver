@@ -52,21 +52,26 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 Der Auftraggeber hat am 2026-08-04 beanstandet, dass zu viele Tokens verbrannt werden. Gemessen an
 dieser Sitzung sind das die tatsächlichen Posten, größter zuerst:
 
-| Posten                                                            | Kosten                       | Gegenmittel                                                                                                                  |
-| ----------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **F35 ist offen** — lokal ist `prettier --check` strukturell rot  | ~7 000 Tokens je Sitzung     | `.gitattributes` (Fix-Vorschlag steht bei F35). Solange er fehlt: **niemals** repoweit prüfen, nur die eigenen Dateien       |
-| Ein Volllauf, ungefiltert gelesen                                 | ~5 000 Tokens                | Ausgabe in eine Datei, dann **nur** Fehlschläge und Summenzeilen lesen (Rezept unten). Gefiltert: ~400 Tokens                |
-| CRLF-Warnungen von `git add`/`commit`/`diff`                      | ~2 500 Tokens je Sitzung     | `git config core.safecrlf false` (lokal, am 2026-08-04 gesetzt). Der eigentliche Fix ist wieder F35                          |
-| Große Dokumente vollständig lesen                                 | 4 000–15 000 Tokens je Datei | `ctx_execute_file` mit einem Skript, das nur Struktur oder Treffer ausgibt — nie `cat` auf `06-status.md` oder `09-befunde…` |
-| Inhalte durchs Kontextfenster verschieben (etwa beim Archivieren) | ~55 000 Tokens vermieden     | `sed -n 'A,Bp' quelle > ziel` statt lesen-und-neu-schreiben. So sind die 195 000 Zeichen nach `18-archiv-e4-e5.md` gewandert |
+| Posten                                                            | Kosten                       | Gegenmittel                                                                                                                   |
+| ----------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ~~F35~~ — lokal war `prettier --check` strukturell rot            | ~7 000 Tokens je Sitzung     | **Behoben 2026-08-04** (`9c60f32`): `.gitattributes` setzt LF, `.eml`-Fixtures behalten CRLF. `pnpm lint` ist hier jetzt grün |
+| Ein Volllauf, ungefiltert gelesen                                 | ~5 000 Tokens                | Ausgabe in eine Datei, dann **nur** Fehlschläge und Summenzeilen lesen (Rezept unten). Gefiltert: ~400 Tokens                 |
+| CRLF-Warnungen von `git add`/`commit`/`diff`                      | ~2 500 Tokens je Sitzung     | `git config core.safecrlf false` (lokal, am 2026-08-04 gesetzt). Der eigentliche Fix ist wieder F35                           |
+| Große Dokumente vollständig lesen                                 | 4 000–15 000 Tokens je Datei | `ctx_execute_file` mit einem Skript, das nur Struktur oder Treffer ausgibt — nie `cat` auf `06-status.md` oder `09-befunde…`  |
+| Inhalte durchs Kontextfenster verschieben (etwa beim Archivieren) | ~55 000 Tokens vermieden     | `sed -n 'A,Bp' quelle > ziel` statt lesen-und-neu-schreiben. So sind die 195 000 Zeichen nach `18-archiv-e4-e5.md` gewandert  |
 
 **Das Rezept für einen Volllauf** — er dauert knapp drei Minuten, die Ausgabe muss nicht gelesen werden:
 
 ```bash
 DATABASE_URL=postgresql://admin:password@127.0.0.1:5432/open_archive OA_TEST_REQUIRE_INFRA=1 \
   corepack pnpm test > /tmp/run.log 2>&1; echo "EXIT=$?"
-grep -E 'Test Files|Tests +|TEST-EXECUTED|Suite inventory|FAIL|✗' /tmp/run.log | tail -12
+sed -r 's/\x1b\[[0-9;]*m//g' /tmp/run.log \
+  | grep -E 'Test Files|Tests +[0-9]|TEST-EXECUTED|Suite inventory|FAIL|✗' | tail -12
 ```
+
+**Das `sed` davor ist nicht Kosmetik:** vitest schreibt ANSI-Farbcodes zwischen `Tests` und die Zahl,
+weshalb ein naives `grep 'Tests +[0-9]'` genau die Zeile mit der Testzahl **verschluckt** — bei der
+ersten Fassung dieses Rezepts am 2026-08-04 passiert.
 
 `[TEST-EXECUTED]` und `Suite inventory verified` sind die Zeilen, die zählen — sie unterscheiden „grün"
 von „grün, weil nichts geprüft wurde". **`--silent` ist verboten:** es unterdrückt die
@@ -245,7 +250,7 @@ voraus. Was hier tatsächlich gilt — jeder Punkt gemessen, nicht vermutet:
 | Valkey, Meilisearch, Tika | **laufen ebenfalls** über `docker-compose.yml` und sind vom Host aus belegt: Valkey `AUTH`+`PING`, Meilisearch `/health` `200`, Tika `/version` `Apache Tika 3.2.2`. Damit ist die Infrastrukturfrage für E2 ff. geklärt                                                                                                                                                        |
 | Docker                    | **Docker Desktop**, Client und Engine **29.6.2**, Compose **v5.3.1**, Linux-Engine. **Benutzerinstallation** unter `%LOCALAPPDATA%\Programs\DockerDesktop`; der PATH-Eintrag `…\resources\bin` existiert, aber eine **vor** der Installation gestartete Shell sieht ihn nicht — dann fehlt auch `docker-credential-desktop` und jedes `pull` bricht ab. Eigener Abschnitt unten |
 | `git fetch/push`          | **braucht zwei Handgriffe.** `origin` ist `git@github.com:maxx1337/OpenArchiver.git` über SSH, `~/.ssh/id_rsa` ist **passphrase-geschützt**. Ohne geladenen Key endet ein nicht-interaktiver Aufruf mit `Could not read from remote repository`, ein interaktiver **hängt** an der Passphrase-Abfrage. Lösung siehe unten                                                       |
-| `pnpm lint`               | **strukturell rot: 388 Dateien** — `core.autocrlf=true` ohne `.gitattributes`, siehe **F35**. Das ist **kein** Formatierungsfehler im Repository. **Nicht** mit `prettier --write` „beheben" — das schriebe 388 Dateien um. Stattdessen `corepack pnpm exec prettier --check <eigene Dateien>`                                                                                  |
+| `pnpm lint`               | **grün, seit F35 am 2026-08-04 behoben ist** (`9c60f32`). Bis dahin war es hier strukturell rot (zuletzt 481 Dateien), weil `core.autocrlf=true` ohne `.gitattributes` alles als CRLF auscheckte. **Eine Rotmeldung ist ab jetzt wieder eine Aussage** und darf nicht mehr weggedeutet werden — aber weiterhin **nie** mit repoweitem `prettier --write` „beheben"              |
 
 **Wegwerf-Cluster ohne Systeminstallation** — so ist er in dieser Session entstanden, PostgreSQL
 **17.10**, dieselbe Version wie die CI und wie `JR-13-09a`:
@@ -730,9 +735,9 @@ projektweit als „Fallstrick N" darauf verwiesen wird. Sie sind Referenz, nicht
 diese Datei wird bei jedem Sessionende überschrieben, jene wächst nur.
 
 **Die vier, die man vor der ersten Zeile Code kennen sollte:** `pnpm` ist nicht im PATH
-(`corepack pnpm`), `pnpm lint` ist auf diesem Host strukturell rot (F35) und darf **nicht** mit
-`--write` „behoben" werden, ein Import kann eine Infrastruktur mitziehen, die es nicht gibt, und
-`-t` ist ein Regex und kein Substring.
+(`corepack pnpm`), `pnpm lint` **war** auf diesem Host strukturell rot (F35, seit dem 2026-08-04
+behoben — eine Rotmeldung ist wieder eine Aussage), ein Import kann eine Infrastruktur mitziehen, die
+es nicht gibt, und `-t` ist ein Regex und kein Substring.
 
 ## Vorlage für den nächsten Handover
 
