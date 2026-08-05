@@ -256,3 +256,25 @@ export {
 	journalInboundJobId,
 	type JournalInboundJobData,
 } from './phase-b/queue-contract';
+
+export {
+	classifySpoolEntry,
+	mayArchive,
+	type MeasuredSpoolEntry,
+	type SpoolEntryArchive,
+	type SpoolEntryContentMismatch,
+	type SpoolEntryNoReceipt,
+	type SpoolEntryNotAReceipt,
+	type SpoolEntryReceiptWithoutHash,
+	type SpoolEntryVerdict,
+} from './phase-b/spool-entry-gate';
+
+export { NodeSpoolEntryReader, type SpoolEntryReader } from './phase-b/spool-entry-reader';
+
+export {
+	alertSeverityFor,
+	noopPhaseBAlertSink,
+	type PhaseBAlert,
+	type PhaseBAlertSeverity,
+	type PhaseBAlertSink,
+} from './phase-b/alerts';

@@ -28,8 +28,17 @@ export class PostgresLedgerLookup implements LedgerLookup {
 			journaling_source_id: string | null;
 			remote_ip: string | null;
 			received_at: string | Date;
+			event_type: string;
+			// `| undefined` on both, and it is not defensive padding: a driver that omits a NULL column
+			// from a row object, or any caller handing in a row shaped by a narrower SELECT, produces
+			// `undefined` rather than `null` -- and the first version of this code compared with `=== null`
+			// and threw `Cannot convert undefined to a BigInt`. Found by the existing unit test's fake rows,
+			// which is exactly what that test is for.
+			content_sha256: Uint8Array | null | undefined;
+			size_bytes: string | bigint | null | undefined;
 		}>(
-			`SELECT spool_txid, seq, chain_scope_id, journaling_source_id, remote_ip, received_at
+			`SELECT spool_txid, seq, chain_scope_id, journaling_source_id, remote_ip, received_at,
+			        event_type, content_sha256, size_bytes
 			   FROM journal_ledger
 			  WHERE spool_txid = ANY($1)`,
 			[[...spoolTxIds]]
@@ -46,6 +55,17 @@ export class PostgresLedgerLookup implements LedgerLookup {
 				remoteIp: row.remote_ip,
 				receivedAt:
 					row.received_at instanceof Date ? row.received_at : new Date(row.received_at),
+				eventType: row.event_type,
+				// `bytea` arrives as a Buffer from postgres-js; kept as raw bytes, never hex-encoded
+				// here -- see the port's doc comment on why the encoding decision stays with the caller.
+				// `?? null` rather than a `=== null` test: absent and SQL-NULL must reach the caller as the
+				// same value, because the gate branches on `contentSha256 === null` and an `undefined`
+				// slipping through would take the "hash present" branch and then hex-encode nothing.
+				contentSha256: row.content_sha256 ?? null,
+				sizeBytes:
+					row.size_bytes === null || row.size_bytes === undefined
+						? null
+						: BigInt(row.size_bytes),
 			});
 		}
 		return result;

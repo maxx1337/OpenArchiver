@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { LedgerEntryByTxId, LedgerLookup } from '../../src/ledger/ledger-lookup-port';
 
 /**
@@ -35,7 +36,28 @@ export class FakeLedgerLookup implements LedgerLookup {
 	}
 }
 
-/** Build a minimal, valid {@link LedgerEntryByTxId} with sensible defaults, overridable per field. */
+/**
+ * The bytes {@link ledgerEntry}'s default `contentSha256` is the hash of, so the default row is
+ * **internally consistent**: its hash and its `sizeBytes` describe one and the same message.
+ *
+ * That consistency is the point. `JR-6-02a`'s gate compares a receipt's `content_sha256` against a
+ * measurement of the file on disk, and a default of `null` (or of 32 zero bytes) would make the default
+ * row one that no real receipt can be -- so a Phase-B test built on it would be exercising an
+ * impossible input while looking like it exercised the ordinary one.
+ */
+export const DEFAULT_LEDGER_ENTRY_CONTENT = Buffer.from(
+	'Return-Path: <sender@example.com>\r\nSubject: fake\r\n\r\nbody\r\n',
+	'utf8'
+);
+
+/**
+ * Build a minimal, valid {@link LedgerEntryByTxId} with sensible defaults, overridable per field.
+ *
+ * The defaults describe a **`receipt`** for {@link DEFAULT_LEDGER_ENTRY_CONTENT}. A Phase-B test that
+ * measures its own bytes must override `contentSha256` and `sizeBytes` together -- overriding only one
+ * produces a self-contradicting receipt, which is a legitimate thing to test but never an accident worth
+ * having.
+ */
 export function ledgerEntry(overrides: Partial<LedgerEntryByTxId> = {}): LedgerEntryByTxId {
 	return {
 		seq: 1n,
@@ -43,6 +65,11 @@ export function ledgerEntry(overrides: Partial<LedgerEntryByTxId> = {}): LedgerE
 		journalingSourceId: null,
 		remoteIp: '192.0.2.25',
 		receivedAt: new Date('2026-08-01T10:00:00.000Z'),
+		eventType: 'receipt',
+		contentSha256: new Uint8Array(
+			createHash('sha256').update(DEFAULT_LEDGER_ENTRY_CONTENT).digest()
+		),
+		sizeBytes: BigInt(DEFAULT_LEDGER_ENTRY_CONTENT.length),
 		...overrides,
 	};
 }

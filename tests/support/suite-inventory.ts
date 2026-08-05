@@ -215,7 +215,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// including that maxStalledCount stays 0). The worker entry point itself has no unit test on
 		// purpose: importing it constructs a BullMQ Worker and opens a Redis connection, so it is
 		// measured by spawning the compiled process in the integration suite instead.
-		expectedFiles: 69,
+		//
+		// 72 after JR-6-02a added three under packages/journaling/src/phase-b/: spool-entry-gate.test.ts
+		// (the decision whether a spool entry may be archived at all), alerts.test.ts (the severity split
+		// E5 deliberately left to E6) and spool-entry-reader.test.ts (streaming hash against a one-shot
+		// hash, across several read chunks).
+		expectedFiles: 72,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -722,7 +727,19 @@ export const SUITES: readonly SuiteSpec[] = [
 		// none of which may fall back to the default -- and 2 that pin maxStalledCount to 0 and
 		// lockDuration to ten minutes, the two parameters whose values JR-6-03's dedup correctness and
 		// long synchronous MIME parsing respectively depend on).
-		expectedTests: { ci: 1019, nightly: 3, manual: 0 },
+		//
+		// 1054 after JR-6-02a added 35: 20 in spool-entry-gate.test.ts, 9 in alerts.test.ts, 8 in
+		// spool-entry-reader.test.ts. The gate's 20 are the shape that matters -- every case asserts
+		// `mayArchive()` explicitly, including the five that must refuse, and two of them are a
+		// counter-check against a plausible wrong gate ("a ledger row exists, so archive it") which passes
+		// every positive assertion in the file and fails exactly the three that decide integrity. Without
+		// that pair, the suite would be satisfiable by a function that archives unconditionally.
+		//
+		// 1056 after JR-6-02a also added 2 to ledger-lookup.test.ts: absent-vs-SQL-NULL for the two new
+		// nullable columns. That pair is a regression test for a defect this slice introduced and its own
+		// test caught -- `row.size_bytes === null` does not match `undefined`, and the gate branches on
+		// `contentSha256 === null`, so an `undefined` would have reported a hashless receipt as tampering.
+		expectedTests: { ci: 1056, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',

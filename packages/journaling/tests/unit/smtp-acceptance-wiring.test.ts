@@ -427,6 +427,13 @@ class InMemoryLedgerAndLookup implements LedgerBackend, LedgerLookup {
 				journalingSourceId: request.journalingSourceId,
 				remoteIp: request.remoteIp,
 				receivedAt: new Date(Number(request.receivedAtMicros / 1000n)),
+				// JR-6-02a widened `LedgerEntryByTxId` with the three fields Phase B verifies a spool
+				// file against. Mirrored straight off the request rather than defaulted: this fake exists
+				// to report what `append()` was actually called with, and a fake that substituted its own
+				// `eventType` or hash here would let a caller that passes the wrong one look correct.
+				eventType: request.eventType,
+				contentSha256: request.contentSha256,
+				sizeBytes: request.sizeBytes,
 			});
 		}
 		return { seq, chainHash: computed, prevChainHash };

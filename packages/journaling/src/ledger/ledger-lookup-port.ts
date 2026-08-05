@@ -44,6 +44,29 @@ export interface LedgerEntryByTxId {
 	/** Canonical textual form (`normalizeRemoteIp()`'s output), as stored. */
 	readonly remoteIp: string | null;
 	readonly receivedAt: Date;
+	/**
+	 * Which kind of ledger row this is (`JR-6-02a`).
+	 *
+	 * Handed back rather than assumed, because "a row exists for this `spool_txid`" and "the **receipt**
+	 * for this `spool_txid` exists" are different statements, and Phase B may only archive on the
+	 * second. Today only `receipt` rows carry a `spool_txid`, so the two coincide -- but a caller that
+	 * reads `has(txid)` as "receipted" encodes that coincidence instead of checking it, and the next
+	 * event type to reference a spool entry would silently make it wrong.
+	 */
+	readonly eventType: string;
+	/**
+	 * `content_sha256` as stored: 32 raw bytes over the **plaintext wire bytes** (ADR-006,
+	 * architecture section 3 step 4), or `null` for a row that records no object.
+	 *
+	 * This is the value Phase B verifies the spool file against before archiving anything, and the one
+	 * `verify` (E9) re-checks against the stored object. Handed back as raw bytes rather than hex so no
+	 * encoding decision is made on the read path -- the column is `bytea` with a
+	 * `length(content_sha256) = 32` check constraint, and hex-encoding here would invite a comparison
+	 * against a differently-cased hex string elsewhere.
+	 */
+	readonly contentSha256: Uint8Array | null;
+	/** `size_bytes` as stored, or `null` for a row that records no object. */
+	readonly sizeBytes: bigint | null;
 }
 
 /**
@@ -62,6 +85,14 @@ export interface LedgerLookup {
 	 * row is simply absent, never mapped to `null` or `undefined`, so `map.has(id)` and `map.get(id)`
 	 * agree. An empty `spoolTxIds` input must not perform any I/O (an idle spool must not touch the
 	 * database at all).
+	 *
+	 * **A map keyed by `spoolTxId` assumes at most one row per id, and that assumption is load-bearing**
+	 * (ADR-030 already leans on it: "`findBySpoolTxIds()` liefert genau einen Eintrag je `spool_txid`",
+	 * which is why a second `RCPT TO` for another chain gets `452 4.5.3` instead of a second receipt).
+	 * A second row carrying the same `spool_txid` would not fail here -- it would silently **collapse**,
+	 * and the caller would act on whichever row the database happened to return last. `JR-6-03` writes a
+	 * duplicate marker (`duplicate_of`) for a redelivered message and **must not** give that row the
+	 * original's `spool_txid`; if it ever needs to, this signature has to change first.
 	 */
 	findBySpoolTxIds(
 		spoolTxIds: readonly string[]
