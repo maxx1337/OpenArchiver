@@ -1,0 +1,28 @@
+# Line-ending policy. Closes F35 (docs/dev/journaling/09-befunde-bestandscode.md).
+#
+# Without this file, a Windows checkout with Git-for-Windows' default `core.autocrlf=true` gets every
+# text file as CRLF, while Prettier defaults to `endOfLine: "lf"`. `pnpm lint` then reported 481 files
+# as unformatted on such a host while the index, `origin` and CI were all clean -- so a genuine
+# formatting error was indistinguishable from the noise. That ambiguity has already produced one wrong
+# finding (2026-08-04).
+#
+# The index has always held LF; this file makes the working tree match it on every platform.
+* text=auto eol=lf
+
+# The exception that matters, and the reason this file is not a one-liner.
+#
+# `packages/journaling/tests/fixtures/*.eml` are stored with **CRLF on purpose**: RFC 5322 and RFC 5321
+# define CRLF as the line terminator, and these fixtures are the wire bytes the parser and the
+# byte-fidelity roundtrip tests measure against. Normalising them to LF would not "fix formatting" --
+# it would change the input the tests assert on, and the byte-fidelity claim of the receive path
+# (`JR-4-07`) would be measured against something no MTA ever sends.
+#
+# `-text` disables all conversion in both directions: no normalisation on commit, no conversion on
+# checkout. Measured before writing this: 28 tracked `.eml` blobs contain CR, and they are the only
+# non-binary files in the repository that do.
+*.eml -text
+
+# Binary, so neither diffed as text nor line-ending converted. `text=auto` already detects these, but
+# being explicit keeps a future `--renormalize` from depending on that detection.
+*.png binary
+*.svg text eol=lf
