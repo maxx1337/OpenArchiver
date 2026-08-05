@@ -126,11 +126,11 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 ## Aktueller Eintrag
 
 **Stand:** 2026-08-05 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b` erledigt** (Code fertig,
-TEST-Abnahme offen; ADR-010, ADR-033, ADR-034 entschieden; F59 und F61 behoben, F62 neu) ·
+TEST-Abnahme offen; ADR-010, ADR-033, ADR-034 entschieden; F59 und F61 behoben, F62/F63 neu) ·
 **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf:
 **1297 passed | 8 skipped** bei 106 Dateien — `unit ci 1102/1102 · integration ci 126/126 ·
-adversarial ci 69/69`, Exit 0 · CI-Lauf für diesen Stand: siehe `06-status.md`s neuestem Eintrag für
-die Lauf-ID
+adversarial ci 69/69`, Exit 0 · **CI `31054880932` success** (nach fünf vorangegangenen roten Läufen,
+siehe F63)
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -160,8 +160,13 @@ und `JR-6-04` (Spool-Reconciler).
 
 ### Was diese Session gemacht hat
 
-> **Eine Scheibe, ein Commit für Code+Tests (`cb1a524`), ein Commit für diese Doku.** Volllauf **1297
-> passed | 8 skipped** bei 106 Dateien, Exit 0 (vorher: 1276 passed | 8 skipped bei 104 Dateien).
+> **Eine Scheibe, acht Commits.** `cb1a524` (Code+Tests), `440c492` (Doku/ADR-034/F62), und sechs
+> Nacharbeits-Commits — jeder aus einem roten CI-Lauf, keiner aus einem lokalen Fund:
+> `0264405`/`9af1492`/`49a0bc1`/`41c407e`/`3d0fadb`/`c2987e9`. **F63** fasst die drei zugrunde
+> liegenden Ursachen zusammen (fehlende `STORAGE_TYPE`/`ENCRYPTION_KEY` in der CI, eine unmigrierte
+> Datenbank für den gespawnten Worker, eine offene `postgres-js`-Verbindung, die den Shutdown
+> hängen ließ). Volllauf **1297 passed | 8 skipped** bei 106 Dateien, Exit 0 (vorher: 1276 passed |
+> 8 skipped bei 104 Dateien), **CI `31054880932` success**.
 
 **Was gebaut wurde, in der Reihenfolge der Architektur §6:**
 
@@ -405,13 +410,22 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, Commit `cb1a524`
-(Code + Tests von `JR-6-02b`). Nicht neu abzweigen, nicht neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `c2987e9`.
+CI `31054880932` **success** — 106 Dateien, `unit 1102/1102 · integration 126/126 ·
+adversarial 69/69`. Nicht neu abzweigen, nicht neu reservieren.
 
 **Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034` sind entschieden;
 Gate, Pipeline und Backend-Adapter stehen; Ende-zu-Ende ist **manuell** bewiesen (siehe oben und
 `05-entscheidungen.md` ADR-034 Punkt 6), aber nicht automatisiert. `JR-6-02` insgesamt ist damit
 **code-fertig** — die formelle Abnahme (Rolle TEST/PO) steht noch aus.
+
+> **F63, gelesen bevor der nächste Worker echten DB-/Storage-Zugriff bekommt (`JR-6-04`s
+> Reconciler zum Beispiel):** fünf der sechs Nacharbeits-Commits dieser Scheibe waren CI-Iterationen,
+> keine lokalen Funde — `packages/journaling`s eigenes `test:types` war lokal nie gelaufen (nur das
+> von `packages/backend`), die CI setzte `STORAGE_TYPE`/`ENCRYPTION_KEY` nie (der Platzhalter-Worker
+> hatte sie nie gebraucht), der gespawnte Worker griff auf die unmigrierte Wartungsdatenbank statt auf
+> eine isolierte migrierte zu, und eine offene `postgres-js`-Verbindung ließ den Shutdown hängen. Alle
+> drei Ursachen und die Lehre daraus stehen in **F63** (`09-befunde-bestandscode.md`).
 
 **Was `JR-6-03` zu tun hat** (Backlog: „Idempotenz: Objekt-Dedupe auf `content_sha256`, aber jede
 Receipt bleibt im Ledger, Duplikate mit `duplicate_of`"):

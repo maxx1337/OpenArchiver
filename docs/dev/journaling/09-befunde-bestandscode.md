@@ -3593,3 +3593,50 @@ auch wenn nichts im Repository selbst ihn nutzt), und liegt außerhalb des Umfan
 
 **Schwere:** niedrig — der Typ wird nirgends konstruiert, richtet also keinen Schaden an. Der Wert des
 Fundes liegt in der korrigierten Doku-Aussage, nicht in einer Verhaltensänderung.
+
+## F63 — der `journal-inbound`-Worker bekam mit `JR-6-02b` seine ersten echten, dauerhaften Postgres-Verbindungen, und die CI-Umgebung war darauf nicht vorbereitet
+
+**Gefunden:** `JR-6-02b` (2026-08-05), fünf rote CI-Läufe in Folge nach dem ersten grünen lokalen
+Volllauf, bevor der sechste grün wurde (`31054880932`).
+
+**Der Fund, in drei Teilen — jeder für sich unauffällig, zusammen fünf CI-Iterationen teuer.**
+`JR-6-01`s Prozessor war ein reiner Platzhalter (kein DB-Zugriff, kein Storage-Zugriff); `JR-6-02b`
+verdrahtet ihn gegen `IngestionService`/`StorageService`/`PostgresLedgerLookup`, und drei
+Eigenschaften dieser Verdrahtung, die lokal (mit vollständig gesetzten Umgebungsvariablen und einer
+migrierten Datenbank) unsichtbar bleiben, waren in der CI-Umgebung sofort sichtbar:
+
+1. **`config/storage.ts` wirft beim Import, nicht bei der ersten Benutzung.** Ein bloßes
+   `import { StorageService } from '...'` am Kopf einer Datei reicht, um `Invalid STORAGE_TYPE:
+undefined` auszulösen, wenn `STORAGE_TYPE` nicht gesetzt ist — unabhängig davon, ob und wann
+   `new StorageService()` tatsächlich aufgerufen wird. Die CI hatte `STORAGE_TYPE`/
+   `STORAGE_LOCAL_ROOT_PATH`/`ENCRYPTION_KEY` nie gesetzt, weil `.github/workflows/ci.yml`s eigener
+   Kommentar bis dahin zutraf: „the integration suite never touches `config/storage.ts`". Der erste
+   rote Lauf riss dabei **23 von 106 Testdateien** mit, nicht nur die eine, die den Worker spawnt —
+   ein einzelner Import-Fehlschlag in einem Kindprozess genügte, um den ganzen Vitest-Lauf als
+   Fehlschlag zu melden.
+2. **`process.env.DATABASE_URL` in der CI ist absichtlich die unmigrierte Wartungsdatenbank.**
+   `acquireTestDatabase()` erzeugt daraus je Testdatei eine eigene, migrierte Datenbank — aber ein
+   Test, der einen **Kindprozess spawnt** statt die Harness direkt zu benutzen, muss die
+   Verbindungszeichenkette dieser isolierten Datenbank **explizit** an den Kindprozess weiterreichen.
+   `journal-inbound-worker.int.test.ts` tat das nie, weil der Platzhalter-Prozessor nie eine
+   Datenbankabfrage brauchte. Der Fehlschlag war `relation "journal_ledger" does not exist`.
+3. **Eine offene `postgres-js`-Verbindung hält die Event-Loop am Leben, auch im Leerlauf**, und
+   `Worker.close()` (BullMQ) kennt nur seine eigene Redis-Verbindung, nicht irgendeine andere. Der
+   Prozess blieb nach einem sauber abgeschlossenen `worker.close()` bis zum 20-Sekunden-Limit des
+   Tests am Leben. Das Schließen der einen bekannten Verbindung (`ledgerSql.end()`) genügte nicht —
+   vermutlich hält noch etwas im `IngestionService`/`StorageService`/Datenbank-Singleton-Graphen eine
+   weitere Verbindung offen, nicht weiter identifiziert. Behoben mit einem expliziten
+   `process.exit(0)`, **nachdem** `worker.close()` aufgelöst hat (kein Job läuft mehr) und ein
+   bestmöglicher Versuch, `ledgerSql` selbst zu schließen, unternommen wurde.
+
+**Warum das kein Einzelfall bleiben muss.** Jeder künftige Worker-Prozess, der zum ersten Mal echten
+DB-/Storage-Zugriff bekommt (etwa `JR-6-04`s Reconciler), trifft auf dieselben drei Fallen, wenn er
+gegen die CI läuft, ohne dass jemand sie vorher kennt: die CI setzt nur, was der jeweils letzte
+Prozess brauchte, nicht was ein neuer Prozess braucht. Wer den nächsten Worker gegen echte Services
+verdrahtet, sollte **vorher** `corepack pnpm --filter @open-archiver/backend test:types` **beider**
+betroffenen Pakete laufen lassen (nicht nur eines, siehe auch die separate Lehre in `JR-6-02b`s
+Statuseintrag) und den CI-Job-`env:`-Block auf fehlende Variablen prüfen, statt es dem ersten
+CI-Lauf zu überlassen, es zu melden.
+
+**Schwere:** mittel — kein Datenverlust, keine Sicherheitsfrage, aber fünf CI-Iterationen für eine
+einzige Scheibe sind genau die Art Kosten, die eine Lehre rechtfertigt, nicht nur einen Fix.

@@ -724,13 +724,26 @@ adversarial 69/69`, der neue `valkey`-Service trägt. **Der erste Versuch dessel
 ### 2026-08-05 — `JR-6-02b` fertiggestellt (neue Sitzung)
 
 - **Rolle:** DEV (Subagent `senior-dev`)
-- **Commit:** `cb1a524` (Code + Tests). Diese Doku-Aktualisierung folgt als eigener Commit.
+- **Commits:** `cb1a524` (Code + Tests), `440c492` (Doku, ADR-034, F62), plus **sechs
+  Nacharbeits-Commits**, alle aus roten CI-Läufen, nicht aus lokalen Funden: `0264405` (`test:types`
+  von `packages/journaling` war lokal nie gelaufen, zwei Fakes fehlten die neuen
+  `envelopeFrom`/`envelopeRcpt`-Felder), `9af1492`/`49a0bc1` (CI setzte `STORAGE_TYPE`/
+  `STORAGE_LOCAL_ROOT_PATH`/`ENCRYPTION_KEY` nie, weil der Worker vor dieser Scheibe keinen
+  DB-/Storage-Zugriff brauchte — siehe **F63**), `41c407e` (der gespawnte Worker brauchte eine
+  **migrierte** Testdatenbank, nicht `process.env.DATABASE_URL`s Wartungsdatenbank), `3d0fadb`/
+  `c2987e9` (eine offene `postgres-js`-Verbindung hielt den Prozess nach `worker.close()` am Leben;
+  behoben mit `process.exit(0)` nach bestätigtem Drain). **F63** fasst alle drei CI-spezifischen
+  Ursachen zusammen
 - **Tests:** 21 neu gegenüber dem Vortag (11 `pipeline.test.ts`, 3 `spool-entry-releaser.test.ts`,
   2 `ledger-lookup.test.ts`, 5 `journal-inbound.options.test.ts`). Volllauf **1297 passed | 8
   skipped** bei 106 Dateien, Exit 0, `unit ci 1102/1102 · integration ci 126/126 ·
-adversarial ci 69/69`
-- **CI:** noch nicht geprüft zum Zeitpunkt dieses Eintrags — folgt nach dem Push, siehe
-  `07-session-handover.md`
+adversarial ci 69/69` — unverändert über alle Nacharbeits-Commits hinweg
+- **CI:** `31054880932`, **success** nach fünf vorangegangenen roten Läufen (`31050995086` Parse-Fehler
+  in der Workflow-Datei selbst, `31051952349` `test:types`, `31052494990`/`31052830240`
+  Workflow-Parse-Problem mit einem `${{ runner.temp }}`-Ausdruck in job-scope `env:`, `31053663551`
+  unmigrierte Datenbank, `31054317990` hängender Shutdown). 106 Dateien,
+  `unit 1102/1102 · integration 126/126 · adversarial 69/69`, `Suite inventory verified: unit 77/77,
+integration 22/22, adversarial 7/7, 0 unclassified test files`
 - **Entscheidungen:** **ADR-034** (Fan-out über jeden aufgelösten Owner via `normalizedEmail`;
   Spool-Freigabe ist Löschen, kein drittes Spool-Verzeichnis; der Prozessor wirft für jeden
   Nicht-Erfolg; `envelope_from`/`envelope_rcpt` erneut in den Ledger-Lookup gezogen; kein
@@ -741,7 +754,10 @@ adversarial ci 69/69`
   (`bob`/`carol`/`dave@contoso.com`), alle drei archiviert und indexiert, Volltextsuche nach
   `"Quarterly numbers"` findet alle drei, Spool-Datei danach gelöscht. Siehe ADR-034 Punkt 6 für
   die Begründung, warum das kein committeter Test wurde
-- **Befunde:** **F62** neu (`IJournalInboundJob` ist totes Gerüst, Architektur-Doku korrigiert)
+- **Befunde:** **F62** neu (`IJournalInboundJob` ist totes Gerüst, Architektur-Doku korrigiert),
+  **F63** neu (drei CI-spezifische Ursachen — fehlende `STORAGE_TYPE`/`ENCRYPTION_KEY`, unmigrierte
+  Wartungsdatenbank, hängender Shutdown durch eine offene `postgres-js`-Verbindung — kosteten fünf
+  CI-Iterationen für diese Scheibe)
 - **Offen:** `JR-6-03` (Idempotenz/`duplicate_of`), `JR-6-04` (Reconciler), `JR-6-05`–`JR-6-07`
   (Test-Slices), `JR-6-08` (Abnahme). Die Entscheidung, ob ein automatisierter Meilisearch-E2E-Test
   gebaut wird (und mit welcher CI-/DI-Änderung), liegt beim Auftraggeber
