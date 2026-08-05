@@ -6,12 +6,12 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-01 (**E2 ist abgenommen und zurückgemergt** — die zweite,
-**unabhängige** Runde `JR-2-10a` hat 24 von 24 Kriterien erfüllt gefunden, in einer frischen Sitzung,
-die weder `JR-2-08` noch `JR-2-09` noch `JR-2-10` geschrieben hat; der Rückmerge ist am 2026-08-01
-vollzogen (`eb340a9`, `--no-ff`, kein Squash). Ein neuer Befund **F39**, niedrig, kein Produktdefekt.
-**Nächstes Epic: E3**) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
-(Integrationsbranch; E1, E13 und E2 sind zurückgemergt)
+**Letzte Aktualisierung:** 2026-08-04 (**E4 und E5 sind abgenommen und zurückgemergt** — E5 mit
+`JR-5-09`/`107346d`, E4 mit `JR-4-13`/`9503bc8`. Volllauf gegen den gemergten Baum: **1181 Tests** bei
+95 Dateien, `unit ci 991 · integration ci 121 · adversarial ci 69`, CI-Lauf `30967766605` **success**.
+Beim Rückmerge sind drei Nummernkreise kollidiert und nach **ADR-032** aufgelöst worden.
+**Nächstes Epic: E6**) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
+(Integrationsbranch; E1, E13, E2, E3, E5 und E4 sind zurückgemergt)
 
 > **Am 2026-08-01 zusätzlich entschieden: `ADR-025` — der Fork wird weitergeführt.** Die Frage des
 > Auftraggebers, ob angesichts einer kostenpflichtigen Upstream-Lizenz eine eigenständige Anwendung

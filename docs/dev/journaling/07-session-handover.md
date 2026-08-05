@@ -47,6 +47,33 @@ Prompt ist für den Fall, dass eine Session abrupt endet):
 Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 ```
 
+### Billig verifizieren — die Zahlen dazu sind gemessen, nicht geschätzt
+
+Der Auftraggeber hat am 2026-08-04 beanstandet, dass zu viele Tokens verbrannt werden. Gemessen an
+dieser Sitzung sind das die tatsächlichen Posten, größter zuerst:
+
+| Posten                                                            | Kosten                       | Gegenmittel                                                                                                                  |
+| ----------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **F35 ist offen** — lokal ist `prettier --check` strukturell rot  | ~7 000 Tokens je Sitzung     | `.gitattributes` (Fix-Vorschlag steht bei F35). Solange er fehlt: **niemals** repoweit prüfen, nur die eigenen Dateien       |
+| Ein Volllauf, ungefiltert gelesen                                 | ~5 000 Tokens                | Ausgabe in eine Datei, dann **nur** Fehlschläge und Summenzeilen lesen (Rezept unten). Gefiltert: ~400 Tokens                |
+| CRLF-Warnungen von `git add`/`commit`/`diff`                      | ~2 500 Tokens je Sitzung     | `git config core.safecrlf false` (lokal, am 2026-08-04 gesetzt). Der eigentliche Fix ist wieder F35                          |
+| Große Dokumente vollständig lesen                                 | 4 000–15 000 Tokens je Datei | `ctx_execute_file` mit einem Skript, das nur Struktur oder Treffer ausgibt — nie `cat` auf `06-status.md` oder `09-befunde…` |
+| Inhalte durchs Kontextfenster verschieben (etwa beim Archivieren) | ~55 000 Tokens vermieden     | `sed -n 'A,Bp' quelle > ziel` statt lesen-und-neu-schreiben. So sind die 195 000 Zeichen nach `18-archiv-e4-e5.md` gewandert |
+
+**Das Rezept für einen Volllauf** — er dauert knapp drei Minuten, die Ausgabe muss nicht gelesen werden:
+
+```bash
+DATABASE_URL=postgresql://admin:password@127.0.0.1:5432/open_archive OA_TEST_REQUIRE_INFRA=1 \
+  corepack pnpm test > /tmp/run.log 2>&1; echo "EXIT=$?"
+grep -E 'Test Files|Tests +|TEST-EXECUTED|Suite inventory|FAIL|✗' /tmp/run.log | tail -12
+```
+
+`[TEST-EXECUTED]` und `Suite inventory verified` sind die Zeilen, die zählen — sie unterscheiden „grün"
+von „grün, weil nichts geprüft wurde". **`--silent` ist verboten:** es unterdrückt die
+`[TEST-COVERAGE NOTICE]`-Zeilen, und genau die tragen die Aussagen, die F48 und F52–F54 aufgedeckt
+haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
+`node_modules/.cache/oa-test/executed-tests.json`.
+
 ### Immer zuerst
 
 1. **Gegen das Remote abgleichen — vor allem anderen.** Der Container kann auf einen **älteren Stand
