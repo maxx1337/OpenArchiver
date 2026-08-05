@@ -12,6 +12,14 @@ verweisen auf `F<N>`, führen aber keine eigenen Befunde — eine über zwei Dat
 Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-status.md`, verschoben am
 2026-07-28 im Rahmen von `JR-1-06`).
 
+> **Reservierung für E6: `F59` bis `F70`** (angelegt 2026-08-05 auf dem Integrationszweig, Grundlage
+> **ADR-032** Punkt 4). Höchste vergebene Nummer beim Eröffnen des Zweigs
+> `claude/journaling-e6-phase-b-worker`: **F58**. Wer in E6 einen Befund aufnimmt, nimmt die nächste
+> freie Nummer **aus diesem Block** — und legt den Abschnitt trotzdem hier an, nicht im Statusdokument
+> (Punkt 3 derselben ADR: genau das hat E5 mit F42/F43 verletzt). Reicht der Block nicht, wird er
+> **hier** erweitert, nicht auf dem Epic-Zweig. Nicht gebrauchte Nummern fallen mit der Abnahme des
+> Epics an den Vorrat zurück.
+
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
 | Kategorie                  | Bedeutung                                                                              | Befunde                                         |

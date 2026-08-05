@@ -2306,3 +2306,20 @@ Fehler wäre stumm geblieben.
 **Nicht entschieden ist der Umgang mit Task-IDs** (`JR-<Epic>-<NN>`). Sie kollidieren strukturell
 nicht, weil die Epic-Nummer im Präfix steht — genau die Eigenschaft, die den anderen drei Kreisen
 fehlt. Wenn ein künftiger Kreis neu entsteht, ist das die Vorlage.
+
+## ADR-033 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
+
+**Status:** **reserviert** (2026-08-05) · **Grundlage:** ADR-032 Punkt 4
+
+Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**.
+Wer während E6 eine weitere Nummer braucht, ergänzt sie **hier auf dem Integrationszweig** und nicht
+auf dem Epic-Zweig — die Reservierung ist nur wirksam, solange der Vorrat an der Stelle geführt wird,
+die beim Rückmerge gewinnt.
+
+**Die in E6 fällige Entscheidung trägt bereits eine Nummer:** `ADR-010` (`processEmail` erweitern
+oder eigener Journaling-Pfad) steht seit dem 2026-07-27 als _offen_ in dieser Datei und ist
+`JR-6-02` zugeordnet. Sie ist **keine** der vier reservierten — für sie wird der bestehende
+Abschnitt gefüllt, nicht ein neuer angelegt (ADR-032 Punkt 2: eine Nummer wird nie umgewidmet).
+
+Reservierungen laufen mit der Abnahme des Epics aus. Nicht gebrauchte Nummern fallen an den
+allgemeinen Vorrat zurück; ein nachfolgendes Epic reserviert dann ab der ersten freien.
