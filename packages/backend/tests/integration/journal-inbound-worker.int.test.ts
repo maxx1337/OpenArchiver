@@ -7,7 +7,7 @@ import type { Readable } from 'node:stream';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { Queue, type Job } from 'bullmq';
 import { suiteRequiring } from '@oa-test/classification';
-import { probeRedis } from '@oa-test/infra';
+import { probePostgres, probeRedis } from '@oa-test/infra';
 import { coverageNotice } from '@oa-test/notice';
 import {
 	JOURNAL_INBOUND_JOB_NAME,
@@ -16,6 +16,7 @@ import {
 	journalInboundJobId,
 } from '@open-archiver/journaling';
 import { connection } from '../../src/config/redis';
+import { acquireTestDatabase } from '../support/pg-harness';
 
 /**
  * The `journal-inbound` worker process (`JR-6-01`). Classification: `ci`.
@@ -96,6 +97,7 @@ const compiledWorker = path.resolve(thisDir, '../../dist/workers/journal-inbound
 const defaultSpoolRoot = mkdtempSync(path.join(tmpdir(), 'oa-journal-worker-spool-'));
 
 const redisProbe = await probeRedis();
+const postgresProbe = await probePostgres();
 const buildProbe = existsSync(compiledWorker)
 	? { available: true, reason: `compiled worker present at ${compiledWorker}` }
 	: {
@@ -106,7 +108,23 @@ const buildProbe = existsSync(compiledWorker)
 				`checkout has none`,
 		};
 
-const requirement = !redisProbe.available ? redisProbe : buildProbe;
+const requirement = !redisProbe.available
+	? redisProbe
+	: !postgresProbe.available
+		? postgresProbe
+		: buildProbe;
+
+/**
+ * `JR-6-02b`: the worker's ledger lookup now needs a real, **migrated** database --
+ * `process.env.DATABASE_URL` in this job is deliberately the unmigrated maintenance database
+ * `acquireTestDatabase()` creates per-file isolated databases *from*, never a database anything
+ * queries directly (`pg-harness.ts`'s own doc comment). Without this, the spawned worker's ledger
+ * lookup fails with `relation "journal_ledger" does not exist` instead of the gate ever running --
+ * measured against CI, where `DATABASE_URL` points at the plain `postgres` maintenance database.
+ */
+const harness = requirement.available
+	? await acquireTestDatabase('journal-inbound-worker')
+	: undefined;
 
 /**
  * The child's exact stdio shape: `stdin` is `'ignore'` (nothing is ever written to the worker), both
@@ -146,6 +164,9 @@ function spawnWorker(extraEnv: Record<string, string> = {}): SpawnedWorker {
 		env: {
 			...process.env,
 			SMTP_INGRESS_SPOOL_ROOT_PATH: defaultSpoolRoot,
+			// Overrides the maintenance-database DATABASE_URL from the job's own env (see the module
+			// doc comment above) with the isolated, migrated one this file acquired.
+			...(harness ? { DATABASE_URL: harness.url } : {}),
 			...extraEnv,
 		},
 	});
