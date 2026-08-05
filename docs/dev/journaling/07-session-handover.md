@@ -85,11 +85,10 @@ Aktualisiere 06-status.md und 07-session-handover.md, committe und pushe.
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-04 (**E4 ist abgenommen — 21 von 21 Tasks plus `JR-4-13`; noch nicht
-zurückgemergt**) · **Branch:** `claude/journaling-e4-smtp-ingress` (eigener Upstream) · Volllauf:
-**1040 Tests** bei 90 Dateien — `unit ci 850 · integration ci 121 · adversarial ci 69`, **zweimal
-unabhängig gefahren** (Tester und PO, identische Zahlen) · **CI** `30915618389` **success** für
-`b951be2`, vom Tester heruntergeladen und ausgewertet
+**Stand:** 2026-08-04 (**E4 ist abgenommen und zurückgemergt; E5 ebenfalls — beide Parallelzweige
+sind zusammengeführt**) · **Branch:** `claude/enterprise-product-implementation-cxmmqe`
+(Integrationsbranch) · Volllauf **gegen den gemergten Baum**: **1181 Tests** bei 95 Dateien —
+`unit ci 991 · integration ci 121 · adversarial ci 69`, `[TEST-EXECUTED]` vorhanden
 
 > **E4 ist abgenommen (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung).** Urteil: angenommen mit zwei
 > Auflagen, **beide in derselben Sitzung erledigt**. Das Protokoll mit einem Beleg je Kriterium steht
@@ -99,9 +98,16 @@ unabhängig gefahren** (Tester und PO, identische Zahlen) · **CI** `30915618389
 > **Aus E4 ist kein Befund offen.** F42–F51 behoben oder aufgelöst; F52/F53/F54 in `JR-4-21`,
 > F50/F55/F56 in `JR-4-21a`, **F47** bei der Abnahme als längst behoben erkannt und korrigiert.
 
-> **Nichts ist gepusht.** `origin` steht auf `b951be2`; lokal liegen `71d2b85` (Protokoll), `a28b6af`
-> (Auflage 1), `c79aff4` (Nachführung) und der Statuscommit darüber. **Der Rückmerge ist die nächste
-> Handlung und braucht die Freigabe des Auftraggebers.**
+> **Der Rückmerge ist vollzogen** (`9503bc8`, `--no-ff`, kein Squash), freigegeben vom Auftraggeber am
+> 2026-08-04. Der Epic-Branch ist vorher gepusht worden, damit die Abnahmehistorie nicht nur im
+> Container liegt.
+
+> **Beim Rückmerge sind drei Nummernkreise kollidiert**, weil E4 und E5 parallel auf zwei Zweigen
+> entstanden sind: ADR-Nummern (026/027/028 doppelt, plus eine von E4 verschobene 026),
+> Befundnummern (F42/F43 doppelt) und Dateinamen (`12-`). Aufgelöst nach dem Grundsatz **der
+> eingehende Zweig gibt nach**; E4s ADRs heißen jetzt **029/030/031**, E5s Befunde **F57/F58**, und
+> `12-parallelbetrieb.md` heißt **`17-parallelbetrieb.md`**. Die Regel dazu ist **ADR-032** — wer
+> einen Epic-Zweig eröffnet, reserviert seine Nummern vorab auf dem Integrationsbranch.
 
 > **E3 ist abgenommen (`JR-3-08`, 21/21) und am 2026-08-02 zurückgemergt** (`185e9bd`, `--no-ff`).
 
@@ -373,32 +379,30 @@ formatiert sie und schreibt die **Zeilenenden unverändert** zurück. Beide sind
 > > stillschweigend wieder auf die Wurzel zurückdrehen oder ein Falsch-positives einführen. Die Reihenfolge
 > > entscheidet der Auftraggeber; DEV legt es nur erneut vor.
 
-### Nächster konkreter Schritt — **der Rückmerge von E4, dann E5**
+### Nächster konkreter Schritt — **E6, der Phase-B-Worker**
 
-**E4 ist abgenommen.** `JR-4-13` ist am 2026-08-04 in einer unabhängigen TEST-Sitzung durchgeführt
-worden: 24 Kriterienzeilen mit Beleg, zwei Auflagen, beide sofort erledigt. Protokoll:
-**`16-abnahme-e4.md`**.
+**E4 und E5 sind beide abgenommen und zurückgemergt.** `JR-4-13` ist am 2026-08-04 in einer
+unabhängigen TEST-Sitzung durchgeführt worden (24 Kriterienzeilen mit Beleg, zwei Auflagen, beide
+sofort erledigt, Protokoll **`16-abnahme-e4.md`**), der Rückmerge ist `9503bc8`. E5 war bereits über
+`107346d` gemergt (`JR-5-09`) — beide Statusdateien hatten das nur nicht nachgetragen.
 
-**Damit ist der nächste Schritt der Rückmerge nach ADR-014** — und er ist eine Handlung des
-Auftraggebers, nicht eine der nächsten Sitzung:
+**Damit ist der Empfangspfad vollständig und der Parser steht.** Was fehlt, ist das Stück dazwischen:
+**E6 — der Phase-B-Worker**, der eine gespoolte Nachricht aufnimmt, den Journal-Report parst und den
+Archiveintrag erzeugt. Er ist der erste Verbraucher **beider** eben zusammengeführter Epics, und die
+erste Stelle, an der ihr Zusammenspiel überhaupt ausgeführt wird — bisher existiert es nur als
+Schnittstelle.
 
-```bash
-git checkout claude/enterprise-product-implementation-cxmmqe
-git merge --no-ff claude/journaling-e4-smtp-ingress
-```
-
-Vorher `git fetch` und den lokalen Stand gegen `origin` abgleichen (Abschnitt „Immer zuerst"). **Der
-E4-Branch ist bisher nicht gepusht** — `origin/claude/journaling-e4-smtp-ingress` steht auf `b951be2`,
-die vier Abnahmecommits liegen nur lokal. Wer den Rückmerge fährt, pusht **zuerst den Epic-Branch**,
-damit die Abnahmehistorie nicht nur in diesem Container existiert; der Container ist schon einmal auf
-einen älteren Stand zurückgesetzt worden.
-
-**Danach beginnt E5** (Journal-Report-Parser, 0 / 9). Der Prompt dafür:
+Der Prompt für die nächste Sitzung:
 
 ```
 Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
 und arbeite den nächsten Schritt ab.
 ```
+
+> **Vor der ersten E6-Scheibe: die Nummern reservieren.** Nach **ADR-032** legt ein neuer Epic-Zweig
+> seine ADR- und Befundnummern **vorab auf dem Integrationsbranch** an. Das ist die Gegenmaßnahme zu
+> genau der Kollision, die der E4-Rückmerge gekostet hat — drei Nummernkreise gleichzeitig, 98
+> Referenzen in 15 Dateien. Ein Platzhalter-Commit kostet eine Minute.
 
 > **Die Abnahme selbst ist erledigt und wird nicht wiederholt.** Der frühere Prompt „Nimm E4
 > unabhängig ab" steht nur noch als Muster oben unter „Wie eine Session gestartet wird".
