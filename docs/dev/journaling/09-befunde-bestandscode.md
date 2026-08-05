@@ -3500,6 +3500,13 @@ Ablehnungspfade (`denied`, `unavailable`, Verbindungsgrenze) ·
 **Status:** **behoben am 2026-08-05**, mit kalibriertem Regressionstest
 (`tests/unit/smtp-connection-reset-crash.test.ts`, 5 Fälle)
 
+> **Der Beleg ist diesmal der Test, nicht die Lauf-Rate — und das ist der Unterschied zu F59.** Der
+> Regressionstest ist **deterministisch und kalibriert**: mit zurückgenommenem Fix meldet der Lauf
+> `Unhandled Errors: Error: read ECONNRESET`, auf **jeder** Plattform. Die CI-Rate bestätigt nur:
+> **4 von 4 Läufen grün** nach dem Fix (CI `31008541750`, ein Push plus drei Wiederholungen), vorher
+> 3 von 9 rot. Vier Läufe wären für sich genommen **kein** Beleg — genau dieser Fehlschluss ist bei F59
+> passiert. Sie sind hier nur die Gegenprobe zu einer Aussage, die schon anders bewiesen ist.
+
 `handleConnection()` beantwortet drei Fälle mit `socket.end(text)` und kehrt **zurück, ohne je eine
 `SmtpConnection` zu bauen** — und der einzige `'error'`-Listener des ganzen Verbindungspfads lag in
 deren Konstruktor (`attachSocketHandlers`). Ein `net.Socket` **ohne** `'error'`-Listener verschluckt den
