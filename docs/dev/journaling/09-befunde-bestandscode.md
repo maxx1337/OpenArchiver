@@ -14,15 +14,15 @@ Nummerierung hat schon einmal in die Irre geführt (F11 lag zunächst in `06-sta
 
 Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
-| Kategorie                  | Bedeutung                                                                              | Befunde                         |
-| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29 |
-| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22              |
-| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39          |
-| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34     |
-| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35                             |
-| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                             |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38                             |
+| Kategorie                  | Bedeutung                                                                              | Befunde                                         |
+| -------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29                 |
+| **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22                              |
+| **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43, F47, F48, F49 |
+| **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                     |
+| **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                        |
+| **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                             |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46                         |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -51,6 +51,76 @@ zweite Abnahme `JR-2-10a` (F39), 2026-07-30 bis 2026-08-01.
 >
 > **Unverändert offen und ausdrücklich nicht mitbehandelt:** F2, F4, F5, F6, F9, F10, F13–F18, F22,
 > F23. `JR-13-09` prüft, dass sie nicht stillschweigend mitverändert wurden.
+
+---
+
+## Alle Befunde auf einen Blick
+
+**Diese Tabelle ist am 2026-08-03 entstanden** (Doku-Diät) und wird bei jedem neuen Befund
+mitgeführt. Sie ersetzt das Lesen der Datei nicht, sie ersetzt das **Durchblättern**: die
+Volltexte stehen unverändert darunter, und wer nur wissen will, ob eine Nummer offen ist,
+findet es hier.
+
+| Nr.      | Befund                                                                                                                                                | Schwere | Status    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------- |
+| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                                                                              | hoch    | behoben   |
+| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                                                                                      | mittel  | offen     |
+| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                                                                               | mittel  | behoben   |
+| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                                                                       | mittel  | offen     |
+| **F5 **  | { field: null } wird zu "field" = NULL                                                                                                                | niedrig | offen     |
+| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                                                                                  | niedrig | behoben   |
+| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                                                                              | hoch    | behoben   |
+| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                                                                         | mittel  | behoben   |
+| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                                                                             | niedrig | offen     |
+| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                                                                               | niedrig | offen     |
+| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                                                                       | mittel  | behoben   |
+| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen                                                                      | mittel  | behoben   |
+| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft                                                               | niedrig | offen     |
+| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                                                                                     | mittel  | behoben   |
+| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                                                                               | niedrig | behoben   |
+| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                                                                         | niedrig | behoben   |
+| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt                                                                | mittel  | behoben   |
+| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                                                                             | niedrig | offen     |
+| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                                                                             | mittel  | behoben   |
+| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                                                                                | mittel  | behoben   |
+| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                                                                        | niedrig | —         |
+| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                                                                               | niedrig | behoben   |
+| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig                                                               | niedrig | offen     |
+| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                                                                          | niedrig | behoben   |
+| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch                                                            | niedrig | behoben   |
+| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                                                                            | mittel  | behoben   |
+| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic…                                                        | mittel  | behoben   |
+| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                                                                                | niedrig | behoben   |
+| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig                                                                   | niedrig | behoben   |
+| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem…                                                        | mittel  | behoben   |
+| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde                                                                     | mittel  | offen     |
+| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                                 | niedrig | offen     |
+| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                           | niedrig | offen     |
+| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                            | niedrig | offen     |
+| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | offen     |
+| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                           | keine   | widerlegt |
+| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                        | mittel  | offen     |
+| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                        | hoch    | behoben   |
+| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was …                                                        | niedrig | —         |
+| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität…                                                        | mittel  | offen     |
+| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                                                                        | niedrig | offen     |
+| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt                                                          | niedrig | offen     |
+| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                                                                                | mittel  | offen     |
+| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                                  | hoch    | behoben   |
+| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                        | mittel  | behoben   |
+| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                        | hoch    | behoben   |
+| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | behoben   |
+| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                                    | hoch    | behoben   |
+| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben   |
+| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | behoben   |
+| **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
+| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | behoben   |
+| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | behoben   |
+| **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben   |
+| **F55**  | kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                                                | mittel  | behoben   |
+| **F56**  | kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                                         | mittel  | behoben   |
+| **F57**  | `pnpm test` war nicht in `dotenv --` gewickelt — ohne exportiertes `DATABASE_URL` übersprang die ganze `integration`-Suite, der Lauf sah grün aus     | mittel  | behoben   |
+| **F58**  | Whitespace in einer konfigurierten Domain landete unverändert in der Eigentümeradresse (`alice@ company.com`)                                         | mittel  | behoben   |
 
 ---
 
@@ -1930,3 +2000,1276 @@ belegen, dass sie **das getan hat, was sie tun sollte**. Rot allein ist kein Bel
 Fehlermeldung muss die erwartete Zusicherung nennen. `expected 'fs:stat' to be 'ledger-append'`
 beweist etwas; `expected { kind: 'ledger-append-failed' } to deeply equal { kind: 'accepted' }`
 beweist nur, dass irgendwo etwas geworfen hat, und verrät nicht, was.
+
+---
+
+## F42 — `tsconfig.build.json` kennt weder `packages/journaling` noch `apps/*` und wird von nichts benutzt
+
+**Schwere:** niedrig · **Kategorie:** Entwicklungsumgebung · **Ort:** `tsconfig.build.json`
+(Repo-Wurzel) · **Gefunden:** `JR-4-01` (2026-08-02, Rolle DEV), gemeldet und **nicht** behoben ·
+**Status:** **offen**
+
+Das Aggregat referenziert `packages/types`, `packages/backend` und `packages/frontend`. Seit E2 gibt
+es `packages/journaling`, seit `JR-4-01` `apps/smtp-ingress` — beide fehlen. `grep -rn
+"tsconfig.build.json"` findet **keine** Verwendung in einem Skript, in `package.json` oder in der CI.
+
+**Warum es trotzdem hier steht und nicht ignoriert wird:** eine Datei, die aussieht wie der
+Projektbau, es aber nicht ist, wird irgendwann von jemandem benutzt — und liefert dann einen grünen
+Build, der zwei Pakete nicht angefasst hat. Entweder sie wird vervollständigt oder entfernt.
+
+---
+
+## F43 — der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:** der Speichernachweis von `JR-3-02`
+(`packages/journaling`, Durable-Write-Pfad) und jede weitere Stelle, die „ohne proportionalen
+Heap-Anstieg" über `process.memoryUsage().heapUsed` belegt · **Gefunden:** `JR-4-03` (2026-08-02,
+Rolle DEV) beim Aufbau des eigenen Nachweises · **Status:** **offen** · **Betrifft ein bereits
+abgenommenes Epic** (E3, `JR-3-08`)
+
+**Node-`Buffer`-Inhalte liegen außerhalb des V8-Heaps.** Wer Vollpufferung über `heapUsed` sucht,
+sucht am falschen Ort: `JR-4-03` hat zur Kalibrierung absichtlich eine Voll-Pufferung eingebaut und
+gemessen — `heapUsed` blieb **flach bei 13–17 MB**, also exakt so, wie der korrekte Code aussieht,
+während 150 MB gepuffert wurden. Umgestellt auf `process.memoryUsage().arrayBuffers` trennt die
+beiden Zustände deutlich: **166 MB** mit Regression, **unter 40 MB** ohne. In beiden Richtungen
+verifiziert.
+
+**Die Folge ist keine Vermutung, sondern eine Frage an einen abgenommenen Nachweis:** `JR-3-02`s
+Akzeptanzkriterium lautet „150-MB-Nachricht ohne proportionalen Heap-Anstieg", und `JR-3-08` hat es
+abgenommen. Wenn dieser Nachweis über `heapUsed` geführt wurde, belegt er die Eigenschaft **nicht** —
+unabhängig davon, ob der Produktionscode korrekt ist (er ist es aller Wahrscheinlichkeit nach, weil
+`writeDurableSpoolFile()` streamt). Zu prüfen ist der **Nachweis**, nicht der Code: dieselbe
+Kalibrierung dort einmal fahren.
+
+**Die allgemeine Regel dahinter**, weil sie sich wiederholen wird: ein Messinstrument, das eine
+absichtlich eingebaute Regression **nicht** rot macht, misst nicht die Eigenschaft, die es zu messen
+vorgibt. Jeder Speichernachweis in diesem Projekt bekommt diese Kalibrierung, bevor er zitiert wird.
+
+---
+
+## F44 — nach einem `552` im `DATA`-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos
+
+**Schwere:** **hoch** · **Kategorie:** Neuer Code · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts`, `DataScanner.push()`/`handleDataChunk()` →
+`finishData()` → `completeTransfer()` · **Gefunden:** von `JR-4-03` (2026-08-02, Rolle DEV) als
+Klasse benannt, vom PO am selben Tag **gemessen und in der Schwere heraufgestuft** · **Status:**
+**behoben** in `JR-4-16` (`packages/journaling/src/ingress/smtp-server.ts`, Rolle DEV, 2026-08-02)
+
+> **Behoben (`JR-4-16`).** `DataScanner` setzt bei einem `SIZE`-Überlauf nicht mehr `finished = true`
+> mitten im Strom. Beide Abbruchstellen — die zeilenweise Byte-Zählung in `scan()` **und** die
+> `carry`-Deckelung für eine „Zeile" ohne jedes `CRLF` in `push()` — setzen jetzt `oversize = true`
+> und wechseln in einen Verwerfungs-Scan (`scanDiscard()`), der über beliebig viele weitere
+> `push()`-Aufrufe hinweg liest und verwirft, bis der echte `<CRLF>.<CRLF>`-Terminator gefunden ist —
+> `BDAT`s eigene Disziplin (deklarierte Länge immer vollständig abzählen, bevor reagiert wird) als
+> Vorbild genommen, wie vom PO verlangt. Erst wenn der Scanner `done: true` meldet, ruft
+> `handleDataChunk()` `finishData()`/`completeTransfer()` auf; `oversize` allein löst das nicht mehr
+> aus. `completeTransfer()` bleibt dabei der einzige Anschlusspunkt für `JR-4-06`, unverändert.
+>
+> **Ressourcengrenze der verworfenen Bytes:** `scanDiscard()` puffert nichts — es ist ein
+> Automat aus vier Skalaren (`discardSawCr`/`discardLineDisqualified`/`discardLineLength`/
+> `discardFirstByte`), der pro Zeile nur deren erste zwei Bytes kennen muss, um zu wissen, ob sie ein
+> einzelner Punkt war. Der Speicherbedarf zwischen den `push()`-Aufrufen bleibt damit O(1),
+> unabhängig davon, wie viel eine Gegenstelle nach der Überschreitung noch sendet. Sendet sie nie
+> einen Terminator, bleibt `state` weiter `'data'`, und der bereits vorhandene, bei jedem Chunk neu
+> gestellte `dataTimeoutMs`-Timer (`armDataTimer()` in `handleDataChunk()`, unverändert) beendet die
+> Verbindung mit `421 4.4.2` — kein neuer Mechanismus, keine neue Erschöpfungslücke.
+>
+> **Testfall im Repository, rot ohne den Fix:** `packages/journaling/tests/unit/smtp-server-protocol.test.ts`,
+> Suite „`DATA` oversize does not desync the connection (JR-4-16, F44)" — die Probe des PO als
+> Regressionstest nachgebaut (Rumpf und „geschmuggelte" Kommandozeilen in getrennten
+> `writeRaw()`-Aufrufen, nicht in einem kombinierten Write, exakt wie der Befund es verlangt), plus
+> ein Test für den legitimen Fall (Sender sendet nach der Überschreitung bis zum echten Terminator
+> weiter) und einer für die Ressourcengrenze (Sender verstummt, ohne je einen Terminator zu senden).
+> Vor dem Fix zurückgenommen: alle drei schlagen fehl, mit benannter Zusicherung, nicht nur
+> „irgendetwas ist anders" — u. a. `promise resolved "[ '552 5.3.4 ...' ]" instead of rejecting` (ein
+> `552` kam an, wo keine Antwort erwartet war) und `expected '552 ...' to match /^421 4\.4\.2/`.
+> Ergänzend in `packages/journaling/src/ingress/smtp-server.test.ts`: die reinen `DataScanner`-Fälle
+> für beide Abbruchstellen, ebenfalls rot ohne den Fix — die Zusicherung nannte `done: false`, wo
+> `done: true` ankam. Voller Lauf danach: `628 passed | 6 skipped`, 48 Dateien (vorher
+> `622 passed | 6 skipped`, +6 neue Tests: 3 je Datei).
+
+`DataScanner` setzt bei Überschreitung des `SIZE`-Limits sofort `finished = true`, ohne bis zum
+`<CRLF>.<CRLF>`-Terminator weiterzulesen. `completeTransfer()` antwortet `552 5.3.4` und setzt
+`state = 'ready'`. **Der Sender weiß davon nichts und sendet den Rest seiner Nachricht** — und dieser
+Rest läuft ab jetzt durch `processCommandLine()`.
+
+**Gemessen** (Probe des PO gegen den gebauten Server, `sizeLimitBytes: 1000`, Rumpf 1500 Byte, danach
+in einem **eigenen** TCP-Segment drei Zeilen aus dem „Rumpf"):
+
+```
+552 5.3.4 Message size exceeds fixed maximum message size
+250 2.1.0 Ok        <- auf  MAIL FROM:<attacker@evil.invalid>
+250 2.1.5 Ok        <- auf  RCPT TO:<j@example.com>
+250 2.0.0 Ok        <- auf  NOOP
+```
+
+**Nachrichteninhalt wird zu Envelope.** Sobald `JR-4-06` `JournalAcceptance.accept()` anschließt,
+entsteht daraus ein Ledger-Eintrag mit einem `envelope_from`, den nie ein Sender gesendet hat — und
+`envelope_from`/`envelope_rcpt` gehören zu den 16 gehashten Feldern (ADR-006). Der Ledger würde einen
+Empfang bezeugen, den es nicht gab. Deshalb **hoch**, obwohl heute noch nichts archiviert wird: der
+Defekt wird durch die nächste Scheibe scharf, nicht durch einen Angriff.
+
+**Zwei Details, die die Einordnung tragen:**
+
+1. **Es braucht keinen Angreifer.** Ein legitimer Sender mit einer zu großen Nachricht sendet nach dem
+   `552` genauso weiter. Der konstruierte Fall ist nur die schnellste Art, es sichtbar zu machen.
+2. **Es hängt an der TCP-Segmentierung, und die kontrolliert die Gegenstelle.** Die erste Probe des PO
+   war **negativ** — sie sendete Rumpf und Kommandos in **einem** `write`, und der Rest desselben
+   Chunks wird verworfen, weil `handleDataChunk()` ihn nicht aufteilt. Erst mit einem eigenen Segment
+   trat der Fall ein. **Eine Probe, die den Fall verfehlt, ist kein Beleg für seine Abwesenheit** —
+   dieselbe Lehre wie in F41s Nachtrag, hier innerhalb einer Viertelstunde ein zweites Mal.
+
+**Der `BDAT`-Pfad hat den Defekt nicht**, und zwar strukturell: `handleBdatChunkBytes()` zählt die
+deklarierte Chunk-Länge immer vollständig ab, bevor es auf ein Oversize reagiert, und gibt den
+Überhang gezielt an die Kommandoverarbeitung zurück. Der Fix für `DATA` folgt derselben Linie —
+nach Oversize bis zum Terminator weiterlesen und verwerfen, dann antworten; alternativ die Verbindung
+nach der Antwort schließen. Was `JR-4-16` daraus macht, entscheidet die Task; ein stiller
+Zustandswechsel nach `'ready'` mitten im Rumpf ist keine der beiden Möglichkeiten.
+
+---
+
+## F45 — ein verworfener Iterator verließ den Durable Write als nackter `Error`, nicht als `DurableWriteError`
+
+**Schwere:** mittel · **Kategorie:** Neuer Code · **Ort:**
+`packages/journaling/src/spool/durable-write.ts`, die `for await`-Schleife über `request.chunks` ·
+**Gefunden und behoben:** `JR-4-06a` (2026-08-03, Rolle DEV) beim Verdrahten des Oversize-Abbruchs ·
+**Status:** **behoben**, mit Regressionstest
+
+`writeDurableSpoolFile()` fasste seine eigenen Dateisystemaufrufe in `DurableWriteError`, ließ aber
+einen Fehler **aus dem Iterator** ungefasst durch — die `for await`-Schleife lag außerhalb des
+`try`/`catch`. Das war in E3 **latent**, weil kein Aufrufer den Abbruchweg benutzte: alle Quellen waren
+Arrays oder Testgeneratoren, die nicht werfen.
+
+**Scharf wird es genau mit `JR-4-06a`.** Dort bricht der Server einen laufenden Spool-Write bei
+Überschreitung des `SIZE`-Limits über den Iterator ab (`bridge.abort()`).
+`JournalAcceptance.accept()` unterscheidet aber **nach Typ**: ein `DurableWriteError` wird zu einem
+typisierten Ergebnis (`'spool-write-failed'` bzw. `'spool-capacity-exceeded'`, plus Quarantäne der
+eigenen Leiche nach `JR-3-09`), **alles andere wird bewusst weitergeworfen** — `acceptance.ts` nennt
+das „a programming error in the filesystem seam itself", und es zu verschlucken hieße, einen Fehler
+hinter einem Retry zu verstecken, der nie gelingen kann. Ein nackter `Error` aus dem Iterator wäre
+also als **unbehandelte Ausnahme** aus dem Annahmepfad geflogen, statt `552` zu erzeugen.
+
+**Die Lehre steht in diesem Projekt schon zweimal:** eine Fehlerklassifikation nach Typ ist nur so gut
+wie die Vollständigkeit der Stelle, die den Typ setzt. Wer einen `try`-Block um „die eigenen Aufrufe"
+legt und eine fremde, **injizierte** Quelle daneben laufen lässt, hat einen zweiten Fehlerpfad, den
+niemand sieht — solange keine Quelle wirft. Dasselbe Muster wie F41 (das Testnetz deckte vier von
+sieben Operationen ab) und F44 (die Probe traf den Fall nicht): der ungeprüfte Rand, nicht die Mitte.
+
+---
+
+## F46 — zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche Sache
+
+**Schwere:** **hoch** · **Kategorie:** Neuer Code · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`RecipientAclEvaluator` / `SourceAclEvaluator`),
+`packages/journaling/src/ingress/source-acl-cache.ts`, verdrahtet in
+`apps/smtp-ingress/src/index.ts` · **Gefunden:** `JR-4-18` (2026-08-03, Rolle DEV), gemeldet und
+**nicht** behoben · **Status:** **behoben** in `JR-4-20` (Rolle DEV, 2026-08-03)
+
+`RecipientAclEvaluator.evaluate` und `SourceAclEvaluator.evaluate` tragen denselben Methodennamen.
+TypeScript typisiert **strukturell**, also erfüllt `SourceAclCache` beide Schnittstellen über seine
+**eine** `evaluate(remoteIp)`-Methode — die CIDR-Prüfung. Die eigentlich zuständige
+`evaluateRecipient(rcptToAddress)` wird nie aufgerufen.
+
+**Wirkung in Produktion:** `apps/smtp-ingress/src/index.ts` übergibt den Cache als
+`recipientAclEvaluator`, also läuft jeder `RCPT TO` gegen die IP-Allowlist. `normalizeRemoteIp()`
+wirft bei einer E-Mail-Adresse, das Ergebnis wird zu `'unavailable'`, und der Server antwortet
+**immer `451 4.3.0`** — nie `550`, nie `250`, unabhängig vom Inhalt von `journaling_sources`.
+**Der empfängerbasierte Empfang ist damit vollständig funktionsunfähig**, sobald `apps/smtp-ingress`
+echt läuft.
+
+### Warum weder Compiler noch Testsuite es gesehen haben
+
+Der Compiler **kann** es nicht sehen: strukturelle Kompatibilität ist hier gewollte Sprachsemantik,
+kein Fehler. Und die Suite konnte es nicht sehen, weil **jeder** Test seine eigene, korrekte
+Verdrahtung mitbringt statt der produktiven: `smtp-recipient-acl-protocol.test.ts` benutzt ein
+handgeschriebenes Fake und sagt das in einem eigenen Kommentar, `journal-smtp-accept-e2e.int.test.ts`
+ein Inline-Objekt. Aufgefallen ist es erst, als `JR-4-18` zum ersten Mal den **echten** Prozess mit
+dem **echten** Cache startete.
+
+**Das ist der eigentliche Befund, und er ist größer als die Namenskollision:** die Stelle, an der
+dieser Prozess seine Objekte zusammensteckt, wird von keinem Test durchlaufen. Jeder Test prüft eine
+Nachbildung der Verdrahtung, nie die Verdrahtung. Eine Namenskollision ist nur die erste Art von
+Fehler, die dort unbemerkt bleibt — ein vergessener Parameter, ein vertauschtes Argument oder ein
+nicht gestarteter Cache wären genauso unsichtbar. `JR-4-20` behebt deshalb beides: die Kollision
+strukturell, **und** die untestete Verdrahtung.
+
+> **Behoben in `JR-4-20`** (2026-08-03, `78f2d96`). `RecipientAclEvaluator.evaluate` heißt jetzt
+> `evaluateRecipient` — `SourceAclCache` musste dafür **nicht** geändert werden, sie hatte die
+> Methode längst, nur war sie an keiner Schnittstelle und wurde nie aufgerufen. Der Nachweis gegen
+> künftige Vertauschung ist ein Kompilierfehler: `tests/unit/acl-evaluator-port-shapes.test.ts`
+> weist beide Richtungen mit `@ts-expect-error` zurück, geprüft über `tsc -p tsconfig.test.json`
+> (vor dem Fix kompilierten beide Zeilen anstandslos — deshalb war es unsichtbar). Alle übrigen
+> Ports des Prozesses auf dieselbe Falle geprüft: keine weitere Kollision. Und die zweite Hälfte ist
+> ebenfalls zu: `bindSourceAclCache()` ist jetzt **die** Verdrahtung, die Produktion **und** Test
+> gemeinsam aufrufen. Der Beleg, wie stark die Lücke war: **jeder** bestehende Test benutzte ein
+> Fake mit `evaluate:` und wurde von der Umbenennung rot — genau deshalb hatte keiner den Defekt
+> gesehen. Volllauf danach `846 passed | 7 skipped` bei 67 Dateien.
+
+---
+
+## F47 — der Typcheck für `packages/journaling` läuft in der CI nicht, und ist deshalb rot
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:**
+`.github/workflows/ci.yml` (Schrittfolge) und `packages/journaling/tests/unit/smtp-acceptance-wiring.test.ts:408` ·
+**Gefunden:** vom PO am 2026-08-03, nachdem `JR-4-18` und `JR-4-20` unabhängig denselben roten
+Typfehler gemeldet und als vorbestehend bestätigt hatten · **Status:** **behoben in `JR-4-06b`,
+Commit `25a7e91`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-06b`).** Der CI-Schritt „Typecheck journaling test files" existiert
+> (`.github/workflows/ci.yml:108-109`, eingeführt durch `25a7e91` — mit `git log -S` gegengeprüft),
+> und `corepack pnpm --filter @open-archiver/journaling test:types` läuft mit **Exit 0** durch.
+> **Nachtrag (PO, 2026-08-04, `JR-4-13`):** Dieser Befund stand als Auflage 2 der E4-Abnahme noch
+> zehn Scheiben lang auf „offen", obwohl er längst behoben war — sowohl hier als auch in der
+> Übersichtstabelle. Der Tester hat es bei der Abnahme gefunden. Zusammen mit F50/F52/F53/F55/F56,
+> deren Detailabschnitte „behoben" führten, während die Übersichtstabelle „offen" sagte, ist das
+> dasselbe Muster wie die doppelt geführte Statusfassung in `README.md`: **eine zweite Fassung
+> derselben Wahrheit veraltet, sobald sie existiert.** Wer einen Status ändert, ändert beide Stellen.
+
+Zwei Teile, und der zweite erklärt den ersten:
+
+1. `corepack pnpm --filter @open-archiver/journaling test:types` ist rot —
+   `Record<string, unknown> | null` ist nicht zu `CanonicalJsonValue` zuweisbar (entstanden in
+   `JR-4-06a`).
+2. **Die CI prüft das nie.** `ci.yml` fährt `test:types` ausschließlich für
+   `@open-archiver/backend`. `packages/journaling` — das Paket, in dem seit E2 der gesamte
+   Ledger-, Spool- und Ingress-Code entsteht — wird gebaut (`build`), aber sein Testprogramm wird
+   nicht typgeprüft.
+
+**Warum das mehr ist als ein Typfehler:** der Wächter deckt die Stelle nicht ab, an der dieses
+Projekt inzwischen den größten Teil seines Codes schreibt.
+
+---
+
+## F48 — **jeder** CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt
+
+**Schwere:** **hoch** · **Kategorie:** Testharness / Verfahren · **Gefunden:** vom PO am 2026-08-03,
+nachdem `JR-4-07`s Bericht die Windows-`EPERM`-Grenze beim Verzeichnis-fsync beschrieb ·
+**Status:** **Ursache behoben** (`1fc7de4`), **Verfahrenslücke offen** — siehe unten
+
+**Alle zwölf CI-Läufe zwischen `JR-4-17` (07:22) und `JR-4-07` (11:08) sind fehlgeschlagen**, jeder
+nach etwa einer Minute, jeder am **Lint**-Schritt: `prettier --check .` meldete **fünf** Dateien mit
+echten Formatierungsverstößen (`06-status.md`, `smtp-ingress-crash-recovery-boot.int.test.ts`,
+`source-acl-cache.ts`, `smtp-acceptance-wiring.test.ts`, `smtp-starttls-protocol.test.ts`). Das ist
+**nicht** F35: in der CI ist der Checkout LF, und es waren fünf Dateien, nicht 388.
+
+**Der Schaden ist nicht die Formatierung, sondern was dahinter nicht mehr lief.** Lint ist Schritt 7
+von 14; Build, `svelte-check`, `test:types` und die **gesamte Testsuite** sind in der CI seit dem
+2026-08-03 07:22 **überhaupt nicht ausgeführt worden**.
+
+**Und genau dort liegt der einzige Beleg für die Kernaussage dieses Epics.**
+`NodeSpoolFileSystem.fsyncDirectory()` scheitert auf diesem Windows-Host mit `EPERM`, und
+`JournalAcceptance.accept()` ruft `backend.append()` **erst nach** erfolgreichem Verzeichnis-fsync auf
+(`JR-4-07` hat das ausdrücklich beschrieben, `JR-4-06a` hatte es schon behandelt). Auf diesem Host
+erreicht also **kein** Lauf den Ledger-Append. Die Aussage „`250` erst nach fsync von Spool **und**
+Ledger" — der Kern des ganzen Projekts — ist damit **lokal nicht prüfbar** und war zugleich in der CI
+nicht geprüft. Vierzehn Scheiben wurden auf Zahlen abgenommen, die diesen Pfad nicht enthalten.
+
+### Zwei Ursachen, und die zweite ist die eigentliche
+
+1. **Technisch:** die Per-Datei-Prettier-Prüfung der Scheiben lief über LF-normalisierte Kopien, um
+   F35 zu umgehen — und eine Umgehung, die zu viel normalisiert, verdeckt einen echten Verstoß. Behoben
+   in `1fc7de4` (Formatierung über die Prettier-API mit erhaltenen Zeilenenden, danach erneut geprüft).
+2. **Verfahren:** **der PO hat nach keinem einzigen Push den CI-Lauf angesehen.** Der Auftrag „zitiere
+   die Zahlen, nicht das Wort grün" war an die DEV-Rolle gerichtet und wurde dort befolgt — aber
+   niemand hat gefragt, ob dieselben Zahlen auch auf der Plattform entstehen, auf der sie zählen. Als
+   Gegenmaßnahme steht in `.claude/agents/senior-dev.md` jetzt die Pflicht, nach dem Push den CI-Lauf
+   zu prüfen und seine Schlussfolgerung neben den lokalen Zahlen zu berichten; **der PO prüft ihn ab
+   sofort selbst, bevor er eine Scheibe für erledigt erklärt.**
+
+> **Die Lehre ist dieselbe wie in F14/F15 und Fallstrick 6, eine Ebene höher:** eine grüne Zahl belegt
+> nur das, was der Lauf ausgeführt hat. Bisher war die Frage „ist die Suite gelaufen?" — jetzt lautet
+> sie „**ist sie dort gelaufen, wo der Pfad existiert?**"
+
+### Aufgelöst am 2026-08-03: der erste grüne Lauf, und was er zusätzlich belegt
+
+Lauf **`30808478519`** auf `1fc7de4` ist **`success`** (2 min 27 s):
+
+```
+Test Files  72 passed (72)
+[TEST-EXECUTED] unit: ci 742/742 · integration: ci 111/111 · adversarial: ci 37/37
+Suite inventory verified: unit 49/49, integration 18/18, adversarial 5/5, 0 unclassified test files.
+No oa_test_* databases left behind.
+```
+
+Die Zahlen sind mit den lokalen identisch (742 + 111 + 37 = 890) — **aber die 111
+Integrationstests sind auf Linux gelaufen**, also durch den Ledger-Append, den `EPERM` auf dem
+Windows-Host abschneidet. Damit ist der Acceptance-Contract zum ersten Mal über seine **ganze** Länge
+gemessen und nicht nur bis zum Verzeichnis-fsync. Die vierzehn Scheiben davor sind damit nachträglich
+gedeckt; der Vorbehalt aus diesem Befund ist eingelöst, nicht weggeredet.
+
+Nebenbefund aus demselben Lauf, **nicht** neu und **nicht** blockierend: der Harness lässt
+„stale-looking" Datenbanken stehen, solange etwas mit ihnen verbunden ist
+(`oa_test_…_ledger_concurrency` während `JR-2-08`s Lastlauf) und meldet das als
+`TEST-COVERAGE NOTICE`. Am Ende steht trotzdem „No `oa_test_*` databases left behind." — das
+Verhalten ist F13s bekannter Bereich und arbeitet hier korrekt. Ein Typfehler in einer
+
+> `packages/journaling`-Testdatei fällt niemandem auf, solange ihn nicht zufällig ein Agent beim
+> Arbeiten sieht — hier haben es zwei unabhängig voneinander gemeldet, und beide haben ihn korrekt als
+> nicht ihren eingeordnet und liegen gelassen. Dieselbe Klasse wie F14/F15 (der Wächter zählte
+> Dateien statt Tests) und wie F35s Nebenwirkung: **ein grüner Lauf, dessen Grün eine Lücke im
+> Messbereich ist.**
+
+> **Behoben (`JR-4-20`).** Beide Hälften, wie im Befund gefordert:
+>
+> **1. Die Kollision strukturell ausgeschlossen, nicht nur umbenannt.** `RecipientAclEvaluator`
+> (`packages/journaling/src/ingress/smtp-server.ts`) heißt jetzt `evaluateRecipient(rcptToAddress)`
+> statt `evaluate(rcptToAddress)` — der Name, den `SourceAclCache` für diese Rolle bereits **hatte**,
+> nur nie über eine Schnittstelle erreichbar war. `handleRcpt()` ruft jetzt
+> `this.recipientAclEvaluator.evaluateRecipient(parsed.address)`. Der Nachweis, dass ein künftiger
+> Vertauscher nicht mehr kompiliert, ist selbst ein Test, kein Kommentar:
+> `packages/journaling/tests/unit/acl-evaluator-port-shapes.test.ts` weist per `@ts-expect-error`
+> nach, dass ein Objekt, das nur `SourceAclEvaluator` implementiert, `RecipientAclEvaluator` nicht
+> mehr erfüllt (und umgekehrt) — geprüft durch `tsc -p tsconfig.test.json`
+> (`pnpm --filter @open-archiver/journaling test:types`), nicht durch die Laufzeit-Assertion allein.
+> Die übrigen Ports desselben Prozesses (`AuthCredentialEvaluator.lookupCredential`,
+> `PasswordVerifier.compare`, `SourceAclLookup.listActiveSources`, `LedgerBackend.append`,
+> `IngressLogger.{debug,info,warn,error}`) tragen dieselbe Falle **nicht** — jeder Methodenname ist im
+> gesamten Ingress-Prozess einzigartig, mechanisch nachvollzogen durch die Methodennamen aller
+> exportierten Ports in `packages/journaling/src/ingress/` und `packages/journaling/src/ledger/`.
+>
+> **2. Die untestete Verdrahtung geschlossen.** `bindSourceAclCache()` (neu, in
+> `packages/journaling/src/ingress/source-acl-cache.ts`) ist die eine Funktion, die einen
+> `SourceAclCache` auf die drei `EsmtpServerOptions`-Rollen abbildet;
+> `apps/smtp-ingress/src/index.ts` ruft jetzt genau diese Funktion statt drei Objektliteral-Zeilen
+> auszuschreiben. `packages/journaling/tests/unit/source-acl-cache-wiring.test.ts` ruft **dieselbe**
+> Funktion, verdrahtet einen echten `SourceAclCache` in einen echten `EsmtpServer` und fährt über
+> eine echte Loopback-Verbindung — kein Fake mehr an der Stelle, die den Befund verursacht hat.
+> Zusätzlich prüft `smtp-ingress-crash-recovery-boot.int.test.ts`s dritter Fall (`JR-4-18`) jetzt über
+> den echten, kompilierten Prozess: `RCPT TO` einer gesäten Route antwortet `250 2.1.5` (die
+> Regression, die vor diesem Fix `451` war), `DATA` bleibt `451 4.3.0` (das eigentliche Ziel dieses
+> Tests: `journalAcceptance` unverdrahtet nach fehlgeschlagenem Crash-Recovery-Scan).
+>
+> **Voller Lauf:** `846 passed | 7 skipped`, 67 Dateien (vorher `843 passed | 7 skipped`, 65 Dateien);
+> `unit: ci 698/698`, `integration: ci 111/111`, `adversarial: ci 37/37` — exakt, keine Verletzung der
+> Suite-Inventur.
+
+---
+
+## F49 — der Reihenfolgetest „Scan vor `listen()`" ist flaky, und der Beweis dafür ist billig
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:**
+`packages/backend/tests/integration/smtp-ingress-crash-recovery-boot.int.test.ts`, der Fall
+„runs before listen(): the log line precedes »listening«, a ledgered file is requeued, an orphan is
+quarantined" (`JR-4-18`) · **Gefunden:** vom PO am 2026-08-03 beim CI-Lauf der Doku-Diät ·
+**Status:** **behoben am 2026-08-03** (Rolle DEV, siehe „Behoben" unten)
+
+Der Test belegt eine tragende Zusicherung aus `02-architektur.md` §5: der Crash-Recovery-Scan läuft
+**vor** dem Binden des Ports. Er tut das über die Byte-Offsets zweier Log-Zeilen in `stdout` des echten
+Kindprozesses — und scheitert reproduzierbar **nicht** reproduzierbar:
+
+```
+× runs before listen(): the log line precedes "listening", …
+  → expected 581 to be greater than 853
+```
+
+**Der Beleg, dass es Flakiness ist und keine Regression, kostet nichts:** derselbe Test war im Lauf
+`30822606272` (`4795688`) **grün** und im Lauf `30824258066` (`552d234`) **rot** — und zwischen diesen
+beiden Commits ist **ausschließlich Dokumentation** geändert worden (die Doku-Diät). Der
+Produktionscode und der Testcode sind byteidentisch. Ein Test, der bei identischem Code beides liefert,
+misst etwas anderes als das, was er zu messen vorgibt.
+
+**Die wahrscheinliche Ursache, nicht gemessen:** die beiden Zeilen entstehen über `pino` und landen
+über die `stdout`-Pipe eines Kindprozesses. Reihenfolge **im Puffer** ist nicht dasselbe wie
+Reihenfolge **der Ereignisse** — Pufferungsgrenzen, Schreibvorgänge in verschiedenen Ticks und die
+Frage, ob `pino` synchron oder über einen Transport schreibt, kommen alle in Betracht.
+
+**Warum das mehr ist als ein nerviger Test:** solange er flaky ist, ist die Zusicherung „Scan vor
+`listen()`" **nicht** belastbar belegt — jeder grüne Lauf kann Zufall sein, so wie jeder rote.
+Und ein flakiger Test in der CI kostet mehr als seine Aussage wert ist, weil er die nächste Abnahme
+mit einem Rauschen belastet, das niemand mehr von einem echten Fehlschlag unterscheidet
+(`tester.md`: „a flaky adversarial test is useless because nobody will trust its failures").
+
+**Was zu tun ist, in dieser Reihenfolge:** erst herausfinden, **ob die Invariante hält** (kann der Port
+gebunden sein, bevor der Scan fertig ist?) — das ist die Frage, die zählt. Erst danach den Nachweis
+reparieren. Ein Offset-Vergleich in einem gepufferten Stream ist wahrscheinlich das falsche Instrument;
+belastbar wäre eine Beobachtung, die nicht von Pufferung abhängt, etwa ein Verbindungsversuch **während**
+des Scans, der abgewiesen werden muss, oder eine Sequenznummer, die der Prozess selbst in beide Zeilen
+schreibt.
+
+> **Der Fund ist ein Nebenprodukt der neuen Regel** (F48): weil der PO seit heute nach jedem Push den
+> CI-Lauf prüft, ist ein Fehlschlag aufgefallen, der bei einem reinen Dokumentations-Commit sonst
+> niemandem aufgefallen wäre — und der gerade deshalb so gut beweisbar war.
+
+### Behoben am 2026-08-03: die Invariante hält, das Instrument war falsch
+
+**Die Reihenfolge stimmt, und zwar strukturell.** `main()` in `apps/smtp-ingress/src/index.ts` ist eine
+gerade `async`-Sequenz: `await buildJournalAcceptance(...)` — darin `await runExclusiveCrashRecoveryScan(...)`
+— steht **vor** `await server.listen(...)`. Es gibt keinen Pfad, auf dem der Port bindet, bevor der Scan
+zurückgekehrt ist. Der Befund betraf nie das Verhalten, nur seinen Nachweis.
+
+**Der Nachweis hängt jetzt am Port statt am Log.** Der Testfall (neuer Name: „does not bind its port until
+the scan is done …") hält den Scan **von außen** an — er nimmt selbst
+`pg_advisory_xact_lock(crashRecoveryScanLockKey(spoolRoot))`, denselben Schlüssel, den
+`runExclusiveCrashRecoveryScan()` braucht — und messt in diesem Zustand:
+
+1. der Kindprozess ist **beweisbar im Scan**: er steht in `pg_locks` als **ungewährter** Waiter auf genau
+   diesem Schlüssel (kein `sleep`, keine Logzeile — ein Zustand, aus dem Server gelesen);
+2. ein TCP-Connect auf den Port wird **abgelehnt** (`ECONNREFUSED`), und die Orphan-Datei liegt noch
+   unangetastet in `incoming/`;
+3. nach der Freigabe des Locks antwortet **derselbe** Port mit einem `220`-Banner. Das ist die Gegenprobe,
+   die (2) erst zu einem Beleg über die **Reihenfolge** macht statt über einen falschen Port oder einen
+   abgestürzten Prozess.
+
+**Kalibriert, nicht nur grün gesehen.** Mit einer absichtlich eingebauten Regression — derselbe Scan, aber
+nicht mehr `await`ed, sodass der Port bindet, während er läuft — schlägt der Fall mit
+`expected 'connected' to be 'refused'` fehl (und die beiden anderen Fälle der Datei ebenfalls). Ohne diese
+Gegenprobe wäre auch der neue Test nur eine Behauptung. Danach viermal in Folge grün, Volllauf
+`927 passed | 7 skipped` bei 75 Dateien.
+
+**Was bewusst nicht angefasst wurde: die gemischten Schreibpfade selbst.** `index.ts` schreibt seine
+Scan-Zeile über `pino` und seine „listening"-Zeile über `console.log` — zwei unabhängige Puffer auf
+demselben Dateideskriptor. **Welche** der beiden Seiten im roten CI-Lauf nachhing, ist **nicht gemessen**;
+auf diesem Windows-Host ließ sich die Umkehrung in 3 × 60 Läufen einer Nachbildung nicht reproduzieren
+(Node behandelt Pipes auf Windows asynchron, auf Linux synchron — der rote Lauf war Linux). Für den Fix ist
+es gleichgültig: der Test vergleicht keine Logzeilen mehr, er **wartet** nur noch auf ihr Vorhandensein, und
+das ist von Pufferung unabhängig. **Offen als kleine Betriebsunschönheit:** die Ausgabe eines Laufs kann
+„listening" vor „scan complete" zeigen, obwohl die Ereignisse anders lagen. Wer das schließen will, legt
+beide Zeilen auf **einen** synchronen Schreibpfad (`pino.destination({ dest: 1, sync: true })`, `console.log`
+durch `logger.info` ersetzt); Nutzen ist hier nur die Lesbarkeit des Logs, kein Test hängt mehr davon ab.
+
+## F50 — der `DATA`-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert: Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Performance · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`DataScanner.scan()`, ruft `onContent` einmal je
+gefundener CRLF-terminierter Zeile auf), `packages/journaling/src/ingress/spool-write-bridge.ts`
+(`SpoolWriteBridge.push()`, ein Objekt je Aufruf, keine Zusammenfassung), `packages/journaling/src/spool/durable-write.ts:160`
+(`for await (const chunk of chunks) { await handle.write(chunk); }` — ein `fs`-Write-Aufruf je
+Objekt) · **Gefunden:** von TEST am 2026-08-04 beim Bau der `JR-4-10`-Kill-Tests, als ein 20-Runden-
+Smoke-Lauf nach zehn Minuten nicht fertig war · **Status:** **behoben in `JR-4-21a`, Commit
+`543d73d`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21a`).** `SpoolWriteBridge.push()` sammelt gepushte Chunks jetzt in einem internen
+> Puffer und reicht erst ab `DEFAULT_FLUSH_THRESHOLD_BYTES` (128 KiB, aus dem im Befund selbst
+> genannten 64-256-KiB-Rahmen) ein zusammengefasstes Objekt an den Stream weiter — `handle.write()`
+> in `durable-write.ts` bekommt dadurch deutlich weniger, dafür größere Chunks, unabhängig davon, wie
+> kurz die Zeilen waren, aus denen sie stammen. `end()` leert den Restpuffer auch unterhalb der
+> Schwelle (eine Nachricht verliert ihren letzten, nicht vollen Block nicht), `abort()` verwirft ihn
+> (ein abgebrochener Schreibvorgang braucht ihn nie). **Unverändert:** `writeDurableSpoolFile()`
+> selbst, die fsync-Semantik, die Fehlerpfade (`ENOSPC` etc.), Byte-Treue (`Buffer.concat()`
+> transformiert kein Byte) und die Rückstau-Eigenschaft — der Speicherbedarf bleibt ein kleines
+> Vielfaches eines Flush-Batches, nicht proportional zur Nachrichtengröße.
+>
+> **Gemessen** (Skript gegen den echten, kompilierten `SpoolWriteBridge`/`writeDurableSpoolFile()`,
+> 50 MB, je einmal mit 60-Byte- und mit 998-Byte-Zeilen, „vorher" per `git stash` auf **nur**
+> `spool-write-bridge.ts` zurückgesetzt):
+>
+> | Zeileninhalt | vorher                | nachher              | Beschleunigung |
+> | ------------ | --------------------- | -------------------- | -------------- |
+> | 60 Byte      | 58 720 ms (0,88 MB/s) | 629 ms (82,14 MB/s)  | ≈ 93×          |
+> | 998 Byte     | 4 110 ms (12,19 MB/s) | 425 ms (117,88 MB/s) | ≈ 9,7×         |
+>
+> Die eigentliche Signatur des Befunds — der Faktor zwischen kurzen und langen Zeilen bei derselben
+> Bytemenge — fällt von **≈ 13,9×** (58 720 / 4 110 ms) auf **≈ 1,48×** (629 / 425 ms): der Durchsatz
+> hängt jetzt weit überwiegend an der Bytezahl, nicht mehr an der Zeilenzahl. Die „vorher"-Zahlen
+> reproduzieren die ursprüngliche Messung fast exakt (53 816 ms/4 288 ms dort gegen 58 720 ms/4 110 ms
+> hier — derselbe Mechanismus, derselbe Host).
+>
+> **Testfall:** drei neue Fälle in `spool-write-bridge.test.ts` (Batching kleiner Pushes zu wenigen,
+> größeren Chunks ohne Byteverlust oder Umordnung; `end()` leert den Restpuffer auch unterhalb der
+> Schwelle; `abort()` verwirft ihn), zwei bestehende Fälle dort mit explizitem
+> `flushThresholdBytes: 1` versehen, um die Chunkzahl-Wasserlinie unabhängig vom neuen
+> Byte-Batching zu isolieren. Zusätzlich eine dauerhafte **Coverage-Notiz**, keine Assertion (wie vom
+> Auftraggeber verlangt): `tests/unit/spool-write-bridge-throughput.test.ts` schreibt bei jedem
+> `ci`-Lauf 50 MB in beiden Zeilenformen und protokolliert beide Durchsätze über `coverageNotice()` —
+> derselbe Mechanismus, den `JR-2-08`/`JR-4-10` schon nutzen. `byte-fidelity-roundtrip.test.ts`
+> (`JR-4-07`) und `bdat-data-byte-fidelity.test.ts` (`JR-4-11`) blieben grün. Voller Lauf danach:
+> `1038 passed | 8 skipped`, 89 Dateien.
+
+### Was gemessen wurde
+
+Derselbe reale, kompilierte `apps/smtp-ingress`-Prozess, dieselbe 50-MB-`DATA`-Übertragung über einen
+echten Loopback-Socket, nur die **Zeilenlänge** des Nachrichteninhalts verändert (Zeilen exakt an
+CRLF-Grenzen ausgerichtet, damit der Terminator sauber erkannt wird):
+
+| Zeileninhalt                                | Zeilen (bei 50 MB) | Schreibdauer | Durchsatz  |
+| ------------------------------------------- | ------------------ | ------------ | ---------- |
+| 60 Byte                                     | 845 626            | 53 816 ms    | 0,93 MB/s  |
+| 998 Byte (RFC-Maximum, RFC 5321 §4.5.3.1.6) | 52 429             | 4 288 ms     | 11,66 MB/s |
+
+Derselbe Effekt, kleinerer Maßstab (5 MB, drei Zeilenlängen, zur Bestätigung dass es an der
+**Zeilenzahl** und nicht an der absoluten Nachrichtengröße hängt):
+
+| Zeileninhalt | Zeilen (bei 5 MB) | Schreibdauer |
+| ------------ | ----------------- | ------------ |
+| 60 Byte      | 84 563            | 3 105 ms     |
+| 200 Byte     | 25 955            | 1 059 ms     |
+| 998 Byte     | 5 243             | 281 ms       |
+
+Der Durchsatz ist **umgekehrt proportional zur Zeilenzahl, nicht zur Bytezahl** — der Faktor 12,5
+zwischen den beiden 50-MB-Zeilen entspricht fast genau dem Verhältnis der Zeilenzahlen (16,1). Das
+ist die Signatur eines **konstanten Overheads je Zeile**, nicht eines Effekts, der mit der
+Nachrichtengröße selbst skaliert.
+
+### Warum, mechanisch
+
+`DataScanner.scan()` ruft `this.onContent(Buffer.concat([contentLine, CRLF]))` **einmal je in `carry`
+gefundener Zeile** auf (`smtp-server.ts` Zeile ~797), unabhängig davon, wie viele Zeilen ein einzelner
+Socket-„data"-Event geliefert hat. Jeder Aufruf geht über `SpoolWriteBridge.push()` als **ein**
+Objekt in einen `objectMode`-`Readable` (`spool-write-bridge.ts`), und `writeDurableSpoolFile()`s
+`for await`-Schleife (`durable-write.ts:160`) ruft für **jedes** Objekt einzeln
+`await handle.write(chunk)` — ein echter `fs.promises.FileHandle.write()`-Aufruf je SMTP-Zeile, egal
+wie kurz die Zeile ist. Die Kommentare in `durable-write.ts` und `spool-write-bridge.ts` begründen das
+Streaming-Design ausdrücklich mit der Vermeidung von Vollpufferung im Heap (JR-3-02, der berechtigte
+Grund) — aber Streaming pro Zeile ist nicht dieselbe Entscheidung wie Streaming pro Socket-Chunk. Ein
+Socket-„data"-Event liefert typischerweise zehn bis mehrere hundert Kilobyte auf einmal; wird das in
+Hunderttausende Ein-Zeilen-Schreibaufrufe zerlegt, dominiert der Aufrufoverhead (Promise-Erzeugung,
+Systemaufruf, auf Windows zusätzlich der bekannt teurere Datei-I/O-Pfad) vollständig über die
+tatsächliche Bytezahl.
+
+### Warum das mehr als eine Marginalie ist
+
+1. **RFC-Ausgangslage widerspricht sich selbst mit diesem Befund.** `docs/dev/journaling/00-rfc.md`
+   verlangt ausdrücklich Nachrichten bis 150 MB (Exchange-Online-Journal-Reports wickeln die gesamte
+   MIME-Struktur ein zweites Mal ein) — und genau solche Nachrichten bestehen zu einem erheblichen
+   Teil aus **kurzen** Zeilen: Base64-kodierte Anhänge brechen bei 76 Zeichen um (RFC 2045 §6.8), viel
+   häufiger als die 998-Byte-Obergrenze. Eine 50-MB-Nachricht mit überwiegend Base64-Inhalt hat in der
+   Größenordnung von 650 000 Zeilen — näher am langsamen Ende dieser Tabelle als am schnellen.
+2. **Das trifft `JR-4-10` unmittelbar.** Ein 500-Runden-Nightly-Soak mit dem in diesem Befund
+   gemessenen langsamen Zeilenprofil (60 Byte) hätte, grob gerechnet, im Mittel weit über zehn Sekunden
+   je Runde allein für den Schreibanteil gebraucht — bei 500 Runden mehrere Stunden zusätzlich, nur für
+   dieses eine Testfeld. Der 20-Runden-`ci`-Smoke-Test aus diesem Befund lief deshalb über zehn Minuten,
+   ohne fertig zu werden. **Die konkrete Abhilfe in `JR-4-10`s eigenem Test:** Zeilen am RFC-Maximum
+   (998 Byte Inhalt), dokumentiert in `smtp-ingress-kill-during-data.adv.test.ts`s eigenem Kommentar,
+   mit Verweis hierher — der Test bleibt eine ehrliche 50-MB-`DATA`-Übertragung, wählt aber bewusst die
+   Zeilenform, die dieses Problem nicht auslöst, statt es stillschweigend zu umgehen.
+3. **Nicht ausgeschlossen, aber auch nicht gemessen: eine Verstärkung auf diesem Windows-Host.**
+   `fs.promises`-Aufrufe sind auf Windows über den Threadpool spürbar teurer als auf Linux
+   (`libuv`s Windows-Backend hat keinen echten asynchronen Datei-I/O-Pfad für alle Operationen). Der
+   Faktor könnte auf Linux kleiner ausfallen — aber selbst dort bleibt die Architektur **O(Zeilenzahl)**
+   statt **O(Chunkzahl)**, und die relative Verlangsamung durch kurze Zeilen (der Faktor ~12,5 in der
+   eigenen Messung) ist eine Eigenschaft des Codes, nicht der Plattform.
+
+### Was nicht behauptet wird
+
+Kein Datenverlust, keine Verletzung des Acceptance-Contracts — jede einzelne Zeile wird korrekt
+geschrieben, nur langsam. Auch keine unbegrenzte Verzögerung: die Schleife terminiert, sie ist nur
+teuer. Nicht geprüft: ob ein Absender-seitiger SMTP-`DATA`-Timeout (bei Exchange Online oder einem
+anderen MTA) bei einer hinreichend zeilenreichen 150-MB-Nachricht auf einem produktiven Linux-Host
+tatsächlich vor Abschluss der Übertragung feuert — das wäre der Nachweis, der aus dieser Beobachtung
+eine **hohe** statt einer **mittleren** Einstufung machen würde, und er braucht eine reale Zielumgebung,
+keinen Entwicklerhost.
+
+### Umsetzung
+
+Wie oben beschrieben in `JR-4-21a` behoben: `SpoolWriteBridge` sammelt kurze `onContent`-Zeilen in
+einem Zwischenpuffer bis zu 128 KiB, statt jede einzeln an `handle.write()` weiterzugeben —
+`writeDurableSpoolFile()` selbst blieb unverändert, die Streaming-Eigenschaft (O(1) Speicher
+gegenüber der Nachrichtengröße) ist erhalten.
+
+## F51 — `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte
+
+**Schwere:** niedrig · **Kategorie:** Testharness (Testinstabilität) · **Ort:**
+`packages/backend/tests/integration/smtp-ingress-ledger-recovery.int.test.ts:313-314` (vor der
+Reparatur) · **Gefunden:** vom PO am 2026-08-04 anhand des CI-Laufs `30863769294` (`JR-4-11`-Push) ·
+**Status:** **behoben in diesem Commit**
+
+### Was passiert ist
+
+CI-Lauf `30863769294` schlug in `smtp-ingress-ledger-recovery.int.test.ts` (`JR-4-19`) fehl:
+
+```
+expected 0 to be greater than or equal to 1
+```
+
+Alle funktionalen Zusicherungen unmittelbar davor waren grün — der Client hatte `451 4.3.0` erhalten,
+`incoming/` war leer. Gefehlt hat allein `countOccurrences(output.stdout(), UNWIRED_LINE) >= 1`,
+direkt nach dem Empfang der `451`-Antwort abgefragt, ohne zu warten.
+
+### Die Ursache
+
+`smtp-server.ts` schreibt die Logzeile („acceptance path not yet wired") **synchron vor** dem
+`writeResponse(451, …)`-Aufruf, im selben Funktionsdurchlauf — die Reihenfolge in der
+Produktionsanwendung ist korrekt und war nie das Problem. Aber die beiden Ereignisse erreichen den
+Testprozess über **zwei unabhängige Kanäle**: die `451`-Antwort über den TCP-Socket, die Logzeile über
+die gepipte `stdout` des Kindprozesses. Ein Test, der `output.stdout()` in dem Moment abfragt, in dem
+die Socket-Antwort eintrifft, unterstellt, dass beide Kanäle synchron ankommen — das tun sie nicht.
+
+Das ist derselbe Fallstrick, den `F49` in dieser Sitzung schon einmal gelernt hat: **am Log messen,
+nicht am Verhalten.** Die Datei macht es an anderer Stelle (Zeile 287-291, wartet auf „listening on
+port") bereits richtig — nur diese eine Stelle nicht.
+
+### Der Fix
+
+`countOccurrences(...) >= 1` wird jetzt über dasselbe `waitUntil()`-Muster abgewartet, das die Datei
+für „listening on port" schon benutzt, **bevor** gezählt wird:
+
+```ts
+await waitUntil(
+	() => countOccurrences(output.stdout(), UNWIRED_LINE) >= 1,
+	5_000,
+	'the process never logged that acceptance was not yet wired'
+);
+const unwiredBefore = countOccurrences(output.stdout(), UNWIRED_LINE);
+expect(unwiredBefore).toBeGreaterThanOrEqual(1);
+```
+
+Die übrigen `output.stdout()`-Abfragen derselben Datei wurden auf dasselbe Muster geprüft: Zeile
+293-295 (Prüfung auf „could not build journal acceptance") folgt bereits einem `waitUntil` auf
+„listening on port" **auf demselben Pipe** — da Node die Schreibvorgänge eines einzelnen Kindprozesses
+auf **einem** Deskriptor in Schreibreihenfolge ausliefert, ist die Reihenfolge zwischen zwei Zeilen
+auf demselben Pipe garantiert, unabhängig davon, wann die zweite Zeile beobachtet wird. Zeile 328
+(Zählung von `PROMOTION_LINE`) folgt bereits einem eigenen `waitUntil`. Zeile 337 (Prüfung, dass die
+Zählung **unverändert** blieb) prüft eine Abwesenheit, nicht ein Erscheinen — dort gibt es kein
+Rennen in dieselbe Richtung, die diesen Befund ausgelöst hat. Keine weitere Stelle in der Datei zeigt
+dasselbe Muster.
+
+### Kalibrierung
+
+Die Logzeile wurde in `packages/journaling/src/ingress/smtp-server.ts` testweise entfernt (nur der
+`this.logger.info(...)`-Aufruf, `writeResponse(451, …)` blieb), `journaling`/`smtp-ingress-app` neu
+gebaut, der reparierte Test gegen echtes Postgres gefahren:
+
+```
+× starts unusable, answers 451 with an untouched spool, then accepts on the same connection once
+  the database is fixed -- no restart
+  → the process never logged that acceptance was not yet wired: condition not met within 5000ms
+```
+
+Der reparierte Test wird also **rot**, wenn die Zeile wirklich fehlt — nicht nur, wenn sie langsam
+ankommt. Anschließend die Entfernung vollständig zurückgenommen (`git diff` gegen
+`packages/journaling/src/ingress/smtp-server.ts` zeigt **keine** Abweichung), neu gebaut, der Test
+lief wieder grün.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — die Ursache liegt ausschließlich in der Beobachtung des Tests, nicht im
+Verhalten des Servers. Keine Änderung an der Aussage des Kriteriums selbst, nur an der Art, wie sie
+gemessen wird.
+
+## F52 — `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, RFC-Konformität/Ressourcenbegrenzung · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts:1390-1397` (`SmtpConnection.drainCommandCarry`) ·
+**Gefunden:** von TEST am 2026-08-04 beim Bau von `JR-4-14` (adversariale Protokollrobustheit,
+ADR-029 Auflage 1, Fallgruppe „überlange Envelope-Adressen") · **Status:** **behoben in `JR-4-21`,
+Commit `3b2bc66`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21`).** Die Grenze sitzt jetzt zeilenweise in `drainCommandCarry()` selbst: der
+> `idx !== -1`-Zweig prüft `idx > MAX_COMMAND_LINE_BYTES`, **bevor** die Zeile extrahiert wird, genau
+> die Prüfung, die hier gefehlt hat — der `idx === -1`-Zweig war unverändert schon richtig. Das ist
+> nach `go-smtp`s Vorlage (ADR-029-Nachtrag), aber **nicht** als ein eifriger Scan über den ganzen
+> Puffer: eine erste Fassung hat genau das versucht und `JR-4-07`s Byte-Treue-Suite zerschossen, weil
+> ein pipeliniertes `BDAT <n> LAST` samt eigenem Inhalt in einem Paket wie eine überlange Zeile aussah
+> — gefunden vom **Volllauf**, nicht von F52/F53s eigenen Tests. Die Schleife prüft deshalb genau eine
+> Zeile zur Zeit, in der Reihenfolge, in der sie ohnehin verarbeitet wird, und verlässt sich darauf,
+> nie ein zweites `indexOf(CRLF)` aufzurufen, sobald eine Zeile `DATA`/`BDAT` einleitet — das ist
+> dieses Projekts strukturelles Gegenstück zu `go-smtp`s `LineLimit = 0`, ohne eigenes Flag.
+>
+> **Kalibriert, wiederholt statt einmalig:** ein eigenständiges `node`-Skript (kein `vitest`) hat
+> gegen den echten, kompilierten Server je 10 Verbindungen bei ~2 000 Byte gefahren, einmal gegen den
+> Fix und einmal gegen den per `git stash` auf **nur** `smtp-server.ts` zurückgesetzten Vorzustand:
+> **10/10 `250` vorher, 10/10 `500 5.5.1` nachher**, beide Male in 1–8 ms. Testfall in
+> `packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts`, jetzt „fixed in
+> `JR-4-21` (F52): …" statt der bisherigen „FINDING"-Dokumentation des Ist-Zustands.
+
+### Was gemessen wurde
+
+RFC 5321 §4.5.3.1.4 begrenzt eine Kommandozeile auf 512 Oktette. `drainCommandCarry()` prüft dieses
+Limit — aber nur in einem einzigen Zweig:
+
+```ts
+const idx = this.commandCarry.indexOf(CRLF);
+if (idx === -1) {
+	if (this.commandCarry.length > MAX_COMMAND_LINE_BYTES) {
+		this.writeResponse(500, '5.5.1', 'Line too long');
+		this.socket.end();
+	}
+	return;
+}
+const lineBuf = this.commandCarry.subarray(0, idx);
+```
+
+`MAX_COMMAND_LINE_BYTES` (512) wird ausschließlich abgefragt, wenn `indexOf(CRLF)` **kein**
+Ergebnis liefert — also nur, solange eine Zeile noch nicht durch ihr eigenes `CRLF` abgeschlossen
+ist. Sobald `commandCarry` ein `CRLF` enthält, egal an welcher Position, nimmt der Code den
+`idx !== -1`-Zweig, extrahiert die komplette Zeile (`subarray(0, idx)`, beliebig lang) und
+verarbeitet sie ganz normal über `processCommandLine()` — ohne die Zeile jemals gegen das Limit zu
+prüfen.
+
+Das ist über einen echten Socket reproduzierbar, deterministisch, nicht auf TCP-Fragmentierung
+angewiesen: ein einzelner `write()`-Aufruf mit einer 2000-Byte-Adresse **plus ihrem eigenen
+CRLF** —
+
+```ts
+const oversizedAddress = 'a'.repeat(2_000);
+await client.writeRaw(`MAIL FROM:<${oversizedAddress}@example.com>\r\n`);
+```
+
+— wird mit `250` beantwortet, nicht mit `500 5.5.1`. Der Test, der das zeigt, steht in
+`packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts` (Gruppe „a line that
+never completes with CRLF …", Fall „FINDING (see report/F52) …") und ist absichtlich als
+Dokumentation des **Ist-Zustands** formuliert, nicht als Regressionsschutz für ein gewünschtes
+Verhalten: der Kommentar dort sagt ausdrücklich, dass eine künftige Behebung diese Zeile ändern
+muss, nicht nur den Test lockern darf.
+
+### Warum das mehr als ein Format-Detail ist
+
+1. **RFC-Konformität**: die 512-Byte-Grenze ist in RFC 5321 kein Vorschlag, sondern eine Zusage an
+   den Client („MUST be able to receive... 512 octets"), die diese Implementierung damit für jede
+   Zeile bricht, die vollständig in einem TCP-Segment ankommt.
+2. **Ressourcenbegrenzung**: die Grenze ist genau der Mechanismus, den `JR-4-14`s Akzeptanzkriterium
+   „lässt den Speicher unbegrenzt wachsen" adressieren soll. Für eine Zeile, die **fragmentiert**
+   ankommt, greift die Prüfung zuverlässig (siehe die zwei grünen Fälle im selben Testfile, die
+   genau das zeigen — 50 000 Byte in einem Stück und 40×20 Byte über mehrere Schreibvorgänge treffen
+   beide den `idx === -1`-Zweig und werden korrekt mit `500`+Verbindungsabbruch beantwortet). Wie
+   groß eine „in einem Stück" ankommende Zeile in der Praxis werden kann, hängt von Node/`libuv`s
+   Lesepuffergröße und der Sendegeschwindigkeit des Angreifers ab — nicht unbegrenzt, aber ohne
+   diesen Fund auch nicht durch `MAX_COMMAND_LINE_BYTES` begrenzt, sondern nur durch das, was ein
+   einzelner `read()`-Syscall zurückgibt (in dieser Messung genügten 2000 Byte problemlos; nicht
+   gemessen, wie weit sich das treiben lässt, bevor das Betriebssystem selbst fragmentiert).
+3. **Betrifft mehr als `MAIL FROM`**: derselbe Zweig gilt für **jede** Kommandozeile — eine
+   überlange `RCPT TO`, ein überlanger, aber syntaktisch gültiger Verb-Präfix, jede Zeile. Die
+   Fallgruppe „überlange Envelope-Adressen" aus dem Backlog ist der Fall, der es zuerst auffällig
+   gemacht hat, aber die Ursache ist allgemein.
+
+### Kalibrierung
+
+Der Fund ist eine direkte Ableitung aus dem Quelltext (die `if (idx === -1)`-Verzweigung lässt keine
+andere Lesart zu), zusätzlich am echten `EsmtpServer` über einen echten Loopback-Socket gemessen,
+nicht nur am Quelltext behauptet — der oben zitierte Testfall demonstriert `250` statt `500` mit dem
+tatsächlichen Server. Eine Gegenprobe mit einer **kurzen** Adresse (unter 512 Byte) ergibt ebenfalls
+`250` — das beweist an sich nichts (das ist der Normalfall), zeigt aber, dass der Fund nicht an
+irgendeinem Nebeneffekt der Testadresse hängt.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber (E4
+Randbedingung: „Kein Produktionscode-Fix ohne Rückfrage"). Ein möglicher Fix: den Längen-Check auch
+im `idx !== -1`-Zweig ausführen (`idx > MAX_COMMAND_LINE_BYTES` prüfen, bevor die Zeile extrahiert
+wird) — nicht umgesetzt, nur als Richtung notiert.
+
+### Koordinationsnotiz — aufgelöst durch den PO (2026-08-04)
+
+Zwei unabhängig entstandene `JR-4-14`-Dateien trafen genau diesen Defekt aus verschiedenen
+Richtungen: der eigene Testfall der zweiten, zwischenzeitlich vorhandenen Datei
+(`packages/journaling/tests/unit/smtp-adversarial-protocol.test.ts`, Fall „an envelope address that
+pushes the whole command line over the length cap …") war **unabhängig davon rot**
+(`expected '250 2.1.0 Ok' to match /^500 5\.5\.1/`) — zwei getrennt geschriebene Suiten, die denselben
+Defekt treffen, sind ein stärkerer Beleg als eine. Der PO hat die Nummern entschieden: **F52 bleibt
+dieser Fund**, der andersartige Fund derselben zweiten Datei (`commandCarry` wächst während eines
+suspendierten Fensters ungeprüft) ist **F53** (eigener Abschnitt unten, Finder: tester-jr-4-10). Die
+zweite Datei ist inzwischen vollständig in
+`packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts` aufgegangen (ihre
+eigenständigen Fälle übernommen, u. a. der F53-Nachweis mit echtem `PasswordVerifier`, die
+Verbindungslimit-Verfeinerung mit einem noch offenen zweiten Slot, und die Kalibrierung von
+`expectServerStillAcceptsAValidMessage()` gegen einen geschlossenen Port) und danach gelöscht.
+
+## F53 — `commandCarry` wächst während eines suspendierten Fensters (`AUTH`, settling `accept()`) völlig ungeprüft
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.onData()`, der
+`commandProcessingSuspended`-Zweig) · **Gefunden von:** tester-jr-4-10, beim eigenständigen Bau einer
+zweiten `JR-4-14`-Suite in derselben Sitzung · **Status:** **behoben in `JR-4-21`, Commit `3b2bc66`**
+(Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21`).** Anders als F52 (zeilenweise Prüfung in `drainCommandCarry()`) prüft der
+> `commandProcessingSuspended`-Zweig eifrig über den **ganzen** neu zusammengesetzten Puffer
+> (`appendDuringSuspension()`), weil `drainCommandCarry()` hier per Definition nicht läuft. Das ist
+> nur deshalb sicher, weil ein suspendiertes Fenster (laufender `AUTH`-Bcrypt-Vergleich oder
+> settelnder `accept()`-Aufruf) protokollbedingt **nie** rohe `DATA`/`BDAT`-Inhaltsbytes trägt —
+> `bdatChunkRemaining` ist zu diesem Zeitpunkt bereits `null`, `dataScanner` bereits fertig. Geprüft
+> wird die Länge jeder einzelnen, durch CRLF abgegrenzten Zeile im Puffer, nicht die Gesamtlänge —
+> sonst würde legitim gepipelinete, aber gestapelte kurze Kommandozeilen fälschlich abgelehnt.
+>
+> **Kalibriert:** derselbe Testfall in `smtp-protocol-robustness.adv.test.ts` (400-ms-Fenster,
+> 20 MB Flut) zeigt nach dem Fix eine sichtbar andere Form — die Verbindung wird jetzt innerhalb des
+> ersten überlangen Chunks abgelehnt statt die volle Fensterdauer zu füllen, gemessen: 2,0 MB
+> gesendet statt der vollen Flut, `arrayBuffers` +5,1 MB statt der ungebremsten Werte vor dem Fix.
+> Nicht als Schwelle assertiert (unverändert keine vom Auftraggeber freigegebene Obergrenze), aber
+> die Testbeschreibung ist von „reported as F53, not fixed here" auf „fixed in `JR-4-21`" umgestellt.
+
+### Was gemessen wurde
+
+`onData()` behandelt drei Fälle: `state === 'data'`, ein offenes `BDAT`, und — als dritten,
+eigenständigen Zweig — `commandProcessingSuspended`:
+
+```ts
+if (this.commandProcessingSuspended) {
+	// ... erläuternder Kommentar im Quelltext ...
+	this.commandCarry = Buffer.concat([this.commandCarry, chunk]);
+	return;
+}
+```
+
+Dieser Zweig hängt jeden eingehenden Chunk **bedingungslos** an `commandCarry` an und kehrt sofort
+zurück — er ruft `drainCommandCarry()` gar nicht auf, und `drainCommandCarry()` ist die **einzige**
+Stelle, an der `MAX_COMMAND_LINE_BYTES` je geprüft wird (siehe F52 oben). Solange
+`commandProcessingSuspended` `true` ist — laufender `AUTH`-Bcrypt-Vergleich
+(`verifyCredentials()`) oder ein settelnder `accept()`-Aufruf —, gibt es für die Größe von
+`commandCarry` **keine** Prüfung jeder Art, unabhängig davon, ob die eingehenden Bytes fragmentiert
+oder in einem Stück ankommen (der Unterschied, der F52 von F53 trennt, spielt hier keine Rolle mehr).
+
+**Gemessen** (Testfall „measures commandCarry growth during one suspended AUTH window", übernommen
+nach `packages/journaling/tests/adversarial/smtp-protocol-robustness.adv.test.ts`): während eines
+einzigen, 400 ms langen suspendierten `AUTH LOGIN`-Fensters (ein absichtlich verzögerter
+`PasswordVerifier` steht für die reale Kosten eines Bcrypt-Vergleichs) wurden vor dem Fix
+**~6,0 MB** CRLF-freier Bytes gesendet, und `process.memoryUsage().arrayBuffers` wuchs dabei um:
+**28,3 MB** (CI, Linux, Lauf `30900280611`), **76,6 MB** und **83,7 MB** (zwei lokale Läufe
+verschiedener Bearbeiter unter Windows) — über mehrere Läufe eines Bearbeiters hinweg zwischen
+**54,6 und 135,0 MB**. **Reproduzierbar ist die Größenordnung — ein Vielfaches der gesendeten
+Menge —, nicht der einzelne Wert:** der CI-Wert ist mit knapp Faktor 5 der niedrigste der vier
+Messungen, und die Aussage hält trotzdem. Vermutete, nicht weiter verifizierte Ursache der Streuung:
+der GC-Zeitpunkt relativ zum Messpunkt und Zwischenzustände wiederholter `Buffer.concat()`-Aufrufe,
+von denen jeder eine neue, größere Kopie alloziert, während die alte kurzfristig doppelt gehalten
+wird, bis der GC sie einsammelt. **Nach dem Fix** (`JR-4-21`) wurden bei **2,0 MB** gesendeter Daten
+nur noch **4,0 MB** (CI) bzw. **5,1 MB** (lokal) Wachstum gemessen — die Ablehnung greift jetzt
+innerhalb des ersten überlangen Chunks, statt die volle Fensterdauer zu füllen. Nach Ablauf des
+Fensters antwortet der Server korrekt (`535` falsche Zugangsdaten oder `501` bei einer als
+SASL-Fortsetzung fehlinterpretierten Flut) — der Prozess erholt sich, das Fenster ist nur eine
+Verzögerung, keine dauerhafte Sperre.
+
+### Warum das ernster ist als reine Speicherkosmetik
+
+Die Fensterdauer ist an einen echten, langsamen kryptographischen Vergleich gekoppelt (Bcrypt,
+Kostenfaktor 10 laut `smtp-server.ts`s eigenem `AUTH_DUMMY_PASSWORD_HASH`-Kommentar) — ein Angreifer
+kann das Fenster **selbst nicht verlängern**, aber er kann es **beliebig oft öffnen** (jeder
+`AUTH`-Versuch öffnet ein neues, bis `MAX_AUTH_ATTEMPTS_PER_CONNECTION` = 3 pro Verbindung greift)
+und **jedes einzelne Fenster** mit so vielen Bytes fluten, wie die Netzwerkverbindung in der
+Fensterzeit zulässt — ohne die sonst überall geltende 512-Byte-Grenze.
+
+### Kalibrierung
+
+Nicht als Schwelle assertiert (es gibt keine vom Auftraggeber freigegebene Obergrenze, gegen die
+sich "bestanden/durchgefallen" sinnvoll entscheiden ließe) — die Zahl wird protokolliert
+(`console.warn`), nicht geprüft. Die Kalibrierung liegt in der Mechanik selbst: derselbe Testfall
+zeigt, dass der Prozess nach dem Fenster korrekt antwortet (kein Hänger), und der Verzögerungsmechanismus
+(`slowVerifier`) macht das Fenster deterministisch beobachtbar, ohne von echtem `bcryptjs`-Timing
+abhängig zu sein (dieselbe Begründung, die `smtp-auth-protocol.test.ts`s `RecordingPasswordVerifier`
+für einen Fake statt echtem `bcryptjs` schon gibt).
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber.
+Ein möglicher Fix: `commandCarry` auch im `commandProcessingSuspended`-Zweig gegen eine Obergrenze
+prüfen (nicht notwendigerweise `MAX_COMMAND_LINE_BYTES`, da hier keine Kommandozeile erwartet wird,
+sondern Rohbytes bis zur Wiederaufnahme) — nicht umgesetzt, nur als Richtung notiert.
+
+## F54 — der Abbruchpfad von `MAX_COMMAND_LINE_BYTES` ist nicht idempotent: eine fragmentiert ankommende überlange Zeile kann zu einem `ECONNRESET` statt einem sauberen `500` führen
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Protokollkonformität · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`drainCommandCarry()`, der `idx === -1`-Zweig, und
+`onData()`, der Zweig für den ordinären Kommando-Modus) · **Gefunden:** von TEST am 2026-08-04, beim
+Untersuchen, warum ein für `JR-4-14` übernommener Testfall mit einer 2-MB-Adresse zuverlässig am
+5-Sekunden-`testTimeout` der `unit`-Projektkonfiguration scheiterte, statt (wie die ursprüngliche
+Fallbeschreibung erwartete) mit einem schnellen `250` · **Status:** **behoben in `JR-4-21`, Commit
+`3b2bc66`** (Rolle DEV, 2026-08-04). Vom Auftraggeber bestätigt — der Zusatz „Vorschlag, noch nicht
+bestätigt" ist entfernt.
+
+> **Behoben (`JR-4-21`).** Zwei Mechanismen: `oversizedLineRejected` (neues Feld) latcht die erste
+> Ablehnung — jeder weitere `onData()`-Aufruf prüft dieses Flag **zuerst** und tut sonst nichts mehr,
+> also auch keinen zweiten `writeResponse()`/`socket.end()`-Aufruf. Das allein reicht nicht: dieselbe
+> Kollisionsklasse tritt auch auf, wenn eine **andere** asynchrone Fortsetzung (`verifyCredentials`s
+> Bcrypt-`.then()`, `completeTransfer`s `accept()`-Fortsetzung) nach einer bereits erfolgten Ablehnung
+> noch schreiben will — deshalb prüfen `writeResponse()`/`writePlain()` jetzt zusätzlich
+> `socket.writableEnded` (nicht nur `socket.destroyed`, das `socket.end()` nicht synchron setzt).
+>
+> **Kalibriert, mit Wiederholung statt einem Lauf** (Auftraggeber-Anforderung, weil ein einzelner
+> grüner Lauf hier nichts beweist — der Fall ist ohne Wiederholung nicht sicher von einem seltenen
+> Rennen zu unterscheiden): der reguläre `vitest`-Testfall zehnmal hintereinander gegen den Fix
+> gefahren, **10/10 grün**. Zusätzlich ein eigenständiges `node`-Skript (kein `vitest`, kein
+> Pro-Test-Timeout) gegen den echten kompilierten Server, **10 Verbindungen je Größe**, an der vom
+> Auftraggeber benannten Größenmatrix:
+>
+> | Größe   | vorher (10 Läufe, nur `smtp-server.ts` per `git stash` zurückgesetzt) | nachher (10 Läufe) |
+> | ------- | --------------------------------------------------------------------- | ------------------ |
+> | ~2000 B | 10/10 falsches `250` (F52)                                            | 10/10 `500 5.5.1`  |
+> | 100 KB  | 10/10 `500` (war nie kaputt — der `idx === -1`-Zweig griff schon)     | 10/10 `500`        |
+> | ~200 KB | 10/10 Reset/Hänger, keine lesbare Antwort                             | 10/10 `500`        |
+> | 2 MB    | 10/10 Reset/Hänger, keine lesbare Antwort                             | 10/10 `500`        |
+>
+> Nach dem Fix antworten alle vier Größen einheitlich in 1–11 ms — keine Chunk-Abhängigkeit mehr, das
+> Signal, das laut Auftraggeber zeigt, dass die Grenze jetzt an der richtigen Schicht sitzt. Der
+> `RED UNTIL JR-4-21`-Marker im Testfall (`smtp-protocol-robustness.adv.test.ts`) ist entfernt.
+>
+> **Die eigentliche Erkenntnis dieser Scheibe liegt nicht in F52/F53/F54 selbst, sondern in einer
+> Regression, die der Fix zwischenzeitlich selbst eingeführt hat:** eine erste Fassung hat die
+> Zeilenlängengrenze als eifrigen Scan über den **ganzen** neu zusammengesetzten Puffer umgesetzt
+> („die Grenze sitzt im Reader" zu wörtlich genommen) und damit `JR-4-07`s Byte-Treue-Suite
+> zerschossen: ein pipeliniertes `BDAT <n> LAST` samt eigenem Inhalt in einem Paket sah, bevor die
+> Kommandozeile geparst war, wie eine einzige überlange Zeile aus. **Gefunden hat das der Volllauf,
+> nicht F52s oder F53s eigene Tests** — genau die Konstellation, vor der `go-smtp`s `LineLimit = 0`
+> um `BDAT` (ADR-029-Nachtrag, Punkt 2) warnt. Behoben, indem F52 zeilenweise **innerhalb**
+> `drainCommandCarry()`s bestehender Schleife prüft (die dort ohnehin nie ein zweites `indexOf(CRLF)`
+> auf Inhaltsbytes aufruft) und nur F53s Fall — wo Inhaltsbytes protokollbedingt ausgeschlossen sind —
+> weiterhin eifrig über den ganzen Puffer scannt.
+
+### Was gemessen wurde
+
+Eine überlange, **fragmentiert** ankommende Kommandozeile (groß genug, dass Node den `write()` nicht
+als einen einzigen `data`-Event zustellt — ab ca. 100 KB reproduzierbar gemessen, siehe Tabelle) löst
+den in F52 zitierten `idx === -1`-Zweig korrekt aus: `writeResponse(500, '5.5.1', 'Line too long')`
+gefolgt von `this.socket.end()`. Das Problem liegt **danach**: `commandCarry` wird bei diesem Aufruf
+**nicht** zurückgesetzt, und es gibt kein Merkmal wie „diese Verbindung wurde bereits abgelehnt,
+ignoriere alles Weitere". Trifft nach dem `socket.end()` ein **weiterer** Chunk derselben,
+bereits im Zustellungsprozess befindlichen Zeile ein (üblich: der Client hat den ganzen `write()`
+schon an das Betriebssystem übergeben, bevor er überhaupt eine Antwort lesen konnte), ruft
+`onData()` erneut `drainCommandCarry()` auf, das **erneut** `writeResponse(500, …)` und **erneut**
+`this.socket.end()` aufruft — auf einem Socket, der sich bereits im Schließen befindet. Gemessen,
+mit echtem Logger: das erzeugt zuverlässig
+
+```
+smtp-ingress: socket error {"err":{"code":"ERR_STREAM_WRITE_AFTER_END"}}
+```
+
+und der Socket wird daraufhin mit einem **RST** statt einem geordneten FIN geschlossen — was beim
+Client als `ECONNRESET` ankommt. **Nicht deterministisch, ob der Client die ursprüngliche
+`500`-Zeile noch zu lesen bekommt, bevor der Reset eintrifft** — in wiederholten Läufen desselben
+Szenarios kam die `500`-Zeile manchmal beim Client an (im gepufferten `data`-Text sichtbar) und
+manchmal nicht (ein Testklient, der auf eine vollständige, mit Regex erkannte Antwortzeile wartet,
+sah in mehreren Läufen **gar keine** Antwort und lief in seinen eigenen 15/30-Sekunden-Timeout,
+obwohl der Server nach wenigen Millisekunden bereits geantwortet **und** sich beendet hatte).
+
+**Größentabelle** (einzelner `write()`, lokal auf diesem Host gemessen, `EsmtpServer` ohne TLS/ACL):
+
+| Adressgröße                                     | Beobachtung                                                                                                                                                                        |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10 KB, 50 KB                                    | ein `data`-Event, komplette Zeile inkl. CRLF sofort verarbeitet → `250` (F52)                                                                                                      |
+| 100 KB                                          | fragmentiert, erster Chunk > 512 Byte ohne CRLF → korrektes `500`, keine Wiederholung beobachtet                                                                                   |
+| 200 KB – 1600 KB (jede gemessene Zwischengröße) | fragmentiert, **wiederholter** `writeResponse`+`socket.end()`-Aufruf, `ERR_STREAM_WRITE_AFTER_END`, `ECONNRESET` beim Client, `500`-Zeile beim Client **nicht zuverlässig lesbar** |
+
+Die genaue Schwelle zwischen „ein Chunk" und „mehrere Chunks" ist eine Eigenschaft von Node/`libuv`s
+Lesepuffergröße auf diesem Host, nicht eine feste, dokumentierte Konstante — auf einem anderen Host
+oder unter anderer Last kann sie abweichen.
+
+### Warum das über F52 hinausgeht
+
+F52 sagt: eine überlange **atomare** Zeile wird nie geprüft und einfach akzeptiert. Dieser Fund sagt
+etwas Schärferes über den **Ablehnungspfad selbst**: die Ablehnung, wenn sie greift, ist nicht
+idempotent, und ihr Fehlschlag beim zweiten Versuch beschädigt die ursprüngliche, bereits
+geschriebene Antwort möglicherweise noch **vor** deren zuverlässiger Zustellung. Das verletzt „jeder
+Fall ist aus Client-Sicht ausgewertet" im wörtlichen Sinn: aus Client-Sicht ist das Ergebnis für
+identische Eingaben bei wiederholten Läufen manchmal ein korrektes `500`, manchmal ein nackter
+Verbindungsabbruch ohne jede SMTP-Antwort — kein Crash des Serverprozesses (der Prozess selbst lief
+in jedem Lauf weiter und nahm danach neue Verbindungen an), aber ein für den Sender nicht
+unterscheidbares Verhalten von einem Netzwerkfehler.
+
+### Kalibrierung
+
+Reproduzierbar mit einem eigenständigen Skript gegen den echten, kompilierten `EsmtpServer`
+(`node:net`, kein `vitest`, keine Zeitbeschränkung) über eine Größenreihe (10 KB bis 1600 KB) sowie
+zweimal wiederholt bei 200 KB — beide Läufe zeigten denselben `ERR_STREAM_WRITE_AFTER_END` und
+`ECONNRESET`, mit unterschiedlicher Reihenfolge zwischen dem Log-Eintrag und dem Zustellzeitpunkt der
+`500`-Zeile beim Client (nicht deterministisch, aber der Fehler selbst reproduzierbar). Keine
+Produktionscode-Änderung vorgenommen.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix, und **diese Nummer (F54) ist ein Vorschlag, keine vom Auftraggeber
+bestätigte Zuweisung** — anders als F52/F53 wurde sie nicht vorab vergeben, weil der Fund erst bei
+der Zusammenführung der beiden `JR-4-14`-Dateien entstand. Ein möglicher Fix: `commandCarry` beim
+ersten `writeResponse(500, …)` leeren und einen Zustand „bereits abgelehnt" setzen, den jeder weitere
+`onData()`-Aufruf zuerst prüft, bevor er irgendetwas anderes tut — nicht umgesetzt, nur als Richtung
+notiert.
+
+## F55 — kein Limit für die Anzahl angenommener `RCPT TO` je Transaktion
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, Ressourcenbegrenzung · **Ort:**
+`packages/journaling/src/ingress/smtp-server.ts` (`SmtpConnection.handleRcpt()`,
+`recordMatchedRecipient()`, die Felder `rcptTo`/`matchedRecipients`) · **Gefunden:** von TEST am
+2026-08-04, im Rahmen von `JR-4-15` (ADR-029 Auflage 2, Scope-Punkt „Ressourcengrenzen je
+Verbindung") · **Status:** **behoben in `JR-4-21a`, Commit `8755d9b`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21a`).** `smtp-config.ts` bekommt ein neues Feld `maxRecipientsPerTransaction`
+> (Default `1000`, per Zod auf `.min(100, ...)` begrenzt — RFC 5321 §4.5.3.1.8 verlangt, dass ein
+> Server **mindestens** 100 Empfänger je Nachricht annimmt, ein niedrigerer Wert wäre also selbst ein
+> Normverstoß, keine bloß strengere Einstellung). `handleRcpt()` prüft `this.rcptTo.length >=
+this.smtp.maxRecipientsPerTransaction` **unbedingt**, vor der ACL-Verzweigung — die Grenze gilt
+> also unabhängig davon, ob überhaupt ein `recipientAclEvaluator` konfiguriert ist. Bei Überschreitung
+> antwortet der Server `452 4.5.3`, mit einem Text, der sich bewusst von ADR-030s eigenem `452 4.5.3`
+> („andere Kette") unterscheidet — sonst könnte ein Betreiber die beiden Ursachen im Log nicht
+> auseinanderhalten. Die Transaktion läuft danach weiter: `452` weist nur diesen einen Empfänger
+> zurück, `DATA`/`BDAT` schließt mit den bereits angenommenen Empfängern normal ab.
+>
+> **Kalibriert:** die beiden Durchsetzungsfälle in `smtp-protocol-robustness.adv.test.ts` wurden gegen
+> den per `git stash` zurückgesetzten Vorzustand gefahren und schlugen dort mit der benannten
+> Zusicherung fehl (`expected '250 2.1.5 Ok' to match /^452 4\.5\.3/`), danach zurückgenommen
+> (`git diff` leer) und wieder grün nachgefahren.
+>
+> **Testfall:** drei neue Fälle in `smtp-protocol-robustness.adv.test.ts` (Empfänger bis zur
+> konfigurierten Grenze angenommen, der nächste mit unterscheidbarem `452 4.5.3` abgewiesen und die
+> Transaktion schließt trotzdem ab; jeder weitere Empfänger über der Grenze wird abgewiesen, nicht nur
+> der erste; die unveränderte Default-Konfiguration nimmt mindestens die RFC-Untergrenze von 100
+> Empfängern an) plus vier neue Fälle in `smtp-config.test.ts` (Default ≥ 100, ein Wert unter 100 wird
+> abgelehnt, genau 100 wird angenommen, ein nicht-ganzzahliger Wert wird abgelehnt). Voller Lauf
+> danach: `1034 passed | 8 skipped`, 88 Dateien.
+
+### Was gemessen wurde
+
+`handleRcpt()` prüft die Empfänger-ACL, ADR-030s Ketten-Zugehörigkeit (`452 4.5.3` bei einer
+**anderen** Kette) und — bei authentifizierten Verbindungen — die Quellen-Übereinstimmung. Danach
+folgt unbedingt:
+
+```ts
+this.recordMatchedRecipient(parsed.address, decision.sourceId, decision.chainScopeId);
+// ...
+this.rcptTo.push(parsed.address);
+```
+
+Für **jeden** syntaktisch gültigen `RCPT TO`, der zur bereits zugeordneten Kette gehört (auch
+derselbe Empfänger beliebig oft — laut Backlog-Kommentar ausdrücklich zulässig: „doppelte Empfänger
+bleiben zulässig"), wachsen `rcptTo` und `matchedRecipients` um ein Element. Es gibt **keine**
+Konfiguration, keine Konstante und keine Prüfung, die die Anzahl der `RCPT TO`-Kommandos einer
+Transaktion begrenzt — anders als bei realen MTAs (Postfix' `smtpd_recipient_limit`, Default 1000).
+
+**Gemessen**, gegen den echten, kompilierten `EsmtpServer` über einen echten Loopback-Socket, mit
+demselben Empfänger einer bereits zugeordneten Kette wiederholt (`RCPT TO:<victim@example.com>`,
+gepipelinet in einem Schreibvorgang):
+
+| Anzahl `RCPT TO` | Gesendete Bytes (Client) | Antwortzeit gesamt | `heapUsed`-Wachstum (Server) |
+| ---------------- | ------------------------ | ------------------ | ---------------------------- |
+| 1 000            | ~30 KB                   | 51 ms              | nicht einzeln gemessen       |
+| 100 000          | ~3 MB                    | 845 ms             | nicht einzeln gemessen       |
+| 1 000 000        | ~30 MB                   | 3 931 ms           | **395,4 MB**                 |
+
+Jede einzelne Anfrage wird korrekt mit `250 2.1.5` beantwortet — kein Hänger, kein Absturz, keine
+falsche Antwort. Der Server bleibt **funktional korrekt**, aber der Speicherverbrauch wächst
+proportional zur Anzahl der Empfänger, ohne jede Obergrenze: 30 MB Eingabe erzeugen ~395 MB
+Heap-Wachstum auf dem Server — ein Verstärkungsfaktor von gut **13×** bei dieser Messung, und ohne
+Deckel wächst er mit jedem weiteren `RCPT TO` weiter.
+
+### Warum das ein eigenständiger Befund ist, nicht nur F52/F53 in neuer Form
+
+Anders als F52/F53/F54 (alle drei: eine Kommandozeile bzw. ein Puffer wird nicht gegen
+`MAX_COMMAND_LINE_BYTES` geprüft) ist hier **jede einzelne** Kommandozeile für sich genommen kurz und
+gültig — das Problem ist nicht die Zeilenlänge, sondern die **Anzahl** der Zeilen, die dieselbe
+Transaktion anhäufen darf, bevor `DATA`/`BDAT` überhaupt beginnt. Der `go-smtp`-Vorlage aus dem
+ADR-029-Nachtrag (`JR-4-21`) begegnet dieser Klasse von Fund nicht — `lineLimitReader` begrenzt
+Byte-Länge, nicht Anzahl-der-Kommandos-einer-Sorte.
+
+### Kalibrierung
+
+Reproduzierbar mit einem eigenständigen Skript (`node`, kein `vitest`) gegen den echten,
+kompilierten Server: eine erste, naive Fassung des Meßskripts erzeugte einen scheinbaren Hänger bei
+schon 5 000 Wiederholungen — nachgesehen war das ein Fehler im **Testklienten** (eine
+`String.slice()`-basierte Zeilenpufferung, die bei großen Antwortmengen selbst zum Engpass wurde),
+nicht am Server. Mit einem korrigierten, zählbasierten Klienten (keine Zeichenketten-Pufferung)
+liefen 1 000 000 Anfragen in unter 4 Sekunden durch — das ist die Zahl oben, und die Lehre selbst ist
+Teil des Befunds: **die eigene Meßmethode zuerst gegen einen bekannten Fall geprüft**, bevor „hängt"
+als Serververhalten statt als Werkzeugfehler gemeldet wird (Testrollen-Regel: ein Prüfwerkzeug, das
+fail-open ist, ist derselbe Fehler eine Ebene höher).
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber.
+Ein möglicher Fix: eine konfigurierbare Obergrenze für `rcptTo.length` je Transaktion, bei
+Überschreitung `452 4.5.3` (derselbe Code, den ADR-030 für „zu viele Empfänger" schon benutzt, nur
+aus einem anderen Grund) — nicht umgesetzt, nur als Richtung notiert.
+
+## F56 — kein expliziter Cipher-Suite-Filter: der Server verhandelt `AES128-SHA` (keine Forward Secrecy) unter TLS 1.2
+
+**Schwere:** mittel · **Kategorie:** Empfangspfad, TLS-Konfiguration · **Ort:**
+`packages/journaling/src/ingress/tls-config.ts` (`ingressTlsConfigSchema`, kein `ciphers`-Feld),
+`smtp-server.ts` (`buildTlsSocketOptions()`, setzte nur `minVersion`) · **Gefunden:** von TEST am
+2026-08-04, im Rahmen von `JR-4-15`, Scope-Punkt „TLS-Parameter" · **Status:** **behoben in
+`JR-4-21a`, Commit `819403f`** (Rolle DEV, 2026-08-04)
+
+> **Behoben (`JR-4-21a`).** `TLS_CIPHERS` (`tls-config.ts`) ist eine feste, PFS-und-AEAD-only-Liste
+> (nur `ECDHE`/`DHE`-Schlüsselaustausch, nur `GCM`/`ChaCha20-Poly1305`) — kein reiner RSA-Austausch,
+> kein CBC/SHA-1 mehr aushandelbar. **Die erste Fassung setzte diese Liste an der falschen Stelle**:
+> als `ciphers`/`honorCipherOrder` im Optionsobjekt, das `buildTlsSocketOptions()` an
+> `new tls.TLSSocket(plainSocket, options)` übergibt — genau daneben, wo `minVersion` steht, also
+> naheliegend, aber gemessen wirkungslos. Sobald ein `secureContext` bereits übergeben wird (was in
+> diesem Prozess immer der Fall ist), ignoriert Node einen Cipher-Parameter auf Socket-Ebene
+> vollständig; die Aushandlung folgt ausschließlich der Cipher-Liste, die beim Bau des
+> `secureContext` selbst (`tls.createSecureContext()`) galt. Ein Client, der nur `AES128-SHA`
+> anbietet, bekam diesen Cipher **trotz** gesetztem `ciphers`-Feld weiterhin ausgehandelt — an
+> genau dieser Stelle hätte ein reiner Optionsobjekt-Test (ohne echten Socket) den Fehler nicht
+> gefunden. Der Fix sitzt jetzt in `EsmtpServer`s Konstruktor:
+> `tls.createSecureContext({ cert, key, ciphers: TLS_CIPHERS, honorCipherOrder: true })`.
+> `buildTlsSocketOptions()` setzt weiterhin nur `minVersion`.
+>
+> **Kalibriert, in beiden Richtungen, gegen einen echten `net.Server` + `tls.TLSSocket`/echten
+> TLS-Client:** ein Client mit `ciphers: 'AES128-SHA', minVersion/maxVersion: 'TLSv1.2'` gegen den
+> unveränderten (Vorzustand-)Server verhandelte `AES128-SHA` erfolgreich — auch mit der (wirkungslosen)
+> ersten Fixfassung. Erst mit `ciphers`/`honorCipherOrder` am `secureContext` selbst antwortet der
+> Server „no shared cipher", derselbe Client scheitert mit einem fatalen Handshake-Alert. TLS 1.3
+> bleibt unberührt (eigener Testfall, `getProtocol() === 'TLSv1.3'`), ein gewöhnlicher Client
+> verhandelt weiterhin `ECDHE-RSA-AES128-GCM-SHA256` — Exchange Online und vergleichbare Absender
+> bleiben also zugelassen. `smtp-starttls-protocol.test.ts` (`JR-4-04`, TLS 1.2 **und** 1.3
+> Ende-zu-Ende) und `smtp-tls11-clienthello-rejection.test.ts` (`JR-4-14`) blieben grün.
+>
+> **Testfall:** neue Datei `packages/journaling/tests/unit/smtp-tls-cipher-filter.test.ts` (3 Fälle:
+> `AES128-SHA` wird abgelehnt, ein gewöhnlicher Client verhandelt weiterhin Forward-Secrecy-AEAD, TLS
+> 1.3 unberührt), plus zwei angepasste Fälle in `smtp-server.test.ts` (`buildTlsSocketOptions` setzt
+> **weder** `ciphers` noch `honorCipherOrder`; `TLS_CIPHERS` selbst enthält keine CBC/SHA-1- oder
+> reine-RSA-Suite). Voller Lauf danach: `1027 passed | 8 skipped`, 88 Dateien.
+
+### Was gemessen wurde
+
+`buildTlsSocketOptions()` übergibt an `new tls.TLSSocket(...)` ausschließlich `isServer`,
+`secureContext` und `minVersion: 'TLSv1.2'` — kein `ciphers`-String, kein `honorCipherOrder`. Damit
+gilt für die Cipher-Auswahl unter TLS 1.2 ausschließlich Node/OpenSSLs **Standard**-Liste, die vom
+verhandelnden **Client** eingeschränkt werden kann, aber vom Server nicht vorab verengt wird.
+
+Gemessen gegen einen echten `tls.TLSSocket({ isServer: true, secureContext, minVersion: 'TLSv1.2' })`
+mit genau dieser Konfiguration: ein Client, der explizit nur `AES128-SHA`
+(`TLS_RSA_WITH_AES_128_CBC_SHA` — reiner RSA-Schlüsselaustausch ohne Forward Secrecy, CBC-Betriebsart,
+SHA-1-MAC) anbietet, bekommt genau diesen Cipher ausgehandelt:
+
+```
+[AES128-SHA] negotiated: TLSv1.2 AES128-SHA
+[AES128-SHA] client negotiated: AES128-SHA
+```
+
+Zum Vergleich: ein gewöhnlicher, nicht eingeschränkter Client verhandelt von sich aus
+`ECDHE-RSA-AES128-GCM-SHA256` (Forward Secrecy, AEAD) — das Standardverhalten ist also gut, nur nicht
+**erzwungen**. `DES-CBC3-SHA` (3DES) ließ sich mit diesem Node-Client nicht gegenprüfen (OpenSSL 3.x
+verweigert 3DES bereits beim Aufbau des Client-Kontexts) — das ist eine Einschränkung des
+**Prüfwerkzeugs**, kein Beleg, dass der Server 3DES ablehnen würde; nicht weiter verifiziert.
+
+### Warum das ein eigenständiger Befund ist
+
+Ein Angreifer kann den Cipher einer TLS-1.2-Aushandlung nicht einseitig erzwingen (die
+`Finished`-Nachricht bindet die Aushandlung kryptographisch ab) — das eigentliche Risiko ist ein
+**legitimer, aber veralteter** Absender (ein alter Exchange-Server, eine schlecht konfigurierte
+MTA), der von sich aus nur `AES128-SHA` anbietet und dessen Journal-Mail dann ohne Forward Secrecy
+verschlüsselt wird: wird der private Schlüssel dieser Verbindung später kompromittiert (oder der
+Serverschlüssel selbst), lässt sich mitgeschnittener historischer Datenverkehr rückwirkend
+entschlüsseln — genau das, was Forward Secrecy verhindern soll. Für ein Compliance-Archivsystem, das
+selbst hochsensible Inhalte transportiert, ist das ein begründetes Härtungsziel, auch ohne aktiven
+Angreifer im Aushandlungspfad.
+
+### Kalibrierung
+
+Direkt am echten `tls.TLSSocket`-Konstrukt mit der exakten, im Quelltext verwendeten Optionsmenge
+gemessen (nicht am Quelltext allein behauptet). Als Gegenprobe: derselbe Aufbau ohne
+Client-seitige `ciphers`-Einschränkung verhandelt den erwarteten starken Cipher
+(`ECDHE-RSA-AES128-GCM-SHA256`) — der Fund betrifft also nur den Fall eines Clients, der selbst eine
+schwächere Auswahl anbietet, nicht das Serververhalten im Normalfall.
+
+### Was nicht angefasst wurde
+
+Kein Produktionscode-Fix — Befund dokumentiert, gemeldet, Entscheidung liegt beim Auftraggeber. Ein
+möglicher Fix: `buildTlsSocketOptions()` einen expliziten `ciphers`-String mitgeben, der
+Nicht-PFS-Suiten (reiner RSA-Schlüsselaustausch) und `3DES`/`RC4`/`NULL` ausschließt (z. B. Mozillas
+„intermediate"-Profil als Ausgangspunkt) — nicht umgesetzt, nur als Richtung notiert.
+
+## `JR-4-15` — Sicherheitsdurchsicht des Empfangspfads (ADR-029 Auflage 2): Ergebnis je Scope-Punkt
+
+Rolle TEST, 2026-08-04. Akzeptanzkriterium wörtlich: „Jeder Punkt des Umfangs ist mit Befund oder
+mit begründetem ‚unauffällig' beantwortet; Befunde landen hier; kein Punkt bleibt unbeantwortet
+stehen." Sechs Punkte, in der Reihenfolge des Backlogs:
+
+1. **TLS-Parameter** — **Befund F56** (kein Cipher-Suite-Filter, `AES128-SHA` ohne Forward Secrecy
+   aushandelbar). Die Versionsgrenze selbst (`TLS_MIN_VERSION = 'TLSv1.2'`) ist bereits durch `JR-4-14`
+   mit einem von Hand gebauten TLS-1.1-`ClientHello` bewiesen abgelehnt
+   (`smtp-tls11-clienthello-rejection.test.ts`) — dieser Teilpunkt ist unauffällig.
+
+2. **Ressourcengrenzen je Verbindung** — **Befund F55** (kein Limit für die Anzahl `RCPT TO` je
+   Transaktion, Speicherverstärkung ~13× gemessen). Alle übrigen Grenzen sind vorhanden und durch
+   `JR-4-14` bereits gehärtet geprüft: `MAX_COMMAND_LINE_BYTES` (F52/F53/F54, behoben in `JR-4-21`),
+   `MAX_AUTH_ATTEMPTS_PER_CONNECTION = 3`, `PerSourceConnectionLimiter`,
+   `PerSourceTransactionRateLimiter`, die drei Protokoll-Timeouts (`connectionTimeoutMs`/
+   `commandTimeoutMs`/`dataTimeoutMs`), das `SIZE`-Limit. Unauffällig bis auf F55.
+
+3. **Informationsgehalt der Antworttexte** — **unauffällig, begründet.** Jeder `writeResponse()`-/
+   `writePlain()`-Aufruf in `smtp-server.ts` übergibt einen literalen, im Quelltext fest geschriebenen
+   String — mechanisch bestätigt durch `smtp-5xx-inventory.test.ts`s erschöpfenden Scan aller
+   `5xx`-Aufrufstellen (der nur literale Argumente erkennt und deshalb eine variable Zusammensetzung
+   ohnehin melden würde). Keine Aufrufstelle interpoliert `err.message`, `cause`, einen Stacktrace,
+   einen absoluten Pfad oder einen Konfigurationswert in eine an den Client gesendete Zeile. Ein
+   unauthentifizierter Peer erfährt aus einer Antwort also nie mehr als den SMTP-Code und einen
+   generischen, vorab festgelegten Text.
+
+4. **Envelope-Werte auf dem Weg in Protokoll und Ledger** — **geprüft, unauffällig mit einer
+   Einschränkung.** `remote_ip`/`ehlo_name` sind angreiferkontrolliert und fließen an zwei Stellen:
+   gehasht in die Kette (`canonical-encoding.ts`) und als Klartext-Spalten in `journal_ledger`
+   (`journal-ledger.ts`-Schema). Log-Injection im klassischen Sinn (eine eingeschleuste Newline, die
+   eine gefälschte Logzeile erzeugt) ist strukturell ausgeschlossen, weil `apps/smtp-ingress` echtes
+   `pino` benutzt — jeder Log-Aufruf erzeugt ein einzeiliges JSON-Objekt, in dem eine eingebettete
+   Newline als `\n`-Escape innerhalb eines JSON-Strings landet, nicht als literarischer Zeilenumbruch.
+   Ein NUL-Byte in `ehloName` — messbar über einen Angreifer-`EHLO`-Parameter erreichbar
+   (`smtp-protocol-robustness.adv.test.ts`) — ist in einer Postgres-`text`-Spalte nicht darstellbar
+   (`22021: invalid byte sequence for encoding "UTF8": 0x00`, gemessen gegen die echte Testdatenbank)
+   und lässt `PostgresLedgerWriter.append()` fehlschlagen — gemessen End-zu-Ende über den echten Draht
+   in `smtp-ingress-envelope-hostile-values.int.test.ts` (3 Fälle, alle grün): der Fehler wird von
+   `JournalAcceptance.accept()`s generischem `try`/`catch` aufgefangen, ordnungsgemäß als
+   `ledger-append-failed` klassifiziert und mit `451 4.3.0` beantwortet — kein Absturz, kein `5xx`,
+   die Spool-Datei bleibt für die Crash-Recovery unangetastet liegen, und derselbe Chain-Append
+   funktioniert danach normal weiter (Kette bleibt an Position 1, kein Loch). Die Einschränkung: nicht
+   geprüft ist, ob ein ANSI-Escape-Zeichen (nicht NUL) in `ehlo_name` beim Betrachten der `pino`-JSON-
+   Ausgabe in einem Terminal-Viewer (nicht in der strukturierten Datei selbst) etwas Störendes
+   anzeigen könnte — das ist eine Eigenschaft des Log-**Betrachters**, nicht dieser Anwendung, und
+   außerhalb dieser Scheibe nicht weiter verfolgt.
+
+5. **Speicherverhalten bei 150 MB** — **geprüft, unauffällig, mit benannter Lücke.** Der `BDAT`-Pfad
+   ist bereits mit einem Nightly-Test bei exakt 150 MB (`150 x 1 MiB`-Chunks) gemessen und bleibt
+   deutlich unter dem beobachteten Rausch-Rahmen (`smtp-server-protocol.test.ts`, `arrayBuffers`-
+   Metrik, F43-Lehre bereits berücksichtigt). Der `DATA`-Pfad ist **nicht separat** bei 150 MB
+   gemessen — strukturell identisch gepuffert (`writeDurableSpoolFile()` streamt für beide Pfade), aber
+   nicht empirisch bestätigt für `DATA` im Speziellen. Zusätzlich gilt **F50** (nicht neu, hier nur
+   verknüpft): der Durchsatz hängt an der Zeilenzahl, nicht an der Bytezahl — 50 MB mit 60-Byte-Zeilen
+   brauchen ~54 s, mit 998-Byte-Zeilen ~4 s; bei 150 MB mit kurzen Zeilen ist entsprechend mit
+   deutlich über einer Minute Laufzeit zu rechnen, was selbst kein Speicherproblem ist, aber die
+   Verbindung lange in Anspruch nimmt (Ressourcengrenzen-Punkt oben).
+
+6. **Keine Ableitung von Dateipfaden aus Angreiferdaten** — **unauffällig, begründet.**
+   `incomingFilePath()`/`quarantineFilePath()`/`shardOf()` (`spool/layout.ts`) sind ausschließlich
+   Funktionen von `spool_txid` — serverseitig per `generateTxId()` erzeugt (`crypto.randomBytes` plus
+   Zeitstempel, `spool/txid.ts`), nie aus `mailFrom`/`rcptTo`/`ehloName`/`remoteAddress` abgeleitet.
+   Mechanisch bestätigt: kein `path.join`/`path.resolve` in `packages/journaling/src/spool/*.ts` oder
+   `src/ingress/*.ts` referenziert einen dieser Bezeichner.
+
+**Neue Testdatei:** `packages/backend/tests/integration/smtp-ingress-envelope-hostile-values.int.test.ts`
+(3 Fälle, `ci`, echtes Postgres) — Punkt 4. Kein neuer Test für Punkt 1/2 (F55/F56) über die bereits
+zitierten Messskripte hinaus — beide Funde sind gemessen und dokumentiert, aber (wie bei F52/F53/F54
+vor `JR-4-21`) noch nicht als dauerhafte Regressionstests committet, weil beide Fixes vom Auftraggeber
+noch nicht freigegeben sind und ein Regressionstest gegen eine noch nicht entschiedene Obergrenze
+nichts Belastbares prüfen könnte.
+
+---
+
+## F57 — `pnpm test` war nicht in `dotenv --` gewickelt: die `integration`-Suite übersprang sich sichtbar, der Lauf sah unverdächtig aus
+
+**Schwere:** mittel · **Kategorie:** Testharness · **Ort:** `package.json` (die sieben `test*`-Skripte) ·
+**Gefunden:** 2026-08-02 vom PO in Parallelsession B (E5) · **Status:** **behoben in E5, Commit
+`914c026`** (2026-08-02)
+
+> **Aus E5 übernommen und umnummeriert.** Dieser Befund wurde in Parallelsession B als **F42**
+> vergeben und in `06-status.md` dokumentiert statt hier — beides hat sich beim Rückmerge von E4 als
+> Fehler erwiesen: E4 hatte F42 zur selben Zeit für einen anderen Befund vergeben, und eine
+> Befundnummer außerhalb dieser Datei zu vergeben verletzt die Regel im Kopf dieses Dokuments.
+> **ADR-032** hält beides fest. Die ausführliche Fassung mit den Messungen steht weiterhin im
+> E5-Abschnitt von `06-status.md`.
+
+`CLAUDE.md` §4 sagt, alle Root-Skripte seien in `dotenv -- …` gewickelt und läsen die `.env`. Für die
+`test*`-Skripte stimmte das nicht. Ohne **exportiertes** `DATABASE_URL` übersprang die gesamte
+`integration`-Suite — sichtbar in der Ausgabe, aber ohne Fehlschlag: **`integration: ci 0/97`, Exit 0.**
+Das ist dieselbe Klasse wie F48 und F14/F15: ein Lauf, der grün meldet, weil nichts geprüft wurde.
+
+**Behoben** durch Wickeln aller sieben `test*`-Skripte. Vorher an der installierten Version gemessen
+statt aus der Dokumentation geschlossen: `dotenv-cli` verträgt eine **fehlende** `.env` (Exit 0), und
+bereits gesetzte Umgebungsvariablen behalten **Vorrang** vor der Datei — die CI setzt `DATABASE_URL`
+im Workflow und bleibt daher unberührt. **Beleg der Wirkung:** `pnpm test` ohne exportiertes
+`DATABASE_URL` liefert seitdem `integration: ci 97/97` statt `0/97`.
+
+---
+
+## F58 — Whitespace in einer konfigurierten Domain landete unverändert in der Eigentümeradresse
+
+**Schwere:** mittel · **Kategorie:** Neuer Code · **Ort:** `packages/journaling/src/parser/owner-resolution.ts`
+(Treffer- und Fallback-Ausgabepfad) · **Gefunden:** 2026-08-02 in der Abnahme `JR-5-09` ·
+**Status:** **behoben in E5, Commit `d579c35`** (2026-08-02)
+
+> **Aus E5 übernommen und umnummeriert** — vergeben war **F43**, dieselbe Nummer, die E4 parallel für
+> den Heap-Nachweis benutzte. Siehe **ADR-032**; die ausführliche Fassung steht im E5-Abschnitt von
+> `06-status.md`.
+
+Der Vergleich lief über `normalizedConfiguredDomain()` (trimmt), die **Ausgabe** benutzte die rohe
+Zeichenkette. Ein versehentliches Leerzeichen in `organizationDomains` passte damit weiterhin — und
+wanderte in die erzeugte Adresse:
+
+```
+'company.com '   -> "alice@company.com "            Whitespace am Ende
+' company.com'   -> "alice@ company.com"            Whitespace MITTEN in der Adresse
+'company.com\t'  -> "alice@company.com\t"
+```
+
+Eine solche Adresse ist nie zustellbar und vergleicht sich mit nichts — und sie wäre nach E6 in
+`archived_emails.userEmail` gelandet. **Behoben** an beiden Ausgabestellen mit acht Regressionstests.
+
+**Bewusst nicht mitbehoben:** Die Groß-/Kleinschreibung bleibt erhalten (entworfen, nicht versehentlich;
+ein Test hält `' Company.COM '` ⇒ `alice@Company.COM` fest). Und ein `main`, das gar keine Domain ist
+(`'admin@company.com'` ⇒ `default_fallback@admin@company.com`), wird **nicht** repariert: zu raten,
+welche Hälfte der Betreiber meinte, hieße aus einer kaputten Eingabe einen Wert zu erfinden. Ein Test
+hält diese Grenze fest. Sie gehört in die Konfigurationsprüfung im Backend.

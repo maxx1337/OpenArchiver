@@ -1,0 +1,24 @@
+{
+	"name": "smtp-ingress-app",
+	"version": "0.1.0",
+	"private": true,
+	"license": "AGPL-3.0",
+	"scripts": {
+		"dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"refresh-m365-ranges": "node dist/refresh-m365-ranges.js"
+	},
+	"dependencies": {
+		"@open-archiver/journaling": "workspace:*",
+		"bcryptjs": "^3.0.2",
+		"dotenv": "^17.2.0",
+		"pino": "^9.7.0",
+		"postgres": "^3.4.7"
+	},
+	"devDependencies": {
+		"@types/node": "^24.0.13",
+		"ts-node-dev": "^2.0.0",
+		"typescript": "^5.0.0"
+	}
+}

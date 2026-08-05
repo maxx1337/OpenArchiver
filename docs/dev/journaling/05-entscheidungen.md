@@ -6,6 +6,28 @@ neu verhandelt wird. Status: **entschieden** · **offen** · **verworfen**.
 Eine als _entschieden_ markierte Entscheidung wird nur mit einer neuen ADR geändert, die die alte
 explizit ersetzt — nie durch stille Abweichung im Code.
 
+> **Umnummerierung am 2026-08-04, beim Rückmerge von E4 — wer eine ADR-Nummer in einem älteren
+> Commit, Kommentar oder Protokoll liest, muss das hier kennen.** E4 (`smtp-ingress`) und E5
+> (Journal-Report-Parser) sind **parallel auf zwei Zweigen** entstanden und haben unabhängig
+> voneinander dieselben Nummern vergeben. E4 hatte zusätzlich die bestehende ADR-026 (Task-IDs) auf
+> ADR-029 verschoben, während der Integrationszweig sie als ADR-026 weiterführte. Aufgelöst nach dem
+> Grundsatz **der eingehende Zweig gibt nach**, entschieden vom Auftraggeber:
+>
+> | vorher auf dem E4-Zweig                 | jetzt                                     |
+> | --------------------------------------- | ----------------------------------------- |
+> | ADR-026 — SMTP-Eigenimplementierung     | **ADR-029**                               |
+> | ADR-027 — eine Kette pro Transaktion    | **ADR-030**                               |
+> | ADR-028 — Erholung der Ledger-Anbindung | **ADR-031**                               |
+> | ADR-029 — Task-IDs `JR-<Epic>-<NN>`     | **ADR-026** (zurück auf die Trunk-Nummer) |
+>
+> Unverändert bleiben die auf dem Integrationszweig vergebenen **ADR-027** (`mailparser`) und
+> **ADR-028** (Betriebsart ist Konfiguration). Die Umstellung erfasste 98 Referenzen in 15 Dateien und
+> ist mechanisch als Permutation ausgeführt worden, nicht von Hand.
+>
+> **Die Lehre steht in ADR-032:** zwei parallele Zweige, die beide aus demselben fortlaufenden
+> Nummernkreis schöpfen, kollidieren zwangsläufig — das galt hier gleichzeitig für ADR-Nummern,
+> Befundnummern (F42/F43) und Dateinamen (`12-`).
+
 ---
 
 ## ADR-001 — Umfang von Epic 0: nur Planung und Dokumentation
@@ -1654,8 +1676,18 @@ nicht wiederverwendet werden:
 
 ## ADR-026 — Task-IDs schreiben sich `JR-<Epic>-<NN>`
 
-**Status:** **entschieden** (2026-08-01) · **Entscheider:** Auftraggeber · **Betrifft:**
-`03-backlog.md` und jedes Dokument, jeden Kommentar und jeden Suite-Namen, der eine Task-ID nennt
+> **Diese ADR hieß bis zum 2026-08-04 „ADR-029" — dieselbe Nummer wie die SMTP-ADR unten.** Die
+> Doppelvergabe fiel beim Schreiben von ADR-029s Go-Nachtrag auf; der Auftraggeber hat die
+> Umnummerierung entschieden. **Umnummeriert wurde diese**, nicht die SMTP-ADR: Die trägt 40
+> Referenzen quer durchs Repo, darunter Produktivcode (`smtp-server.ts`), zwei Testdateien und
+> `suite-inventory.ts`, und ihre beiden **Auflagen** (`JR-4-14`, `JR-4-15`) werden unter der Nummer
+> zitiert. Diese hier hatte fünf Referenzen. **Die Nummer ist bewusst 029 und nicht eine Lücke
+> davor** — 001 bis 028 sind vergeben, und eine ADR-Nummer ist ein Identifikator, kein Datum. Dass
+> 029 damit älter ist als 027 und 028, ist der Preis dafür, keine bestehende Nummer zu recyceln.
+
+**Status:** **entschieden** (2026-08-01, umnummeriert 2026-08-04) · **Entscheider:** Auftraggeber ·
+**Betrifft:** `03-backlog.md` und jedes Dokument, jeden Kommentar und jeden Suite-Namen, der eine
+Task-ID nennt
 
 Task-IDs tragen ab sofort einen Bindestrich zwischen Epic und laufender Nummer:
 **`JR-<Epic>-<NN>`**. Die laufende Nummer bleibt zweistellig, ein Nacharbeits-Suffix hängt als
@@ -1830,7 +1862,7 @@ die Begründung dieser ADR hängt an der Gleichheit.
 ## ADR-028 — Die Betriebsart ist Konfiguration, keine Ableitung aus der Nachricht
 
 **Status:** **entschieden** (2026-08-02) · **Entscheider:** PO · **Betrifft:** E5s Parser, E4s
-Quellenkonfiguration, E6s Aufrufer · **Nummer beim Rückmerge gegenprüfen** (`12-parallelbetrieb.md` §6)
+Quellenkonfiguration, E6s Aufrufer · **Nummer beim Rückmerge gegenprüfen** (`17-parallelbetrieb.md` §6)
 
 `parseJournalReport()` bekommt einen optionalen Hinweis auf die **erwartete Quellenart**
 (`'exchange-journal' | 'plain-bcc' | 'infer'`, Voreinstellung `'infer'`). Bei `'plain-bcc'` ist
@@ -1887,6 +1919,332 @@ so im Modulkommentar und in den Tests, statt weggeschrieben zu werden. Vor allem
 Aufrufer, der sie kennt und `'infer'` übergibt, verschenkt die Zusage. Die Voreinstellung bleibt
 `'infer'`, damit E5 für sich lauffähig bleibt — sie ist eine Übergangs-, keine Zielbetriebsart.
 
+---
+
+## ADR-029 — SMTP-Empfangspfad: Eigenimplementierung statt Bibliothek
+
+**Status:** **entschieden** (2026-08-02) · **Entscheider:** PO, auf der Messung von `JR-4-02` und
+einer **eigenen Gegenprobe** · **Quelle:** Backlog E4 (`JR-4-02`, `JR-4-03`), RFC §4.1/§4.2, Skill
+`journal-ledger` §10 · **Berührt nicht:** ADR-002 (Code-Ablage) — die Aufteilung dünne App /
+Logik im Paket bleibt unverändert
+
+**Entschieden: der SMTP-Server wird selbst implementiert**, auf `node:net` und `node:tls`, in
+`packages/journaling/src/ingress/smtp-server.ts`. Keine SMTP-Server-Bibliothek als Abhängigkeit.
+
+### Warum — das Kriterium ist `BDAT`, und es ist nicht verhandelbar
+
+Der Projektzweck steht und fällt mit Exchange Online (`README.md`, erster Abschnitt: Exchange Online
+kann Journal-Reports nicht an ein Exchange-Online-Postfach ausliefern, das Ziel muss extern und per
+SMTP erreichbar sein). Exchange Online spricht `CHUNKING`/`BDAT`; das Backlog sagt dazu
+ausdrücklich „das ist nicht optional". Damit ist `BDAT`-Fähigkeit kein Auswahlkriterium unter
+mehreren, sondern eine Ausschlussbedingung.
+
+**Gemessen, nicht aus READMEs gelesen** — `JR-4-02` hat die Pakete entpackt und den ausgelieferten
+Quelltext geprüft, der PO hat es unabhängig wiederholt:
+
+| Kandidat                | Ergebnis                                                                                                                                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smtp-server` 3.19.2    | **Kein `BDAT`.** 17 Kommando-Handler (`AUTH`, `DATA`, `EHLO`, `HELO`, `HELP`, `KILL`, `MAIL`, `NOOP`, `QUIT`, `RCPT`, `RSET`, `SHELL`, `STARTTLS`, `VRFY`, `WIZ`, `XCLIENT`, `XFORWARD`), kein `handler_BDAT`. Der eigene Quellkommentar sagt es: „BINARYMIME is not supported as it requires BDAT command (RFC 3030)" |
+| `haraka`                | **Kein `BDAT`** — und ein vollständiges `outbound/`-Modul (Queueing, Relay, Bounces), weil es ein MTA _sein_ will. Scheitert unabhängig davon an Skill §10 („kein ausgehender Mailpfad")                                                                                                                               |
+| `simplesmtp`            | Unmaintained seit 2015, kein `BDAT`                                                                                                                                                                                                                                                                                    |
+| übrige Registry-Treffer | `fake-smtp-server`, `maildev`, `smtp-tester`, `test-smtp-server` u. ä. — Testattrappen, überwiegend auf `smtp-server` aufgebaut, keine Produktionsserver                                                                                                                                                               |
+
+Eine Registry-Suche nach `bdat` liefert zwei Treffer, beide ohne Bezug zu SMTP. **Es gibt in Node
+keinen SMTP-Server mit `BDAT`.**
+
+### Nachtrag 2026-08-03: die Prämisse ist richtig, ihre Begründung im RFC war es nicht
+
+**Der Auftraggeber hat die Entscheidung angezweifelt** — ob eine fertige Bibliothek (`smtp-server`)
+nicht den Aufwand erheblich senken würde. Die Rückfrage war berechtigt und hat die ADR verbessert,
+denn die Begründung, auf der sie stand, hielt der Prüfung **nicht** stand.
+
+`00-rfc.md:127` sagt: „**`CHUNKING` / `BDAT`** — Exchange Online uses BDAT. Not optional." Der erste
+Halbsatz begründet den zweiten nicht. **RFC 3030 verlangt das Gegenteil:** ein Server, der `BDAT`
+anbietet, **muss** `DATA` weiter unterstützen, und ein Client darf `DATA` benutzen. Kündigt ein
+Empfänger `CHUNKING` nicht an, fällt jeder normkonforme Sender auf `DATA` zurück — genau deshalb
+liefert Exchange Online an die Mehrheit der Mailserver im Internet aus, die `CHUNKING` nicht
+anbieten. „Exchange benutzt BDAT" ist damit **kein** Argument für Unverzichtbarkeit.
+
+**Unverzichtbar ist es aus einem anderen Grund, und der trägt:** Microsoft 365 **entfernt seit
+einigen Jahren keine „bare line feeds" mehr** aus Nachrichten — früher tat es das, um an ältere
+Empfänger ausliefern zu können, und hat damit aufgehört, weil das Signaturen (DKIM) zerstört. Eine
+Nachricht mit einem `LF` ohne vorangehendes `CR` **ist über `DATA` nicht übertragbar**: `DATA` ist
+zeilenorientiert und endet auf `<CRLF>.<CRLF>`. Microsoft schreibt dazu ausdrücklich, dass für solche
+Nachrichten `CHUNKING` erforderlich ist und ein Ziel ohne `BDAT` sie **nicht annehmen kann**; der
+Sendeversuch endet in `barelinefeedsareillegal`.
+
+**Für dieses Produkt ist das die schlimmste denkbare Lückenart.** Ein Journal-Report, dessen
+Originalnachricht ein Bare-LF enthält, käme nie an — und ob er eines enthält, hängt an der
+Byte-Zusammensetzung der archivierten Mail, nicht an einer Einstellung. Die Lücke wäre also
+**unsystematisch und unauffällig**, in einem System, dessen einziger Zweck **beweisbare
+Vollständigkeit** ist. Ein Archiv, das „alles außer manchen" enthält, ist genau das, was dieses
+Projekt ersetzen soll (`README.md`, erster Abschnitt: die Pull-Ingestion ist defekt, _weil_ ihre
+Lücke nicht nachweisbar ist).
+
+**Der `00-rfc.md`-Satz bleibt unverändert** — die Datei ist byteidentisch zu halten (`.prettierignore`,
+ADR-004). Die tragende Begründung steht hier.
+
+### Was der Umstieg konkret kosten und sparen würde — gemessen, nicht geschätzt
+
+Weil die Frage wiederkommen wird, hier die Zahlen aus dem entpackten Paket (`smtp-server` 3.19.2):
+
+| Punkt                                           | Befund                                                                                                                                                                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ließe sich `handler_BDAT` „von außen" ergänzen? | Der Dispatch ist `handler = this['handler_' + commandName]` (`lib/smtp-connection.js:603`), ein Prototype-Lookup — ein Handler wäre also über einen Deep-Import in `smtp-server/lib/smtp-connection` und einen Prototype-Patch grundsätzlich anfügbar         |
+| **Aber `BDAT` ist kein Kommando-Problem**       | `lib/smtp-stream.js` (295 Zeilen) kennt **zwei** Modi: Kommandozeilen und `_dataMode` (Terminatorsuche mit Dot-Unstuffing). Ein „lies genau `n` rohe Bytes"-Modus — der, in dem `BDAT` arbeitet — **existiert nicht**. Er müsste **in** die Bibliothek hinein |
+| Was der Umstieg spart                           | `STARTTLS` (`JR-4-04`), `AUTH`/SASL (Teil von `JR-4-05`), Timeouts, Parameter-Parsing, Dot-Unstuffing — real, aber der Größenordnung nach **rund 1,5 von 16** E4-Tasks                                                                                        |
+| Was der Umstieg kostet                          | `JR-4-02`, `JR-4-03` und `JR-4-16` sind fertig, getestet und gemessen — sie wären wegzuwerfen; die Byte-Treue (Randbedingung 3) liefe künftig durch fremden Stream-Code; der `BDAT`-Eingriff läge an drei Stellen in nicht-öffentlicher API                   |
+| Unerwünschtes, das mitkommt                     | `handler_VRFY`, `handler_XCLIENT`, `handler_XFORWARD`, `handler_WIZ`, `handler_SHELL` — ADR-029 schließt die ersten drei ausdrücklich aus, weil `XCLIENT`/`XFORWARD` einer Gegenstelle erlauben, `remote_ip`/`ehlo_name` zu setzen, also gehashte Felder      |
+
+**Die Entscheidung bleibt damit bestehen**, aber ihre Begründung ist ausgetauscht: nicht „keine
+Bibliothek kann `BDAT`" allein, sondern „`BDAT` ist für Vollständigkeit unverzichtbar **und** keine
+Bibliothek kann es, und die eine, die man umbauen könnte, müsste an ihrem Bytestrom-Parser umgebaut
+werden — genau an der Stelle, an der unser Kernversprechen hängt."
+
+### Die dritte Option, und warum sie verworfen ist
+
+Neben „Bibliothek nehmen" und „selbst bauen" gab es **`smtp-server` forken und `BDAT` nachrüsten**.
+Diese Option ist **abgewogen, nicht gemessen** — das gehört hier hin, weil der Rest dieser ADR auf
+Messung beruht und der Unterschied nicht verwischt werden soll. Gegen den Fork sprechen drei Punkte:
+
+1. **Das Hauptargument für einen Fork trägt gerade dort nicht, wo er gebraucht würde.** Man forkt,
+   um die gehärtete Substanz zu erben. Der nachgerüstete `BDAT`-Pfad ist aber genau der Teil, den
+   niemand gehärtet hat — die geerbte Härtung deckt den `DATA`-Pfad ab, den wir ohnehin bekommen
+   hätten.
+2. **Der Eingriff läge im fremden Zustandsautomaten an der Stelle, an der die Byte-Treue entsteht.**
+   Randbedingung 3 des Projekts (Bytes werden nie transformiert) ist eine Aussage über genau diesen
+   Codepfad. Sie über einen fremden, umgebauten Automaten zu belegen ist teurer als über 627 Zeilen
+   eigenen Code.
+3. **Ein Fork ist über die Projektlaufzeit Wartung ohne Ertrag** — Upstream-Änderungen müssen
+   nachgezogen werden, ohne dass Upstream je das Feature bekommt, dessentwegen geforkt wurde.
+
+### Was das kostet, und was es einbringt
+
+**Es bringt ein**, dass zwei Zusicherungen strukturell statt argumentativ werden: es gibt in diesem
+Prozess **keinen** ausgehenden Mailpfad, weil kein solcher Code existiert (`JR-4-07` wird damit
+belegbar statt behauptbar), und die empfangenen Bytes durchlaufen keinen fremden Filter.
+
+**Es kostet die geerbte Härtung.** Wer eine etablierte Bibliothek einsetzt, erbt deren Umgang mit
+überlangen Zeilen, unvollständigen Kommandos, Kommandofluten, ungültigen Sequenzen und
+Ressourcenerschöpfung — Verhalten, das dort über Jahre an echtem Verkehr entstanden ist. Dieser
+Erwerb entfällt und **muss deshalb selbst hergestellt werden**. Das ist keine Anmerkung, sondern
+eine Auflage:
+
+> **Auflage 1:** `JR-4-14` (neu, Rolle TEST) — adversariale Protokollrobustheit. Ohne diese Task
+> ist E4 nicht abnehmbar; `JR-4-13` nimmt sie in seine Kriterien auf.
+>
+> **Auflage 2:** `JR-4-15` (neu, Rolle TEST) — Sicherheitsdurchsicht des Empfangspfads, bevor
+> `JR-4-13` läuft. Dieser Prozess terminiert TLS, nimmt Bytes von unauthentifizierten Gegenstellen
+> an und ist der einzige Teil des Systems, der von außen erreichbar ist.
+
+### Was bewusst **nicht** implementiert wird
+
+Der Befehlssatz bleibt auf das beschränkt, was ein Journaling-Empfänger braucht. Insbesondere
+**kein `VRFY`/`EXPN`** (Auskunft über Empfänger ist ein Informationsleck und für dieses Produkt
+ohne Nutzen) und **kein `XCLIENT`/`XFORWARD`** (sie erlauben einer Gegenstelle, die protokollierte
+Herkunft zu setzen — in einem System, dessen Ledger `remote_ip` und `ehlo_name` hasht, wäre das
+eine Manipulationsschnittstelle). Wer einen dieser Befehle später aufnimmt, ändert damit die
+Aussagekraft der Kette und braucht eine eigene Entscheidung.
+
+### Konsequenz für die Abhängigkeitslage
+
+`node:net`/`node:tls` sind Builtins, keine npm-Pakete. `packages/journaling` hängt damit
+unverändert **nur** von `@open-archiver/types` und `zod` ab — die Frage „Bibliothek ins Paket oder
+in die App" hat sich aufgelöst, statt entschieden zu werden. Die Protokollierung (`pino`) liegt in
+der App und wird über den Port `IngressLogger` injiziert, wie `SpoolFileSystem`, `LedgerBackend` und
+`QuarantineAlertSink`.
+
+### Nachtrag 2026-08-04: **Go war nie geprüft** — nachgeholt, Entscheidung bestätigt, Vorlage übernommen
+
+**Der Auftraggeber hat die Entscheidung ein zweites Mal angezweifelt**, diesmal mit konkreten
+Kandidaten außerhalb von Node: [`go-smtp`](https://github.com/emersion/go-smtp),
+[`net/smtp`](https://pkg.go.dev/net/smtp) und
+[`microbus/smtpingress`](https://docs.microbus.io/package-reference/coreservices/smtpingress/).
+Anlass waren **F52** und **F53** — zwei Defekte, die `JR-4-14` gefunden hat und die genau in die
+Kategorie fallen, die diese ADR als Kosten ihrer eigenen Entscheidung benannt hat („es kostet die
+geerbte Härtung").
+
+**Die Rückfrage war berechtigt, und sie hat eine echte Lücke getroffen.** Der Satz „Es gibt in Node
+keinen SMTP-Server mit `BDAT`" ist richtig — aber die Tabelle darüber prüft **ausschließlich
+npm-Pakete**, und das stand nirgends. Für andere Sprachen galt die Aussage nie.
+
+**Gemessen am Quelltext, nach demselben Maßstab wie oben:**
+
+| Kandidat               | Befund                                                                                                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `go-smtp` (emersion)   | **Kann `BDAT` vollständig, serverseitig.** `handleBdat()` in `conn.go:993`, `bdatPipe`, `CHUNKING` in den Capabilities, eigene Byte-Zählung, korrektes `RSET`-Verhalten. Ein echter Kandidat — in **Go** |
+| `net/smtp`             | Scheidet aus: **Client** (`SendMail`), kein Server; von Go als eingefroren markiert                                                                                                                      |
+| `microbus/smtpingress` | Scheidet aus: kein `BDAT`/`CHUNKING`, und es setzt das vollständige Microbus-Substrat samt NATS voraus                                                                                                   |
+
+**Warum die Entscheidung trotzdem bestehen bleibt — der Grund ist nicht der SMTP-Server, sondern der
+Acceptance-Contract.** `250` fällt erst nach fsync von Spool **und** Ledger-Append. Beides muss im
+selben Prozess liegen wie der Protokollzustand. Ein Go-Ingress müsste deshalb mitnehmen:
+
+| Bereich   | Umfang heute | Lage                                                                                        |
+| --------- | ------------ | ------------------------------------------------------------------------------------------- |
+| `ingress` | 5 309 Zeilen | `go-smtp` ersetzt das **Protokoll**, nicht ACL gegen Postgres, Rate-Limits, TLS-Config      |
+| `spool`   | 1 684 Zeilen | **E3, abgenommen**                                                                          |
+| `ledger`  | 1 154 Zeilen | **E2, abgenommen** — kanonische Kodierung über 16 Felder, Chain-Hash, Merkle, Advisory-Lock |
+
+Der Ledger ist der Ausschlussgrund: ihn in Go nachzubauen hieße, die **Hash-Kette zweimal zu
+implementieren**. Weicht die kanonische Kodierung um ein Byte ab, entsteht ein Kettenbruch — also
+exakt der Befund, den das Produkt als Manipulation meldet. Die Alternative, eine IPC-Grenze zwischen
+fsync und `250`, legt eine Prozessgrenze in den kritischen Pfad und verkompliziert die
+Crash-Recovery. Dazu kämen 21 Testdateien zum Empfangspfad (allein die fünf großen 2 606 Zeilen),
+darunter der Kill-Test, der als erster belegt hat, dass die Kernzusage unter `SIGKILL` hält.
+
+**Entscheidung des Auftraggebers (2026-08-04): bei der Node-Eigenimplementierung bleiben — aber die
+Lösungen von `go-smtp` übernehmen, statt sie neu herzuleiten.** Das ist der Teil, der diese ADR
+verändert: der Eigenbau bleibt, hört aber auf, seine Härtung selbst zu erfinden.
+
+#### Die Vorlage, die dabei zu übernehmen ist
+
+`go-smtp` löst **F52 und F53 strukturell**, nicht durch Einzelprüfungen — und genau das ist der
+Unterschied zu unserer Implementierung:
+
+1. **`lineLimitReader` (`conn.go:38`, `60-69`): die Zeilenlängengrenze sitzt im _Reader_, nicht in
+   der Parselogik.** Damit greift sie unabhängig davon, ob das CRLF im selben Chunk ankommt (**F52**)
+   und unabhängig davon, ob die Verarbeitungsschleife gerade läuft (**F53**). Unsere Prüfung liegt in
+   `drainCommandCarry()` und in der von `onData()` überspringbaren Schleife — deshalb hat sie zwei
+   Lücken statt keiner.
+2. **Für `BDAT` wird das Limit gezielt abgeschaltet und exakt wiederhergestellt** (`LineLimit = 0` in
+   Zeile 1075, zurück auf `MaxLineLength` in 1091 und 1098), weil Chunks binär und ohne
+   Zeilenstruktur sind. Die Fallunterscheidung, die man leicht vergisst.
+3. **`strconv.ParseUint(args[0], 10, 32)` statt `Atoi`** — im Quelltext kommentiert mit „so we will
+   not accept negative values". Erschlägt den negativen `BDAT`-Längenfall an der Wurzel.
+4. **Oversize bei `BDAT`: `552` senden _und_ den angekündigten Chunk verwerfen**
+   (`io.Copy(Discard, LimitReader(…))`), damit die Verbindung synchron bleibt — dasselbe Verhalten,
+   das `JR-4-12` prüft.
+5. **Grenzen als benannte Serverfelder mit Defaults**: `MaxLineLength` (2000), `MaxRecipients`,
+   `MaxMessageBytes`, getrennte `ReadTimeout`/`WriteTimeout`, Idle-Timeout → `421`.
+
+**Lizenz:** `go-smtp` steht unter **MIT**, dieses Projekt unter **AGPL-3.0**. MIT ist damit
+verträglich. Übernommen werden **Lösungsansätze**, nicht Quelltext — die Umsetzung ist TypeScript
+gegen `node:net`. Wo eine Stelle erkennbar nachgebaut ist, gehört ein Verweis auf `go-smtp` samt
+MIT-Hinweis in den Dateikommentar; das ist guter Stil und hält die Herkunft nachvollziehbar.
+
+**Was das für `JR-4-15` bedeutet:** Auflage 2 bleibt bestehen und wird durch diesen Nachtrag nicht
+kleiner. Sie prüft künftig einen Empfangspfad, dessen Grenzen an der Transportschicht sitzen — die
+Durchsicht wird dadurch aussagekräftiger, nicht überflüssig.
+
+## ADR-030 — Eine Transaktion, die Journal-Empfänger mehrerer Ketten adressiert
+
+**Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-05b` hat den Fall
+erkannt und ausdrücklich **nicht** gelöst, wie beauftragt · **Umsetzung:** `JR-4-17` (neu), **vor
+`JR-4-06`** · **Berührt:** ADR-007 (eine Kette je Archiv), Skill `journal-ledger` §5 (eine Receipt je
+Transaktion)
+
+**Entschieden: der zweite und jeder weitere `RCPT TO`, der eine _andere_ Kette einführen würde, wird
+mit `452 4.5.3` abgewiesen.** Eine SMTP-Transaktion bleibt damit eindeutig **einer** Kette zugeordnet.
+Mehrere Empfänger **derselben** Quelle und ein doppelt genannter Empfänger bleiben unproblematisch und
+werden angenommen.
+
+### Der Fall
+
+`journaling_sources.routing_address` bestimmt die Quelle, deren `ingestion_source_id` die
+`chain_scope_id` **ist** (ADR-007). Adressiert eine Transaktion zwei gültige Journal-Adressen
+verschiedener Quellen, ist die Kettenzuordnung ambig — eine Transaktion erzeugt aber genau eine
+Receipt in genau einer Kette. Praktisch tritt das ein, wenn ein Endkunde mehrere Archive auf einer
+Installation betreibt und eine Nachricht in zwei Journalregeln fällt.
+
+### Die drei Wege, und warum zwei ausfallen
+
+**Verworfen: „der erste Empfänger gewinnt".** Der Sender hätte für **beide** Empfänger ein `250`
+bekommen, während nur eine Kette einen Eintrag hat. Das ist keine Ungenauigkeit, sondern ein direkter
+Bruch des Acceptance-Contracts: `250` ist die Zusage, dass **diese** Nachricht durabel liegt, und für
+den zweiten Mandanten wäre sie unwahr. Ein stiller Verlust in genau dem Archiv, dessen
+Vollständigkeit bewiesen werden soll.
+
+**Verworfen für v1: „eine Receipt je betroffener Kette, ein Spool-Objekt".** Inhaltlich die sauberste
+Variante — verlustfrei, und jede Mandantenkette bliebe für sich vollständig, was ADR-007 anstrebt.
+Sie scheitert an einer **gemessenen** Eigenschaft des bestehenden Kerns, nicht an einer Vermutung:
+
+- `LedgerLookup.findBySpoolTxIds()` (`packages/journaling/src/ledger/ledger-lookup-port.ts`) liefert
+  eine `ReadonlyMap<string, LedgerEntryByTxId>` — **genau einen** Eintrag je `spool_txid`. Zwei
+  Receipts unter derselben Transaktions-ID würden die Crash-Recovery blind dafür machen, dass ein
+  zweiter Eintrag fehlt: sie sähe „Ledger vorhanden" und reihte Phase B nach, während eine Kette
+  lückenhaft bliebe. Das ist ein Eingriff in `JR-3-05`, den **abgenommenen** kritischsten Pfad.
+- Der Ausweg wäre ein **atomarer Append über mehrere Ketten** — beide Einträge in einer
+  Datenbanktransaktion, damit „einer da ⇒ alle da" gilt. `PostgresLedgerWriter.append()` nimmt aber
+  einen Advisory-Lock **je Kette**; zwei Locks in einer Transaktion brauchen eine erzwungene
+  Sperrreihenfolge, sonst gibt es Deadlocks zwischen zwei Transaktionen mit vertauschten Ketten.
+- Der Index auf `spool_txid` ist **nicht** unique (`0041_even_scream.sql`), eine Migration wäre also
+  nicht nötig — das ist der einzige Teil, der billig wäre.
+
+**Für einen Randfall ist das zu viel Risiko am Kern.** Die Variante bleibt als Ausbaupfad benannt,
+mit dieser Kostenliste.
+
+### Warum `452 4.5.3` und nicht `550`
+
+`452 4.5.3` („too many recipients") ist der Code, für den sendende MTAs **bereits** eine
+Empfänger-Aufspaltung implementiert haben — er ist die übliche Antwort auf ein Empfängerlimit, und
+ein Sender reicht die abgelehnten Empfänger in einer **eigenen** Transaktion nach. Genau das löst den
+Fall: getrennt gesendet ist jede Transaktion wieder eindeutig. Ein `550` wäre endgültig und würde die
+zweite Kette verlieren.
+
+### Das Restrisiko, ausdrücklich benannt
+
+**Diese Entscheidung hängt an fremdem Verhalten.** Spaltet ein Sender nicht auf, verzögert er die
+Zustellung an die zweite Adresse und erzeugt am Ende einen NDR. Das ist hinzunehmen, weil es die
+**sichtbare** Fehlerart ist: ein NDR landet bei einem Menschen, eine fehlende Ledger-Zeile bei
+niemandem. Das Projekt existiert, weil die Pull-Ingestion Lücken erzeugt, **die man nicht bemerkt**
+(`README.md`); eine Lücke, die einen NDR erzeugt, ist die zulässige Sorte.
+
+Drei Auflagen daraus:
+
+1. **`JR-4-17`** setzt die Abweisung um. Heute **protokolliert** `recordMatchedRecipient()` den Fall
+   nur — richtig so, aber es ist noch keine Entscheidung im Code.
+2. **Der Fall muss in E10 (Monitoring) sichtbar werden**, nicht nur im Prozessprotokoll. Ein
+   Betreiber, dessen Sender nicht aufspaltet, muss es erfahren, ohne Logs zu lesen.
+3. **`JR-12-08`** (echter Exchange-Online-Tenant) messe, ob Exchange tatsächlich aufspaltet. Fällt
+   die Messung negativ aus, ist der oben benannte Ausbaupfad zu bauen — dann mit dem vollen Preis für
+   Recovery und Sperrreihenfolge.
+
+## ADR-031 — Erholung der Ledger-Anbindung: Provider statt Wert, Wiederholung bis zum ersten Erfolg
+
+**Status:** **entschieden** (2026-08-03) · **Entscheider:** PO · **Quelle:** `JR-4-06a` hat die Lücke
+selbst offengelegt und vorgelegt; Task `JR-4-19` · **Berührt:** Skill `journal-ledger` §2
+(Metadaten-DB nicht erreichbar ⇒ `451`), Architektur §5 (Scan über einen Spool, in den niemand
+schreibt), ADR-018 (Verfügbarkeit zuerst, dann fail closed)
+
+**Der Defekt.** `apps/smtp-ingress` baute seine Ledger-Anbindung **einmal**, beim Start. War die
+Datenbank in diesem Moment nicht erreichbar oder nicht migriert, blieb `journalAcceptance`
+**dauerhaft** `undefined`: der Prozess band seinen Port, sah gesund aus und antwortete jeder
+Transaktion `451`, bis ihn jemand neu startete — lange nachdem Exchange Online seine Wiederholungen
+aufgegeben und NDRs erzeugt hatte. Tabellenkonform war das; der Defekt war die fehlende Erholung.
+
+**Drei Festlegungen:**
+
+1. **`EsmtpServer` nimmt einen Provider, keinen Wert** (`journalAcceptanceProvider`), aufgelöst
+   **genau einmal je Transaktion** bei `MAIL FROM`. Ein Wert war zweifach eingefroren (Serverfeld plus
+   Kopie je Verbindung), eine nachträgliche Verdrahtung also unmöglich — auch für neue Verbindungen.
+   Die Auflösung wird für die Dauer der Transaktion festgehalten, weil dieselbe Antwort darüber
+   entscheidet, ob überhaupt eine `SpoolWriteBridge` geöffnet wird; ein Provider, der mitten in der
+   Transaktion umschaltet, ist ein Absturz oder eine Quittung ohne Spool-Datei. Der bestehende
+   Wert-Parameter bleibt und wird im Konstruktor in einen konstanten Provider gehoben — dieselbe
+   Normalisierung, die `requireTlsResolver` für `tls.requireTls` schon macht.
+2. **Wiederholt wird bis zum ersten Erfolg, danach wird der Timer abgeschaltet.** Ein späterer
+   Ausfall braucht diese Maschinerie nicht: `postgres-js` verbindet je `append()` neu, und
+   `JournalAcceptance` bildet einen fehlgeschlagenen Append bereits auf `451` ab, nie auf `250`.
+   Weiterlaufendes Polling kostete eine Verbindung je Intervall und stellte die Frage „Verdrahtung
+   wieder entfernen?", die keine gute Antwort hat.
+3. **Der Crash-Recovery-Scan läuft in jedem Versuch mit.** Zulässig, weil vor der ersten Verdrahtung
+   **kein Byte** in den Spool gelangt (ohne Acceptance keine `SpoolWriteBridge`) — genau die
+   Vorbedingung aus Architektur §5. Weil der Timer beim ersten Erfolg endet, läuft der Scan nie
+   parallel zu einer Annahme; das Scan-gegen-Annahme-Rennen, das `crash-recovery-lock.ts`
+   ausdrücklich **nicht** löst, bleibt unerreichbar. Die Gegenvariante (nur beim Boot scannen) ließe
+   den Spool einer abgestürzten Installation genau dann unabgeglichen, wenn die Datenbank beim
+   Neustart weg war — F40s Kapazitätsproblem.
+
+**Was sich nicht ändert, und das ist der Kern:** bis zum ersten Erfolg antwortet **jede**
+`DATA`/`BDAT … LAST` mit `451 4.3.0` und **nie** `250`. Es wird nichts quittiert, was keinen
+Ledger-Eintrag hat. Ein werfender Provider fällt defensiv auf `451` zurück statt den Prozess
+mitzunehmen (er läuft im `data`-Handler des Sockets).
+
+**Nicht geschlossen:** eine Bereitschaftssonde, die „nicht konfiguriert" von „konfiguriert, aber noch
+nicht verdrahtet" unterscheidbar macht (`ledger-config.ts` fragt danach). `JournalAcceptanceBootstrap`
+hat mit `isWired()` die Antwort, aber es gibt keinen Endpunkt, der sie ausliefert — Sache von E10.
+
 ## Nicht verhandelbar (keine ADR nötig)
 
 Diese Punkte stehen im RFC als harte Anforderungen und sind im Skill
@@ -1902,3 +2260,49 @@ sondern Vorgaben:
 - Ledger-Einträge werden nie gelöscht, auch nicht bei DSGVO-Löschung (§10).
 - Hashing vor Verschlüsselung (§7).
 - Keine Compliance-Behauptung über die Formulierung in §13 hinaus.
+
+---
+
+## ADR-032 — Fortlaufende Nummernkreise gehören dem Integrationszweig, nicht dem Epic-Zweig
+
+**Status:** **entschieden** (2026-08-04) · **Entscheider:** Auftraggeber · **Betrifft:** ADR-Nummern,
+Befundnummern in `09-befunde-bestandscode.md`, Dateinamen in `docs/dev/journaling/`
+
+Beim Rückmerge von E4 kollidierten **drei** Nummernkreise gleichzeitig, weil E4 und E5 parallel auf
+zwei Zweigen entstanden sind und beide aus demselben fortlaufenden Vorrat geschöpft haben:
+
+| Kreis             | Kollision                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| **ADR-Nummern**   | ADR-026, ADR-027 und ADR-028 doppelt vergeben; E4 hatte zusätzlich die bestehende ADR-026 verschoben          |
+| **Befundnummern** | F42/F43 doppelt — E5 vergab sie in `06-status.md` und `17-parallelbetrieb.md` statt in `09-befunde…`          |
+| **Dateinamen**    | `12-parallelbetrieb.md` (E5) gegen `12-archiv-e13-e2.md` (E4) — E5s Datei heißt jetzt `17-parallelbetrieb.md` |
+
+Das war kein Versehen einer einzelnen Sitzung, sondern die zwangsläufige Folge davon, dass ein
+fortlaufender Zähler auf zwei Zweigen gleichzeitig weitergezählt wird. Er verhält sich wie eine
+Sequenz ohne Sperre.
+
+### Entscheidung
+
+1. **Der Integrationszweig führt die Nummernkreise.** Kollidiert ein Epic-Zweig beim Rückmerge, gibt
+   **der eingehende Zweig nach** — unabhängig davon, welche Seite billiger umzustellen wäre. Der Trunk
+   ist bereits abgenommen und wird von Folgearbeit referenziert; er ist der stabile Bezugspunkt.
+2. **Eine Nummer wird nie umgewidmet.** Was der Trunk als ADR-026 führt, bleibt ADR-026. Eine
+   Verschiebung wie die von E4 (Task-IDs von 026 auf 029) ist auch dann unzulässig, wenn sie auf dem
+   eigenen Zweig konsistent aussieht.
+3. **Befundnummern werden ausschließlich in `09-befunde-bestandscode.md` vergeben.** Die Regel stand
+   dort schon; E5 hat sie verletzt, indem es F42/F43 in Statusdokumenten vergab. Wer in einem anderen
+   Dokument einen Befund nennt, verweist auf eine dort bereits angelegte Nummer.
+4. **Wer einen Epic-Zweig eröffnet, reserviert seine Nummern vorab auf dem Integrationszweig** — ein
+   Platzhalterabschnitt (`## ADR-0NN — reserviert für E<N>`) genügt und kostet einen Commit. Das ist
+   die eigentliche Gegenmaßnahme: Kollisionen entstehen beim Vergeben, nicht beim Mergen.
+
+### Konsequenz
+
+Die Umnummerierung ist in der Notiz am Kopf dieser Datei dokumentiert. Sie hat 98 Referenzen in 15
+Dateien erfasst und ist als mechanische Permutation ausgeführt worden, nicht von Hand — bei einer
+Zyklusabbildung (026→029→026) ist die naheliegende Reihenfolge von Einzelersetzungen falsch, und der
+Fehler wäre stumm geblieben.
+
+**Nicht entschieden ist der Umgang mit Task-IDs** (`JR-<Epic>-<NN>`). Sie kollidieren strukturell
+nicht, weil die Epic-Nummer im Präfix steht — genau die Eigenschaft, die den anderen drei Kreisen
+fehlt. Wenn ein künftiger Kreis neu entsteht, ist das die Vorlage.

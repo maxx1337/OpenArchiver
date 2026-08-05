@@ -113,6 +113,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// ledger/ledger-lookup.test.ts (the batched spool_txid -> ledger read port, against a recording
 		// fake) and spool/crash-recovery.test.ts (the crash-recovery scan: requeue vs. quarantine,
 		// batching, quarantine/ observability, no-delete, and tolerance of a racing second scan).
+		//
+		// From here the history forks: E5 (journal-report parser) and E4 (SMTP ingress) were built on
+		// two branches in parallel, each counting up from the 25 files they shared. E4's back-merge
+		// (2026-08-04) keeps both histories and the count is the sum of both deltas against that
+		// common base: 23 + 5 (E5) + 39 (E4) = 67. Each branch's own numbering below therefore stops
+		// short of the total -- that is expected, not a stale comment.
+		//
+		// E5's five:
 		// 26 after JR-5-01/JR-5-02 added packages/journaling/src/parser/{mime-split,envelope,
 		// journal-report}.test.ts -- the hand-rolled top-level MIME splitter that keeps mailparser
 		// from recursing across the message/rfc822 boundary, the envelope field-line parser
@@ -124,7 +132,83 @@ export const SUITES: readonly SuiteSpec[] = [
 		// parser test corpus: everyday non-journal mail forms not otherwise in the corpus, plus two
 		// measured misclassifications left RED on purpose -- see that file's module doc comment and
 		// 06-status.md's E5 test-corpus section for detail).
-		expectedFiles: 28,
+		//
+		// E4's thirty-nine:
+		// 26 after JR-4-01 added ingress/config.test.ts (the apps/smtp-ingress zod configuration
+		// schema), tests/unit/ingress-import-graph.test.ts (a static walk proving apps/smtp-ingress
+		// never resolves anything under packages/backend/, in particular not
+		// packages/backend/src/config/* or src/database/index.ts) and
+		// tests/unit/ingress-process-boot.test.ts (the compiled process spawned for real: exits 1
+		// with a readable message and no configuration, starts and accepts a connection on its
+		// configured port with one).
+		// 29 after JR-4-02 added ingress/smtp-config.test.ts (the ESMTP engine's own config schema),
+		// ingress/smtp-server.test.ts (pure EHLO/multiline/MAIL-RCPT-parsing/DataScanner logic), and
+		// tests/unit/smtp-server-protocol.test.ts (the protocol proven over a real loopback socket --
+		// same "unit despite a real socket" classification `ingress-process-boot.test.ts` established
+		// one task earlier, see that file's own doc comment for the precedent this one follows).
+		// 31 after JR-4-04 added ingress/tls-config.test.ts (the TLS configuration zod schema) and
+		// tests/unit/smtp-starttls-protocol.test.ts (STARTTLS/require_tls/session-reset proven over a
+		// real TCP+TLS loopback connection).
+		// 36 after JR-4-05a (source ACL): ingress/cidr.test.ts (CIDR parsing/matching),
+		// ingress/source-acl.test.ts (PostgresSourceAclLookup against a recording fake),
+		// ingress/source-acl-cache.test.ts (compileSourceAcl's fail-closed-per-source handling of an
+		// invalid CIDR, SourceAclCache's availability-then-fail-closed staleness contract, and the
+		// tighten-never-loosen createSourceAclRequireTlsResolver), ingress/source-acl-config.test.ts
+		// (the zod schema for the ACL's own database connection/refresh/staleness config), and
+		// tests/unit/smtp-source-acl-protocol.test.ts (the connect-time gate proven over a real
+		// loopback socket: 554 5.7.1 denied with no 220 ever sent, 421 4.3.2 when the ACL is not
+		// currently known, the ordinary 220 unaffected when allowed or when no evaluator is wired).
+		// 38 after JR-4-05b (recipient ACL): ingress/recipient-address.test.ts
+		// (normalizeJournalRecipient's case-folding/trim rules, including postmaster and the
+		// angle-bracket-comment edge case) and tests/unit/smtp-recipient-acl-protocol.test.ts (the
+		// RCPT TO gate proven over a real loopback socket: 550 5.1.1 denied, 451 4.3.0 unavailable
+		// with the connection kept open, the ordinary 250 when allowed or when no evaluator is
+		// wired, and the cross-chain ambiguity logged exactly once for two recipients of different
+		// sources but never for a duplicate or same-source recipient).
+		// 39 after JR-4-05c (AUTH) added tests/unit/smtp-auth-protocol.test.ts (the AUTH dialogue
+		// proven over a real loopback TCP+TLS socket).
+		// 41 after JR-4-06a added ingress/spool-write-bridge.test.ts (the push-to-pull backpressure
+		// bridge between a socket's `data` events and `writeDurableSpoolFile()`'s `for await`) and
+		// tests/unit/smtp-acceptance-wiring.test.ts (`JournalAcceptance.accept()` wired into
+		// `completeTransfer()`: the response-code mapping, the oversize-abort override to `552` with
+		// nothing left in `incoming/`, an abandoned mid-`BDAT` transaction on `RSET`, and the
+		// calibrated streaming-memory proof). 42 after JR-4-18 added
+		// spool/crash-recovery-lock.test.ts (runExclusiveCrashRecoveryScan(): the cross-process
+		// exclusivity runCrashRecoveryScan() itself does not provide, wiring the previously uncalled
+		// JR-3-05 scan's lock into the caller). 44 after JR-4-20 added
+		// tests/unit/acl-evaluator-port-shapes.test.ts and tests/unit/source-acl-cache-wiring.test.ts
+		// (F46 -- see expectedTests below for what each proves). 49 after JR-4-07 added
+		// tests/unit/no-outbound-mail-path.test.ts (the structural "no outbound mail path" scan) and
+		// tests/unit/byte-fidelity-roundtrip.test.ts (the DATA/BDAT byte-fidelity roundtrip corpus) --
+		// see expectedTests below for what each proves.
+		// 52 after JR-4-08 added ingress/rate-limit-config.test.ts, ingress/connection-rate-limiter.test.ts
+		// and tests/unit/smtp-rate-limit-protocol.test.ts -- see expectedTests below for what each proves.
+		// 53 after JR-4-09 added ingress/m365-ip-ranges.test.ts (the range refresh helper's diff logic,
+		// against a fixture of the endpoint feed -- no network access anywhere in it).
+		// 55 after JR-4-19 added ingress/journal-acceptance-bootstrap.test.ts (the retry-until-wired
+		// bootstrap, driven through tryNow() rather than a slept-out timer) and
+		// tests/unit/smtp-acceptance-promotion.test.ts (the same open connection going 451 -> 250 at the
+		// wire, plus the mid-transaction stability of the per-transaction resolution).
+		// 56 after JR-4-10 added tests/unit/kill-during-data-invariant.test.ts -- calibration of
+		// checkNeverPartial(), the pure checker the real kill-during-DATA adversarial test uses.
+		// 57 after JR-4-11 added tests/unit/bdat-data-byte-fidelity.test.ts.
+		// 58 after JR-4-12 added tests/unit/smtp-oversize-boundary.test.ts.
+		// 59 after JR-4-14 added tests/unit/smtp-tls11-clienthello-rejection.test.ts -- the hand-built,
+		// byte-level TLS 1.1 ClientHello proof JR-4-04 handed forward, see that file's own doc comment.
+		// (A second JR-4-14 file, tests/unit/smtp-adversarial-protocol.test.ts, was found mid-session
+		// as a parallel, uncommitted attempt at the same backlog slice by another session on this same
+		// checkout -- see 09-befunde-bestandscode.md's coordination note for why it is deliberately
+		// left out of this count rather than committed: it currently fails 4 of its own cases.)
+		// 60 after JR-4-21a added tests/unit/smtp-tls-cipher-filter.test.ts (F56).
+		// 61 after JR-4-21a also added tests/unit/spool-write-bridge-throughput.test.ts (F50).
+		// 62 after JR-4-13's acceptance review (Auflage 1) added
+		// tests/unit/smtp-tls-fields-reach-acceptance.test.ts -- closes the gap the review found: no
+		// existing test compared the *negotiated* TLS version/cipher of a real STARTTLS handshake
+		// against the fields JournalAcceptancePort.accept() actually receives (see that file's own
+		// doc comment for the three near-misses it replaces).
+		//
+		// 67 = 23 (shared base) + 5 (E5) + 39 (E4), see the fork note above.
+		expectedFiles: 67,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -150,6 +234,11 @@ export const SUITES: readonly SuiteSpec[] = [
 		// mixed multi-shard batch resolved in exactly one ledger call, pre-existing quarantine/ files
 		// counted but never queried or moved, a fresh/empty spool scans cleanly, content preserved
 		// byte-for-byte across a run that both requeues and quarantines, and a racing second scan's
+		//
+		// Same fork as `expectedFiles` above: E5 and E4 counted up independently from the 371 ci tests
+		// they shared. Merged total is 371 + 141 (E5) + 479 (E4) = 991 ci; nightly 1 + 2 (E4) = 3.
+		//
+		// E5's hundred-and-forty-one:
 		// already-moved source is tolerated rather than thrown). 410 after JR-5-01/JR-5-02: 17
 		// tests for the top-level MIME splitter, 14 for the envelope field-line parser, 8 for the
 		// end-to-end parseJournalReport() orchestration -- 39 new tests.
@@ -289,7 +378,335 @@ export const SUITES: readonly SuiteSpec[] = [
 		// trimmed are +7; the eighth asserts the limit that is deliberately NOT repaired, a `main`
 		// that is a full address rather than a bare domain, because guessing which half the operator
 		// meant would invent a value out of a broken input. Net +8 (504 -> 512).
-		expectedTests: { ci: 512, nightly: 1, manual: 0 },
+		//
+		// E4's four-hundred-and-seventy-nine:
+		// 393 ci after JR-4-01: 15 in ingress/config.test.ts (parseIngressConfig: valid input, the
+		// logLevel default and an explicit override, missing/out-of-range smtpPort x3,
+		// missing/empty/invalid spool fields x4, an entirely empty input; formatIngressConfigError:
+		// every invalid field named on one line each, no stack frame, the non-Zod fallback, the
+		// non-Error fallback) + 5 in tests/unit/ingress-import-graph.test.ts (the walker reaches the
+		// entry point and its known imports, no unresolved specifier, no @open-archiver/backend
+		// anywhere in the graph, nothing under packages/backend/ at all, and specifically neither
+		// packages/backend/src/config/* nor src/database/index.ts) + 2 in
+		// tests/unit/ingress-process-boot.test.ts (the compiled process exits 1 with a readable
+		// message and never binds a port without configuration; with valid configuration it creates
+		// the spool layout, accepts a connection on its configured port, and stays up until stopped).
+		// 452 ci after JR-4-02: +3 in ingress/config.test.ts (the smtp key now embeds
+		// smtp-config.ts's schema: defaults every field when smtp is {}, an explicit override is
+		// embedded rather than replacing every field's default, and the smtp key missing entirely is
+		// rejected -- 15 -> 18) + 13 in ingress/smtp-config.test.ts (the three named-constant checks,
+		// defaults on an empty object, a fully overridden configuration, env-var-shaped string
+		// coercion, and one rejection per non-positive/non-integer numeric field plus the empty
+		// hostname) + 28 in ingress/smtp-server.test.ts (buildEhloResponseLines x4,
+		// formatMultilineResponse x3, parseMailFromArguments x7, parseRcptToArguments x3, DataScanner
+		// x11: empty message, single line, dot-unstuffing, terminator-vs-dot-stuffed-line
+		// disambiguation, the terminator split across chunks, content split mid-line across chunks,
+		// exactly-at-limit, one-byte-over, a CRLF-less pathological line, and chunks arriving after
+		// the scanner already finished) + 16 in tests/unit/smtp-server-protocol.test.ts (the 220
+		// greeting, EHLO's default SIZE, EHLO's non-default configured SIZE, HELO's single-line
+		// extension-free reply, PIPELINING proven with two commands in one packet, an 8BITMIME/SMTPUTF8
+		// UTF-8 address, MAIL/RCPT/DATA out-of-sequence x3, an unrecognized command, MAIL FROM's SIZE=
+		// parameter rejected before DATA, QUIT, end-of-DATA always 451 4.3.0 never 250, and the three
+		// timeouts -- connection/command/data -- each observed as a 421 4.4.2 plus a closed socket).
+		// 488 ci / 2 nightly after JR-4-03 (CHUNKING/BDAT): +18 in ingress/smtp-server.test.ts
+		// (buildEhloResponseLines' CHUNKING assertion updated in place, not counted again;
+		// parseBdatArguments x9: bare size, size+LAST case-insensitively, zero with/without LAST,
+		// leading zeros, missing, non-numeric, negative, decimal, unsafe-integer-sized, a non-LAST
+		// second token; BdatContentTracker x7: single push, multi-push accumulation, onContent
+		// forwarding verbatim, exactly-at-limit, one-byte-over, oversize stays sticky, a zero-length
+		// push is a no-op; the DATA/BDAT byte-identical acceptance proof x2: a body with a bare-dot
+		// line, a leading-dot line and a chunk boundary between '\r' and '\n', plus the same proof
+		// again over maximally fragmented one-byte chunk boundaries) + 18 in
+		// tests/unit/smtp-server-protocol.test.ts (EHLO announces CHUNKING x1; the BDAT/CHUNKING wire
+		// suite x16: single chunk never 250, multi-chunk 250-then-451, BDAT 0 LAST alone, BDAT 0 LAST
+		// completing prior chunks, a zero-length non-LAST no-op, a chunk boundary mid-line, a chunk
+		// boundary between '\r' and '\n' with a follow-up command proving alignment survived, a
+		// pipelined BDAT command plus its full content, non-numeric/negative/missing chunk-size x3,
+		// BDAT before MAIL/RCPT, a chunk sum over SIZE, a stalled sender timing out, DATA after a
+		// non-LAST BDAT (RFC 3030 mixing), and a BDAT sent after BDAT...LAST already closed the
+		// transaction; classified `nightly` x1: streaming 150 MB over 150 BDAT chunks with bounded
+		// `arrayBuffers` growth -- see that test's own doc comment for why `heapUsed`, the metric
+		// JR-3-02's durable-write proof samples, turned out blind to a deliberately reintroduced
+		// full-buffering regression here, and had to be replaced with `arrayBuffers`, verified in
+		// both directions before being kept).
+		// 494 ci after JR-4-16 (F44 -- a DATA transfer over the SIZE limit no longer desyncs the
+		// connection): +3 in ingress/smtp-server.test.ts (DataScanner's oversize cases updated for the
+		// new "oversize does not imply done" contract: the pathological-line trip now reports
+		// `done: false` until a terminator arrives, waiting continues across further CRLF-less chunks,
+		// and the terminator is recognised whenever it eventually shows up after each of the two abort
+		// points -- the line-count trip and the CRLF-less-line trip) + 3 in
+		// tests/unit/smtp-server-protocol.test.ts (the F44 regression, reproduced exactly as measured:
+		// message-body bytes shaped like SMTP commands in a later TCP segment get no response at all;
+		// an oversize body read through to the real terminator gets exactly one 552 and the connection
+		// is realigned afterward; an oversize sender that never sends a terminator still times out via
+		// the pre-existing data timeout, proving discarding opened no new exhaustion gap).
+		// 538 ci after JR-4-04 (STARTTLS/require_tls/TLS >= 1.2 floor): +8 in ingress/smtp-server.test.ts
+		// (buildEhloResponseLines' five STARTTLS-advertisement cases -- omitted, unavailable,
+		// available-and-inactive, active-already, plus the renamed "includes CHUNKING" case -- and
+		// buildTlsSocketOptions x3: the fixed TLS_MIN_VERSION floor, isServer/secureContext forwarded
+		// unchanged, maxVersion left unset) +
+		// 10 in the new ingress/tls-config.test.ts (the fixed-floor constant, defaults on an empty
+		// object and an explicit requireTls: false, string "true" coercion, cert/key must both be set
+		// or both unset x4, requireTls: true rejected with no certificate and accepted with one) + 21
+		// in the new tests/unit/smtp-starttls-protocol.test.ts, a real loopback TCP+TLS suite gated by
+		// `suiteRequiring` on a working `openssl` CLI (see that file's own doc comment for why TLS 1.1
+		// rejection is proven at the `minVersion` option level in smtp-server.test.ts instead of
+		// end-to-end -- this environment's client tooling cannot construct a TLS 1.1 ClientHello at
+		// all, the F43 lesson applied rather than a test that would be green for the wrong reason):
+		// STARTTLS not advertised with no certificate, bare STARTTLS 454 4.7.0 with none configured,
+		// STARTTLS advertised then withheld post-handshake, STARTTLS-with-parameters 501 5.5.4, a
+		// second STARTTLS after a completed handshake 503, the negotiated version/cipher read from the
+		// real socket and logged; the require_tls gate x11 (MAIL 530 alone, RCPT/DATA/BDAT/RSET/AUTH
+		// 530 x5 via it.each, EHLO/HELO/NOOP/STARTTLS still work x4 via it.each, QUIT still works, TLS
+		// active lets MAIL/RCPT/DATA through to the usual 451, a JR-4-05-shaped tightening resolver
+		// requires TLS even with the process default false); the session reset x1 (MAIL right after the
+		// handshake with no fresh EHLO is 503, proving state did not survive); the STARTTLS
+		// command-injection companion to F44 x1 (bytes pipelined in the same segment as STARTTLS are
+		// discarded, never answered, before or after the handshake).
+		// 597 ci after JR-4-05a (source ACL): +18 in the new ingress/cidr.test.ts (parseCidr: bare
+		// IPv4/IPv6 address as implicit /32//128, explicit CIDR blocks, /0 flagged isCatchAll for both
+		// families, invalid IPv4/IPv6 prefix length, negative/non-numeric/missing prefix, unparseable
+		// address; matchesCidr: inside/outside an IPv4 block, exact-match /32, inside/outside an IPv6
+		// block, /0 matches everything of its family, never matches across families even a /0, an
+		// IPv4-mapped IPv6 remote normalised then matched against an IPv4 CIDR, a partial-byte /25
+		// prefix boundary) + 6 in the new ingress/source-acl.test.ts (PostgresSourceAclLookup against
+		// a recording fake: maps rows, decodes allowed_ips from either a decoded array or JSON text,
+		// throws rather than defaulting to [] for a non-array/non-string value, asserts status =
+		// 'active' is in the query text, empty result) + 16 in the new
+		// ingress/source-acl-cache.test.ts (compileSourceAcl: compiles every valid entry, excludes a
+		// whole source and logs an error on any invalid CIDR, logs a warning but still compiles a /0
+		// entry; SourceAclCache.evaluate: 'unavailable' before the first refresh, 'allowed' with the
+		// matched source's identity/requireTls, 'denied' for a non-matching IP, a source excluded for
+		// one bad entry matches nothing at all, a failed refresh keeps serving the previous snapshot
+		// (availability) until staleAfterMs elapses then fails closed to 'unavailable' (security),
+		// concurrent refreshNow() calls coalesce into one lookup, start() resolves even when the
+		// first load fails, stop() halts the timer; createSourceAclRequireTlsResolver: process
+		// default true always wins, a matched source's requireTls tightens the default, an
+		// unmatched/null remoteIp never loosens it) + 9 in the new ingress/source-acl-config.test.ts
+		// (the zod schema: accepts/rejects databaseUrl, refreshIntervalMs/staleAfterMs default and
+		// coerce from strings, reject zero/negative values and staleAfterMs below refreshIntervalMs,
+		// accept them equal) + 4 in the new tests/unit/smtp-source-acl-protocol.test.ts (the
+		// connect-time gate over a real loopback socket: 554 5.7.1 denied with no 220 ever sent, 421
+		// 4.3.2 when the ACL is not currently known, the ordinary 220 unaffected when allowed or when
+		// no evaluator is wired) + 6 added directly to the pre-existing ingress/config.test.ts
+		// (sourceAcl is a required key like smtp/tls but, unlike them, {} does not satisfy it; rejects
+		// an empty databaseUrl; refreshIntervalMs/staleAfterMs default; an explicit override embeds
+		// rather than replacing; staleAfterMs below refreshIntervalMs is rejected).
+		// 618 ci after JR-4-05b (recipient ACL): +7 in the new ingress/recipient-address.test.ts
+		// (normalizeJournalRecipient: lower-cases the domain, lower-cases the local part too (the
+		// deliberate RFC 5321 section 2.4 deviation), trims whitespace, an empty/blank address
+		// normalises to the empty string never a wildcard, postmaster is not special-cased, a
+		// parenthesised comment is compared verbatim, idempotent) + 7 added to the pre-existing
+		// ingress/source-acl-cache.test.ts (buildRecipientIndex x3: indexes by normalised address,
+		// keeps the first of two sources sharing a routing_address and logs the conflict naming both
+		// ids, excludes a source whose routing address is empty after normalisation and logs it
+		// without affecting other sources; SourceAclCache.evaluateRecipient x4: 'unavailable' before
+		// the first refresh, 'allowed' with a case-folded/trimmed match, 'denied' for a known-but-
+		// non-matching address, the same first-wins dedup reflected end to end) + 1 added to the
+		// pre-existing ingress/source-acl.test.ts (routing_address read and ORDER BY id asserted in
+		// the query text) + 6 in the new tests/unit/smtp-recipient-acl-protocol.test.ts (550 5.1.1
+		// denied, 451 4.3.0 unavailable with the connection kept open and retryable, the ordinary 250
+		// when allowed or when no evaluator is wired, two recipients resolving to different chains
+		// both get their 250 with the ambiguity logged exactly once, and a duplicate/same-source
+		// recipient never logs it).
+		// 669 ci after JR-4-05c (AUTH): +1 added to the pre-existing ingress/source-acl.test.ts
+		// (smtp_username/smtp_password_hash mapped through as null when AUTH is not configured) + 10
+		// in the pre-existing ingress/source-acl-cache.test.ts (buildAuthIndex x4: indexes by
+		// smtp_username, excludes a source with no AUTH configured without logging, excludes a source
+		// with only smtp_username set, keeps the first of two sources sharing an smtp_username and
+		// logs the conflict naming both ids; SourceAclCache.lookupCredential x6: 'unavailable' before
+		// the first refresh, 'found' with the matched source's identity and stored hash, 'not_found'
+		// for an unknown username, 'not_found' -- never 'found' -- for a real source with no AUTH
+		// configured, case-sensitive comparison unlike the recipient ACL, fails closed to
+		// 'unavailable' once stale rather than 'not_found') + 19 in the pre-existing
+		// ingress/smtp-server.test.ts (buildEhloResponseLines' AUTH-advertisement x4: omitted by
+		// default, withheld pre-handshake even when configured, withheld when TLS is active but AUTH
+		// is not configured, advertised as "AUTH PLAIN LOGIN" once both are true; parseAuthArguments
+		// x5: bare mechanism, mechanism plus initial response, case-insensitive mechanism parsing, a
+		// bare AUTH with no mechanism at all rejected, surrounding whitespace tolerated; decodeSaslBase64
+		// x5: ordinary base64, the literal "=" empty-response marker, invalid-alphabet input rejected,
+		// wrong-length input rejected, an empty string decodes to an empty buffer; decodeSaslPlain x5:
+		// authzid/authcid/password split correctly, a non-empty authzid, too few fields rejected, too
+		// many fields rejected, an empty password allowed) + 21 in the new
+		// tests/unit/smtp-auth-protocol.test.ts (the AUTH dialogue proven over a real loopback TCP+TLS
+		// socket: AUTH withheld from EHLO pre-handshake even when configured and advertised once TLS is
+		// active, a bare AUTH over plaintext refused 538 5.7.11 unconditionally, AUTH not configured
+		// falls through to the ordinary 500, PLAIN with an initial response and PLAIN with an empty
+		// challenge both succeed 235 2.7.0, LOGIN's two-step Username:/Password: dialogue succeeds, a
+		// wrong password and an unknown username both answer the exact same 535 5.7.8 -- the unknown-
+		// username case additionally asserts the dummy-hash comparison actually ran, an unrecognised
+		// mechanism is 504 5.5.4, malformed base64 in an initial response and in a continuation are both
+		// 501 5.5.2, a malformed SASL-PLAIN field count is 501 5.5.2, client cancellation with "*" is
+		// 501, a second AUTH once authenticated is 503 5.5.1, AUTH after MAIL FROM is 503 5.5.1, an
+		// 'unavailable' credential store answers 454 4.7.0 never 535, exceeding
+		// MAX_AUTH_ATTEMPTS_PER_CONNECTION closes the connection with 421 never a 5xx, an authenticated
+		// source addressing its own recipient is unaffected, an authenticated source addressing a
+		// different source's recipient is refused 550 5.7.1, and an unauthenticated connection is
+		// unaffected by the source-conflict check).
+		// 670 ci after JR-4-17 (ADR-030 -- a second RCPT TO for a different chain is rejected, not
+		// merely logged): the pre-existing "two recipients resolving to different chains" case in
+		// tests/unit/smtp-recipient-acl-protocol.test.ts was rewritten in place (not counted again) to
+		// assert the new 452 4.5.3 for the second recipient, the first recipient's 250 unaffected, and
+		// the rejection log naming the rejected recipient while `matchedRecipients` holds only the
+		// transaction's one committed chain -- plus a further recipient of that same chain still
+		// succeeding, unlogged. Net +2 new tests: RSET after a 452 rejection frees the connection so the
+		// previously rejected chain is accepted in the next transaction, and an explicit check that two
+		// recipients of the same source and the same recipient twice both stay 250 with no rejection log
+		// (the pre-existing "does not log" case, made to assert response codes too, not counted again).
+		// 690 ci after JR-4-06a added 20: spool-write-bridge.test.ts (5, the push-to-pull backpressure
+		// bridge), durable-write.test.ts's F45 regression case (1), config.test.ts's four new ledger
+		// cases (4), and smtp-acceptance-wiring.test.ts's ci-classified cases (10: the response-code
+		// mapping table, the oversize override with the crash-recovery-clean proof, and the
+		// RSET-mid-BDAT abandon proof). 3 nightly after JR-4-06a added
+		// smtp-acceptance-wiring.test.ts's calibrated 150 MB streaming-memory proof.
+		// 695 ci after JR-4-18 added spool/crash-recovery-lock.test.ts (5: crashRecoveryScanLockKey's
+		// determinism and its reuse of advisoryLockKey, the lock acquired strictly before the scan's
+		// own ledger lookup, the requeue/quarantine result passed through unchanged, a scan failure
+		// propagated -- not swallowed -- only after the lock was taken, and a fake modelling real
+		// pg_advisory_xact_lock semantics proving two scans on the same spoolRoot serialise while two
+		// on different spoolRoots do not).
+		// 698 ci after JR-4-20 (F46 -- SourceAclEvaluator/RecipientAclEvaluator's shared `evaluate`
+		// method name let SourceAclCache's IP matcher silently stand in for the recipient ACL) added
+		// tests/unit/acl-evaluator-port-shapes.test.ts (2: the type-level proof that swapping either
+		// evaluator for the other no longer compiles, checked by tsc -p tsconfig.test.json, plus the
+		// runtime check that SourceAclCache still satisfies all three roles at once) and
+		// tests/unit/source-acl-cache-wiring.test.ts (1: bindSourceAclCache() -- the same function
+		// apps/smtp-ingress/src/index.ts calls in production -- wired into a real EsmtpServer over a
+		// real loopback socket, RCPT TO a seeded routing address reaching 250 and an unknown one 550).
+		// 703 ci after JR-4-06b added tests/unit/smtp-5xx-inventory.test.ts (5: the reasoned inventory
+		// of every 5xx smtp-server.ts can write, matched exactly against the source by a static scan --
+		// no uninventoried/stale pair in either direction; the one connect-time 554 5.7.1 socket.end()
+		// literal; source-acl-cache.ts writes no response code of its own; the scan finds a non-trivial
+		// count equal to the inventory's own total; every entry's reason is one of the fixed
+		// sender-fault vocabulary). 708 ci after JR-4-06b also added
+		// tests/unit/smtp-graceful-shutdown.test.ts (5: an idle connection is proactively told 421
+		// 4.3.2 and closes without needing to send another command; a connection idle between MAIL/RCPT
+		// is drained the same way; a new connection attempt is refused once close() has begun; a
+		// transaction mid-DATA with accept() still pending earns its own real 250 before the shutdown
+		// notice, proven with a deterministic drained-but-unsettled fake rather than a timing guess; a
+		// rejected (non-accepted) in-flight transaction keeps its own real 451 ahead of the shutdown
+		// notice too). 719 ci after JR-4-06b also added tests/unit/smtp-response-code-table.test.ts (11:
+		// one per row of skill journal-ledger section 2's table, in the table's own order -- accepted,
+		// spool-write-failed, ledger-append-failed, high-water-mark-exceeded, the structural
+		// object-store-unreachable proof (a scoped re-run of ingress-import-graph.test.ts's own walk),
+		// metadata-DB-unreachable resolved to the same ledger-append-failed row with a
+		// connection-loss-shaped cause, recipient denied, source denied, STARTTLS required but
+		// refused, oversize with the loud oversize-rejected alert reconfirmed end to end, and the
+		// shutdown drain's row-level check). 742 ci after JR-4-07 added tests/unit/no-outbound-mail-path.test.ts
+		// (5: every forbidden outbound-network pattern's own fixture sample is caught, the legitimate
+		// Postgres-client/inbound-listener sample trips nothing, the file walker reaches a non-trivial
+		// count including the known entry points, no file under packages/journaling/src or
+		// apps/smtp-ingress/src contains an outbound-capable call, and neither package.json declares an
+		// outbound-mail/HTTP-client dependency) and tests/unit/byte-fidelity-roundtrip.test.ts (18: the
+		// 5-entry CRLF-line-oriented corpus sent over both DATA and BDAT -- plain body, a leading-dot
+		// line, a bare "." content line, consecutive blank lines, UTF-8 multibyte content -- 10 tests,
+		// the 7-entry BDAT-only corpus that DATA's line framing cannot carry at all -- bare LF only,
+		// bare CR only, mixed CRLF/LF/CR with no final terminator, a very long line with no line ending,
+		// non-UTF-8 Latin-1 bytes, embedded NUL bytes, arbitrary binary content -- 7 tests, plus one
+		// corpus-not-empty sanity check).
+		// 779 ci after JR-4-08 (per-source connection/transaction-rate limits) added: 10 in the new
+		// ingress/rate-limit-config.test.ts (the zod schema: defaults all three fields on an empty
+		// object, string coercion, a fully overridden configuration, reject zero/negative/non-integer
+		// maxConnectionsPerSource, reject zero/negative maxTransactionsPerSourcePerWindow, reject
+		// zero/negative rateLimitWindowMs) + 13 in the new ingress/connection-rate-limiter.test.ts
+		// (PerSourceConnectionLimiter x6: admits up to the max then refuses, tracks sources
+		// independently, release() frees exactly one slot, a refused tryAcquire does not itself
+		// consume a slot, a source is removed from the map once its count returns to zero -- the
+		// bounded-memory argument -- release() on a never-acquired source is a no-op; +
+		// PerSourceTransactionRateLimiter x7: admits up to the max within one window then refuses,
+		// tracks sources independently, resets once the window elapses, does not reset one instant
+		// early, currentWindowCount reports 0 once expired, pruneExpired() leaves a still-active
+		// window untouched, defaults to Date.now with no injected clock) + 8 in the new
+		// tests/unit/smtp-rate-limit-protocol.test.ts (the connection-limit gate over a real loopback
+		// socket x4: 421 4.7.0 with the full line delivered before the socket closes and the first
+		// connection unaffected, release() on close freeing the slot for a subsequent connection,
+		// two different sources never sharing a budget, a connect-time-denied source hammering the
+		// gate never occupies a slot a real source could otherwise use; the transaction-rate gate x4:
+		// 450 4.7.1 at MAIL FROM with the connection kept open and a further command still answered,
+		// two different sources tracked independently, a transaction already past MAIL FROM running
+		// to its ordinary 451 unaffected by its own now-exhausted budget, no sourceAclEvaluator
+		// configured leaving the rate limiter inert) + 6 added to the pre-existing ingress/config.test.ts
+		// (rateLimit is a required key like smtp/tls/ledger but, like them, {} satisfies it and every
+		// field defaults on its own; an explicit override embeds rather than replacing; the missing-key
+		// case and one rejection per non-positive numeric field).
+		// 797 after JR-4-09 added 18 in ingress/m365-ip-ranges.test.ts: 7 on reading the official feed
+		// (the port-25 filter keeping the Exchange *web* front end out of the ACL is the
+		// security-relevant one, plus a port range, unknown fields, deduplication, and a malformed
+		// feed throwing rather than looking empty), 8 on the diff (network-not-string comparison, a
+		// wider ACL entry covering an official range, an unmatched entry never becoming a removal
+		// recommendation, `containedIn` for a narrower one, family confusion, unparseable entries on
+		// either side, and the documented union-coverage over-report), 3 on the operator report
+		// (every rendering says nothing was changed).
+		// 811 after JR-4-19: 7 in journal-acceptance-bootstrap.test.ts (wired on the first attempt with
+		// exactly one state line; a failed start resolving anyway and leaving the provider undefined;
+		// promotion on a later attempt logged once; no further build() once wired; concurrent attempts
+		// coalesced; the retry timer armed only on failure and cleared idempotently; the timer cleared
+		// before the promotion is claimed) and 7 in smtp-acceptance-promotion.test.ts (451 -> 250 on
+		// one unbroken connection; never 250 while unwired; a promotion mid-transfer not changing the
+		// running transaction, and the reverse direction; BDAT 0 LAST; a throwing provider degrading to
+		// 451; the plain value form still working through the constructor's lift).
+		// 818 after JR-4-10 added tests/unit/kill-during-data-invariant.test.ts (7): calibration of
+		// checkNeverPartial() (tests/support/kill-during-data-invariant.ts) against seven hand-built
+		// observations, independently of the real kill test -- three that must stay clean (250 seen
+		// with a fully matching row, no 250 and no row, no 250 but a fully correct row -- the
+		// response-lost-in-the-kill race, not a defect) and four that must be reported (250 seen with
+		// no row at all, a row with no spool file, a row whose spool file is truncated, a row that
+		// belongs to a different payload entirely). This is the calibration
+		// `smtp-ingress-kill-during-data.adv.test.ts` itself cannot provide on this host: F48 means
+		// every real iteration there resolves to 451, so no real iteration can ever produce a
+		// violation for the checker to catch.
+		// 826 after JR-4-11 added tests/unit/bdat-data-byte-fidelity.test.ts (8): 4 real cases --
+		// single-chunk, multi-chunk, BDAT 0 LAST, and a chunk boundary landing mid-line, each proven by
+		// comparing the BDAT-stored spool object directly against the DATA-stored one (not against a
+		// hand-built expectation) -- plus 4 calibration cases for expectStoredBytesIdentical() itself
+		// (an untouched copy stays clean; a flipped byte, a truncated byte, and an extra trailing byte
+		// must each be caught).
+		// 833 after JR-4-12 added tests/unit/smtp-oversize-boundary.test.ts (7): 3 real cases -- exactly
+		// at the SIZE limit (accepted, byte-identical, zero alerts of either kind), one byte over
+		// (552, both detection paths: MAIL FROM SIZE= declared -- a structured warn log -- and the
+		// actual-transfer overrun -- the mandatory QuarantineAlertSink, reason 'oversize-rejected',
+		// file moved to quarantine/), and far over (552, both paths again, plus the connection staying
+		// aligned afterward: a further QUIT on the same connection still gets exactly one clean reply)
+		// -- plus 4 calibration cases for the alert-shape assertion itself (an exactly-one-correct-
+		// reason alert passes; zero alerts, two alerts, and one alert with the wrong reason must each
+		// be caught).
+		// 835 after JR-4-14 added tests/unit/smtp-tls11-clienthello-rejection.test.ts (2): the
+		// hand-built TLS 1.1 ClientHello is answered with a fatal protocol_version alert, never a
+		// ServerHello, and the same process still completes a normal TLS 1.2 handshake afterward. (See
+		// this suite's `expectedFiles` comment above for the second, uncommitted JR-4-14 file found on
+		// this checkout and why its 16 cases are deliberately not counted here.)
+		// 840 after JR-4-21a (F56 -- no cipher-suite filter, AES128-SHA negotiable with no forward
+		// secrecy): +2 in ingress/smtp-server.test.ts (buildTlsSocketOptions no longer sets
+		// ciphers/honorCipherOrder at all -- see that function's own doc comment for why the fix moved
+		// to EsmtpServer's tls.createSecureContext() call instead -- and TLS_CIPHERS itself never
+		// lists a CBC/SHA-1 or plain-RSA-key-exchange suite) + 3 in the new
+		// tests/unit/smtp-tls-cipher-filter.test.ts (a client offering only AES128-SHA is refused the
+		// handshake, an ordinary client still negotiates a forward-secret AEAD cipher under TLS 1.2,
+		// and a TLS 1.3 handshake is unaffected).
+		// 844 after JR-4-21a also added 4 to ingress/smtp-config.test.ts (F55 -- no limit on RCPT TO
+		// count per transaction): DEFAULT_MAX_RECIPIENTS_PER_TRANSACTION is at least the RFC 5321
+		// section 4.5.3.1.8 floor of 100, a value below that floor is rejected, exactly 100 (the
+		// floor itself) is accepted, and a non-integer value is rejected.
+		// 847 after JR-4-21a also added 3 to ingress/spool-write-bridge.test.ts (F50 -- the DATA path
+		// wrote once per SMTP line instead of batched by byte threshold): batches pushes under the
+		// flush threshold into fewer, larger chunks without losing or reordering a byte, end()
+		// flushes whatever is still buffered below the threshold, and abort() discards it rather than
+		// delivering it. Two pre-existing cases in the same file were changed in place, not counted
+		// again, to pass an explicit flushThresholdBytes of 1 so they keep isolating the chunk-count
+		// high-water-mark from the new byte-threshold batching.
+		// 848 after JR-4-21a also added the new tests/unit/spool-write-bridge-throughput.test.ts (1):
+		// F50's measurement, not an assertion test -- writes 50 MB as 60-byte lines and the same
+		// 50 MB as 998-byte lines through the real SpoolWriteBridge/writeDurableSpoolFile() pair and
+		// logs both throughputs via coverageNotice() every run, the same mechanism JR-2-08/JR-4-10
+		// already use.
+		// 850 after JR-4-13's acceptance review (Auflage 1) added
+		// tests/unit/smtp-tls-fields-reach-acceptance.test.ts (2): a real TLS 1.3 handshake and a
+		// real TLS 1.2 handshake with an explicit non-default cipher, each driven through a full
+		// EHLO/MAIL/RCPT/DATA transaction and compared field-for-field against the fake
+		// JournalAcceptancePort.accept() actually received.
+		//
+		// 991 ci = 371 (shared base) + 141 (E5) + 479 (E4), see the fork note above.
+		expectedTests: { ci: 991, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -306,8 +723,32 @@ export const SUITES: readonly SuiteSpec[] = [
 		// that is never given to drizzle() (F38's rule: anything in packages/journaling that gets its
 		// connection injected needs at least one test writing through a bare client). 14 after JR-3-05
 		// added journal-ledger-lookup.int.test.ts -- PostgresLedgerLookup.findBySpoolTxIds() against a
-		// real database.
-		expectedFiles: 14,
+		// real database. 15 after JR-4-05a added source-acl-lookup.int.test.ts --
+		// PostgresSourceAclLookup.listActiveSources() against a real database, read through a client
+		// this file constructs itself and never hands to drizzle() (F38's rule). 16 after JR-4-06a
+		// added journal-smtp-accept-e2e.int.test.ts -- the 250 proof: a real SMTP client over a real
+		// socket, a real EsmtpServer wired to a real JournalAcceptance (real disk, real Postgres
+		// through apps/smtp-ingress's own production bare-client transactor). 18 after JR-4-18 added
+		// journal-crash-recovery-lock.int.test.ts (runExclusiveCrashRecoveryScan() against real
+		// Postgres and real disk: requeue/quarantine against a real ledger row, a second connection
+		// genuinely blocking on pg_advisory_xact_lock and proceeding once released, two different
+		// spoolRoots not serialising against each other) and
+		// smtp-ingress-crash-recovery-boot.int.test.ts (the same scan wired into the actual compiled
+		// process: the port refuses connections while the scan is held on its advisory lock and
+		// answers 220 once it is released (reworked in F49 -- it used to compare two stdout log
+		// lines' byte offsets, which was flaky), two processes started at once
+		// against the same spool/ledger quarantine the same orphan file exactly once and both still
+		// bind their ports, and a scan that itself fails -- journal_ledger dropped, deployment_identity
+		// still readable -- leaves the process bound but answering never-250 to DATA).
+		// 19 after JR-4-09 added m365-range-refresh-cli.int.test.ts (the compiled range refresh helper
+		// against a real database and a local fixture feed -- no internet access).
+		// 20 after JR-4-19 added smtp-ingress-ledger-recovery.int.test.ts (the real process starting
+		// with an unusable ledger database and promoting itself without a restart).
+		// 21 after JR-4-15 added smtp-ingress-envelope-hostile-values.int.test.ts (a NUL byte in the
+		// attacker-controlled ehloName cannot be represented in Postgres text -- 3 cases: the direct
+		// PostgresLedgerWriter.append() rejection, that the chain still accepts a normal append
+		// afterward, and the real wire protocol producing 451, never a crash or a silent 250).
+		expectedFiles: 21,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -316,8 +757,35 @@ export const SUITES: readonly SuiteSpec[] = [
 		// of order, through PostgresLedgerWriter.append() on the same bare client). 97 after JR-3-05: a
 		// mixed batch of known/unknown spool_txids resolved correctly against the real schema and index,
 		// an all-unknown batch coming back empty without error, and an empty batch never reaching the
-		// database at all.
-		expectedTests: { ci: 97, nightly: 0, manual: 0 },
+		// database at all. 101 after JR-4-05a added source-acl-lookup.int.test.ts (4 tests, read
+		// through a client this file constructs itself and never hands to drizzle() -- F38's rule):
+		// an active source's CIDR list/require_tls round-trip correctly, a paused source is excluded,
+		// an empty allowed_ips array round-trips, and require_tls: false is read correctly rather than
+		// merely "not true".
+		// 103 after JR-4-05c added 2 more to source-acl-lookup.int.test.ts: smtp_username/
+		// smtp_password_hash round-trip when AUTH is configured for a source, and read back as null
+		// for the ordinary source with no AUTH configured. 105 after JR-4-06a added 2 tests to
+		// journal-smtp-accept-e2e.int.test.ts: the 250-with-seq round trip (spool file and ledger row
+		// re-verified independently, byte-for-byte) and a second transaction on the same chain getting
+		// seq + 1 while a denied recipient never reaches accept() at all.
+		// 111 after JR-4-18 added 3 to journal-crash-recovery-lock.int.test.ts (requeue/quarantine
+		// against a real ledger row and real disk, a second connection blocking on the real advisory
+		// lock and proceeding once released, two spoolRoots not serialising against each other) and 3
+		// to smtp-ingress-crash-recovery-boot.int.test.ts (scan-before-listen ordering with
+		// requeue/quarantine observed at real process boot, two concurrently-starting processes not
+		// racing each other's scan, a failed scan leaving the process bound but accepting nothing).
+		// 116 after JR-4-09 added 5 to m365-range-refresh-cli.int.test.ts -- the compiled helper run
+		// against a real database and a local fixture feed: the missing range reported and
+		// allowed_ips byte-identical afterwards (the security claim of RFC section 4.3), the feed
+		// asked with a clientRequestId, exit 0 when everything is covered, exit 1 (never 0) when the
+		// feed cannot be read, exit 1 without a database URL.
+		// 118 after JR-4-19 added 2 to smtp-ingress-ledger-recovery.int.test.ts: the process starting
+		// unusable (451, untouched spool), promoting once deployment_identity is restored and accepting
+		// on the same open connection; and the counter-direction, a database that stays broken never
+		// producing a promotion however many retries elapse.
+		// 121 after JR-4-15 added 3 to smtp-ingress-envelope-hostile-values.int.test.ts (see the
+		// expectedFiles comment above for what each proves).
+		expectedTests: { ci: 121, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
@@ -325,8 +793,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 1 until JR-2-08/JR-2-09; 3 with journal-ledger-concurrency.adv.test.ts (the 20x500 load case)
 		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 5 after JR-3-06/JR-3-07
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
-		// spool-disk-full.adv.test.ts.
-		expectedFiles: 5,
+		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
+		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts.
+		expectedFiles: 7,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -344,7 +813,35 @@ export const SUITES: readonly SuiteSpec[] = [
 		// cases) gated on a real size-limited volume via OA_TEST_SPOOL_DISKFULL_ROOT -- it is
 		// environment-gated rather than class-gated, so it contributes 0 executed tests on this host
 		// under every class selection, including `OA_TEST_CLASSES=manual`; manual stays 1.
-		expectedTests: { ci: 37, nightly: 1, manual: 1 },
+		// 38 ci / 2 nightly after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts: one `ci` test
+		// (20 real SIGKILLs during a 50 MB DATA transfer, judged from the client) and one `nightly` test
+		// (the same, 500 iterations) -- see that file's own doc comment for F48: on this Windows host
+		// every iteration in both variants resolves to 451, never 250, so the client-saw-250-implies-
+		// durable half of the invariant is unverified locally by construction; only Linux CI exercises
+		// it. The checker itself (checkNeverPartial(), tests/support/kill-during-data-invariant.ts) is
+		// calibrated independently in the `unit` suite's kill-during-data-invariant.test.ts.
+		// 57 ci after JR-4-14 added 19 cases in smtp-protocol-robustness.adv.test.ts (ADR-029
+		// Auflage 1 -- adversarial protocol robustness; see that file's own doc comment).
+		// 63 ci after the same file absorbed 6 more cases from a second, independently-built JR-4-14
+		// file found on this checkout mid-session (packages/journaling/tests/unit/smtp-adversarial-
+		// protocol.test.ts, since deleted): a merely-long-but-under-cap address, a command-timeout
+		// variant of the truncated-command case, a representative case against real spool/ledger
+		// acceptance instead of the fake port, the F53 flood-during-suspended-AUTH proof (real TLS +
+		// AUTH + PasswordVerifier), the calibration of the real-acceptance health check against a
+		// closed port, and the F54 (proposed) fragmented-overlong-line race case.
+		// 66 ci after JR-4-21 landed the fix (F52/F53/F54) and the F54 case became a Nacharbeit item
+		// for JR-4-14: the single ~200 KB case became 4 (one per size in the finding's own matrix --
+		// ~2000 B, 100 KB, ~200 KB, 2 MB), each repeating 10x internally rather than running once, so
+		// a race this size-dependent and this non-deterministic cannot pass by luck the way CI run
+		// 30900280611 did before the fix landed. Net +3 over the previous count.
+		// 69 ci after JR-4-21a (F55 -- no limit on the number of RCPT TO commands per transaction)
+		// added 3 cases to the same file: accepts recipients up to a configured limit and rejects one
+		// over it with a distinguishable 452 4.5.3 (never ADR-030's own "different journal chain"
+		// text) while the transaction still completes DATA for the recipients already accepted,
+		// every further RCPT TO past the limit is rejected rather than just the first one, and the
+		// unmodified default configuration accepts at least the RFC 5321 section 4.5.3.1.8 floor of
+		// 100 recipients.
+		expectedTests: { ci: 69, nightly: 2, manual: 1 },
 	},
 ];
 

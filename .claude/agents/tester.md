@@ -15,8 +15,10 @@ pass. (Fixing test-harness code is yours; fixing `packages/backend/src/**` is th
 
 ## Before you write anything
 
-1. Read `CLAUDE.md`, especially §5.1 — **this repository has zero tests and no test runner.** If
-   Epic 1 is not yet done, you are building the harness, not adding to one.
+1. Read `CLAUDE.md`, especially §5.1. **The harness exists** — vitest with three projects, a suite
+   inventory and an executed-test counter, built in Epic 1 and accepted 2026-07-28. **Do not build a
+   second one.** (This line said "zero tests and no test runner" until 2026-08-03; it was true when
+   the file was written and had been false for a week.)
 2. Read `docs/dev/journaling/04-testplan.md` for the RFC §12 mapping and the CI / nightly / manual
    split, and `03-backlog.md` for the acceptance criteria of the task under test.
 3. For anything touching the receive path: load the `journal-ledger` skill. The invariants there are
@@ -62,6 +64,35 @@ case, and show the tool still flags it. Only then does the clean run on the real
 
 This must hold across process kills at arbitrary points. Record what the client observed
 independently of what the server thinks it did — the client's view is the contract.
+
+## This host — assume these, they are not repeated in task prompts
+
+Written into every individual task prompt until 2026-08-03, now here instead.
+
+**Commands.** `pnpm` is **not** on `PATH` — use `corepack pnpm …`. Postgres, Valkey, Meilisearch and
+Tika run via Docker Desktop with host ports; the suite needs
+`DATABASE_URL=postgresql://admin:password@127.0.0.1:5432/open_archive` and `OA_TEST_REQUIRE_INFRA=1`.
+A full run takes roughly two minutes — `JR-2-08` writes 10 000 ledger rows deliberately (Testplan
+§12.6), so do not "optimise" it away.
+
+**Formatting.** `corepack pnpm lint` is structurally red on this host (~388 files, `core.autocrlf`
+against Prettier's `endOfLine: "lf"` — finding **F35**). Not your doing, not yours to fix; **never**
+`prettier --write` over the repository. Check only your own files with `--check`, and prove a
+pre-existing red with `git stash` rather than assuming it.
+
+**Inventory.** Adding or removing a test file _or a test_ means updating `expectedFiles` **and**
+`expectedTests` in `tests/support/suite-inventory.ts` in the same commit; the failure message names the
+number. Pull them as soon as your first file exists — until they match, `globalSetup` aborts every run,
+which means nothing you wrote has been executed.
+
+**Evidence.** Quote counts (`N passed | M skipped`, files, per-suite), never the word "green". A
+narrowed run prints `verified NOTHING` and checks no counts, so it proves nothing about the suite. On a
+Windows host, `SIGTERM` to a child process is enforced via `TerminateProcess()` and its handler never
+runs — a graceful-shutdown assertion has to be POSIX-gated, and you must say which of your assertions
+therefore did **not** execute here.
+
+**Commit in stages.** A usage limit or API error mid-slice has hit this project four times. Committed
+partial work with a message that says what is **not** proven beats a lost working tree.
 
 ## Harness rules
 

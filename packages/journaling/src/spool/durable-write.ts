@@ -46,15 +46,46 @@ import type { SpoolFileHandle, SpoolFileSystem } from './fs-port';
  * original error untouched for exactly that. Three stages, matching the three independent failure
  * points `FakeSpoolFileSystem` exposes (`JR-3-03`):
  *
- *  - `'write'` -- covers directory creation, file creation and every `write()` call. All three are
- *    "the bytes are not yet safely on disk" failures with the same required action (retry with a new
- *    transaction ID), so they share one stage rather than three.
+ *  - `'write'` -- covers directory creation, file creation, every `write()` call, **and (`JR-4-06a`)
+ *    a failure of `chunks` itself**, i.e. the async source rejecting instead of a `write()` call
+ *    rejecting. All four are "the bytes are not yet safely on disk" failures with the same required
+ *    action (retry with a new transaction ID), so they share one stage rather than four.
  *  - `'file-fsync'` -- every byte was written, but the file descriptor was never confirmed durable.
  *  - `'directory-fsync'` -- the file itself is fully written *and* file-synced; only the directory
  *    entry's durability is unconfirmed. Worth its own stage because it is the failure mode the skill
  *    calls out as "the one that is easy to forget" -- a file fsync alone does not make a directory
  *    entry durable, and code that cannot tell this case apart from full success cannot honour that
  *    rule.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `chunks` failing was unreachable until `JR-4-06a` gave it a real, live source (F45)
+ * ---------------------------------------------------------------------------------------------
+ * The module doc comment above promises "rejects with a `DurableWriteError`... and never with a
+ * bare `Error`". That was quietly false for one path no test before `JR-4-06a` ever exercised: the
+ * `for await (const chunk of chunks)` loop's own iteration -- getting the *next* chunk, as opposed to
+ * `handle.write(chunk)` once one has arrived -- was not wrapped in any `try`/`catch` at all. Every
+ * caller up to `JR-4-06a` passed an async generator over already-buffered test fixtures or a
+ * harness-owned socket read that never itself rejected, so the gap stayed latent. `JR-4-06a` is the
+ * first real caller: `apps/smtp-ingress` needs to abort an in-flight durable write when the SMTP
+ * layer discovers mid-transfer that a message exceeds the configured `SIZE` limit (skill
+ * `journal-ledger` section 2, `552 5.3.4`), and the only way to end an already-started `accept()` call
+ * is through its `chunks` iterable (see `acceptance.ts`'s `JournalAcceptance.accept()` doc comment) --
+ * there is no cancellation token. Ending it with a rejection (rather than a graceful `done: true`,
+ * which would let a truncated write complete "successfully" and get a ledger receipt for content that
+ * is not the real message) surfaced this gap immediately: the rejection propagated as a bare `Error`,
+ * which `JournalAcceptance.accept()`'s `catch` block treats as "a programming error in the filesystem
+ * seam itself" and rethrows uncaught -- exactly the crash `accept()`'s own doc comment says must never
+ * happen for a local failure.
+ *
+ * The fix wraps the whole `for await` (not just `handle.write()`) in one `try`/`catch` that rewraps
+ * anything that is not already a `DurableWriteError` as `DurableWriteError('write', cause)` -- the
+ * existing `'write'` stage already covers "the bytes are not yet safely on disk", and a chunk source
+ * that stops producing bytes mid-transfer is exactly that. This is deliberately *not* a new stage:
+ * `apps/smtp-ingress`'s oversize-abort case must map to the ordinary `'spool-write-failed'` result
+ * (`451`, retried by the sender) from `accept()`'s point of view -- the SMTP layer is the only thing
+ * that knows this particular `'write'` failure was actually an oversize rejection, and it is also the
+ * only thing that overrides `accept()`'s result for that one case (`552`, never `451`) -- see
+ * `smtp-server.ts`'s `SmtpConnection.finalizeAcceptance` doc comment.
  */
 
 /** Which of the three durability steps did not complete. See the module doc comment. */
@@ -125,16 +156,28 @@ export async function writeDurableSpoolFile(
 	}
 
 	try {
-		for await (const chunk of chunks) {
-			try {
-				await handle.write(chunk);
-			} catch (cause) {
-				throw new DurableWriteError('write', cause);
+		try {
+			for await (const chunk of chunks) {
+				try {
+					await handle.write(chunk);
+				} catch (cause) {
+					throw new DurableWriteError('write', cause);
+				}
+				// Folded in immediately, right after the write it corresponds to -- never batched, never
+				// held onto past this point. This is the streaming half of the acceptance criterion.
+				hash.update(chunk);
+				sizeBytes += BigInt(chunk.byteLength);
 			}
-			// Folded in immediately, right after the write it corresponds to -- never batched, never
-			// held onto past this point. This is the streaming half of the acceptance criterion.
-			hash.update(chunk);
-			sizeBytes += BigInt(chunk.byteLength);
+		} catch (cause) {
+			// F45 (see the module doc comment): a rejection from *iterating* `chunks` -- as opposed to
+			// one from `handle.write()`, already wrapped above -- used to escape as a bare `Error`.
+			// Rethrow an already-typed failure as-is; wrap anything else the same way `handle.write()`'s
+			// own catch above does, so this function keeps its "always a DurableWriteError" contract
+			// regardless of which half of the loop failed.
+			if (cause instanceof DurableWriteError) {
+				throw cause;
+			}
+			throw new DurableWriteError('write', cause);
 		}
 
 		try {

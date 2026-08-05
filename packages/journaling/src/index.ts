@@ -114,6 +114,8 @@ export {
 	type RequeueCandidate,
 } from './spool/crash-recovery';
 
+// E5 (journal-report parser) and E4 (SMTP ingress) grew this barrel independently on two branches;
+// the back-merge of E4 keeps both sets of exports.
 export { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './parser/envelope';
 export {
 	isSmimeWrappedContentType,
@@ -130,3 +132,120 @@ export {
 } from './parser/mime-split';
 export { parseJournalReport } from './parser/journal-report';
 export { resolveOwner } from './parser/owner-resolution';
+
+export {
+	crashRecoveryScanLockKey,
+	runExclusiveCrashRecoveryScan,
+	type ExclusiveCrashRecoveryScanOptions,
+} from './spool/crash-recovery-lock';
+
+export {
+	formatIngressConfigError,
+	ingressConfigSchema,
+	parseIngressConfig,
+	type IngressConfig,
+} from './ingress/config';
+
+export {
+	DEFAULT_COMMAND_TIMEOUT_MS,
+	DEFAULT_CONNECTION_TIMEOUT_MS,
+	DEFAULT_DATA_TIMEOUT_MS,
+	DEFAULT_SMTP_HOSTNAME,
+	DEFAULT_SMTP_SIZE_LIMIT_BYTES,
+	smtpServerConfigSchema,
+	type SmtpServerConfig,
+} from './ingress/smtp-config';
+
+export {
+	AUTH_DUMMY_PASSWORD_HASH,
+	AUTH_MECHANISMS,
+	buildEhloResponseLines,
+	DataScanner,
+	decodeSaslBase64,
+	decodeSaslPlain,
+	EsmtpServer,
+	formatMultilineResponse,
+	MAX_AUTH_ATTEMPTS_PER_CONNECTION,
+	noopIngressLogger,
+	parseAuthArguments,
+	parseMailFromArguments,
+	parseRcptToArguments,
+	type AuthCredentialEvaluator,
+	type AuthCredentialLookupResult,
+	type ConnectionLimiter,
+	type DecodedSaslPlain,
+	type EsmtpServerOptions,
+	type IngressLogger,
+	type JournalAcceptancePort,
+	type JournalAcceptanceProvider,
+	type ParsedAuthCommand,
+	type ParsedMailFrom,
+	type PasswordVerifier,
+	type RecipientAclDecision,
+	type RecipientAclEvaluator,
+	type RequireTlsContext,
+	type RequireTlsResolver,
+	type SourceAclDecision,
+	type SourceAclEvaluator,
+	type TransactionRateLimiter,
+} from './ingress/smtp-server';
+
+export { SpoolWriteBridge, type SpoolWriteBridgeCallbacks } from './ingress/spool-write-bridge';
+
+export {
+	JournalAcceptanceBootstrap,
+	type JournalAcceptanceBootstrapOptions,
+} from './ingress/journal-acceptance-bootstrap';
+
+export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
+
+export {
+	diffM365Ranges,
+	formatM365RangeDiff,
+	M365_ENDPOINTS_BASE_URL,
+	M365EndpointFeedError,
+	parseM365SmtpRanges,
+	type InvalidRange,
+	type M365RangeDiff,
+	type M365SmtpRangeSet,
+	type UnmatchedConfiguredRange,
+} from './ingress/m365-ip-ranges';
+
+export { normalizeJournalRecipient } from './ingress/recipient-address';
+
+export type { JournalingSourceAclEntry, SourceAclLookup } from './ingress/source-acl-port';
+export { PostgresSourceAclLookup } from './ingress/source-acl';
+
+export {
+	bindSourceAclCache,
+	buildAuthIndex,
+	buildRecipientIndex,
+	compileSourceAcl,
+	createSourceAclRequireTlsResolver,
+	SourceAclCache,
+	type CompiledSourceAcl,
+	type SourceAclCacheEsmtpBindings,
+	type SourceAclCacheOptions,
+} from './ingress/source-acl-cache';
+
+export {
+	DEFAULT_SOURCE_ACL_REFRESH_INTERVAL_MS,
+	DEFAULT_SOURCE_ACL_STALE_AFTER_MS,
+	sourceAclConfigSchema,
+	type SourceAclConfig,
+} from './ingress/source-acl-config';
+
+export { ledgerConfigSchema, type LedgerConfig } from './ingress/ledger-config';
+
+export {
+	DEFAULT_MAX_CONNECTIONS_PER_SOURCE,
+	DEFAULT_MAX_TRANSACTIONS_PER_SOURCE_PER_WINDOW,
+	DEFAULT_RATE_LIMIT_WINDOW_MS,
+	rateLimitConfigSchema,
+	type RateLimitConfig,
+} from './ingress/rate-limit-config';
+
+export {
+	PerSourceConnectionLimiter,
+	PerSourceTransactionRateLimiter,
+} from './ingress/connection-rate-limiter';

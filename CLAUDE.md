@@ -127,11 +127,18 @@ Four things about it are easy to trip over:
   message states the number to write. `globalSetup` checks the files before the run; a reporter plus the
   `globalSetup` teardown check the **executed** test counts after it (JR-1-05c, findings F14/F15).
 - **A green run can be a disabled run** — the reason all of the above exists. Quote test counts, not
-  just "green": a full local run is `398 passed | 2 skipped` at 30 files (274 before E2 started; the
-  ledger encoding, schema, trigger, writer and the two adversarial ledger suites added the rest). A run
-  narrowed with `-t`, a file filter, `--project` or `--shard` prints `verified NOTHING` and checks no
-  counts. **A full run now takes around two minutes** — `JR-2-08` writes ten thousand ledger entries
-  against a real database, and that is deliberate rather than reducible (Testplan §12.6).
+  just "green": a full local run is `989 passed | 8 skipped` at 84 files as of `JR-4-12` (2026-08-04;
+  274 before E2, 398 at 30 files when E2 ended, 974 at 82 files after `JR-4-10` — E4's TEST slices
+  added the rest). CI run `30864243188` confirms the same 84 files with
+  `unit 58/58 · integration 20/20 · adversarial 6/6`. A run narrowed with `-t`, a file filter,
+  `--project` or `--shard` prints `verified NOTHING` and checks no counts.
+  **A full run now takes around two minutes** — `JR-2-08` writes ten thousand ledger entries against a
+  real database, and that is deliberate rather than reducible (Testplan §12.6).
+- **Green is not the same as exercised.** `JR-4-10` shipped two consecutive versions that were useless
+  on _every_ platform and still reported green — the assertion never ran because `DATA` never
+  completed. Where a suite's central claim depends on the platform (anything behind `fsyncDirectory()`
+  is Linux-only here, see F48), emit a count that distinguishes "branch not taken" from "taken and
+  passed". Without it, "green on Windows" and "green because nothing was checked" print identically.
 - **Integration tests acquire a real database** via `acquireTestDatabase()` in the **module scope**, and
   the harness records it in a per-run ledger so the main process can announce and drop anything a
   failed teardown left behind. Details and the required env vars: `docs/dev/journaling/04-testplan.md`

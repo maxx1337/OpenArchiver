@@ -25,6 +25,27 @@ import type { SpoolFileSystem } from './fs-port';
  * only `reason` differs, which is exactly what lets an operator (and, later, E10's monitoring) tell the
  * two apart without two unrelated alert shapes to reconcile.
  *
+ * `'oversize-rejected'` -- `JR-4-06b`, a third reason for the exact same mechanism, not a second alarm
+ * path. Skill `journal-ledger` section 2 requires the oversize rejection to "log loudly -- this is a
+ * silent data-loss vector": a message over the configured `SIZE` limit is rejected with `552`, but by
+ * the time that is known, `JournalAcceptance.accept()` has very likely already started (often
+ * finished) a durable write for it (`smtp-server.ts`'s `finalizeAcceptance` doc comment, "Oversize"
+ * section) -- `tryBeginAcceptance()` opens the spool file before a single content byte is known to be
+ * oversize. So the SMTP layer aborts the in-flight `SpoolWriteBridge`, which already surfaces as a
+ * `DurableWriteError` `acceptance.ts`'s `catch` block already quarantines unconditionally, alerting
+ * through the **mandatory** `alertSink` (`JournalAcceptanceOptions.alertSink`, required precisely so
+ * this kind of debris is never silently discarded). That alert already fires for every oversize
+ * rejection during `DATA`/`BDAT` -- the investigation this task did found no missing loud alert, only a
+ * mislabelled one: every such alert used to report `reason: 'write-failed'`, indistinguishable from a
+ * genuine disk/fsync fault, which would send an on-call operator looking for a hardware problem that
+ * is not there. `ProtocolRejectionAbort` (below) is the marker `smtp-server.ts`'s oversize abort now
+ * passes to `bridge.abort()`; `acceptance.ts`'s `catch` block checks `cause.cause instanceof
+ * ProtocolRejectionAbort` and reports `'oversize-rejected'` instead of `'write-failed'` in exactly that
+ * one case -- same rename, same required `alertSink`, same `QuarantineAlert` shape, only the `reason`
+ * field is more precise. Deliberately **not** a second alert mechanism (the Product Owner's own
+ * instruction for this task warned against building one without need, since E10's completeness
+ * monitoring would then have two shapes to reconcile instead of one).
+ *
  * ---------------------------------------------------------------------------------------------
  * Never deletes, and tolerates "there was nothing to quarantine"
  * ---------------------------------------------------------------------------------------------
@@ -46,8 +67,23 @@ import type { SpoolFileSystem } from './fs-port';
  * Returns `null` for that "nothing to quarantine" case, and the {@link QuarantinedEntry} otherwise.
  */
 
-/** Which of the (so far) two situations produced this quarantine. See the module doc comment. */
-export type QuarantineReason = 'no-ledger-entry' | 'write-failed';
+/** Which of the (so far) three situations produced this quarantine. See the module doc comment. */
+export type QuarantineReason = 'no-ledger-entry' | 'write-failed' | 'oversize-rejected';
+
+/**
+ * Marks an `Error` handed to `SpoolWriteBridge.abort()` as a deliberate protocol-layer rejection
+ * (`JR-4-06b`: currently only the `SIZE`-limit oversize abort in `smtp-server.ts`'s
+ * `finalizeAcceptance`) rather than a genuine I/O failure. `acceptance.ts`'s `DurableWriteError`
+ * handler checks `cause.cause instanceof ProtocolRejectionAbort` to choose `'oversize-rejected'`
+ * over the generic `'write-failed'` -- see this module's doc comment for why this exists and why it
+ * is not a second alert mechanism.
+ */
+export class ProtocolRejectionAbort extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'ProtocolRejectionAbort';
+	}
+}
 
 /** The operator-visible event a quarantine produces (skill `journal-ledger` section 3: "alarmieren"). */
 export interface QuarantineAlert {

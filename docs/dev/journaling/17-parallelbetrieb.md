@@ -142,7 +142,7 @@ ADR, ist das genau die Kollision, vor der dieser Abschnitt warnt.
 
 > **Deshalb: beim Rückmerge wird die Nummer gegen `05-entscheidungen.md` gegengeprüft** und
 > gegebenenfalls hochgezogen — samt der Verweise darauf (`packages/journaling/package.json`-Kommentar
-> gibt es nicht, aber `12-parallelbetrieb.md`, `03-backlog.md` und `06-status.md` nennen sie).
+> gibt es nicht, aber `17-parallelbetrieb.md`, `03-backlog.md` und `06-status.md` nennen sie).
 
 ## 7. Die Umgebung dieser Session (Linux-Container, 2026-08-02)
 

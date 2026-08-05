@@ -8,6 +8,7 @@ import {
 	users,
 	ingestionSources,
 	archivedEmails,
+	journalingSources,
 } from '../../src/database/schema';
 
 /**
@@ -97,6 +98,62 @@ export async function seedIngestionSource(
 		})
 		.returning();
 	return { id: source!.id, name };
+}
+
+export interface SeededJournalingSource {
+	id: string;
+	ingestionSourceId: string;
+	routingAddress: string;
+	smtpUsername: string | null;
+	smtpPasswordHash: string | null;
+}
+
+/**
+ * Seed a `journaling_sources` row (`JR-4-05a`, `routingAddress` override added by `JR-4-05b` for
+ * the recipient-ACL tests, `smtpUsername`/`smtpPasswordHash` overrides added by `JR-4-05c` for the
+ * `AUTH` tests). `ingestionSourceId` must already exist (see {@link seedIngestionSource}) --
+ * `journaling_sources.ingestion_source_id` is `notNull` with no `onDelete: 'set null'`.
+ */
+export async function seedJournalingSource(
+	db: SeedDatabase,
+	options: {
+		ingestionSourceId: string;
+		allowedIps?: string[];
+		requireTls?: boolean;
+		status?: 'active' | 'paused';
+		name?: string;
+		/** Overrides the generated `journal-<suffix>@journaling.test.invalid` default -- needed by
+		 * the recipient-ACL tests to seed two sources with a *chosen*, colliding routing address. */
+		routingAddress?: string;
+		/** `journaling_sources.smtp_username` (`JR-4-05c`). Left `undefined`/unset means `null` --
+		 * this source has no `AUTH` credentials configured, the ordinary case. */
+		smtpUsername?: string | null;
+		/** `journaling_sources.smtp_password_hash` (`JR-4-05c`) -- a bcrypt hash, never a plaintext
+		 * password. Left `undefined`/unset means `null`. */
+		smtpPasswordHash?: string | null;
+	}
+): Promise<SeededJournalingSource> {
+	const suffix = randomUUID().slice(0, 8);
+	const [source] = await db
+		.insert(journalingSources)
+		.values({
+			name: options.name ?? `journaling-source-${suffix}`,
+			allowedIps: options.allowedIps ?? [],
+			requireTls: options.requireTls ?? false,
+			status: options.status ?? 'active',
+			ingestionSourceId: options.ingestionSourceId,
+			routingAddress: options.routingAddress ?? `journal-${suffix}@journaling.test.invalid`,
+			smtpUsername: options.smtpUsername ?? null,
+			smtpPasswordHash: options.smtpPasswordHash ?? null,
+		})
+		.returning();
+	return {
+		id: source!.id,
+		ingestionSourceId: source!.ingestionSourceId,
+		routingAddress: source!.routingAddress,
+		smtpUsername: source!.smtpUsername,
+		smtpPasswordHash: source!.smtpPasswordHash,
+	};
 }
 
 export async function seedArchivedEmail(

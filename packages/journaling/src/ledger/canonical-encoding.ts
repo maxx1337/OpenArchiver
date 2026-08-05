@@ -239,7 +239,14 @@ function jsonField(value: CanonicalJsonValue | null): Buffer {
 /* IP normalisation (ADR-006 section 3.2)                                                       */
 /* -------------------------------------------------------------------------------------------- */
 
-function parseIPv4(text: string): number[] | null {
+/**
+ * Exported (not just used internally by {@link normalizeRemoteIp}) so `../ingress/cidr.ts`
+ * (`JR-4-05a`) can parse a `journaling_sources.allowed_ips` entry with the exact same strictness
+ * that governs `remote_ip` before hashing -- an operator cannot configure a CIDR literal this
+ * system's own IP normalisation would parse differently, and there is only one address parser in
+ * the codebase to keep in sync.
+ */
+export function parseIPv4(text: string): number[] | null {
 	const parts = text.split('.');
 	if (parts.length !== 4) {
 		return null;
@@ -259,7 +266,8 @@ function parseIPv4(text: string): number[] | null {
 	return bytes;
 }
 
-function parseIPv6(text: string): number[] | null {
+/** Exported for the same reason as {@link parseIPv4} -- see that function's doc comment. */
+export function parseIPv6(text: string): number[] | null {
 	let head = text;
 	let embeddedV4: number[] | null = null;
 	const lastColon = head.lastIndexOf(':');

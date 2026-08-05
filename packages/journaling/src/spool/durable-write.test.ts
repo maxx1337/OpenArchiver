@@ -324,6 +324,52 @@ suite('ci', 'writeDurableSpoolFile() against FakeSpoolFileSystem', () => {
 		expect(result.sizeBytes).toBe(referenceBytes);
 		expect(Buffer.from(result.sha256).equals(reference.digest())).toBe(true);
 	});
+
+	/**
+	 * F45 (`JR-4-06a`, see the module doc comment "`chunks` failing was unreachable until `JR-4-06a`
+	 * gave it a real, live source"): a rejection from *iterating* `chunks` -- as opposed to one from
+	 * `handle.write()`, already covered above -- used to escape this function as a bare `Error`,
+	 * breaking its own documented contract ("rejects with a `DurableWriteError`... and never with a
+	 * bare `Error`"). `apps/smtp-ingress` relies on exactly this path to abort an in-flight write when
+	 * the SMTP layer discovers an oversize message mid-transfer (`smtp-server.ts`'s
+	 * `SmtpConnection.finalizeAcceptance`) -- if this stayed a bare `Error`, `JournalAcceptance.accept()`
+	 * would rethrow it as "a programming error in the filesystem seam itself" instead of returning a
+	 * typed, `451`-mappable result.
+	 */
+	it("wraps a chunk source's own rejection as DurableWriteError('write', ...) rather than leaking a bare Error (F45)", async () => {
+		const fake = new FakeSpoolFileSystem();
+		const { fs, order } = recordingFileSystem(fake);
+		const txid = generateTxId();
+		const sourceError = new Error('source aborted mid-transfer');
+
+		async function* chunks() {
+			yield Buffer.from('partial content');
+			throw sourceError;
+		}
+
+		let error: unknown;
+		try {
+			await writeDurableSpoolFile(fs, { spoolRoot: '/spool', txid, chunks: chunks() });
+		} catch (err) {
+			error = err;
+		}
+
+		expect(error).toBeInstanceOf(DurableWriteError);
+		expect((error as DurableWriteError).stage).toBe('write');
+		expect((error as DurableWriteError).cause).toBe(sourceError);
+
+		// The partial content already written stays on disk -- this function never deletes;
+		// `acceptance.ts`'s `JournalAcceptance.accept()` (`JR-3-09`) is what quarantines it, later.
+		expect(fake.fileContent(incomingFilePath('/spool', txid))?.toString()).toBe(
+			'partial content'
+		);
+		// handle.close() still ran, from the same `finally` a handle.write() failure already goes
+		// through -- the point of F45's fix is that this rejection takes the *same* path, not a
+		// different one that might skip cleanup.
+		expect(order).toContain('close');
+		expect(order).not.toContain('file-fsync');
+		expect(order).not.toContain('directory-fsync');
+	});
 });
 
 suite('ci', 'writeDurableSpoolFile() against NodeSpoolFileSystem (real disk)', () => {
