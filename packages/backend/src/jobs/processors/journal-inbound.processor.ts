@@ -58,7 +58,16 @@ const searchService = new SearchService();
 const databaseService = new DatabaseService();
 const indexingService = new IndexingService(databaseService, searchService, storageService);
 
-const ledgerSql = openBareLedgerConnection();
+/**
+ * The bare `postgres-js` connection the ledger lookup uses (see `journal-ledger-query-adapter.ts`).
+ * Exported so `journal-inbound.worker.ts` can close it on `SIGINT`/`SIGTERM` -- an idle `postgres-js`
+ * connection holds an open socket that keeps the event loop alive, and `worker.close()` (BullMQ)
+ * has no idea this connection exists to close it. Without this, the process never exits after a
+ * graceful `worker.close()` completes, and a supervisor ends up `SIGKILL`ing it after its own
+ * timeout -- exactly the "hanging shutdown" outcome `journal-inbound.worker.ts`'s own doc comment
+ * says is the worse trade against a bounded wait.
+ */
+export const ledgerSql = openBareLedgerConnection();
 const ledgerLookup = new PostgresLedgerLookup(createLedgerQuery(ledgerSql));
 
 const spoolRoot = resolveJournalSpoolRoot(process.env[JOURNAL_SPOOL_ROOT_VAR]);

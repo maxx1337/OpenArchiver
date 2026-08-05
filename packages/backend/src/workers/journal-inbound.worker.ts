@@ -1,7 +1,7 @@
 import { Worker, type Job } from 'bullmq';
 import { JOURNAL_INBOUND_JOB_NAME, JOURNAL_INBOUND_QUEUE_NAME } from '@open-archiver/journaling';
 import { connection } from '../config/redis';
-import { journalInboundProcessor } from '../jobs/processors/journal-inbound.processor';
+import { journalInboundProcessor, ledgerSql } from '../jobs/processors/journal-inbound.processor';
 import { logger } from '../config/logger';
 import {
 	JOURNAL_INBOUND_CONCURRENCY_VAR,
@@ -106,5 +106,16 @@ process.on('uncaughtException', (err) => {
 // `worker.close()` lets in-flight jobs finish before the process exits. That matters more here than
 // for a mailbox sync: a job killed mid-flight leaves a spool entry whose Phase B is half done, which
 // is recoverable but costs the reconciler a pass.
-process.on('SIGINT', () => worker.close());
-process.on('SIGTERM', () => worker.close());
+//
+// `ledgerSql.end()` closes the bare ledger connection `JR-6-02b` added -- see its own doc comment on
+// `journal-inbound.processor.ts`. Without it, an idle `postgres-js` socket keeps the event loop alive
+// forever after `worker.close()` resolves, and the process never exits on its own. Sequenced after
+// `worker.close()`, not in parallel with it: a still-running job may need the ledger lookup, and
+// closing the connection out from under it would turn a clean drain into a broken one.
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
+
+async function shutdown(): Promise<void> {
+	await worker.close();
+	await ledgerSql.end();
+}
