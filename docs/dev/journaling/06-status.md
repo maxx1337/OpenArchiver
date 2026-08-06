@@ -7,10 +7,11 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
 **Letzte Aktualisierung:** 2026-08-06 — **Details im Sessionprotokoll unten, jüngste Einträge
-zuletzt.** Kurz: E6 läuft (`JR-6-01`, `JR-6-02a`, `JR-6-02b` erledigt, Code fertig, TEST-Abnahme
-offen), plus das Pre-Push-Gate und F65 (beide Werkzeug-Infrastruktur/Nacharbeit, keine
-Backlog-Tasks). **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig; E1, E13, E2, E3, E4
-und E5 sind zurückgemergt). Nummernkreise nach **ADR-032** reserviert: ADR-033–036, F59–F70.
+zuletzt.** Kurz: E6 läuft (`JR-6-01`, `JR-6-02a`, `JR-6-02b`, `JR-6-03` erledigt; `JR-6-02` insgesamt
+code-fertig, TEST-Abnahme offen), plus das Pre-Push-Gate und F65 (beide Werkzeug-Infrastruktur/
+Nacharbeit, keine Backlog-Tasks). **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig; E1,
+E13, E2, E3, E4 und E5 sind zurückgemergt). Nummernkreise nach **ADR-032** reserviert: ADR-033–036
+(alle vergeben), F59–F70 (F59, F61, F65 vergeben).
 
 > **Am 2026-08-01 zusätzlich entschieden: `ADR-025` — der Fork wird weitergeführt.** Die Frage des
 > Auftraggebers, ob angesichts einer kostenpflichtigen Upstream-Lizenz eine eigenständige Anwendung
@@ -62,7 +63,7 @@ eingeschoben (siehe `03-backlog.md`).
 | 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                           |
 | 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
 | 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (`JR-6-01` erledigt; `JR-6-02` code-fertig mit `a`+`b`, TEST-Abnahme offen)                | 1 / 8 + `JR-6-02` code-fertig. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` gilt erst mit Abnahme als fertig         |
+| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (`JR-6-01`, `JR-6-03` erledigt; `JR-6-02` code-fertig mit `a`+`b`, TEST-Abnahme offen)     | 2 / 8 + `JR-6-02` code-fertig. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` gilt erst mit Abnahme als fertig         |
 | 8           | E7   | WORM-Storage                       | offen                                                                                                    | 0 / 6                                                                                                                           |
 | 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                           |
 | 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                           |
@@ -199,7 +200,7 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
           Postgres über die bestehende Harness-Bindung und echtes Meilisearch über einen neuen
           CI-Service-Container, zweimal kalibriert). `runPhaseBPipeline()` verbindet alles; **Ende-zu-Ende
           ist jetzt ein Test, kein manueller Nachweis mehr.**
-- [ ] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of`
+- [x] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of` (2026-08-06, `5e9551f`)
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
 - [ ] `JR-6-06` — TEST: Object-Store-Ausfall
@@ -520,3 +521,23 @@ Gegenprobe bestanden: nächster Schritt bleibt aus README→Status→Handover al
 | `06-status.md`                      | 38 519       | ≈ 19 547   |
 | `07-session-handover.md`            | 29 213       | 14 184     |
 | **Summe vor diesem Eintrag selbst** | **≈ 72 625** | **39 399** |
+
+### 2026-08-06 — `JR-6-03`: `duplicate_of`-Marker für echte Wiederzustellung
+
+- **Rolle:** DEV (Subagent `senior-dev`)
+- **Task:** `JR-6-03` — ein Objekt, zwei Receipts, der zweite mit `duplicate_of`
+- **Commit:** `5e9551f`
+- **Testzahl:** +3 gegenüber `JR-6-02b`s Stand (+2 `pipeline.test.ts`, +1
+  `journal-phase-b-e2e.int.test.ts`). Volllauf **1301 passed | 8 skipped** bei 107 Dateien, Exit 0,
+  `unit ci 1104/1104 · integration ci 128/128 · adversarial ci 69/69`
+- **CI-Lauf:** noch nicht geprüft — folgt nach `git push`
+- **Entscheidungen:** keine neue ADR (Nummernkreis war laut Auftrag vor Vergabe zu erfragen; die
+  Herleitung — `spool_txid: null`, `eventType: 'receipt'` wiederverwendet, `MIN(seq)` über
+  `chain_scope_id`+`content_sha256` unterscheidet echte Wiederzustellung von Job-Retry — steht als
+  Doc-Comment in `ledger-lookup-port.ts` und `pipeline.ts`, nicht in `05-entscheidungen.md`). Drei
+  Ledger-Zeilen je zweimal zugestellter Nachricht (zwei Phase-A-Receipts, ein Marker) statt
+  wörtlich zwei — Lesart begründet im Bericht an den Auftraggeber
+- **Offen:** `JR-6-04`–`JR-6-08` unverändert. Ob die Drei-Zeilen-Lesart der Auftraggeber-Absicht
+  entspricht, ist an ihn zurückgegeben
+- **Nicht getan, absichtlich:** F64s Ursache, F62, F60, F43, F39, F42, F17(b) — wie ausdrücklich
+  ausgeschlossen

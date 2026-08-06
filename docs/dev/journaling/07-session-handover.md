@@ -155,13 +155,13 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-06 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b` erledigt** (Code fertig,
-TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und F61 behoben, F62/F63/F64
-neu) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
-Volllauf: **1298 passed | 8 skipped** bei 107 Dateien — `unit ci 1102/1102 · integration ci 127/127 ·
-adversarial ci 69/69`, Exit 0 · zuletzt `1611434` · **CI `31090714283` success** · **neu, kein
-Backlog-Task:** `pnpm gate` (Pre-Push-Gate, `88b6719`+`d5f77cf`, F65-Fix `1611434`), dreimal kalibriert
-plus einmal nachkalibriert — Details unter „Billig verifizieren" oben und in `06-status.md`
+**Stand:** 2026-08-06 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b`, `JR-6-03` erledigt** (`JR-6-02`
+insgesamt code-fertig, TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und
+F61 behoben, F62/F63/F64 offen) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig,
+eigener Upstream gesetzt) · Volllauf: **1301 passed | 8 skipped** bei 107 Dateien —
+`unit ci 1104/1104 · integration ci 128/128 · adversarial ci 69/69`, Exit 0 · zuletzt `5e9551f` ·
+**CI:** noch nicht geprüft, folgt nach `git push` · **`pnpm gate` (kein Backlog-Task):**
+`88b6719`+`d5f77cf`, F65-Fix `1611434` — unverändert seit der letzten Sitzung
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -174,33 +174,28 @@ plus einmal nachkalibriert — Details unter „Billig verifizieren" oben und in
 
 ### Der Stand in einem Satz
 
-**Der Empfangspfad steht, der Parser steht, und Phase B hat jetzt einen Prozess, ein Tor, einen
-vollständigen Verarbeitungspfad und einen automatisierten Ende-zu-Ende-Beleg.** `apps/smtp-ingress`
-spricht ESMTP, prüft Quell- und Empfänger-ACL, fährt beim Start den Crash-Recovery-Scan und
-antwortet auf `DATA`/`BDAT … LAST` mit `250 … queued as <seq>` erst nach Spool-fsync **und**
-Ledger-Append. Seit `JR-6-01` gibt es den `journal-inbound`-Worker als eigenen Prozess; seit
-`JR-6-02a` das **Tor**, das entscheidet, ob eine Spool-Datei überhaupt archiviert werden darf; seit
-**`JR-6-02b`** die vollständige Pipeline (`runPhaseBPipeline()`): parsen (E5) → Owner auflösen
-(ADR-033, mit Fan-out über jeden aufgelösten Owner, nicht nur den Gewinner, ADR-034) → über den Port
-aus ADR-010 archivieren → `IndexingService.indexEmailBatch()` → Spool-Datei löschen. **Ende-zu-Ende
-ist jetzt ein automatisierter Test** (`journal-phase-b-e2e.int.test.ts`, ADR-035), gegen echtes
-Postgres (über die bestehende Harness-Bindung, kein DI-Umbau) und echtes Meilisearch (neuer
-CI-Service-Container), zweimal kalibriert. **Was fehlt:** `JR-6-03` (Idempotenz/`duplicate_of`) und
-`JR-6-04` (Spool-Reconciler).
+**Der Empfangspfad steht, der Parser steht, Phase B hat einen vollständigen Verarbeitungspfad mit
+automatisiertem Ende-zu-Ende-Beleg, und Idempotenz ist jetzt Teil davon.** `apps/smtp-ingress` spricht
+ESMTP, prüft Quell- und Empfänger-ACL, fährt beim Start den Crash-Recovery-Scan und antwortet auf
+`DATA`/`BDAT … LAST` mit `250 … queued as <seq>` erst nach Spool-fsync **und** Ledger-Append. Seit
+`JR-6-01` gibt es den `journal-inbound`-Worker als eigenen Prozess; seit `JR-6-02a` das **Tor**; seit
+`JR-6-02b` die vollständige Pipeline (`runPhaseBPipeline()`): parsen (E5) → Owner auflösen
+(ADR-033/034) → archivieren (ADR-010) → indexieren → Spool-Datei löschen, mit automatisiertem
+Ende-zu-Ende-Test (ADR-035). Seit **`JR-6-03`** schreibt ein `'duplicate'`-Ergebnis, das eine **andere**
+Spool-Transaktion als die eigene betrifft, einen `duplicate_of`-Marker in den Ledger
+(`LedgerLookup.findOriginalReceiptSeq()`, `MIN(seq)` über Chain+Hash unterscheidet das von einem
+Job-Retry). **Was fehlt:** `JR-6-04` (Spool-Reconciler).
 
 ### Was diese Session gemacht hat
 
-**Kurzfassung — die volle Begründung steht in `ADR-034`/`ADR-035` (`05-entscheidungen.md`) und im
-Sessionprotokoll in `06-status.md`** (Doku-Diät, 2026-08-06: geprüft statt angenommen — **ADR-034**
-enthält dieselbe sechs Punkte umfassende Begründung, die hier bis dahin in Prosa stand, in gleicher
-oder größerer Tiefe: Fan-out über jeden aufgelösten Owner, `content_sha256` als Identität statt des
-echten `Message-Id`-Headers, Spool-Freigabe als Löschen, der werfende statt quittierende Prozessor,
-`envelope_from`/`envelope_rcpt` im Ledger-Lookup, und die zwei Gründe gegen einen automatisierten
-Meilisearch-E2E-Test. Nichts davon ist hier verloren, nur nicht mehr doppelt geführt). `JR-6-01`
-(eigener Worker-Prozess), `JR-6-02a` (ADR-010, das Tor), `JR-6-02b` (ADR-033/034/035, vollständige
-Pipeline) und danach der automatisierte Ende-zu-Ende-Test (ADR-035) sind erledigt — Code fertig,
-TEST-Abnahme offen. Neuer Befund **F62** (totes `IJournalInboundJob`, niedrige Schwere). Nicht
-angefasst: `JR-6-03`, `JR-6-04`.
+**`JR-6-03` (Idempotenz/`duplicate_of`), Commit `5e9551f`.** Volle Begründung als Doc-Comment in
+`ledger-lookup-port.ts`/`pipeline.ts`, Kurzfassung im Sessionprotokoll (`06-status.md`,
+2026-08-06). Neue Methode `LedgerLookup.findOriginalReceiptSeq()` (Postgres: `SELECT MIN(seq)` über
+`chain_scope_id`+`content_sha256`+`event_type='receipt'`; Fake: dieselbe Logik über die
+In-Memory-Map), ein neuer `ledgerAppend`-Port in `PhaseBPipelineDeps`, und die Marker-Logik in der
+Owner-Schleife: `spool_txid: null`, `duplicate_of` das Original-`seq`, Verbindungsfelder `null` (kein
+neues SMTP-Ereignis). +3 Tests (2 `pipeline.test.ts`, 1 `journal-phase-b-e2e.int.test.ts`), beide
+kalibriert (Wächter invertiert, rot an der erwarteten Stelle, zurückgenommen).
 
 ### Die Umgebung hat sich geändert — Referenz in `19-umgebung-windows-host.md`
 
@@ -210,7 +205,7 @@ gebraucht, **wenn die lokale Infrastruktur klemmt**, nicht bei jedem Sessionstar
 unverändert in [`19-umgebung-windows-host.md`](19-umgebung-windows-host.md). Die zwei E13-Notizen, die
 hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e2.md`.
 
-### Nächster konkreter Schritt — **`JR-6-03` (Idempotenz/`duplicate_of`), dann `JR-6-04` (Reconciler)**
+### Nächster konkreter Schritt — **`JR-6-04` (Spool-Reconciler)**
 
 Der Prompt für die nächste Sitzung:
 
@@ -219,9 +214,9 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `1611434`. CI
-`31090714283` **success** — 107 Dateien, `unit 1102/1102 · integration 127/127 · adversarial 69/69`.
-Nicht neu abzweigen, nicht neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `5e9551f`. CI
+noch nicht geprüft — vor der nächsten Task nachsehen (`gh run list --branch
+claude/journaling-e6-phase-b-worker --limit 1`). Nicht neu abzweigen, nicht neu reservieren.
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
@@ -240,11 +235,6 @@ Nicht neu abzweigen, nicht neu reservieren.
 > Prüfer gemessenen Zustände plus einer Gegenprobe, dass `41c407e`s ursprüngliche Kalibrierung weiter
 > greift. Details in `06-status.md` unter „F65".
 
-**Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034`, `ADR-035` sind
-entschieden; Gate, Pipeline, Backend-Adapter und der automatisierte Ende-zu-Ende-Test
-(`journal-phase-b-e2e.int.test.ts`) stehen. `JR-6-02` insgesamt ist damit **code-fertig** — die
-formelle Abnahme (Rolle TEST/PO) steht noch aus.
-
 > **`F63`/`F64`, gelesen bevor der nächste Worker echten DB-/Storage-Zugriff bekommt** (`JR-6-04`s
 > Reconciler zum Beispiel): volle Fassung — beide Ursachen der CI-Iterationen samt der Lehre für
 > künftige Worker, und der hängende Shutdown als reales, nicht identifiziertes Produktionsverhalten —
@@ -256,26 +246,8 @@ formelle Abnahme (Rolle TEST/PO) steht noch aus.
 > Meilisearch-CI-Auth, die zweifache Kalibrierung) steht in gleicher oder größerer Tiefe in
 > `05-entscheidungen.md` unter **ADR-035**.
 
-**Was `JR-6-03` zu tun hat** (Backlog: „Idempotenz: Objekt-Dedupe auf `content_sha256`, aber jede
-Receipt bleibt im Ledger, Duplikate mit `duplicate_of`"):
-
-1. **Die Stelle existiert bereits, wird aber nicht benutzt.** `ArchiveObjectOutcome`'s `'duplicate'`-Fall
-   (`packages/journaling/src/phase-b/archive-object-port.ts`) trägt `archivedEmailId` der
-   **bereits existierenden** Zeile — genau der Ort, an dem `JR-6-03` einen `duplicate_of`-Ledger-Eintrag
-   schreiben muss. `runPhaseBPipeline()` (`pipeline.ts`) sieht diesen Fall bereits (indexiert ihn
-   unbedingt), schreibt aber **keine** Ledger-Zeile dafür — das ist absichtlich `JR-6-03`
-   überlassen worden (siehe `JR-6-02a`s Handover-Eintrag, Punkt 3/4 der „vier Dinge").
-2. **Der `duplicate_of`-Eintrag darf die `spool_txid` des Originals NICHT wiederverwenden** —
-   `LedgerLookup.findBySpoolTxIds()` gibt eine Map zurück, eine zweite Zeile mit derselben `spool_txid`
-   würde **stillschweigend kollabieren** (dieselbe Warnung wie in `JR-6-02a`s Handover-Eintrag,
-   dort ausführlich begründet).
-3. **Ein neuer Ledger-Append-Port wird gebraucht.** `runPhaseBPipeline()` bekommt heute keinen
-   `LedgerBackend`/`append()`-Zugriff (bewusst: Phase B sollte nicht ungefragt in den Ledger schreiben
-   können, bevor diese Entscheidung getroffen ist). `JR-6-03` muss entscheiden, ob dieser Port in die
-   Pipeline injiziert wird (analog zu `archiveObject`/`indexBatch`) oder ob der `duplicate_of`-Eintrag
-   an anderer Stelle geschrieben wird.
-4. **Test:** dieselbe Nachricht zweimal zugestellt ⇒ ein Objekt, **zwei** Ledger-Einträge, zweiter mit
-   gesetztem `duplicate_of` auf den Original-`seq`.
+**`JR-6-03` ist erledigt** (`5e9551f`) — Umsetzung siehe „Was diese Session gemacht hat" oben, offene
+Auslegungsfrage (drei Ledger-Zeilen statt wörtlich zwei) siehe „Zur Entscheidung" unten.
 
 **Was `JR-6-04` zu tun hat** (Spool-Reconciler): ein periodischer Sweep über Spool-Einträge mit
 Ledger-Eintrag, aber unvollständiger Phase B, reiht sie nach — Redis ist Optimierung, nicht Autorität.
@@ -299,6 +271,10 @@ genau damit der Reconciler idempotent nachreihen kann.
 
 > **Zur Entscheidung beim Auftraggeber:**
 >
+> - **`JR-6-03`s Drei-Zeilen-Lesart** (neu): entspricht „drei Ledger-Zeilen je zweiter Zustellung"
+>   (zwei unbedingte Phase-A-Receipts plus ein `duplicate_of`-Marker) der Absicht hinter „zwei
+>   Ledger-Einträge, der zweite mit `duplicate_of`"? Blockiert `JR-6-04` nicht — die Marker-Zeile
+>   selbst ändert sich durch die Antwort nicht, nur ihre Beschreibung. Details in `06-status.md`.
 > - **~~Soll ein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch gebaut werden?~~ —
 >   entschieden und erledigt** (Auftrag (a), siehe oben, ADR-035). Kein Entscheidungsbedarf mehr.
 > - **F64** (neu): soll der hängende Shutdown untersucht werden (welches Handle genau)? Ausdrücklich
