@@ -3599,11 +3599,13 @@ Fundes liegt in der korrigierten Doku-Aussage, nicht in einer Verhaltensänderun
 **Gefunden:** `JR-6-02b` (2026-08-05), fünf rote CI-Läufe in Folge nach dem ersten grünen lokalen
 Volllauf, bevor der sechste grün wurde (`31054880932`).
 
-**Der Fund, in drei Teilen — jeder für sich unauffällig, zusammen fünf CI-Iterationen teuer.**
+**Der Fund, in zwei Teilen — jeder für sich unauffällig, zusammen vier CI-Iterationen teuer.**
 `JR-6-01`s Prozessor war ein reiner Platzhalter (kein DB-Zugriff, kein Storage-Zugriff); `JR-6-02b`
-verdrahtet ihn gegen `IngestionService`/`StorageService`/`PostgresLedgerLookup`, und drei
+verdrahtet ihn gegen `IngestionService`/`StorageService`/`PostgresLedgerLookup`, und zwei
 Eigenschaften dieser Verdrahtung, die lokal (mit vollständig gesetzten Umgebungsvariablen und einer
-migrierten Datenbank) unsichtbar bleiben, waren in der CI-Umgebung sofort sichtbar:
+migrierten Datenbank) unsichtbar bleiben, waren in der CI-Umgebung sofort sichtbar. **Ein dritter,
+zunächst hier mitgeführter Punkt (ein hängender Shutdown) ist kein CI-Umgebungsproblem und steht
+jetzt richtig gerahmt als eigener Befund: F64.**
 
 1. **`config/storage.ts` wirft beim Import, nicht bei der ersten Benutzung.** Ein bloßes
    `import { StorageService } from '...'` am Kopf einer Datei reicht, um `Invalid STORAGE_TYPE:
@@ -3620,23 +3622,59 @@ undefined` auszulösen, wenn `STORAGE_TYPE` nicht gesetzt ist — unabhängig da
    Verbindungszeichenkette dieser isolierten Datenbank **explizit** an den Kindprozess weiterreichen.
    `journal-inbound-worker.int.test.ts` tat das nie, weil der Platzhalter-Prozessor nie eine
    Datenbankabfrage brauchte. Der Fehlschlag war `relation "journal_ledger" does not exist`.
-3. **Eine offene `postgres-js`-Verbindung hält die Event-Loop am Leben, auch im Leerlauf**, und
-   `Worker.close()` (BullMQ) kennt nur seine eigene Redis-Verbindung, nicht irgendeine andere. Der
-   Prozess blieb nach einem sauber abgeschlossenen `worker.close()` bis zum 20-Sekunden-Limit des
-   Tests am Leben. Das Schließen der einen bekannten Verbindung (`ledgerSql.end()`) genügte nicht —
-   vermutlich hält noch etwas im `IngestionService`/`StorageService`/Datenbank-Singleton-Graphen eine
-   weitere Verbindung offen, nicht weiter identifiziert. Behoben mit einem expliziten
-   `process.exit(0)`, **nachdem** `worker.close()` aufgelöst hat (kein Job läuft mehr) und ein
-   bestmöglicher Versuch, `ledgerSql` selbst zu schließen, unternommen wurde.
 
 **Warum das kein Einzelfall bleiben muss.** Jeder künftige Worker-Prozess, der zum ersten Mal echten
-DB-/Storage-Zugriff bekommt (etwa `JR-6-04`s Reconciler), trifft auf dieselben drei Fallen, wenn er
+DB-/Storage-Zugriff bekommt (etwa `JR-6-04`s Reconciler), trifft auf dieselben zwei Fallen, wenn er
 gegen die CI läuft, ohne dass jemand sie vorher kennt: die CI setzt nur, was der jeweils letzte
 Prozess brauchte, nicht was ein neuer Prozess braucht. Wer den nächsten Worker gegen echte Services
 verdrahtet, sollte **vorher** `corepack pnpm --filter @open-archiver/backend test:types` **beider**
 betroffenen Pakete laufen lassen (nicht nur eines, siehe auch die separate Lehre in `JR-6-02b`s
 Statuseintrag) und den CI-Job-`env:`-Block auf fehlende Variablen prüfen, statt es dem ersten
-CI-Lauf zu überlassen, es zu melden.
+CI-Lauf zu überlassen, es zu melden. Der Reconciler wird außerdem in den Bestand treffen, den F64
+beschreibt, wenn er als eigener Prozess läuft.
 
-**Schwere:** mittel — kein Datenverlust, keine Sicherheitsfrage, aber fünf CI-Iterationen für eine
+**Schwere:** mittel — kein Datenverlust, keine Sicherheitsfrage, aber vier CI-Iterationen für eine
 einzige Scheibe sind genau die Art Kosten, die eine Lehre rechtfertigt, nicht nur einen Fix.
+
+## F64 — der `journal-inbound`-Worker beendet sich nach `worker.close()` nicht selbst; ein offenes Handle irgendwo im `IngestionService`/`StorageService`/DB-Singleton-Graphen hält den Prozess am Leben
+
+**Gefunden:** `JR-6-02b` (2026-08-05), beim CI-Lauf, der zum ersten Mal die SIGTERM-Zusicherung von
+`JR-6-01` tatsächlich erreichte (die vorherigen roten Läufe — F63 — endeten vorher).
+
+**Was gemessen ist, nicht vermutet:** nach einem `worker.close()`, der laut BullMQ erfolgreich
+aufgelöst hat (kein Job mehr aktiv), blieb der Prozess **mindestens 20 Sekunden** am Leben, statt sich
+von selbst zu beenden. Schließen der einen bekannten neuen Verbindung dieser Scheibe (`ledgerSql`,
+der bare Postgres-Client aus `journal-ledger-query-adapter.ts`) behob es **nicht** — der Prozess
+hing weiterhin.
+
+**Was nicht gemessen ist:** welches Handle genau. Der Verdachtsraum ist eingegrenzt (`IngestionService`,
+`StorageService`, oder der `packages/backend/src/database`-Singleton, alle drei zum ersten Mal in
+diesem Prozess importiert), aber nicht weiter isoliert — auf ausdrückliche Anweisung nicht, siehe
+unten.
+
+**Das ist kein Befund über die CI-Umgebung, im Unterschied zu F63.** Ein Worker, der sich nach
+abgeschlossenem Drain nicht selbst beenden kann, verhält sich in Produktion identisch: dort holt ihn
+ein Supervisor mit `SIGKILL`, und genau das soll ein graceful Shutdown verhindern. Der
+20-Sekunden-Fehlschlag im Test war der **Melder**, nicht der Defekt — er wäre in jeder Umgebung
+aufgetreten, die tatsächlich bis zum Ende der Wartezeit misst.
+
+**Behoben, ohne die Ursache zu identifizieren:** `journal-inbound.worker.ts`s `shutdown()` ruft nach
+`worker.close()` einen bestmöglichen `ledgerSql.end()` und danach **`process.exit(0)`** explizit auf.
+Das ist ein bewusster Kompromiss, keine Reparatur: ein erzwungener Exit nach einem bestätigt
+abgeschlossenen Drain ist derselbe Tausch, den diese Datei an anderer Stelle schon eingeht (ein
+hängender Prozess ist der schlechtere Ausgang, weil ein Supervisor ihn ohnehin `SIGKILL`t). **Auf
+ausdrückliche Anweisung nicht weiter untersucht** — das Ziel dieser Scheibe war die korrekte
+Verbuchung, nicht die Ursachenfindung.
+
+**Nebenbefund, im selben `shutdown()`:** die Fehlerbehandlung von `ledgerSql.end()` protokolliert mit
+`logger.warn(...)` **unmittelbar vor** `process.exit(0)`. Das ist exakt die Reihenfolge, die **F59**
+war (`console.log` gefolgt von `process.exit()`, ohne dass der Aufrufer weiß, ob der Log-Schreibvorgang
+auf einem Pipe-stdout abgeschlossen ist, bevor der Prozess endet). Hier ist die Schwere niedrig, weil
+diese Zeile **keine Zusicherung** trägt, die ein Test prüft (anders als F59s „shutting down"-Zeile) —
+aber das Muster ist dasselbe, in einer neuen Datei, und ist billig zu benennen, solange es auffällt.
+Kein Fix in dieser Scheibe; für ein tatsächliches Auftreten wäre `writeLineThenFlush()`
+(`apps/smtp-ingress`) die bereits vorhandene Lösung.
+
+**Schwere:** mittel — kein Datenverlust, aber eine offene Frage über den Ressourcen-Umgang der drei
+neu importierten Services, die jeder künftige Worker-Prozess mit denselben Abhängigkeiten wieder
+treffen wird (siehe F63s Verweis für `JR-6-04`).

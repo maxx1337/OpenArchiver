@@ -126,37 +126,36 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 ## Aktueller Eintrag
 
 **Stand:** 2026-08-05 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b` erledigt** (Code fertig,
-TEST-Abnahme offen; ADR-010, ADR-033, ADR-034 entschieden; F59 und F61 behoben, F62/F63 neu) ·
-**Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf:
-**1297 passed | 8 skipped** bei 106 Dateien — `unit ci 1102/1102 · integration ci 126/126 ·
-adversarial ci 69/69`, Exit 0 · **CI `31054880932` success** (nach fünf vorangegangenen roten Läufen,
-siehe F63)
+TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und F61 behoben, F62/F63/F64
+neu) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
+Volllauf: **1298 passed | 8 skipped** bei 107 Dateien — `unit ci 1102/1102 · integration ci 127/127 ·
+adversarial ci 69/69`, Exit 0 · zuletzt `32fa49f`, CI-Ergebnis dafür: siehe `06-status.md`s neuestem
+Eintrag für die Lauf-ID
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
-> der Reservierung — sie trägt ihre Nummer seit dem 2026-07-27 und wurde in `JR-6-02` gefüllt. **033**
-> und **034** sind jetzt vergeben (Owner-Auflösung für die drei schwächeren Parse-Ergebnisse bzw. die
-> Phase-B-Pipeline); **035–036** bleiben reserviert.
+> der Reservierung — sie trägt ihre Nummer seit dem 2026-07-27 und wurde in `JR-6-02` gefüllt. **033**,
+> **034** und **035** sind jetzt vergeben (Owner-Auflösung für die drei schwächeren Parse-Ergebnisse,
+> die Phase-B-Pipeline, die Automatisierung des Ende-zu-Ende-Tests); **036** bleibt reserviert.
 
 > **E4 und E5 sind abgenommen und zurückgemergt** — E4 mit `JR-4-13`/`9503bc8`, E5 mit `JR-5-09`/`107346d`,
 > E3 mit `JR-3-08`/`185e9bd`. **Aus E4 ist kein Befund offen.**
 
 ### Der Stand in einem Satz
 
-**Der Empfangspfad steht, der Parser steht, und Phase B hat jetzt einen Prozess, ein Tor und einen
-vollständigen Verarbeitungspfad.** `apps/smtp-ingress` spricht ESMTP, prüft Quell- und
-Empfänger-ACL, fährt beim Start den Crash-Recovery-Scan und antwortet auf `DATA`/`BDAT … LAST` mit
-`250 … queued as <seq>` erst nach Spool-fsync **und** Ledger-Append. Seit `JR-6-01` gibt es den
-`journal-inbound`-Worker als eigenen Prozess; seit `JR-6-02a` das **Tor**, das entscheidet, ob eine
-Spool-Datei überhaupt archiviert werden darf; seit **`JR-6-02b`** die vollständige Pipeline
-(`runPhaseBPipeline()`): parsen (E5) → Owner auflösen (ADR-033, jetzt mit Fan-out über jeden
-aufgelösten Owner, nicht nur den Gewinner, ADR-034) → über den Port aus ADR-010 archivieren →
-`IndexingService.indexEmailBatch()` → Spool-Datei löschen. **Manuell einmal gegen echtes
-Postgres/Meilisearch/Dateisystem bewiesen**, ende-zu-Ende von der Spool-Datei bis zum durchsuchbaren
-Treffer (siehe unten) — **kein automatisierter Test dafür**, aus zwei benannten Gründen (kein
-Meilisearch-Service-Container in der CI; die neuen Backend-Adapter hängen am Prozess-Singleton `db`,
-nicht an der isolierten Test-Harness-Datenbank). **Was fehlt:** `JR-6-03` (Idempotenz/`duplicate_of`)
-und `JR-6-04` (Spool-Reconciler).
+**Der Empfangspfad steht, der Parser steht, und Phase B hat jetzt einen Prozess, ein Tor, einen
+vollständigen Verarbeitungspfad und einen automatisierten Ende-zu-Ende-Beleg.** `apps/smtp-ingress`
+spricht ESMTP, prüft Quell- und Empfänger-ACL, fährt beim Start den Crash-Recovery-Scan und
+antwortet auf `DATA`/`BDAT … LAST` mit `250 … queued as <seq>` erst nach Spool-fsync **und**
+Ledger-Append. Seit `JR-6-01` gibt es den `journal-inbound`-Worker als eigenen Prozess; seit
+`JR-6-02a` das **Tor**, das entscheidet, ob eine Spool-Datei überhaupt archiviert werden darf; seit
+**`JR-6-02b`** die vollständige Pipeline (`runPhaseBPipeline()`): parsen (E5) → Owner auflösen
+(ADR-033, mit Fan-out über jeden aufgelösten Owner, nicht nur den Gewinner, ADR-034) → über den Port
+aus ADR-010 archivieren → `IndexingService.indexEmailBatch()` → Spool-Datei löschen. **Ende-zu-Ende
+ist jetzt ein automatisierter Test** (`journal-phase-b-e2e.int.test.ts`, ADR-035), gegen echtes
+Postgres (über die bestehende Harness-Bindung, kein DI-Umbau) und echtes Meilisearch (neuer
+CI-Service-Container), zweimal kalibriert. **Was fehlt:** `JR-6-03` (Idempotenz/`duplicate_of`) und
+`JR-6-04` (Spool-Reconciler).
 
 ### Was diese Session gemacht hat
 
@@ -224,6 +223,20 @@ eigenständige Aufräumarbeit außerhalb dieser Scheibe.
 **Nicht verändert, weil außerhalb des Auftrags:** `JR-6-03` (Idempotenz-Ledgerzeile `duplicate_of`) und
 `JR-6-04` (Spool-Reconciler). Das Tor kennt die Stelle für `duplicate_of` bereits
 (`classifySpoolEntry()`s Verdikte), aber sie wird nicht gebaut, bevor `JR-6-03` sie beauftragt.
+
+**Nachtrag, derselbe Tag (Auftrag (a)): der Absatz oben über „kein automatisierter Test" ist
+überholt.** Der Auftraggeber hat entschieden: der manuelle Nachweis erfüllt das Akzeptanzkriterium
+von `JR-6-02`/`JR-6-08` nicht, er wird automatisiert (`32fa49f`,
+`packages/backend/tests/integration/journal-phase-b-e2e.int.test.ts`, **ADR-035**). Gemessen statt
+angenommen: die vermeintlich nötige DI-Naht existierte bereits (`pg-harness.ts`s
+`bindAsProcessDatabaseUrl()` + verzögerter dynamischer Import, seit `JR-1-04` von
+`filter-builder*`/`mongo-to-meli`/`predefined-roles` benutzt) — kein Umbau von
+`IngestionService`/`StorageService` nötig. Meilisearch bekam einen CI-Service-Container; anders als
+bei `valkey` ist `MEILI_MASTER_KEY` eine Umgebungsvariable, keine Kommandozeilenoption, also
+**keine** `valkey`-artige Auth-Einschränkung (gemessen gegen einen Container, der exakt so gestartet
+wurde wie ein GitHub-Actions-Service-Container). Der Test ist **zweimal kalibriert** (Spool-Freigabe
+deaktiviert, Fan-out auf den Gewinner verkürzt — beide Male rot an der richtigen Stelle, beide Male
+zurückgenommen). Details in ADR-035. Dabei ein neuer Befund: **F64** (siehe unten).
 
 ### Die Umgebung hat sich geändert — lies das, bevor du „Immer zuerst" abarbeitest
 
@@ -410,22 +423,36 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `c2987e9`.
-CI `31054880932` **success** — 106 Dateien, `unit 1102/1102 · integration 126/126 ·
-adversarial 69/69`. Nicht neu abzweigen, nicht neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `32fa49f`.
+CI-Ergebnis dafür: siehe `06-status.md`s neuestem Eintrag für die Lauf-ID. Nicht neu abzweigen, nicht
+neu reservieren.
 
-**Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034` sind entschieden;
-Gate, Pipeline und Backend-Adapter stehen; Ende-zu-Ende ist **manuell** bewiesen (siehe oben und
-`05-entscheidungen.md` ADR-034 Punkt 6), aber nicht automatisiert. `JR-6-02` insgesamt ist damit
-**code-fertig** — die formelle Abnahme (Rolle TEST/PO) steht noch aus.
+**Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034`, `ADR-035` sind
+entschieden; Gate, Pipeline, Backend-Adapter und der automatisierte Ende-zu-Ende-Test
+(`journal-phase-b-e2e.int.test.ts`) stehen. `JR-6-02` insgesamt ist damit **code-fertig** — die
+formelle Abnahme (Rolle TEST/PO) steht noch aus.
 
 > **F63, gelesen bevor der nächste Worker echten DB-/Storage-Zugriff bekommt (`JR-6-04`s
-> Reconciler zum Beispiel):** fünf der sechs Nacharbeits-Commits dieser Scheibe waren CI-Iterationen,
+> Reconciler zum Beispiel):** zwei der Nacharbeits-Commits der vorigen Scheibe waren CI-Iterationen,
 > keine lokalen Funde — `packages/journaling`s eigenes `test:types` war lokal nie gelaufen (nur das
-> von `packages/backend`), die CI setzte `STORAGE_TYPE`/`ENCRYPTION_KEY` nie (der Platzhalter-Worker
-> hatte sie nie gebraucht), der gespawnte Worker griff auf die unmigrierte Wartungsdatenbank statt auf
-> eine isolierte migrierte zu, und eine offene `postgres-js`-Verbindung ließ den Shutdown hängen. Alle
-> drei Ursachen und die Lehre daraus stehen in **F63** (`09-befunde-bestandscode.md`).
+> von `packages/backend`), und die CI setzte `STORAGE_TYPE`/`ENCRYPTION_KEY` nie (der
+> Platzhalter-Worker hatte sie nie gebraucht). Der gespawnte Worker griff außerdem auf die unmigrierte
+> Wartungsdatenbank statt auf eine isolierte migrierte zu. Beide Ursachen und die Lehre daraus stehen
+> in **F63** (`09-befunde-bestandscode.md`). **F64** (neu, eigener Befund seit dieser Sitzung): der
+> hängende Shutdown aus derselben Scheibe war **kein** CI-Umgebungsproblem, sondern reales
+> Produktionsverhalten — ein offenes Handle irgendwo im `IngestionService`/`StorageService`/
+> DB-Singleton-Graphen, nicht identifiziert, `process.exit(0)` nach bestätigtem Drain als bewusster
+> Kompromiss statt Reparatur. **Auf ausdrückliche Anweisung nicht weiter untersucht** — wer das als
+> nächstes anfasst (z. B. `JR-6-04`s Reconciler, falls er als eigener Prozess läuft), sollte das
+> wissen, bevor er denselben Denkfehler macht, den Prozess sei „schon repariert".
+
+> **Auftrag (a), erledigt (Fortsetzung derselben Sitzung, `32fa49f`):** der Ende-zu-Ende-Test ist
+> automatisiert — **ADR-035**. Die vermeintlich nötige DI-Naht an `IngestionService`/`StorageService`
+> existierte bereits (`pg-harness.ts`s `bindAsProcessDatabaseUrl()`); kein Umbau von Produktionscode.
+> Meilisearch hat einen CI-Service-Container, `MEILI_MASTER_KEY` ist dort eine Umgebungsvariable und
+> voll geprüft (keine `valkey`-artige Einschränkung, gemessen). Der Test ist zweimal kalibriert
+> (Spool-Freigabe deaktiviert, Fan-out auf den Gewinner verkürzt — beide Male an der richtigen Stelle
+> rot, beide Male zurückgenommen).
 
 **Was `JR-6-03` zu tun hat** (Backlog: „Idempotenz: Objekt-Dedupe auf `content_sha256`, aber jede
 Receipt bleibt im Ledger, Duplikate mit `duplicate_of`"):
@@ -468,17 +495,16 @@ genau damit der Reconciler idempotent nachreihen kann.
    `ENCRYPTION_KEY is not set`) — sichtbar als „Failed Suites", nicht als stiller Skip, aber leicht mit
    einer echten Regression zu verwechseln, wenn man die Fehlermeldung nicht liest.
 
-> **Zur Entscheidung beim Auftraggeber (neu in dieser Sitzung):**
+> **Zur Entscheidung beim Auftraggeber:**
 >
-> - **Soll ein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch gebaut werden?** Er würde
->   (a) einen `meilisearch`-Service-Container in `.github/workflows/ci.yml` brauchen (dieselbe Art
->   Entscheidung wie `JR-6-01`s `valkey`-Container) und (b) entweder eine Dependency-Injection-Änderung
->   an `IngestionService`/`StorageService`/`SearchService` (damit sie die isolierte
->   Test-Harness-Datenbank statt des Prozess-Singletons `db` nehmen können) oder eine bewusste
->   Ausnahme vom Isolations-Prinzip für genau diese Testklasse. Der manuelle Beleg (siehe oben) steht;
->   was fehlt, ist die Automatisierung. Details in `05-entscheidungen.md` ADR-034 Punkt 6.
-> - **F62** (neu, niedrige Schwere): soll `IJournalInboundJob` aus `packages/types` entfernt werden?
->   Unbenutzt, aber ein exportierter Typ könnte theoretisch extern importiert sein. Blockiert nichts.
+> - **~~Soll ein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch gebaut werden?~~ —
+>   entschieden und erledigt** (Auftrag (a), siehe oben, ADR-035). Kein Entscheidungsbedarf mehr.
+> - **F64** (neu): soll der hängende Shutdown untersucht werden (welches Handle genau)? Ausdrücklich
+>   noch nicht angefasst, auf Anweisung. Blockiert `JR-6-03`/`JR-6-04` nicht — `process.exit(0)` bleibt
+>   der Produktionscode, bis jemand die Ursache findet und einen echten Fix vorschlägt.
+> - **F62** (unverändert, niedrige Schwere): soll `IJournalInboundJob` aus `packages/types` entfernt
+>   werden? Unbenutzt, aber ein exportierter Typ könnte theoretisch extern importiert sein. Blockiert
+>   nichts.
 > - **F60** (unverändert): `StorageService.put()` puffert einen Stream. Vorgeschlagene Zuordnung E7.
 >   Blockiert `JR-6-03`/`JR-6-04` nicht.
 > - **F43**, **F39**, **F42**, **F17(b)** — unverändert, blockieren nichts.

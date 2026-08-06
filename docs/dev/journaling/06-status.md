@@ -449,14 +449,13 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
   **Aufgeteilt nach ADR-021:**
     - [x] `JR-6-02a` — **ADR-010 entschieden** (`41068aa`) plus das Tor, das entscheidet, ob eine
           Spool-Datei überhaupt archiviert werden darf (`fba499c`)
-    - [~] `JR-6-02b` — **Code fertig, Abnahme durch TEST offen.** Erledigt: **ADR-033** (Owner-Auflösung
-      für `plain_bcc`/`ndr`/`parse_failed`) und **ADR-034** (Fan-out über jeden aufgelösten Owner,
-      Backend-Adapter auf `processEmail()`, Indexierung, Spool-Freigabe als Löschen). `runPhaseBPipeline()`
-      verbindet alles; **Ende-zu-Ende manuell mit echtem Postgres/Meilisearch belegt** (siehe unten und
-      ADR-034 Punkt 6), aber **kein automatisierter Test dafür** — die CI hat keinen
-      Meilisearch-Service-Container, und die neuen Backend-Adapter hängen am Prozess-Singleton `db`, nicht
-      an der isolierten Test-Harness-Datenbank. Beides sind Entscheidungen für den Auftraggeber, keine
-      offenen Enden dieser Scheibe.
+    - [x] `JR-6-02b` — **Code fertig, Abnahme durch TEST offen.** Erledigt: **ADR-033** (Owner-Auflösung
+          für `plain_bcc`/`ndr`/`parse_failed`), **ADR-034** (Fan-out über jeden aufgelösten Owner,
+          Backend-Adapter auf `processEmail()`, Indexierung, Spool-Freigabe als Löschen) und **ADR-035**
+          (der Ende-zu-Ende-Test ist automatisiert, `journal-phase-b-e2e.int.test.ts`, gegen echtes
+          Postgres über die bestehende Harness-Bindung und echtes Meilisearch über einen neuen
+          CI-Service-Container, zweimal kalibriert). `runPhaseBPipeline()` verbindet alles; **Ende-zu-Ende
+          ist jetzt ein Test, kein manueller Nachweis mehr.**
 - [ ] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of`
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
@@ -763,3 +762,34 @@ integration 22/22, adversarial 7/7, 0 unclassified test files`
   gebaut wird (und mit welcher CI-/DI-Änderung), liegt beim Auftraggeber
 - **Nicht getan, absichtlich:** die Doku-Diät, weiterhin. `IJournalInboundJob` selbst wurde nicht aus
   `packages/types` entfernt (F62) — nur die Doku-Aussage über seine Rolle korrigiert
+
+### 2026-08-05 — Auftrag (a): der Ende-zu-Ende-Test wird automatisiert (Fortsetzung derselben Rolle)
+
+- **Rolle:** DEV (Subagent `senior-dev`)
+- **Auftrag:** der Auftraggeber hat entschieden, dass der manuelle Nachweis aus der vorigen Scheibe
+  automatisiert wird (Backlog-Akzeptanzkriterium von `JR-6-02`/`JR-6-08`), über Route (i) (DI) statt
+  Route (ii) (Harness-Ausnahme) — **ADR-035**
+- **Commits:** ein Commit mit Code + Doku (Hash siehe `07-session-handover.md`, wird nach Push
+  ergänzt)
+- **Tests:** 1 neu (`journal-phase-b-e2e.int.test.ts`). Volllauf **1298 passed | 8 skipped** bei 107
+  Dateien, Exit 0, `unit ci 1102/1102 · integration ci 127/127 · adversarial ci 69/69`
+- **Entscheidung, gemessen statt angenommen:** die vermeintlich nötige DI-Naht an
+  `IngestionService`/`StorageService` existierte bereits (`pg-harness.ts`s
+  `bindAsProcessDatabaseUrl()` + verzögerter dynamischer Import, seit `JR-1-04` von
+  `filter-builder*`/`mongo-to-meli`/`predefined-roles` benutzt) — kein Umbau von Produktionscode
+  nötig. Details samt der verworfenen Alternative in ADR-035
+- **Meilisearch in der CI:** ein `meilisearch`-Service-Container plus
+  `MEILI_HOST`/`MEILI_MASTER_KEY` im Job-`env:`. Gemessen (nicht angenommen wie bei `valkey`):
+  `MEILI_MASTER_KEY` ist eine Umgebungsvariable, keine Kommandozeilenoption — Authentifizierung ist
+  in der CI vollständig prüfbar, keine `valkey`-artige Einschränkung. `probeMeilisearch()`
+  (`tests/support/infra.ts`) neu, nach demselben Muster wie `probeRedis()`
+- **Kalibriert, zweimal, nach `JR-13-09c`s Muster:** Spool-Freigabe deaktiviert → Test schlägt an der
+  Spool-Zusicherung fehl; Fan-out auf den Gewinner verkürzt → Test schlägt an der Owner-Liste fehl.
+  Beide zurückgenommen, danach wieder grün, `git diff` bestätigt keine Restspur
+- **Befunde:** **F64** neu (der hängende Shutdown aus F63 Punkt 3 ist kein CI-Umgebungsproblem,
+  sondern ein reales Produktionsverhalten, das der CI-Lauf nur zuerst gemessen hat — als eigener
+  Befund geführt, F63 entsprechend gekürzt und verweist darauf; Nebenbefund im selben Text: dasselbe
+  `logger.warn`-vor-`process.exit()`-Muster wie F59, niedrige Schwere, nicht behoben)
+- **Offen:** `JR-6-03`, `JR-6-04`, `JR-6-05`–`JR-6-07`, `JR-6-08` unverändert
+- **Nicht getan, absichtlich:** die Ursache von F64 nicht weiter untersucht (ausdrückliche Anweisung:
+  „Untersuchen sollst du es jetzt nicht — nur richtig verbuchen"). Die Doku-Diät weiterhin offen

@@ -2553,15 +2553,106 @@ irgendjemand wiederholen kann, ohne die Schritte von Hand nachzubauen — der Un
 Beleg und einem Test. Ob ein committeter Test diesen Grad an Beleg verdient (und mit welcher der beiden
 oben genannten Änderungen), ist eine Entscheidung des Auftraggebers.
 
-## ADR-035 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
+## ADR-035 — Der Ende-zu-Ende-Test wird automatisiert, gegen echtes Meilisearch, über die bestehende Harness-Bindung — kein DI-Umbau von `IngestionService`/`StorageService`
+
+**Status:** **entschieden** (2026-08-05, `JR-6-02b`) · **Entscheider:** Auftraggeber, auf Vorlage von DEV
+· **Quelle:** `03-backlog.md`s Akzeptanzkriterium von `JR-6-02`/`JR-6-08` („Ende-zu-Ende von der
+Spool-Datei bis zum durchsuchbaren Treffer"), DEVs Sitzungsbericht zu `JR-6-02b`
+
+**Entschieden: ein manueller, einmaliger Nachweis erfüllt das Akzeptanzkriterium nicht.** Er fängt
+keine Regression und macht E6 ohne Weiteres nicht abnehmbar (`JR-6-08`). Der Test wird automatisiert
+— `packages/backend/tests/integration/journal-phase-b-e2e.int.test.ts`.
+
+### Die Weggabelung: DI-Umbau vs. Harness-Ausnahme — beide verworfen, eine dritte gefunden
+
+DEVs Bericht zu `JR-6-02b` nannte zwei Wege: (i) `IngestionService`/`StorageService` um eine
+injizierbare Datenbankverbindung erweitern, oder (ii) eine dokumentierte Ausnahme vom
+Isolationsprinzip der Test-Harness (der neue Test liefe gegen die geteilte Wartungsdatenbank statt
+gegen eine eigene, migrierte). Der Auftraggeber hat (i) vorgezogen — **eine Ausnahme vom
+Isolationsprinzip wäre dauerhaft und würde die Aussagekraft jedes künftigen Integrationstests mit
+verwässern, nicht nur die dieses einen; eine DI-Naht ist örtlich und testbar.**
+
+**Bei der Umsetzung stellte sich heraus: (i) ist bereits vorhanden, nur ungenutzt.**
+`packages/backend/tests/support/pg-harness.ts` hat seit `JR-1-04` genau diesen Mechanismus:
+`harness.bindAsProcessDatabaseUrl()` setzt `process.env.DATABASE_URL` auf die isolierte, migrierte
+Datenbank, **bevor** `src/database`s Singleton importiert wird — und ein per dynamischem `import()`
+verzögerter Import von `IngestionService`/`StorageService`/den neuen Phase-B-Adaptern **nach** dieser
+Bindung lässt deren `db`-Singleton korrekt gegen die isolierte Datenbank auflösen. `mongoToMeli()`,
+`FilterBuilder` und `predefined-roles.int.test.ts` benutzen diesen Weg bereits. Kein Zeilenumbau an
+`IngestionService`/`StorageService` — beide bleiben unverändert, wie ADR-010 es für `processEmail()`
+schon verlangt.
+
+**Konsequenz für die ursprüngliche Weggabelung:** Route (i) wird genommen, aber nicht als neue
+Dependency-Injection-Naht, sondern als **Wiederverwendung** einer bereits bestehenden. Route (ii)
+bleibt verworfen — die Begründung des Auftraggebers dagegen gilt unverändert, auch wenn (i) am Ende
+billiger war als angenommen.
+
+### Meilisearch in der CI — gemessen, nicht angenommen wie bei `valkey`
+
+`JR-6-01`s `valkey`-Service-Container hat eine dokumentierte Einschränkung: ein Service-Container
+nimmt kein `command`, und `valkey-server --requirepass …` ist genau das — der Broker läuft in der CI
+deshalb ohne Passwort. Für Meilisearch **wurde geprüft, ob dieselbe Einschränkung zutrifft**, statt es
+anzunehmen: `MEILI_MASTER_KEY` ist eine dokumentierte Umgebungsvariable
+(`https://www.meilisearch.com/docs/learn/security/basic_security`), keine Kommandozeilenoption.
+Gemessen an einem Container, der exakt so gestartet wurde, wie ein GitHub-Actions-Service-Container
+ihn startet (`docker run -e MEILI_MASTER_KEY=... -p 7700:7700 getmeili/meilisearch:v1.38`, kein
+`command`): `/health` antwortet ohne Schlüssel, `/indexes` antwortet `401` ohne Schlüssel, `403` mit
+falschem Schlüssel, `200` mit dem richtigen. Authentifizierung ist damit in der CI **vollständig**
+prüfbar — anders als bei `valkey`, keine Einschränkung zu dokumentieren.
+
+`probeMeilisearch()` (`tests/support/infra.ts`) folgt demselben Muster wie `probeRedis()`: ein reiner
+TCP-Connect, der nur Erreichbarkeit prüft, nie den Schlüssel. Eine falsche `MEILI_MASTER_KEY` erreicht
+den Test deshalb als echter Fehlschlag beim tatsächlichen `SearchService`-Aufruf, nicht als Skip — F48
+zum dritten Mal vermieden, nicht wiederholt.
+
+### Was der Test beweist, und wie er kalibriert wurde
+
+Dieselbe Kette wie der manuelle Nachweis (ADR-034 Punkt 6): Spool-Datei → Tor → Parsen →
+Owner-Fan-out → `processEmail()` → Indexierung → Volltextsuche findet **jeden** aufgelösten Owner →
+Spool-Datei danach gelöscht. Der Fan-out auf drei Owner (`bob`/`carol`/`dave@contoso.com`) ist Teil
+der Zusicherung, nicht Kulisse — er ist der Grund, warum E5 existiert.
+
+**Zweimal kalibriert, nach dem Muster von `JR-13-09c`:** ein Glied absichtlich entfernt, Rot gesehen,
+zurückgenommen, Grün bestätigt.
+
+1. Spool-Freigabe deaktiviert (`releaseSpoolEntry.release()` auskommentiert) → Test schlägt exakt an
+   der Zusicherung „Spool-Datei ist gelöscht" fehl (`ENOENT` erwartet, Datei existierte noch).
+2. Fan-out auf den Gewinner verkürzt (`ownerCandidatesOf(ownerResult).slice(0, 1)`) → Test schlägt
+   exakt an der Owner-Liste fehl (`['bob@contoso.com']` statt aller drei).
+
+Beide Male nach dem Zurücknehmen wieder grün, mit identischem `git diff` (keine Restspur der
+Kalibrierung im committeten Code).
+
+### Warum die Suchassertionen nach `ingestionSourceId` filtern statt Trefferzahlen zu zählen
+
+Der Meilisearch-Index `emails` ist — anders als die Postgres-Datenbank — nicht je Testdatei isoliert:
+lokal ist es derselbe Index wie jeder andere reale Lauf gegen dieselbe Meilisearch-Instanz (in der CI
+dagegen frisch, weil der Service-Container keinen Zustand vom letzten Lauf trägt). Eine Zusicherung
+„die Suche nach X liefert 3 Treffer" wäre heute wahr und in dem Moment falsch, in dem irgendetwas
+anderes ein Dokument mit demselben Fixture-Text indexiert. Jede Zusicherung filtert deshalb auf die
+`ingestionSourceId` dieses Laufs, und `afterAll` löscht die erzeugten Dokumente wieder — dieselbe
+Disziplin, die `seedIngestionSource()` für Postgres-Zeilen schon anwendet.
+
+### Konsequenz
+
+- `packages/backend/tests/support/iam-seed.ts`s `seedJournalingSource()` bekommt ein optionales
+  `organizationDomains`-Feld (Default `[]`, der Spaltendefault — kein bestehender Aufrufer ändert sein
+  Verhalten).
+- `.github/workflows/ci.yml` bekommt einen `meilisearch`-Service-Container plus
+  `MEILI_HOST`/`MEILI_MASTER_KEY` im Job-`env:`.
+- **Verworfen:** DI-Umbau von `IngestionService`/`StorageService` (unnötig, siehe oben) und die
+  Harness-Ausnahme (Begründung des Auftraggebers bleibt gültig).
+
+## ADR-036 — reserviert für E6 (Phase-B-Worker)
 
 **Status:** **reserviert** (2026-08-05) · **Grundlage:** ADR-032 Punkt 4
 
 Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**;
 **033** ist mit der Owner-Auflösung für die schwächeren Parse-Ergebnisse vergeben, **034** mit der
-Phase-B-Pipeline (beide oben). Wer während E6 eine weitere Nummer braucht, ergänzt sie **hier auf dem
-Integrationszweig** und nicht auf dem Epic-Zweig — die Reservierung ist nur wirksam, solange der
-Vorrat an der Stelle geführt wird, die beim Rückmerge gewinnt.
+Phase-B-Pipeline, **035** mit der Automatisierung des Ende-zu-Ende-Tests (alle oben). Wer während E6
+eine weitere Nummer braucht, ergänzt sie **hier auf dem Integrationszweig** und nicht auf dem
+Epic-Zweig — die Reservierung ist nur wirksam, solange der Vorrat an der Stelle geführt wird, die beim
+Rückmerge gewinnt.
 
 Reservierungen laufen mit der Abnahme des Epics aus. Nicht gebrauchte Nummern fallen an den
 allgemeinen Vorrat zurück; ein nachfolgendes Epic reserviert dann ab der ersten freien.
