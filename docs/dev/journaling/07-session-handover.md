@@ -230,6 +230,15 @@ hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e
 
 ### Nächster konkreter Schritt — **`JR-6-04` (Spool-Reconciler)**
 
+> **`JR-6-04` ist angefangen, und der Arbeitsbaum ist absichtlich nicht sauber.** Der DEV-Agent lief
+> am 2026-08-06 mitten in der Scheibe in sein Wochenlimit. Rund 490 Zeilen lagen unversioniert da
+> (`reconciler.ts`/`reconciler.test.ts` neu, sechs weitere Dateien geändert). Sie sind zur Sicherheit
+> als **`wip/journaling-jr-6-04`** committet und gepusht (`[skip ci]`, bewusst **nicht** auf dem
+> Epic-Zweig: unlintiert, ungetestet, `suite-inventory.ts` nicht nachgezogen) und danach unverändert
+> im Arbeitsbaum wiederhergestellt. **Kein `git checkout -- .` und kein `git clean`**, sonst ist die
+> Arbeit weg; der WIP-Zweig ist die Kopie, nicht das Original. Wiederherstellen falls nötig:
+> `git checkout wip/journaling-jr-6-04 -- packages/`. Zweig löschen, sobald `JR-6-04` gelandet ist.
+
 Der Prompt für die nächste Sitzung:
 
 ```
@@ -249,21 +258,17 @@ adversarial 69/69`; danach nur der Doku-Nachtrag mit dieser Lauf-Nummer. Gleichs
 > Details in `06-status.md` unter „Pre-Push-Gate" und in `07-session-handover.md` unter „Billig
 > verifizieren". Ändert an `JR-6-03`/`JR-6-04` als nächstem Schritt nichts.
 >
-> **Nacharbeit `F65` (`1611434`), von TEST unabhängig gefunden und gemessen:** `DATABASE_URL` und
-> `REDIS_PASSWORD` sind Host-Infrastruktur, kein Prüfgegenstand, und wurden vorher asymmetrisch
-> behandelt — ein fehlendes `DATABASE_URL` überspringt Schritt 4/4 zwar korrekt, nannte aber nie die
-> dadurch ungeprüften Klassen (`9af1492`/`41c407e`), und ein fehlendes/falsches `REDIS_PASSWORD` wurde
-> **gar nicht** geprüft und führte zu vier `NOAUTH`-Stacktraces mitten im Testlauf — **Exit 1 auf
-> sauberem Baum** (die F35-Form). Behoben mit `probeRedisRequiresAuth()` (spricht `PING`/`AUTH` selbst,
-> vor jedem Build/Spawn) und benannten Skip-Meldungen für beide Fälle. Kalibriert gegen alle drei vom
-> Prüfer gemessenen Zustände plus einer Gegenprobe, dass `41c407e`s ursprüngliche Kalibrierung weiter
-> greift. Details in `06-status.md` unter „F65".
+> **Nacharbeit `F65` (`1611434`) ist erledigt:** das Gate behandelte seine eigenen
+> Infrastruktur-Vorbedingungen (`DATABASE_URL`, `REDIS_PASSWORD`) asymmetrisch. Volle Fassung in
+> `09-befunde-bestandscode.md` unter **F65** — die Ausführung stand hier ein **drittes** Mal und ist am
+> 2026-08-06 auf diesen Verweis gekürzt worden, nachdem geprüft war, dass das Register dieselbe Tiefe
+> trägt. Praktische Folge für dich: `corepack pnpm gate` braucht **beide** Variablen, sonst benennt es
+> selbst die ungeprüft gebliebenen Klassen.
 
-> **`F63`/`F64`, gelesen bevor der nächste Worker echten DB-/Storage-Zugriff bekommt** (`JR-6-04`s
-> Reconciler zum Beispiel): volle Fassung — beide Ursachen der CI-Iterationen samt der Lehre für
-> künftige Worker, und der hängende Shutdown als reales, nicht identifiziertes Produktionsverhalten —
-> steht **in gleicher oder größerer Tiefe** in `09-befunde-bestandscode.md` (am 2026-08-06 dorthin
-> verschoben, nicht gekürzt). `F64` auf ausdrückliche Anweisung nicht weiter untersucht.
+> **`F63`/`F64` lesen, bevor der nächste Worker echten DB-/Storage-Zugriff bekommt** — `JR-6-04`s
+> Reconciler **ist** dieser Fall, F63 nennt ihn selbst als Beispiel. Volle Fassung in
+> `09-befunde-bestandscode.md`; `F64` (hängender Shutdown, reales Produktionsverhalten) auf Anweisung
+> nicht weiter untersucht.
 
 > **Auftrag (a), erledigt (Fortsetzung derselben Sitzung, `32fa49f`):** der Ende-zu-Ende-Test ist
 > automatisiert. Volle Begründung (die DI-Naht, die schon existierte, die gemessene
