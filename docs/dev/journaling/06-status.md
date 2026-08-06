@@ -796,3 +796,58 @@ test files`. Erster Lauf, der den neuen `meilisearch`-Service-Container tatsäch
 - **Offen:** `JR-6-03`, `JR-6-04`, `JR-6-05`–`JR-6-07`, `JR-6-08` unverändert
 - **Nicht getan, absichtlich:** die Ursache von F64 nicht weiter untersucht (ausdrückliche Anweisung:
   „Untersuchen sollst du es jetzt nicht — nur richtig verbuchen"). Die Doku-Diät weiterhin offen
+
+### 2026-08-06 — Pre-Push-Gate (Werkzeug-Infrastruktur, keine Backlog-ID)
+
+- **Rolle:** DEV (Subagent `senior-dev`)
+- **Auftrag:** kein Backlog-Task. Nach einer Kostenanalyse von `JR-6-02b` (sechs CI-Round-Trips, 53
+  Minuten reine Wartezeit für genau diese Scheibe) hat der Auftraggeber ein lokales Gate beauftragt,
+  das die **fangbaren** der sechs Fehlschläge lokal abfängt, bevor gepusht wird — ausdrücklich **kein**
+  zweiter Volllauf (die knapp drei Minuten sind genau das, was das Gate vermeiden soll) und **kein**
+  zweiter Test-Harness (CLAUDE.md §5.1: bestehende Skripte/Tests werden mit anderer Umgebung
+  aufgerufen, keine neue Prüf-Logik gebaut)
+- **Commit:** `88b6719` (`scripts/pre-push-gate.mjs`, `packages/backend/scripts/gate-check-schema.mjs`,
+  `package.json`-Skript `gate`)
+- **Was es prüft, `corepack pnpm gate`, unter zwei Minuten:** (1) `test:types` beider Pakete, (2)
+  Prettier nur auf geänderten Dateien (F35 — nie repo-weit), (3) `svelte-check` (die CI führt es
+  bedingungslos aus), (4) Boot des `journal-inbound`-Workers unter `ci.yml`s **eigenem** `env:`-Block —
+  frisch aus der Workflow-Datei geparst, nie aus dem lokalen `.env` übernommen —, gegen eine
+  **garantiert unmigrierte** Sonden-Datenbank (Postgres' eigene, immer vorhandene Default-Datenbank
+  `postgres`, benutzt, wenn die lokale Entwickler-DB bereits migriert ist)
+- **Kalibriert, dreimal, nach `JR-13-09c`s Muster — Messung, kein Argument:**
+    - **0264405** (`test:types`-Lücke): `alerts.test.ts`/`smtp-acceptance-wiring.test.ts` auf
+      `0264405~1` zurückgesetzt → Gate meldet `[FAIL] test:types @open-archiver/journaling` mit exakt
+      den ursprünglichen TS2322/TS2345-Fehlern → zurückgesetzt, `git status --short` zeigt keine Restspur
+    - **9af1492** (`STORAGE_TYPE` fehlte in der CI): `ci.yml`s `STORAGE_TYPE`/`STORAGE_LOCAL_ROOT_PATH`/
+      `ENCRYPTION_KEY`/`MEILI_HOST`/`MEILI_MASTER_KEY`-Block entfernt → Gate meldet
+      `Error: Invalid STORAGE_TYPE: undefined` und `[FAIL] worker boot check` → zurückgesetzt, `git diff`
+      danach leer
+    - **41c407e** (unmigrierte DB im gespawnten Kind): `journal-inbound-worker.int.test.ts` auf
+      `41c407e~1` zurückgesetzt (23 Zeilen DB-Isolation entfernt) → Gate meldet
+      `AssertionError: expected 'relation "journal_ledger" does not ex…' to contain 'could not be read'`
+      — exakt die erwartete Fehlerklasse, nicht irgendein beliebiger Fehlschlag → zurückgesetzt,
+      `git diff --cached --stat` danach leer
+- **Ausdrücklich NICHT gefangen, und das Gate sagt das selbst während des Laufs:**
+    - **49a0bc1** (ein `${{ runner.temp }}`-Ausdruck, der GitHub Actions' Workflow-Parser brach): nur ein
+      Heuristik-`warn`, wenn ein aus `ci.yml` geparster Env-Wert `${{` enthält — kein Schema-Validator
+      für Workflow-Dateien für diesen Host gefunden, ausdrücklich als nicht-autoritativ markiert
+    - **3d0fadb/c2987e9** (F64, der hängende Shutdown durch ein offenes `postgres-js`-Handle): per
+      Definition nicht lokal reproduzierbar (die Zusicherung steht laut `JR-6-01`s Handover-Eintrag
+      ohnehin nur auf dem Linux-Runner), kein Versuch unternommen
+- **Ablage:** `scripts/` (Repo-Wurzel) für den Haupt-Gate, `packages/backend/scripts/` für den
+  DB-Schema-Helfer — dessen `postgres`-Import löst so gegen `packages/backend/node_modules` auf statt
+  eine neue Root-Abhängigkeit zu brauchen. Kein bestehendes Skript umgebaut, nur `gate` in
+  `package.json` neu ergänzt
+- **Ein Entwurfsfehler unterwegs, selbst gefangen, nicht von außen gemeldet:** der erste Entwurf baute
+  die Kind-Umgebung als `{ ...process.env, ...ciEnv, … }` — eine bereits lokal exportierte
+  `STORAGE_TYPE` hätte ihr Fehlen in `ciEnv` **überdeckt** und genau die Fehlerklasse unsichtbar
+  gemacht, die dieser Schritt fangen soll. Behoben: die konfigurationsrelevanten Schlüssel
+  (`STORAGE_TYPE`, `STORAGE_LOCAL_ROOT_PATH`, `STORAGE_ENCRYPTION_KEY`, `ENCRYPTION_KEY`, `MEILI_HOST`,
+  `MEILI_MASTER_KEY`, `JWT_SECRET`, `OA_TEST_REQUIRE_INFRA`) werden vor dem Overlay explizit aus einer
+  Kopie von `process.env` gelöscht, damit `ci.yml`s eigene Erklärung — oder ihr Fehlen — für sie
+  entscheidet, nicht die Entwicklerumgebung
+- **CI:** `<wird nach dem Push nachgetragen>`
+- **Nicht Teil dieses Auftrags, wie vom Auftraggeber ausdrücklich ausgeschlossen:** F64s Ursache, F62,
+  F60, F43, F39, F42, F17(b), die Doku-Diät, `JR-6-03`/`JR-6-04`
+- **Numerierung:** keine neue ADR, keine neue F-Nummer vergeben — dieser Auftrag hat keinen Bedarf an
+  einer Entscheidung oder einem neuen Befund erzeugt; ADR-036 bleibt reserviert und unvergeben

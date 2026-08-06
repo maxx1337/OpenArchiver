@@ -87,6 +87,30 @@ von „grün, weil nichts geprüft wurde". **`--silent` ist verboten:** es unter
 haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 `node_modules/.cache/oa-test/executed-tests.json`.
 
+**`pnpm gate` — dieselbe Idee, aber gegen CI-Wartezeit statt gegen Tokens.** `JR-6-02b` hat sechs
+CI-Round-Trips gebraucht (Analyse: 53 Minuten reine Wartezeit), obwohl drei der sechs Fehlschläge
+lokal fangbar gewesen wären. `scripts/pre-push-gate.mjs` (Werkzeug-Infrastruktur, keine Backlog-ID —
+Begründung und Kalibrierung in `06-status.md` unter „Pre-Push-Gate") läuft in **unter zwei Minuten**
+und macht **keinen** zweiten Volllauf und **keinen** zweiten Test-Harness — es ruft nur bestehende
+Skripte/Tests mit anderer Umgebung auf:
+
+```bash
+DATABASE_URL=postgresql://admin:password@127.0.0.1:5432/open_archive \
+REDIS_HOST=127.0.0.1 REDIS_PORT=6379 REDIS_PASSWORD=devpassword \
+  corepack pnpm gate
+```
+
+Die drei letzten Variablen sind nur nötig, wenn Schritt 4/4 (Worker-Boot gegen `ci.yml`s eigenen
+`env:`-Block) nicht überspringen soll — er tut das automatisch und mit stehender Begründung, wenn
+`DATABASE_URL` lokal fehlt oder die lokale DB bereits migriert ist (dann fehlt die einzig geeignete
+**unmigrierte** Sonden-Datenbank, und `postgres`s eigene Default-DB gleichen Namens wird als
+Ersatz benutzt). Fängt gemessen (nicht behauptet, siehe `06-status.md`): `test:types`-Lücken
+(0264405-Klasse), an CI-Import-Zeit fehlende Env-Vars wie `STORAGE_TYPE` (9af1492-Klasse) und einen
+gespawnten Kindprozess, der stillschweigend die unmigrierte Wartungs-DB benutzt (41c407e-Klasse).
+Fängt **nicht**: einen die Workflow-Datei selbst kaputtmachenden `${{ }}`-Ausdruck (nur ein
+Heuristik-`warn`, kein Schema-Validator gefunden) und den hängenden-Shutdown-Fall aus F64 (per
+Definition nur in CI beobachtbar).
+
 ### Immer zuerst
 
 1. **Gegen das Remote abgleichen — vor allem anderen.** Der Container kann auf einen **älteren Stand
