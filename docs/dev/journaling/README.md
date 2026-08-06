@@ -29,26 +29,28 @@ SEC 17a-4, FINRA 4511, MiFID II).
 
 ## Lesereihenfolge
 
-| #     | Datei                        | Inhalt                                                                    | Wann lesen                                 |
-| ----- | ---------------------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
-| —     | `README.md`                  | dieses Dokument                                                           | immer zuerst                               |
-| 00    | `00-rfc.md`                  | Der RFC im Original (EN), **byteidentisch** (in `.prettierignore`)        | vor jeder Design-Entscheidung              |
-| 01    | `01-gap-analyse.md`          | Ist-Zustand der Codebase vs. RFC-Forderungen                              | einmal, dann bei Bedarf                    |
-| 02    | `02-architektur.md`          | Zielarchitektur, Prozess- und Credential-Topologie, Ledger-Design         | vor Implementierungsarbeit                 |
-| 03    | `03-backlog.md`              | Epics E1–E12 mit Tasks, Akzeptanzkriterien, Abhängigkeiten                | vor jeder Task                             |
-| 04    | `04-testplan.md`             | RFC §12 → konkrete Testfälle, Einteilung CI/Nightly/manuell               | vor Testarbeit                             |
-| 05    | `05-entscheidungen.md`       | ADR-Log: getroffene und bewusst offene Entscheidungen                     | bei Design-Konflikten                      |
-| 06    | `06-status.md`               | Fortschritt je Epic und Task                                              | **immer zuerst nach diesem README**        |
-| 07    | `07-session-handover.md`     | Was ist der nächste konkrete Schritt                                      | am Anfang und Ende jeder Session           |
-| 08    | `08-risiken.md`              | Risiken mit Gegenmaßnahme                                                 | bei Planungsänderungen                     |
-| 09    | `09-befunde-bestandscode.md` | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes                 | bevor man einen davon „nebenbei" behebt    |
-| 10    | `10-upstream-meldung.md`     | **Entwurf** der Upstream-Sicherheitsmeldung — **nicht versendet**         | nur wenn der Auftraggeber sie versendet    |
-| 11    | `11-archiv-e1.md`            | Protokoll des abgenommenen Epics E1, unverändert ausgegliedert            | nur bei Fragen zur E1-Historie             |
-| 15    | `15-fallstricke.md`          | Die 34 Fallstricke, die Zeit gekostet haben — **Referenz, nicht Lektüre** | wenn ein Werkzeug sich unerwartet verhält  |
-| 16    | `16-abnahme-e4.md`           | Abnahmeprotokoll E4 (`JR-4-13`): Kriterium → Beleg → Urteil               | nur bei Fragen zur E4-Abnahme              |
-| 17    | `17-parallelbetrieb.md`      | Regeln für zwei gleichzeitig laufende Sessions                            | **sobald eine zweite Session läuft**       |
-| 18    | `18-archiv-e4-e5.md`         | Protokolle der abgenommenen Epics E4 und E5                               | nur für Historie, nie für die nächste Task |
-| 11–14 | Archivdateien                | Protokolle und Task-Tabellen der **abgenommenen** Epics (E1, E13, E2, E3) | nur für Historie, nie für die nächste Task |
+| #     | Datei                                | Inhalt                                                                                                              | Wann lesen                                 |
+| ----- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| —     | `README.md`                          | dieses Dokument                                                                                                     | immer zuerst                               |
+| 00    | `00-rfc.md`                          | Der RFC im Original (EN), **byteidentisch** (in `.prettierignore`)                                                  | vor jeder Design-Entscheidung              |
+| 01    | `01-gap-analyse.md`                  | Ist-Zustand der Codebase vs. RFC-Forderungen                                                                        | einmal, dann bei Bedarf                    |
+| 02    | `02-architektur.md`                  | Zielarchitektur, Prozess- und Credential-Topologie, Ledger-Design                                                   | vor Implementierungsarbeit                 |
+| 03    | `03-backlog.md`                      | Epics E1–E12 mit Tasks, Akzeptanzkriterien, Abhängigkeiten                                                          | vor jeder Task                             |
+| 04    | `04-testplan.md`                     | RFC §12 → konkrete Testfälle, Einteilung CI/Nightly/manuell                                                         | vor Testarbeit                             |
+| 05    | `05-entscheidungen.md`               | ADR-Log: getroffene und bewusst offene Entscheidungen                                                               | bei Design-Konflikten                      |
+| 06    | `06-status.md`                       | Fortschritt je Epic und Task                                                                                        | **immer zuerst nach diesem README**        |
+| 07    | `07-session-handover.md`             | Was ist der nächste konkrete Schritt                                                                                | am Anfang und Ende jeder Session           |
+| 08    | `08-risiken.md`                      | Risiken mit Gegenmaßnahme                                                                                           | bei Planungsänderungen                     |
+| 09    | `09-befunde-bestandscode.md`         | Defekte im **vorhandenen** Code, außerhalb des RFC-Scopes                                                           | bevor man einen davon „nebenbei" behebt    |
+| 10    | `10-upstream-meldung.md`             | **Entwurf** der Upstream-Sicherheitsmeldung — **nicht versendet**                                                   | nur wenn der Auftraggeber sie versendet    |
+| 11    | `11-archiv-e1.md`                    | Protokoll des abgenommenen Epics E1, unverändert ausgegliedert                                                      | nur bei Fragen zur E1-Historie             |
+| 15    | `15-fallstricke.md`                  | Die 34 Fallstricke, die Zeit gekostet haben — **Referenz, nicht Lektüre**                                           | wenn ein Werkzeug sich unerwartet verhält  |
+| 16    | `16-abnahme-e4.md`                   | Abnahmeprotokoll E4 (`JR-4-13`): Kriterium → Beleg → Urteil                                                         | nur bei Fragen zur E4-Abnahme              |
+| 17    | `17-parallelbetrieb.md`              | Regeln für zwei gleichzeitig laufende Sessions                                                                      | **sobald eine zweite Session läuft**       |
+| 18    | `18-archiv-e4-e5.md`                 | Protokolle der abgenommenen Epics E4 und E5                                                                         | nur für Historie, nie für die nächste Task |
+| 19    | `19-umgebung-windows-host.md`        | Windows-Host-Infrastruktur: Docker Desktop, Wegwerf-Cluster, `sbx`, `git`/`ssh-agent` — **Referenz, nicht Lektüre** | wenn die lokale Infrastruktur klemmt       |
+| 20    | `20-archiv-offene-fragen-bis-jr6.md` | Beantwortete/entschiedene Fragen an den Auftraggeber, E2/E13-Ära bis `JR-6-02b`                                     | nur für Historie, nie für die nächste Task |
+| 11–14 | Archivdateien                        | Protokolle und Task-Tabellen der **abgenommenen** Epics (E1, E13, E2, E3)                                           | nur für Historie, nie für die nächste Task |
 
 > **`17-parallelbetrieb.md` hieß bis zum Rückmerge von E4 `12-parallelbetrieb.md`.** Sie kollidierte
 > mit `12-archiv-e13-e2.md` aus der Diät vom 2026-08-03 — beide Nummern waren parallel auf zwei
@@ -66,6 +68,16 @@ SEC 17a-4, FINRA 4511, MiFID II).
 > (Task, Commit, Testzahl, CI-Lauf, Entscheidungen, offen) — die bestehenden Prosaeinträge sind der
 > Grund, warum eine einzelne Protokollzeile bis zu 8 531 Zeichen lang war. Und das Protokoll eines
 > Epics wandert ins Archiv, **sobald** das Epic zurückgemergt ist, nicht irgendwann später.
+
+> **Am 2026-08-06 ist die Diät fortgesetzt worden** (Auftrag des Auftraggebers, mit `ADR-036`
+> ausdrücklich auf dem Epic-Zweig statt dem Integrationszweig, siehe `05-entscheidungen.md`): die
+> Pflichtlektüre (`README.md` + `06-status.md` + `07-session-handover.md`) war trotz der ersten Diät
+> auf über **70 000 Tokens** zurückgewachsen — die Diät vom 2026-08-03 hatte nur die formellen
+> Abnahmerunden erfasst, nicht die Notizen zwischen ihnen. **Inhaltlich ist wieder nichts gekürzt**,
+> nur verschoben: nach `12-archiv-e13-e2.md`/`11-archiv-e1.md` (Notizen zwischen den Abnahmerunden),
+> ins neue `19-umgebung-windows-host.md` (Referenz statt Pflicht) und ins neue
+> `20-archiv-offene-fragen-bis-jr6.md` (beantwortete Fragen). Vorher/Nachher-Zahlen mit Methode:
+> `06-status.md` unter „Doku-Diät (E6)".
 
 ## Team und Rollen
 
@@ -118,19 +130,21 @@ Deshalb steht hier nur noch das Gerüst:
 | E13    | **abgenommen + gemergt** — IAM-Autorisierung gehärtet (vier Abnahmerunden)     |
 | E2     | **abgenommen + gemergt** — Ledger, kanonische Kodierung, Merkle, Hash-Kette    |
 | E3     | **abgenommen + gemergt** — Spool und Acceptance-Contract                       |
-| **E4** | **abgenommen** (`JR-4-13`) — `smtp-ingress`; Rückmerge offen                   |
-| E5–E12 | offen                                                                          |
+| E4     | **abgenommen + gemergt** — `smtp-ingress`-Service                              |
+| E5     | **abgenommen + gemergt** — Journal-Report-Parser                               |
+| **E6** | **in Arbeit** — Phase-B-Worker, Zweig `claude/journaling-e6-phase-b-worker`    |
+| E7–E12 | offen                                                                          |
 
-**Was E4 heute kann:** ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`/`BDAT`,
-`STARTTLS` und `AUTH`; Quell- und Empfänger-ACL gegen `journaling_sources`; Crash-Recovery-Scan beim
-Start; und `250 … queued as <seq>` **erst** nach fsync von Spool **und** Ledger. **Seit dem 2026-08-04
-ist E4 abgenommen** (`JR-4-13`, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`); offen ist nur
-noch der Rückmerge in den Integrationsbranch.
+**Diese Zeile war bis zum 2026-08-06 stehen geblieben, als E4 noch „Rückmerge offen" und E5/E6 noch
+„offen" waren** — derselbe Fehler, vor dem dieser Abschnitt selbst warnt. Aktuell: **Was heute steht**
+— der Empfangspfad (ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`/`BDAT`,
+`STARTTLS`, `AUTH`; Quell-/Empfänger-ACL; Crash-Recovery-Scan; `250 … queued as <seq>` erst nach fsync
+von Spool **und** Ledger) und der Journal-Report-Parser stehen und sind zurückgemergt. E6 baut Phase B
+darauf auf: eigener Worker-Prozess, das Archivierungs-Tor, die vollständige Pipeline
+(`runPhaseBPipeline()`), automatisiert bis zum durchsuchbaren Treffer.
 
 **Wo der nächste Schritt steht:** `07-session-handover.md`. **Wo die Entscheidungen stehen:**
-`05-entscheidungen.md` — für E4 sind das **ADR-029** (der SMTP-Server ist selbst gebaut, weil kein
-Node-Paket `BDAT` beherrscht und Nachrichten mit bare line feeds sonst nie ankommen) und **ADR-030**
-(eine Transaktion bleibt genau einer Kette zugeordnet).
+`05-entscheidungen.md`.
 
 ## Branch
 

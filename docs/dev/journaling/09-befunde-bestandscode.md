@@ -3678,3 +3678,39 @@ Kein Fix in dieser Scheibe; für ein tatsächliches Auftreten wäre `writeLineTh
 **Schwere:** mittel — kein Datenverlust, aber eine offene Frage über den Ressourcen-Umgang der drei
 neu importierten Services, die jeder künftige Worker-Prozess mit denselben Abhängigkeiten wieder
 treffen wird (siehe F63s Verweis für `JR-6-04`).
+
+## F65 — das lokale Pre-Push-Gate behandelte seine eigenen Infrastruktur-Vorbedingungen asymmetrisch
+
+**Gefunden:** Rolle TEST, unabhängig, durch drei tatsächliche Läufe auf dem sauberen Kopf-Commit
+`d96bd26` von `scripts/pre-push-gate.mjs` (2026-08-06, kein Backlog-Task — Werkzeug-Infrastruktur nach
+`JR-6-02b`s Kostenanalyse) · **Status:** **behoben** (`1611434`), dreifach nachkalibriert
+
+`DATABASE_URL` und `REDIS_PASSWORD` sind Host-Infrastruktur für Schritt 4/4 des Gates, kein
+Prüfgegenstand — anders als `STORAGE_TYPE`/`ENCRYPTION_KEY`/etc. (deren Fehlen in `ci.yml` genau das
+ist, was geprüft werden soll) sagt ihr Fehlen nichts über `ci.yml`, sondern nur, dass diese Shell noch
+nicht eingerichtet ist. Die Behandlung war asymmetrisch:
+
+1. **Fehlendes `DATABASE_URL`** überspringt Schritt 4/4 handwerklich korrekt, nannte aber nie, welche
+   Fehlschlagklassen dadurch ungeprüft bleiben — und da kein `.env` im Repository liegt, ist das der
+   **Normalfall** auf einem frischen Checkout, nicht der Randfall. Die alte Schlusszeile „All checks
+   passed or were skipped with a stated reason" hätte das verdeckt (Form von F48/`JR-4-10`).
+2. **Fehlendes/falsches `REDIS_PASSWORD` wurde gar nicht geprüft.** Ein reiner TCP-Connect (die einzige
+   Prüfung, die es vorher gab) gelingt gegen Valkey mit `--requirepass` unabhängig vom Passwort, weil
+   Auth oberhalb der TCP-Ebene passiert. Die Folge: Build und `vitest` liefen an und scheiterten mitten
+   im Testlauf mit vier `ReplyError: NOAUTH Authentication required`-Stacktraces, ohne genannte Ursache
+   — **Exit 1 auf sauberem Baum**, die F35-Form.
+
+**Behoben:** `probeRedisRequiresAuth()` spricht `PING`, und nur bei einer `-NOAUTH`-Antwort zusätzlich
+`AUTH <password>` + erneutes `PING` — beantwortet „kommt Schritt 4/4 überhaupt durch" **vor** jedem
+Build/Spawn. Beide Vorbedingungen benennen beim Überspringen jetzt explizit, welche Klassen ungeprüft
+bleiben (`9af1492`, `41c407e`) und das lokale Rezept. Die Summary-Zeile unterscheidet „All checks
+passed" von „All runnable checks passed. Step 4/4 … was SKIPPED".
+
+**Kalibriert, alle drei vom Prüfer gemessenen Zustände nachgefahren:** nichts gesetzt → Exit 0 mit
+Namensnennung; nur `DATABASE_URL` → Exit 0 (vorher Exit 1 mit `NOAUTH`); beide korrekt gesetzt →
+Exit 0, alle vier Schritte `PASS`. Gegenprobe: `41c407e`s ursprüngliche Kalibrierung (Test auf
+`41c407e~1` zurückgesetzt) meldet danach weiterhin exakt dieselbe `AssertionError`, unverändert von
+diesem Umbau — zurückgesetzt, `git diff --cached --stat` danach leer.
+
+**Schwere:** niedrig — kein Produktionscode betroffen, aber ein Gate, das auf sauberem Baum rot wird,
+verliert das Vertrauen, von dem seine Wirkung abhängt (dieselbe Lehre wie F35).
