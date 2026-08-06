@@ -769,10 +769,13 @@ integration 22/22, adversarial 7/7, 0 unclassified test files`
 - **Auftrag:** der Auftraggeber hat entschieden, dass der manuelle Nachweis aus der vorigen Scheibe
   automatisiert wird (Backlog-Akzeptanzkriterium von `JR-6-02`/`JR-6-08`), über Route (i) (DI) statt
   Route (ii) (Harness-Ausnahme) — **ADR-035**
-- **Commits:** ein Commit mit Code + Doku (Hash siehe `07-session-handover.md`, wird nach Push
-  ergänzt)
+- **Commits:** `32fa49f` (Code + Test), `faa26d5` (Doku, ADR-035, F64)
 - **Tests:** 1 neu (`journal-phase-b-e2e.int.test.ts`). Volllauf **1298 passed | 8 skipped** bei 107
   Dateien, Exit 0, `unit ci 1102/1102 · integration ci 127/127 · adversarial ci 69/69`
+- **CI:** `31083864864`, **success** (Kopf-Commit `faa26d5`) — 107 Dateien,
+  `unit 1102/1102 · integration 127/127 · adversarial 69/69`,
+  `Suite inventory verified: unit 77/77, integration 23/23, adversarial 7/7, 0 unclassified
+test files`. Erster Lauf, der den neuen `meilisearch`-Service-Container tatsächlich benutzt
 - **Entscheidung, gemessen statt angenommen:** die vermeintlich nötige DI-Naht an
   `IngestionService`/`StorageService` existierte bereits (`pg-harness.ts`s
   `bindAsProcessDatabaseUrl()` + verzögerter dynamischer Import, seit `JR-1-04` von

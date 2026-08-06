@@ -129,8 +129,8 @@ haben. Die Maschinenfassung derselben Messung liegt zusätzlich in
 TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und F61 behoben, F62/F63/F64
 neu) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
 Volllauf: **1298 passed | 8 skipped** bei 107 Dateien — `unit ci 1102/1102 · integration ci 127/127 ·
-adversarial ci 69/69`, Exit 0 · zuletzt `32fa49f`, CI-Ergebnis dafür: siehe `06-status.md`s neuestem
-Eintrag für die Lauf-ID
+adversarial ci 69/69`, Exit 0 · zuletzt `faa26d5` · **CI `31083864864` success** (erster Lauf mit dem
+neuen `meilisearch`-Service-Container)
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -423,9 +423,9 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `32fa49f`.
-CI-Ergebnis dafür: siehe `06-status.md`s neuestem Eintrag für die Lauf-ID. Nicht neu abzweigen, nicht
-neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `faa26d5`. CI
+`31083864864` **success** — 107 Dateien, `unit 1102/1102 · integration 127/127 · adversarial 69/69`.
+Nicht neu abzweigen, nicht neu reservieren.
 
 **Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034`, `ADR-035` sind
 entschieden; Gate, Pipeline, Backend-Adapter und der automatisierte Ende-zu-Ende-Test
