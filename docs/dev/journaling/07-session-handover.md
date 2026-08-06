@@ -100,16 +100,22 @@ REDIS_HOST=127.0.0.1 REDIS_PORT=6379 REDIS_PASSWORD=devpassword \
   corepack pnpm gate
 ```
 
-Die drei letzten Variablen sind nur nötig, wenn Schritt 4/4 (Worker-Boot gegen `ci.yml`s eigenen
-`env:`-Block) nicht überspringen soll — er tut das automatisch und mit stehender Begründung, wenn
-`DATABASE_URL` lokal fehlt oder die lokale DB bereits migriert ist (dann fehlt die einzig geeignete
-**unmigrierte** Sonden-Datenbank, und `postgres`s eigene Default-DB gleichen Namens wird als
-Ersatz benutzt). Fängt gemessen (nicht behauptet, siehe `06-status.md`): `test:types`-Lücken
-(0264405-Klasse), an CI-Import-Zeit fehlende Env-Vars wie `STORAGE_TYPE` (9af1492-Klasse) und einen
-gespawnten Kindprozess, der stillschweigend die unmigrierte Wartungs-DB benutzt (41c407e-Klasse).
-Fängt **nicht**: einen die Workflow-Datei selbst kaputtmachenden `${{ }}`-Ausdruck (nur ein
-Heuristik-`warn`, kein Schema-Validator gefunden) und den hängenden-Shutdown-Fall aus F64 (per
-Definition nur in CI beobachtbar).
+Die drei letzten Variablen sind **Host-Infrastruktur, kein Prüfgegenstand** — anders als
+`STORAGE_TYPE`/`ENCRYPTION_KEY`/etc. (deren Fehlen in `ci.yml` genau das ist, was Schritt 4/4 prüfen
+soll) sagt ein fehlendes `DATABASE_URL` oder ein falsches `REDIS_PASSWORD` nichts über `ci.yml`,
+sondern nur, dass diese Shell noch nicht eingerichtet ist. Ohne sie überspringt Schritt 4/4
+automatisch, **mit einer Meldung, die die konkret ungeprüften Fehlschlagklassen namentlich nennt**
+(`9af1492`, `41c407e`) statt nur „skipped with a stated reason" — genau das war **F65**, unabhängig
+gemessen und behoben: davor blieb ein fehlendes `REDIS_PASSWORD` unbemerkt bis mitten im Testlauf und
+brach mit vier `NOAUTH`-Stacktraces ab (Exit 1 auf sauberem Baum, die F35-Form). Dasselbe gilt, wenn
+die lokale DB bereits migriert ist (dann fehlt die einzig geeignete **unmigrierte** Sonden-Datenbank,
+und `postgres`s eigene Default-DB gleichen Namens wird als Ersatz benutzt, aber genauso benannt
+übersprungen, falls auch sie migriert ist). Fängt gemessen (nicht behauptet, siehe `06-status.md`):
+`test:types`-Lücken (0264405-Klasse), an CI-Import-Zeit fehlende Env-Vars wie `STORAGE_TYPE`
+(9af1492-Klasse) und einen gespawnten Kindprozess, der stillschweigend die unmigrierte Wartungs-DB
+benutzt (41c407e-Klasse). Fängt **nicht**: einen die Workflow-Datei selbst kaputtmachenden `${{ }}`-
+Ausdruck (nur ein Heuristik-`warn`, kein Schema-Validator gefunden) und den hängenden-Shutdown-Fall
+aus F64 (per Definition nur in CI beobachtbar).
 
 ### Immer zuerst
 

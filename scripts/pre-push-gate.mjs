@@ -24,6 +24,42 @@
  *      why this gate does not reuse the developer's own `DATABASE_URL` for this check. See
  *      `packages/backend/scripts/gate-check-schema.mjs`'s doc comment.
  *
+ * -----------------------------------------------------------------------------------------------
+ * F65 -- infrastructure preconditions vs. config-under-test, and why they are handled differently
+ * -----------------------------------------------------------------------------------------------
+ * Step 4/4 needs two things to exist before it can check anything: a reachable Postgres and a
+ * reachable, correctly-authenticated Redis/Valkey. Those are **host infrastructure**, not the
+ * config-under-test -- unlike `STORAGE_TYPE`/`ENCRYPTION_KEY`/etc. (deliberately stripped from the
+ * child environment above so their *absence from ci.yml* is what gets tested), a missing
+ * `DATABASE_URL` or a wrong `REDIS_PASSWORD` says nothing about whether ci.yml's env block is
+ * correct -- it only says this developer's shell has not been set up for this check yet. Both were,
+ * before this fix, silently swallowed in a way that hid exactly the coverage this gate exists to
+ * provide (an independently-run TEST measurement found this and filed it as F65):
+ *
+ *   - No `DATABASE_URL` at all skipped step 4 with a stated reason, but that reason never named which
+ *     failure classes were consequently unverified -- and since this repository ships no `.env`, "no
+ *     `DATABASE_URL`" is the *normal* state on a fresh checkout, not an edge case. A developer could
+ *     run `pnpm gate`, see "All checks passed or were skipped with a stated reason", and have run
+ *     zero percent of the check that catches `9af1492` and `41c407e`.
+ *   - A set but wrong/missing `REDIS_PASSWORD` was not checked at all before this fix -- the plain TCP
+ *     reachability probe below succeeds against Valkey with `--requirepass` regardless of whether a
+ *     password was supplied (auth happens at the protocol level, not the TCP level), so the run
+ *     proceeded straight into building and spawning `vitest`, which then failed noisily with four
+ *     `ReplyError: NOAUTH Authentication required` stack traces and no indication of which variable to
+ *     set. That is a red gate on a clean tree for a reason that has nothing to do with the code being
+ *     pushed -- the exact failure mode F35 was named for.
+ *
+ * The fix: `probeRedisRequiresAuth()` below speaks just enough of the Redis wire protocol (`PING`,
+ * then `AUTH <password>` if challenged with `-NOAUTH`) to answer "would step 4 actually be able to
+ * connect" *before* anything is built or spawned, and both this and the `DATABASE_URL` precondition
+ * are checked with an explicit, named message: which of `9af1492`/`41c407e` remain unverified, and
+ * the exact local recipe (`07-session-handover.md`, "Billig verifizieren") to fix it. The Summary
+ * section repeats this whenever step 4 did not reach a pass/fail verdict, for the same reason
+ * `JR-6-01`'s `coverageNotice` names an unexercised branch instead of letting a skip print like a
+ * pass. Exit code is unchanged (0 for skip) -- a developer without local Docker infra should still be
+ * able to push after the checks that *can* run locally have run; visibility of the gap, not the exit
+ * code, is what this fixes.
+ *
  * What it does **not** catch, stated rather than silently omitted:
  *
  *   - `49a0bc1` (a `${{ runner.temp }}` expression in a job-level `env:` broke GitHub's own workflow
@@ -95,6 +131,103 @@ function probeTcp(host, port, timeoutMs = 1500) {
 		socket.once('connect', () => done(true));
 		socket.once('timeout', () => done(false));
 		socket.once('error', () => done(false));
+		socket.connect(port, host);
+	});
+}
+
+/** Sends one Redis inline command (`PING`, `AUTH <pw>`) and resolves with the first reply line,
+ *  without its trailing CRLF. Every reply this function is used for (`+PONG`, `+OK`, `-NOAUTH ...`,
+ *  `-WRONGPASS ...`) is a single RESP simple-string/error line, so reading up to the first `\r\n` is
+ *  sufficient -- no need for a full RESP parser here. */
+function sendRedisInlineCommand(socket, command) {
+	return new Promise((resolve) => {
+		let buf = '';
+		const onData = (chunk) => {
+			buf += chunk.toString('utf8');
+			const idx = buf.indexOf('\r\n');
+			if (idx !== -1) {
+				socket.off('data', onData);
+				resolve(buf.slice(0, idx));
+			}
+		};
+		socket.on('data', onData);
+		socket.write(`${command}\r\n`);
+	});
+}
+
+/**
+ * F65: whether `step 4/4` can actually reach Redis is a real question, not a formality -- a plain TCP
+ * connect (what this gate used before F65) succeeds against Valkey with `--requirepass` regardless of
+ * whether a correct password is supplied, because auth happens above the TCP layer. This speaks just
+ * enough of the wire protocol to answer for real: `PING`, and only `AUTH <password>` + a second `PING`
+ * if the first one comes back `-NOAUTH`. Resolves `{ ok: true }` if a working PING was achieved, or
+ * `{ ok: false, reason }` with a reason naming exactly what's missing (no host reachable, no password
+ * supplied, or a supplied password that was rejected) -- never lets the caller find out the hard way
+ * via a mid-test `NOAUTH` stack trace.
+ */
+function probeRedisRequiresAuth(host, port, password, timeoutMs = 1500) {
+	return new Promise((resolve) => {
+		const socket = new net.Socket();
+		let settled = false;
+		const finish = (result) => {
+			if (settled) return;
+			settled = true;
+			socket.removeAllListeners();
+			socket.destroy();
+			resolve(result);
+		};
+		socket.setTimeout(timeoutMs);
+		socket.once('timeout', () =>
+			finish({ ok: false, reason: `no response from ${host}:${port} within ${timeoutMs}ms` })
+		);
+		socket.once('error', (err) =>
+			finish({
+				ok: false,
+				reason: `unreachable at ${host}:${port} (${err.code ?? err.message})`,
+			})
+		);
+		socket.once('connect', () => {
+			(async () => {
+				const ping = await sendRedisInlineCommand(socket, 'PING');
+				if (ping.startsWith('+PONG')) {
+					finish({ ok: true });
+					return;
+				}
+				if (!ping.startsWith('-NOAUTH')) {
+					finish({ ok: false, reason: `unexpected reply to PING -- "${ping}"` });
+					return;
+				}
+				if (!password) {
+					finish({
+						ok: false,
+						reason: `requires a password and REDIS_PASSWORD is not set -- server said "${ping}"`,
+					});
+					return;
+				}
+				const authReply = await sendRedisInlineCommand(socket, `AUTH ${password}`);
+				if (!authReply.startsWith('+OK')) {
+					finish({
+						ok: false,
+						reason: `REDIS_PASSWORD was rejected -- server said "${authReply}"`,
+					});
+					return;
+				}
+				const pingAfterAuth = await sendRedisInlineCommand(socket, 'PING');
+				finish(
+					pingAfterAuth.startsWith('+PONG')
+						? { ok: true }
+						: {
+								ok: false,
+								reason: `authenticated but PING still failed -- "${pingAfterAuth}"`,
+							}
+				);
+			})().catch((err) =>
+				finish({
+					ok: false,
+					reason: `probe error -- ${err instanceof Error ? err.message : String(err)}`,
+				})
+			);
+		});
 		socket.connect(port, host);
 	});
 }
@@ -217,27 +350,49 @@ section("4/4 journal-inbound worker boot, under ci.yml's own env (9af1492 + 41c4
 		}
 		console.log(`parsed ${Object.keys(ciEnv).length} variable(s) from ci.yml's job env: block`);
 
+		// F65: DATABASE_URL and REDIS_PASSWORD are host infrastructure, not config-under-test -- unlike
+		// STORAGE_TYPE/etc. above, their absence says nothing about ci.yml and everything about whether
+		// this shell has been set up for this check. Both get an explicit, named skip reason (which
+		// classes go unverified, and the exact local recipe) instead of a bare "skipped" or -- worse,
+		// for REDIS_PASSWORD before this fix -- a mid-test NOAUTH crash with no named cause.
+		const UNVERIFIED =
+			'step 4/4 cannot run, so 9af1492 (STORAGE_TYPE-at-import) and 41c407e ' +
+			'(unmigrated DB in a spawned child) are NOT locally verified this run';
+		const RECIPE =
+			'local recipe (07-session-handover.md, "Billig verifizieren"): ' +
+			'DATABASE_URL=postgresql://admin:password@127.0.0.1:5432/open_archive ' +
+			"REDIS_HOST=127.0.0.1 REDIS_PORT=6379 REDIS_PASSWORD=<this host's Valkey password>";
+
 		const dbUrl = process.env.DATABASE_URL;
 		const redisHost = process.env.REDIS_HOST || '127.0.0.1';
 		const redisPort = Number(process.env.REDIS_PORT || '6379');
+		const redisPassword = process.env.REDIS_PASSWORD;
 
 		if (!dbUrl) {
-			record('worker boot check', 'skip', 'DATABASE_URL is not set locally');
+			record(
+				'worker boot check',
+				'skip',
+				`DATABASE_URL is not set (the normal state on a fresh checkout -- no .env is committed). ${UNVERIFIED}. ${RECIPE}`
+			);
 		} else {
-			const [dbReachable, redisReachable] = await Promise.all([
-				probeTcp(
-					new URL(dbUrl).hostname || '127.0.0.1',
-					Number(new URL(dbUrl).port || '5432')
-				),
-				probeTcp(redisHost, redisPort),
-			]);
+			const dbReachable = await probeTcp(
+				new URL(dbUrl).hostname || '127.0.0.1',
+				Number(new URL(dbUrl).port || '5432')
+			);
+			const redisCheck = dbReachable
+				? await probeRedisRequiresAuth(redisHost, redisPort, redisPassword)
+				: { ok: false, reason: 'not probed -- Postgres check failed first' };
 			if (!dbReachable) {
-				record('worker boot check', 'skip', 'Postgres unreachable at DATABASE_URL');
-			} else if (!redisReachable) {
 				record(
 					'worker boot check',
 					'skip',
-					`Redis/Valkey unreachable at ${redisHost}:${redisPort}`
+					`Postgres unreachable at DATABASE_URL. ${UNVERIFIED}. ${RECIPE}`
+				);
+			} else if (!redisCheck.ok) {
+				record(
+					'worker boot check',
+					'skip',
+					`Redis/Valkey at ${redisHost}:${redisPort} ${redisCheck.reason}. ${UNVERIFIED}. ${RECIPE}`
 				);
 			} else {
 				const probeUrl = new URL(dbUrl);
@@ -253,13 +408,14 @@ section("4/4 journal-inbound worker boot, under ci.yml's own env (9af1492 + 41c4
 						'skip',
 						`this host's default "postgres" database already carries the schema -- cannot ` +
 							`locally reproduce 41c407e's bug class (a spawned child silently using an ` +
-							`unmigrated database). Neither passed nor failed; genuinely not verifiable here.`
+							`unmigrated database). Neither passed nor failed; genuinely not verifiable here. ` +
+							`${UNVERIFIED}.`
 					);
 				} else if (verdict.startsWith('UNREACHABLE')) {
 					record(
 						'worker boot check',
 						'skip',
-						`could not probe the maintenance database: ${verdict}`
+						`could not probe the maintenance database: ${verdict}. ${UNVERIFIED}.`
 					);
 				} else {
 					// UNMIGRATED, the expected case: safe to use as DATABASE_URL for the spawned worker.
@@ -317,10 +473,14 @@ section("4/4 journal-inbound worker boot, under ci.yml's own env (9af1492 + 41c4
 							// ci.yml's own DATABASE_URL/REDIS_* values name services this host does not
 							// run under those credentials -- keep the developer's own, except for the
 							// database name, which becomes the confirmed-unmigrated probe above.
+							// `redisPassword` reaching this line means `probeRedisRequiresAuth()` already
+							// confirmed it authenticates (or that no auth is required) -- unlike the old
+							// `process.env.REDIS_PASSWORD ?? ''`, this can no longer be a silently wrong
+							// value that only surfaces as a NOAUTH crash inside vitest (F65).
 							DATABASE_URL: probeUrl.toString(),
 							REDIS_HOST: redisHost,
 							REDIS_PORT: String(redisPort),
-							REDIS_PASSWORD: process.env.REDIS_PASSWORD ?? '',
+							REDIS_PASSWORD: redisPassword ?? '',
 						};
 						const ok = run(
 							'corepack',
@@ -354,10 +514,25 @@ for (const r of results) {
 	console.log(`  [${r.status.toUpperCase()}] ${r.name}${r.detail ? ` -- ${r.detail}` : ''}`);
 }
 const failed = results.filter((r) => r.status === 'fail');
+// F65: a skipped step 4/4 means 9af1492 and 41c407e went unverified this run, for ANY skip reason --
+// missing DATABASE_URL, unreachable Postgres, a Redis auth problem, an already-migrated probe DB, or
+// an unreachable probe DB. Repeating this here (it is already in the skip message itself, printed
+// above) is deliberate: the closing line below is the one line most likely to be read on its own, and
+// it must never read as unqualified success when it is not.
+const workerBootSkipped = results.find(
+	(r) => r.name.startsWith('worker boot check') && r.status === 'skip'
+);
 if (failed.length > 0) {
 	console.error(
 		`\n${failed.length} check(s) failed. Not a substitute for CI -- see the module doc comment for what this gate does not cover.`
 	);
 	process.exit(1);
 }
-console.log('\nAll checks passed or were skipped with a stated reason. Not a substitute for CI.');
+if (workerBootSkipped) {
+	console.log(
+		'\nAll runnable checks passed. Step 4/4 (worker boot) was SKIPPED -- 9af1492 and 41c407e are ' +
+			'NOT locally verified this run. See the [SKIP] line above for why and the fix. Not a substitute for CI.'
+	);
+} else {
+	console.log('\nAll checks passed. Not a substitute for CI.');
+}

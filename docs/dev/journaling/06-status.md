@@ -855,3 +855,55 @@ test files`. Erwartungsgemäß unverändert — das Gate selbst ist reine Werkze
   F60, F43, F39, F42, F17(b), die Doku-Diät, `JR-6-03`/`JR-6-04`
 - **Numerierung:** keine neue ADR, keine neue F-Nummer vergeben — dieser Auftrag hat keinen Bedarf an
   einer Entscheidung oder einem neuen Befund erzeugt; ADR-036 bleibt reserviert und unvergeben
+
+### 2026-08-06 — F65: Gate-Vorbedingungen asymmetrisch behandelt, behoben
+
+- **Rolle:** DEV (Subagent `senior-dev`)
+- **Gefunden von:** TEST, unabhängig, durch drei tatsächliche Läufe auf dem sauberen Kopf-Commit
+  `d96bd26` — keine Argumentation, eine Messung. Der dritte Lauf (`DATABASE_URL` **und**
+  `REDIS_PASSWORD` gesetzt, alle vier Schritte `[PASS]`) war der Beleg, dass Schritt 4/4 selbst
+  richtig gebaut ist; der Defekt lag ausschließlich in der Behandlung seiner zwei Vorbedingungen
+- **Befund:** `DATABASE_URL` und `REDIS_PASSWORD` sind Host-Infrastruktur, keine
+  Config-unter-Prüfung — die Unterscheidung, die die `CONFIG_SENSITIVE_VARS`-Löschung schon für
+  `STORAGE_TYPE`/`ENCRYPTION_KEY`/etc. richtig trifft, fehlte für genau diese zwei Variablen, und
+  zwar asymmetrisch:
+    - Fehlendes `DATABASE_URL` überspringt Schritt 4/4 handwerklich korrekt, aber ohne zu nennen,
+      **welche** Fehlschlagklassen dadurch ungeprüft bleiben — und da kein `.env` im Repository liegt,
+      ist das der **Normalfall** auf einem frischen Checkout, nicht der Randfall. Die alte Schlusszeile
+      „All checks passed or were skipped with a stated reason" hätte das verdeckt (Form von F48/`JR-4-10`)
+    - Fehlendes/falsches `REDIS_PASSWORD` wurde **gar nicht** geprüft — ein reiner TCP-Connect (die
+      einzige Prüfung, die es vorher gab) gelingt gegen Valkey mit `--requirepass` unabhängig vom
+      Passwort, weil Auth oberhalb der TCP-Ebene passiert. Die Folge: Build und `vitest` liefen an und
+      scheiterten mitten im Testlauf mit vier `ReplyError: NOAUTH Authentication required`-Stacktraces,
+      ohne genannte Ursache — **Exit 1 auf sauberem Baum, die F35-Form**
+- **Fix:** `probeRedisRequiresAuth()` (`scripts/pre-push-gate.mjs`) spricht `PING`, und nur bei einer
+  `-NOAUTH`-Antwort zusätzlich `AUTH <password>` + erneutes `PING` — beantwortet „kommt Schritt 4/4
+  überhaupt durch" **vor** jedem Build/Spawn, nicht danach. Beide Vorbedingungen benennen jetzt beim
+  Überspringen explizit, welche Klassen ungeprüft bleiben (`9af1492`, `41c407e`) und das lokale
+  Rezept (`07-session-handover.md`, „Billig verifizieren"). Die Schlusszeile der Summary-Sektion
+  unterscheidet jetzt „All checks passed" von „All runnable checks passed. Step 4/4 … was SKIPPED".
+  Exit-Code bewusst unverändert bei Skip (0) — ein Host ohne lokale Docker-Infrastruktur soll trotzdem
+  pushen können; die Sichtbarkeit der Lücke war der Auftrag, nicht der Exit-Code
+- **Kalibriert, alle drei vom Prüfer gemessenen Fälle nachgefahren, auf demselben sauberen Kopf-Commit:**
+    - Nichts gesetzt → **Exit 0**. `worker boot check` als `SKIP` mit dem Text „`DATABASE_URL` is not
+      set (the normal state on a fresh checkout ...)" und der Namensnennung von `9af1492`/`41c407e`
+      plus dem lokalen Rezept
+    - Nur `DATABASE_URL` gesetzt, `REDIS_PASSWORD` fehlt → **Exit 0** (vorher: **Exit 1** mit
+      `NOAUTH`). `worker boot check` als `SKIP` mit dem Text „Redis/Valkey ... requires a password and
+      REDIS_PASSWORD is not set" — keine Stacktraces, kein Build, kein `vitest`-Start
+    - `DATABASE_URL` **und** `REDIS_PASSWORD=devpassword` gesetzt → **Exit 0**, alle vier Schritte
+      `PASS`
+    - **Gegenprobe, dass der Umbau die drei ursprünglichen Kalibrierungen nicht stillschweigend
+      entschärft hat:** `journal-inbound-worker.int.test.ts` erneut auf `41c407e~1` zurückgesetzt (23
+      Zeilen DB-Isolation entfernt), mit gültigem `DATABASE_URL`/`REDIS_PASSWORD` gelaufen → Gate
+      meldet weiterhin exakt dieselbe `AssertionError` wie zuvor, **Exit 1**. Zurückgesetzt,
+      `git diff --cached --stat` danach leer
+- **Commit:** `<wird nach dem Push nachgetragen>`
+- **Entscheidung, wie vom Prüfer offengelassen:** kein automatisches Herleiten von
+  `DATABASE_URL`/`REDIS_PASSWORD` aus einer laufenden Docker-Instanz. Begründung: ein geratener
+  Zugangsdatensatz ist seine eigene Fehlerklasse — ein falsch geratenes `REDIS_PASSWORD` sähe exakt
+  wie das ursprüngliche F65-Symptom aus (eine Sonde, die aus einem falschen Grund scheitert), nur
+  jetzt selbst erzeugt statt vom fehlenden Wert. Benennen statt Raten bleibt die Linie, die schon die
+  `CONFIG_SENSITIVE_VARS`-Löschung trägt
+- **Nicht Teil dieser Nacharbeit:** alles, was schon für die Hauptaufgabe ausgeschlossen war,
+  unverändert
