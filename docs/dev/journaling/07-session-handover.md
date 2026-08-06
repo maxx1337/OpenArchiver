@@ -237,9 +237,10 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `37ba891`. CI
-`31115643168` **success** — 107 Dateien, `unit 1104/1104 · integration 128/128 · adversarial 69/69`.
-Nicht neu abzweigen, nicht neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter **inhaltlicher**
+Commit `37ba891`, CI `31115643168` **success** — 107 Dateien, `unit 1104/1104 · integration 128/128 ·
+adversarial 69/69`; danach nur der Doku-Nachtrag mit dieser Lauf-Nummer. Gleichstand deshalb gegen
+`git ls-remote` prüfen, nicht gegen diesen Hash. Nicht neu abzweigen, nicht neu reservieren.
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
