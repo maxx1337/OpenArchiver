@@ -161,8 +161,8 @@ ADR-035, ADR-037 entschieden; F59 und F61 behoben, F62/F63/F64 offen) · **Branc
 `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf:
 **1301 passed | 8 skipped** bei 107 Dateien — `unit ci 1104/1104 · integration ci 128/128 ·
 adversarial ci 69/69` (unverändert seit `JR-6-03` — ADR-037 korrigierte drei Assertions, fügte keine
-hinzu), Exit 0 · zuletzt siehe „Nächster konkreter Schritt" unten für den Commit-Hash · **`pnpm gate`
-(kein Backlog-Task):** `88b6719`+`d5f77cf`, F65-Fix `1611434` — unverändert seit der letzten Sitzung
+hinzu), Exit 0 · zuletzt `37ba891` · **CI `31115643168` success** · **`pnpm gate` (kein
+Backlog-Task):** `88b6719`+`d5f77cf`, F65-Fix `1611434` — unverändert seit der letzten Sitzung
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -237,9 +237,9 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. CI-Lauf und Kopf-Commit
-für `ADR-037`: siehe den `ADR-037`-Sessionprotokoll-Eintrag in `06-status.md` (dort mit Zahlen
-nachgetragen, sobald gepusht). Nicht neu abzweigen, nicht neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `37ba891`. CI
+`31115643168` **success** — 107 Dateien, `unit 1104/1104 · integration 128/128 · adversarial 69/69`.
+Nicht neu abzweigen, nicht neu reservieren.
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot

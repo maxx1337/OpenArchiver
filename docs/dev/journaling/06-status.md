@@ -492,10 +492,13 @@ files`
 
 - **Rolle:** DEV (Subagent `senior-dev`) · **Auftrag:** kein Backlog-Task, Auftraggeber-Entscheidung
   nach `JR-6-03`s Rückfrage, Nummer reserviert auf dem Integrationszweig (`e8256f7`, Pool 037–040)
-- **Commit:** siehe „Nächster konkreter Schritt" in `07-session-handover.md`
+- **Commit:** `37ba891`
 - **Testzahl:** unverändert, **1301 passed | 8 skipped** bei 107 Dateien (drei Assertions korrigiert,
   keine hinzugefügt/entfernt; `suite-inventory.ts` deshalb unverändert)
-- **CI-Lauf:** ebenda
+- **CI-Lauf:** `31115643168` **success** (Kopf-Commit `37ba891`) — 107 Dateien,
+  `unit ci 1104/1104 · integration ci 128/128 · adversarial ci 69/69`,
+  `Suite inventory verified: unit 77/77, integration 23/23, adversarial 7/7, 0 unclassified test
+files`
 - **Entscheidungen:** **ADR-037** (voll in `05-entscheidungen.md`) — Migration
   `0043_whole_meltdown.sql`, neuer Enum-Wert `duplicate_marker`; `ledger-port.ts`s
   `LedgerAppendRequest['eventType']` importiert jetzt `JournalEventType` statt einer Kopie (F46 selbst
