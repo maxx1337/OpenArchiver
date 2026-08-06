@@ -238,7 +238,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 77 after JR-6-02b's second slice added packages/journaling/src/phase-b/pipeline.test.ts (the
 		// orchestration: gate -> parse -> resolve -> archive -> index -> release, ADR-034) and
 		// packages/journaling/src/phase-b/spool-entry-releaser.test.ts (spool-file deletion, ADR-034).
-		expectedFiles: 77,
+		expectedFiles: 78,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -793,7 +793,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// original's seq via LedgerLookup.findOriginalReceiptSeq()'s MIN(seq)), and a same-job retry
 		// (the outcome's own receipt is the only match) writes none. No new file -- ledger-lookup.ts,
 		// ledger-lookup-port.ts and pipeline.ts changed without adding one.
-		expectedTests: { ci: 1104, nightly: 3, manual: 0 },
+		expectedTests: { ci: 1119, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -844,7 +844,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// against real Postgres and real Meilisearch -- spool file to searchable hit, fan-out to three
 		// owners, spool release. First suite that needs Meilisearch -- see probeMeilisearch() in
 		// tests/support/infra.ts.
-		expectedFiles: 23,
+		expectedFiles: 24,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -902,7 +902,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// PostgresLedgerLookup pair durably appends a third ledger row for the second delivery --
 		// spool_txid null, duplicate_of the first delivery's own receipt seq -- read back and
 		// verified with a raw query against journal_ledger, never through the patched drizzle client.
-		expectedTests: { ci: 128, nightly: 0, manual: 0 },
+		expectedTests: { ci: 130, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

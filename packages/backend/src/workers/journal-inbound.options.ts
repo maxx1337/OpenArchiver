@@ -101,3 +101,38 @@ export function resolveJournalSpoolRoot(raw: string | undefined): string {
 	}
 	return raw.trim();
 }
+
+/** Environment variable that overrides the reconciler sweep's repeat interval. */
+export const JOURNAL_RECONCILE_INTERVAL_VAR = 'JOURNAL_RECONCILE_INTERVAL_MS';
+
+/**
+ * Default sweep interval: five minutes.
+ *
+ * `journalInboundQueue`'s own retry budget (`../jobs/queues.ts`) already covers roughly 85 minutes of
+ * exponential backoff before a job reaches the failed set -- the reconciler exists for what that
+ * budget does not (a crash, a Redis flush, an outage longer than the budget), not to duplicate it.
+ * Five minutes is short enough that an operator watching spool depth (E10) does not wait long for a
+ * recovered backlog to start draining, and long enough that a sweep finding nothing to do (the
+ * ordinary case) costs one batched ledger query and a `readdir` walk, not a busy loop.
+ */
+export const DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * Resolve the reconciler's repeat interval, in milliseconds. Same rejection posture as
+ * {@link resolveJournalInboundConcurrency}: a malformed value fails startup rather than silently
+ * falling back, because an operator who set this believes the sweep runs at the interval they wrote.
+ */
+export function resolveJournalReconcileIntervalMs(raw: string | undefined): number {
+	if (raw === undefined || raw.trim() === '') {
+		return DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS;
+	}
+	const value = Number(raw.trim());
+	if (!Number.isInteger(value) || value < 1) {
+		throw new Error(
+			`${JOURNAL_RECONCILE_INTERVAL_VAR} must be a positive integer (milliseconds), got ` +
+				`${JSON.stringify(raw)}. Unset it to use the default of ` +
+				`${DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS}.`
+		);
+	}
+	return value;
+}

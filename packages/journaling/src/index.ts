@@ -264,6 +264,8 @@ export {
 export {
 	JOURNAL_INBOUND_JOB_NAME,
 	JOURNAL_INBOUND_QUEUE_NAME,
+	JOURNAL_RECONCILE_JOB_ID,
+	JOURNAL_RECONCILE_JOB_NAME,
 	journalInboundJobId,
 	type JournalInboundJobData,
 } from './phase-b/queue-contract';
@@ -317,3 +319,9 @@ export {
 	type PhaseBPipelineDeps,
 	type PhaseBPipelineResult,
 } from './phase-b/pipeline';
+
+export {
+	runSpoolReconcile,
+	type SpoolReconcileOptions,
+	type SpoolReconcileResult,
+} from './phase-b/reconciler';

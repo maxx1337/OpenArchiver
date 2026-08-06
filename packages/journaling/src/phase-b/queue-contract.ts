@@ -55,6 +55,24 @@ export const JOURNAL_INBOUND_QUEUE_NAME = 'journal-inbound';
  */
 export const JOURNAL_INBOUND_JOB_NAME = 'process-spool-entry';
 
+/**
+ * BullMQ job name for the reconciler sweep (`JR-6-04`, architecture doc section 3: "Ein
+ * Reconciler-Job sweept periodisch den Spool..."). Lives on the **same** queue as
+ * {@link JOURNAL_INBOUND_JOB_NAME} rather than a second one -- the reconciler needs no isolation from
+ * the jobs it re-enqueues, and a second queue would need its own worker or its own case in this one
+ * anyway, for no gain.
+ */
+export const JOURNAL_RECONCILE_JOB_NAME = 'reconcile-spool';
+
+/**
+ * Fixed BullMQ job id for the reconciler's own repeatable registration -- not a spool transaction id,
+ * so it does not go through {@link journalInboundJobId}. One repeatable job per queue is enough; a
+ * second `add()` with the same id and the same `repeat` option is a no-op, which is what makes
+ * registering it on every worker startup safe rather than something that needs to happen exactly
+ * once.
+ */
+export const JOURNAL_RECONCILE_JOB_ID = 'reconcile-spool';
+
 /** Everything a Phase-B job carries. See the module comment for why it is one field. */
 export interface JournalInboundJobData {
 	/** The `spool_txid` of the receipt to process -- a ULID as produced by `generateTxId()`. */

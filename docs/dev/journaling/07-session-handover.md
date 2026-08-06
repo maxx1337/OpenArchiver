@@ -228,16 +228,14 @@ gebraucht, **wenn die lokale Infrastruktur klemmt**, nicht bei jedem Sessionstar
 unverändert in [`19-umgebung-windows-host.md`](19-umgebung-windows-host.md). Die zwei E13-Notizen, die
 hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e2.md`.
 
-### Nächster konkreter Schritt — **`JR-6-04` (Spool-Reconciler)**
+### Nächster konkreter Schritt — **`JR-6-05`, dann `JR-6-06`/`JR-6-07`, dann Abnahme**
 
-> **`JR-6-04` ist angefangen, und der Arbeitsbaum ist absichtlich nicht sauber.** Der DEV-Agent lief
-> am 2026-08-06 mitten in der Scheibe in sein Wochenlimit. Rund 490 Zeilen lagen unversioniert da
-> (`reconciler.ts`/`reconciler.test.ts` neu, sechs weitere Dateien geändert). Sie sind zur Sicherheit
-> als **`wip/journaling-jr-6-04`** committet und gepusht (`[skip ci]`, bewusst **nicht** auf dem
-> Epic-Zweig: unlintiert, ungetestet, `suite-inventory.ts` nicht nachgezogen) und danach unverändert
-> im Arbeitsbaum wiederhergestellt. **Kein `git checkout -- .` und kein `git clean`**, sonst ist die
-> Arbeit weg; der WIP-Zweig ist die Kopie, nicht das Original. Wiederherstellen falls nötig:
-> `git checkout wip/journaling-jr-6-04 -- packages/`. Zweig löschen, sobald `JR-6-04` gelandet ist.
+> **`JR-6-04` ist gelandet** (ADR-038). Der WIP-Zweig `wip/journaling-jr-6-04` ist damit überflüssig
+> und kann gelöscht werden. **Die Rollentrennung ist ab dieser Scheibe aufgehoben** — der DEV-Subagent
+> lief in sein Wochenlimit, der Auftraggeber hat die Fertigstellung durch den PO angewiesen. **Folge
+> für `JR-6-08`: die Abnahme braucht eine eigene TEST-Sitzung**, weil niemand die eigene Arbeit
+> unabhängig abnehmen kann. In E13 hat genau dieser Mechanismus vier Runden lang echte Defekte
+> gefunden; er ist kein Formalismus.
 
 Der Prompt für die nächste Sitzung:
 
@@ -247,9 +245,17 @@ und arbeite den nächsten Schritt ab.
 ```
 
 **Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter **inhaltlicher**
-Commit `37ba891`, CI `31115643168` **success** — 107 Dateien, `unit 1104/1104 · integration 128/128 ·
-adversarial 69/69`; danach nur der Doku-Nachtrag mit dieser Lauf-Nummer. Gleichstand deshalb gegen
-`git ls-remote` prüfen, nicht gegen diesen Hash. Nicht neu abzweigen, nicht neu reservieren.
+Commit trägt `JR-6-04`, lokaler Volllauf **1318 passed | 8 skipped** bei 109 Dateien, Exit 0 —
+`unit ci 1119/1119 · integration ci 130/130 · adversarial ci 69/69`; danach nur der Doku-Nachtrag mit
+der CI-Nummer. Gleichstand deshalb gegen `git ls-remote` prüfen, nicht gegen einen Hash hier. Nicht
+neu abzweigen, nicht neu reservieren.
+
+**Was noch offen ist, in dieser Reihenfolge:** `JR-6-05` (Hash-vor-Verschlüsselung festschreiben und
+testen: `content_sha256` über die Plaintext-Wire-Bytes, `StorageService` verschlüsselt danach — Test:
+Objekt exportieren, entschlüsseln, Hash neu berechnen, identisch zum Ledger-Wert), `JR-6-06` (TEST:
+Storage nicht erreichbar ⇒ weiterhin quittiert, Backlog läuft nach Erholung ab, Kette unberührt),
+`JR-6-07` (TEST: Soak, 100 000 Nachrichten als `nightly` plus schnelle `ci`-Smoke-Variante, **`OA_TEST_PG_STALE_MS`
+über die erwartete Laufzeit heben**, F13), `JR-6-08` (Abnahme, eigene Sitzung).
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot

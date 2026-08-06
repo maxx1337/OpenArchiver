@@ -2,10 +2,13 @@ import { expect, it } from 'vitest';
 import { suite } from '@oa-test/classification';
 import {
 	DEFAULT_JOURNAL_INBOUND_CONCURRENCY,
+	DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS,
 	JOURNAL_INBOUND_LOCK_DURATION_MS,
 	JOURNAL_INBOUND_MAX_STALLED_COUNT,
+	JOURNAL_RECONCILE_INTERVAL_VAR,
 	JOURNAL_SPOOL_ROOT_VAR,
 	resolveJournalInboundConcurrency,
+	resolveJournalReconcileIntervalMs,
 	resolveJournalSpoolRoot,
 } from './journal-inbound.options';
 
@@ -109,5 +112,45 @@ suite('ci', 'resolveJournalSpoolRoot() (JR-6-02b)', () => {
 		// The two processes share one physical spool directory; a second, differently-named variable
 		// would let them silently drift apart the way F46 already cost this project once.
 		expect(JOURNAL_SPOOL_ROOT_VAR).toBe('SMTP_INGRESS_SPOOL_ROOT_PATH');
+	});
+});
+
+suite('ci', 'resolveJournalReconcileIntervalMs() (JR-6-04)', () => {
+	it('defaults to five minutes when the variable is unset', () => {
+		expect(resolveJournalReconcileIntervalMs(undefined)).toBe(
+			DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS
+		);
+		expect(DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS).toBe(300_000);
+	});
+
+	it.each([
+		['empty string', ''],
+		['whitespace only', '   '],
+	])('treats %s as unset -- an exported-but-empty variable is not a typo', (_label, raw) => {
+		expect(resolveJournalReconcileIntervalMs(raw)).toBe(DEFAULT_JOURNAL_RECONCILE_INTERVAL_MS);
+	});
+
+	it.each([
+		['1', 1],
+		['60000', 60000],
+		['  120000  ', 120000],
+	])('accepts a positive integer (%s)', (raw, expected) => {
+		expect(resolveJournalReconcileIntervalMs(raw)).toBe(expected);
+	});
+
+	it.each([
+		['non-numeric', 'abc'],
+		['zero -- a sweep that never runs is never what was meant', '0'],
+		['negative', '-1'],
+		['fractional', '2.5'],
+	])('rejects %s rather than falling back to the default', (_label, raw) => {
+		expect(() => resolveJournalReconcileIntervalMs(raw)).toThrow(/must be a positive integer/);
+	});
+
+	it('names the variable and the default in the error, so the message is actionable', () => {
+		expect(() => resolveJournalReconcileIntervalMs('abc')).toThrow(
+			new RegExp(JOURNAL_RECONCILE_INTERVAL_VAR)
+		);
+		expect(() => resolveJournalReconcileIntervalMs('abc')).toThrow(/default of 300000/);
 	});
 });

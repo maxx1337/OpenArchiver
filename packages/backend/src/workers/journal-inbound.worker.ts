@@ -1,13 +1,25 @@
 import { Worker, type Job } from 'bullmq';
-import { JOURNAL_INBOUND_JOB_NAME, JOURNAL_INBOUND_QUEUE_NAME } from '@open-archiver/journaling';
+import {
+	JOURNAL_INBOUND_JOB_NAME,
+	JOURNAL_INBOUND_QUEUE_NAME,
+	JOURNAL_RECONCILE_JOB_ID,
+	JOURNAL_RECONCILE_JOB_NAME,
+} from '@open-archiver/journaling';
 import { connection } from '../config/redis';
-import { journalInboundProcessor, ledgerSql } from '../jobs/processors/journal-inbound.processor';
+import { journalInboundQueue } from '../jobs/queues';
+import {
+	journalInboundProcessor,
+	journalReconcileProcessor,
+	ledgerSql,
+} from '../jobs/processors/journal-inbound.processor';
 import { logger } from '../config/logger';
 import {
 	JOURNAL_INBOUND_CONCURRENCY_VAR,
 	JOURNAL_INBOUND_LOCK_DURATION_MS,
 	JOURNAL_INBOUND_MAX_STALLED_COUNT,
+	JOURNAL_RECONCILE_INTERVAL_VAR,
 	resolveJournalInboundConcurrency,
+	resolveJournalReconcileIntervalMs,
 } from './journal-inbound.options';
 
 /**
@@ -50,12 +62,29 @@ import {
  *
  * The retry budget and the failed-job retention are properties of the **queue**, not of the worker,
  * and are documented at `journalInboundQueue` in `../jobs/queues.ts`.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * The reconciler (`JR-6-04`) is a second job name on this same queue, registered by this same process
+ * ---------------------------------------------------------------------------------------------
+ * `journalInboundQueue.add(JOURNAL_RECONCILE_JOB_NAME, ..., { repeat: {...} })` below, right after
+ * this file constructs the `Worker`, is the entire "where does the process live" decision (ADR-038):
+ * no new process, and deliberately **not** a job registered from the shared `sync-scheduler.ts` --
+ * that process runs unconditionally in every OSS install (`CLAUDE.md`'s runtime topology table), and
+ * the journaling receiver is opt-in (see this file's own module doc comment above, "not part of
+ * `pnpm start:workers`"). Registering the repeat job from a process nobody who has not deployed
+ * journaling ever runs keeps that boundary intact. The registration itself mirrors the pattern
+ * `sync-scheduler.ts` uses for `ingestionQueue`/`indexingQueue`: `queue.add(name, {}, { jobId,
+ * repeat })` is idempotent, so calling it on every worker startup (a restart, a redeploy) is safe --
+ * BullMQ treats a second registration with the same `jobId` and `repeat` shape as a no-op, not a
+ * second schedule.
  */
 
 const processor = async (job: Job) => {
 	switch (job.name) {
 		case JOURNAL_INBOUND_JOB_NAME:
 			return journalInboundProcessor(job);
+		case JOURNAL_RECONCILE_JOB_NAME:
+			return journalReconcileProcessor();
 		default:
 			// Same posture as the ingestion worker: an unknown name is a wiring defect, and failing the
 			// job surfaces it. Completing it would report a message as archived that nothing looked at.
@@ -89,6 +118,42 @@ logger.info(
 	},
 	'Journal inbound worker started'
 );
+
+// Resolved synchronously, before the async registration below -- a malformed override must abort
+// startup the same way the concurrency override does, not surface as a repeat job silently never
+// registered.
+const reconcileIntervalMs = resolveJournalReconcileIntervalMs(
+	process.env[JOURNAL_RECONCILE_INTERVAL_VAR]
+);
+
+// Registers the reconciler's repeatable job on this same queue (see the module doc comment,
+// "The reconciler (JR-6-04) is a second job name..."). No top-level `await`: this package compiles
+// to CommonJS (`tsconfig.base.json`'s `module: nodenext` without `"type": "module"` in
+// `package.json`), which does not support it. `journalInboundQueue.add()` with a fixed `jobId` is
+// itself idempotent, so a registration that has not yet resolved when the first job arrives costs
+// nothing -- the `Worker` above is already listening on the queue independently of this promise.
+journalInboundQueue
+	.add(
+		JOURNAL_RECONCILE_JOB_NAME,
+		{},
+		{
+			jobId: JOURNAL_RECONCILE_JOB_ID,
+			repeat: { every: reconcileIntervalMs },
+		}
+	)
+	.then(() => {
+		logger.info(
+			{ intervalMs: reconcileIntervalMs },
+			'Journal inbound reconciler sweep scheduled'
+		);
+	})
+	.catch((err: unknown) => {
+		// Not fatal: the worker itself is already up and processing ordinary jobs. A sweep that never
+		// got scheduled means the reconciler's own safety net is missing, which is exactly the kind of
+		// silent gap architecture doc section 3 exists to prevent -- log loudly rather than retry
+		// silently, since retrying a malformed `repeat` option would just fail the same way again.
+		logger.error({ err }, 'Failed to schedule the journal inbound reconciler sweep');
+	});
 
 // Same last-resort net as the ingestion worker, and for the same reason: an escaped rejection would
 // otherwise take the process down, `concurrently` does not restart it, and the Phase-B backlog then

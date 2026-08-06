@@ -2,13 +2,17 @@ import type { Job } from 'bullmq';
 import {
 	NodeSpoolEntryReader,
 	NodeSpoolEntryReleaser,
+	NodeSpoolFileSystem,
 	PostgresLedgerLookup,
 	PostgresLedgerWriter,
 	runPhaseBPipeline,
+	runSpoolReconcile,
 	type JournalInboundJobData,
 	type LedgerBackend,
 	type PhaseBAlert,
+	type SpoolReconcileResult,
 } from '@open-archiver/journaling';
+import { enqueueForReconcile } from './journal-reconcile-enqueue';
 import { IngestionService } from '../../services/IngestionService';
 import { StorageService } from '../../services/StorageService';
 import { SearchService } from '../../services/SearchService';
@@ -56,6 +60,14 @@ import { createJournalArchiveObjectPort } from './journal-archive-object-adapter
  * than being forced through `PhaseBAlertSink`'s payload type (`SpoolEntryVerdict`-shaped, from
  * `JR-6-02a`, and not a natural fit for either). Whether every Phase-B alert should eventually share
  * one typed channel is left open for the Product Owner; see `06-status.md`.
+ *
+ * ---------------------------------------------------------------------------------------------
+ * `journalReconcileProcessor` (`JR-6-04`) below is a second job body on the same queue
+ * ---------------------------------------------------------------------------------------------
+ * The reconciler sweep reuses `ledgerLookup`/`spoolRoot`/`ledgerSql` this file already constructs for
+ * `journalInboundProcessor` -- see `reconciler.ts`'s own module doc comment for why the sweep itself
+ * is thin (`runExclusiveCrashRecoveryScan()` plus one loop) and ADR-038 for why it lives here, as a
+ * repeatable job on this same worker, rather than a new process or the shared `sync-scheduler.ts`.
  */
 
 const ingestionService = new IngestionService();
@@ -181,6 +193,37 @@ export const journalInboundProcessor = async (job: Job<JournalInboundJobData>) =
 		'Phase B archived and indexed spool entry'
 	);
 
+	return result;
+};
+
+/**
+ * The enqueue decision lives in `journal-reconcile-enqueue.ts`, not here -- see that module's own doc
+ * comment. Short version: this file's module scope constructs `StorageService`, and
+ * `config/storage.ts` throws **at import** without `STORAGE_TYPE` (F63 case 1), so a function whose
+ * only real dependency is Redis must not be reachable only through this import graph.
+ */
+
+/**
+ * The reconciler sweep (`JR-6-04`). Reuses every dependency `journalInboundProcessor` above already
+ * constructs at module scope -- no second Postgres connection, no second spool-root resolution --
+ * because this worker process is the one place those already exist, tested (F63/F64), and closed on
+ * shutdown (`journal-inbound.worker.ts`).
+ */
+export const journalReconcileProcessor = async (): Promise<SpoolReconcileResult> => {
+	const result = await runSpoolReconcile({
+		fs: new NodeSpoolFileSystem(),
+		ledgerLookup,
+		spoolRoot,
+		alertSink: {
+			alert: (event) => {
+				logger.warn({ event }, 'journal-inbound reconciler: spool file quarantined');
+			},
+		},
+		transactor: postgresTransactor(ledgerSql),
+		enqueue: enqueueForReconcile,
+	});
+
+	logger.info(result, 'journal-inbound reconciler sweep complete');
 	return result;
 };
 

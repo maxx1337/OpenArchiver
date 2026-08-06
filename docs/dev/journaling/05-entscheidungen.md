@@ -2768,3 +2768,60 @@ Ende-zu-Ende-Probe (`journal-phase-b-e2e.int.test.ts`, echtes Postgres) rot exak
 Reservierung „ADR-037 bis ADR-040 — Nachschub für E6" (Status **reserviert**), dieser Zweig trägt den
 oben gefüllten ADR-037-Abschnitt (Status **entschieden**). Beim Rückmerge gewinnt dieser Abschnitt; die
 Reservierungstabelle auf dem Integrationszweig muss um 037 gekürzt werden (038–040 bleiben offen).
+
+## ADR-038 — Der Reconciler ist ein wiederkehrender Job auf der bestehenden `journal-inbound`-Queue, kein eigener Prozess und nicht im `sync-scheduler`
+
+**Status:** **entschieden** (2026-08-06, `JR-6-04`) · **Nummer:** aus dem nach ADR-032 reservierten
+Kreis 037–040
+
+**Die Frage.** Architektur §3 verlangt, dass ein Reconciler „periodisch" den Spool nach Einträgen
+sweept, die einen Ledger-Eintrag haben, aber noch nicht Phase-B-fertig sind. Wo läuft dieses
+„periodisch"? Drei Möglichkeiten standen offen: ein vierter Worker-Prozess, ein Job im bestehenden
+`sync-scheduler.ts`, oder ein wiederkehrender Job auf der Queue, die der `journal-inbound`-Worker
+schon bedient.
+
+**Die Entscheidung: der dritte Weg.** `journalInboundQueue.add(JOURNAL_RECONCILE_JOB_NAME, {}, {
+jobId, repeat })`, registriert vom `journal-inbound`-Worker unmittelbar nach dem Bau seines `Worker`,
+mit einem zweiten `case` im Job-Dispatch.
+
+**Warum nicht der `sync-scheduler`.** Er läuft nach der Prozesstabelle in `CLAUDE.md` §3 in **jeder**
+OSS-Installation, unbedingt. Der Journaling-Empfänger ist dagegen **Opt-in** — genau deshalb steckt
+der `journal-inbound`-Worker nicht in `pnpm start:workers` und `apps/smtp-ingress` nicht in
+`start:oss`. Einen Sweep für ein Subsystem aus einem Prozess zu planen, den auch jemand fährt, der
+das Subsystem nie ausgerollt hat, hätte diese Grenze aufgeweicht: der Job wäre in jeder Installation
+registriert und liefe gegen einen Spool, den es dort nicht gibt.
+
+**Warum kein eigener Prozess.** Er bräuchte dieselbe Postgres-Verbindung, dieselbe
+Spool-Wurzel-Auflösung und dieselbe Shutdown-Behandlung wie der `journal-inbound`-Worker — und **F63
+und F64 sind die gemessenen Kosten genau dieser Verdrahtung**, einmal schon bezahlt. Ein zweiter
+Prozess hätte sie ein zweites Mal fällig gemacht, für eine Aufgabe, die pro Durchlauf eine gebündelte
+Ledger-Abfrage und einen `readdir`-Walk kostet. Der Sweep teilt jetzt `ledgerLookup`, `spoolRoot` und
+`ledgerSql` mit dem Prozess, der sie ohnehin hält, testet und beim Herunterfahren schließt.
+
+**Der Preis, benannt statt entdeckt:** wer den `journal-inbound`-Worker nicht ausrollt, hat auch
+keinen Reconciler — dieselbe Kette, die schon im Doc-Comment des Workers steht („Post, die angenommen
+und nie archiviert wird"). Das Sicherheitsnetz hängt am selben Prozess wie die Arbeit, die es
+absichert. Gegenmittel bleiben **E10** (Monitoring von Spool-Tiefe und Phase-B-Backlog) und **E11**
+(Deployment-Verdrahtung).
+
+**Zwei Eigenschaften, die die Entscheidung tragen und gemessen sind, nicht angenommen.**
+`queue.add()` mit festem `jobId` und gleichem `repeat` ist idempotent — die Registrierung bei **jedem**
+Worker-Start ist deshalb harmlos und braucht kein „genau einmal"-Verfahren. Und `add()` mit
+deterministischer `jobId` ist ein **No-op**, solange BullMQ die Id kennt, auch im `failed`-Set: ein
+Reconciler, der nur `add()` aufruft, hätte einen gescheiterten Job als „wieder eingereiht" gemeldet
+und ihn für immer liegen lassen. Deshalb `retry()` für `failed`/`completed`, und deshalb prüft
+`journal-spool-reconciler.int.test.ts` diese No-op-Eigenschaft **selbst**, statt sie aus der
+Dokumentation zu zitieren.
+
+**Der Sweep selbst ist bewusst dünn** und in `reconciler.ts`s Modulkommentar begründet:
+`runExclusiveCrashRecoveryScan()` aus `JR-3-05`/`JR-4-18` plus eine Schleife. „Datei liegt in
+`incoming/` und hat eine Ledger-Zeile" ist **genau** dessen `requeue`-Liste, weil eine Datei
+`incoming/` erst mit `SpoolEntryReleaser.release()` am Ende einer erfolgreichen Phase B verlässt. Ein
+zweiter Spool-Walk hätte die Sharding-, `readdir`- und Quarantäne-Race-Analyse von `JR-3-05`
+verdoppelt, ohne etwas hinzuzufügen. **Exklusiv** und nicht der blanke Scan, weil dieser Sweep und der
+Boot-Scan von `apps/smtp-ingress` jetzt wirklich aus zwei unabhängigen Prozessen gegen denselben Spool
+laufen.
+
+**Verworfene Nebenoption:** eine eigene Queue für den Sweep. Sie hätte einen eigenen Worker oder einen
+eigenen `case` in diesem gebraucht — und der Reconciler braucht keine Isolation von den Jobs, die er
+selbst einreiht.
