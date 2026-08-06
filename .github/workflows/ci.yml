@@ -130,6 +130,14 @@ jobs:
             # relying on an untested combination.
             STORAGE_TYPE: local
             STORAGE_LOCAL_ROOT_PATH: /tmp/oa-storage
+            # JR-6-05: with this set, `StorageService` encrypts at rest, and
+            # `journal-hash-before-encryption.int.test.ts` can actually verify what the backlog asks
+            # of it -- that `content_sha256` is taken over the PLAINTEXT wire bytes. Without a key,
+            # stored bytes and plaintext are the same bytes, "re-hash equals the ledger value" holds
+            # whatever the ordering is, and the test says so in a `coverageNotice` instead of
+            # reporting the same green as a run that proved it. 64 hex chars = the 32 bytes
+            # `config/storage.ts` validates eagerly. Test-only, never a secret.
+            STORAGE_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
             # `CryptoService` throws at import without this (`decryptSource()`/`seedIngestionSource()`
             # now always populate `credentials`, JR-6-02b's F-caught gap in the shared seed helper).
             # A fixed test-only value, never a secret.

@@ -209,7 +209,7 @@ unten und `05-entscheidungen.md`).
       append-only). Marker trägt seit **ADR-037** einen eigenen `event_type`
       (`duplicate_marker`), nicht mehr `'receipt'`
 - [x] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität) (2026-08-06, ADR-038)
-- [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
+- [x] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
 - [ ] `JR-6-06` — TEST: Object-Store-Ausfall
 - [ ] `JR-6-07` — TEST: Soak, 100.000 Nachrichten (`nightly` plus `ci`-Smoke, F13-Frist heben)
 - [ ] `JR-6-08` — Abnahme E6
@@ -318,3 +318,38 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
   implementiert hat, kann nicht unabhängig abnehmen — genau dieser Mechanismus hat in E13 vier Runden
   lang echte Defekte gefunden. Braucht eine eigene TEST-Sitzung
 - **Nicht getan, absichtlich:** F64s Ursache, F62, F60, F43, F39, F42, F17(b)
+
+### 2026-08-06 — `JR-6-05`: Hash über Plaintext, Verschlüsselung danach
+
+- **Rolle:** PO im Eigenbau (Rollentrennung aufgehoben, siehe `JR-6-04`)
+- **Test:** `packages/backend/tests/integration/journal-hash-before-encryption.int.test.ts` — echte
+  Pipeline, echtes Postgres, Verschlüsselung **eingeschaltet**; `indexBatch` ist ein Stub, weil die
+  Aussage nichts mit Suche zu tun hat und die Anforderung so bei Postgres bleibt
+- **Was er belegt:** die Bytes im Storage sind wirklich Chiffrat (Präfix `oa_enc_idf_v1::`, eigener
+  Hash **verschieden** vom Ledger-Wert, länger als der Klartext) → entschlüsselt → **byteidentisch**
+  zur Wire-Fixture → neu gehasht = Ledger-`content_sha256` = `archived_emails.storage_hash_sha256`,
+  und `size_bytes` ist die **Klartext**länge, nicht die gepolsterte Chiffratlänge
+- **`ci.yml` setzt jetzt `STORAGE_ENCRYPTION_KEY`** (64 Hex, testonly). Ohne Schlüssel sind Klartext
+  und gespeicherte Bytes dieselben Bytes, „Rehash = Ledger-Wert" gilt dann **unabhängig von der
+  Reihenfolge** — der Test meldet das per `coverageNotice` namentlich („HASH-BEFORE-ENCRYPTION
+  ORDERING IS NOT verified") statt dasselbe Grün zu drucken wie ein Lauf, der es bewiesen hat. Kein
+  `skipIf`
+- **Kalibriert:** mit Schlüssel „the ordering claim is verified this run" (1007 Chiffratbytes); ohne
+  Schlüssel die Nicht-geprüft-Meldung. Der **invertierte** Fall (Hash über Chiffrat) ist strukturell
+  unmöglich zu bestehen — der Test behauptet gleichzeitig `storage_hash = rehash = wireDigest` und
+  `hash(Chiffrat) ≠ wireDigest` —, aber **nicht gemessen**, weil dafür Produktionscode in
+  `processEmail()` verdreht werden müsste. Offen benannt statt als gemessen ausgegeben
+- **Ein Fehler auf dem Weg, gemessen statt geraten:** die erste Fassung setzte `STORAGE_*` im
+  Modulscope und erwartete, dass der dynamische Import sie sieht. Tut er nicht — eine **statische**
+  Importkante zieht `config/storage.ts` vorher herein, die Datei landete im Ambient-Root und war
+  **unverschlüsselt**. Sichtbar wurde es als `ENOENT`; die stille Hälfte wäre schlimmer gewesen, denn
+  ein unverschlüsseltes Objekt erfüllt „Rehash = Ledger-Wert" ebenfalls. Konfiguration wird jetzt
+  **gelesen**, nicht gesetzt
+- **Testzahl:** +1 `integration` (1 Datei). Volllauf **1319 passed | 8 skipped** bei 110 Dateien,
+  Exit 0, `unit ci 1119/1119 · integration ci 131/131 · adversarial ci 69/69`
+- **CI-Lauf: offen.** GitHub Actions erzeugt seit `37b471d` keine Läufe mehr für diesen Zweig (dieser
+  Lauf wurde nach 15 Minuten abgebrochen, für `0f2db70` und `afa8200` entstand gar keiner). Das
+  Repository ist öffentlich, es gibt keine `concurrency`-Regel und kein `timeout-minutes` — Ursache
+  liegt außerhalb dieses Codes. **Der CI-Beleg für `JR-6-04` und `JR-6-05` fehlt damit** (F48: lokal
+  grün ist nicht der ganze Beleg)
+- **Offen:** `JR-6-06`, `JR-6-07`, `JR-6-08`

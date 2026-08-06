@@ -844,7 +844,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// against real Postgres and real Meilisearch -- spool file to searchable hit, fan-out to three
 		// owners, spool release. First suite that needs Meilisearch -- see probeMeilisearch() in
 		// tests/support/infra.ts.
-		expectedFiles: 24,
+		expectedFiles: 25,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -902,7 +902,7 @@ export const SUITES: readonly SuiteSpec[] = [
 		// PostgresLedgerLookup pair durably appends a third ledger row for the second delivery --
 		// spool_txid null, duplicate_of the first delivery's own receipt seq -- read back and
 		// verified with a raw query against journal_ledger, never through the patched drizzle client.
-		expectedTests: { ci: 130, nightly: 0, manual: 0 },
+		expectedTests: { ci: 131, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
