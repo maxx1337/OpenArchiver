@@ -149,12 +149,13 @@ Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-05 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b` erledigt** (Code fertig,
+**Stand:** 2026-08-06 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b` erledigt** (Code fertig,
 TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und F61 behoben, F62/F63/F64
 neu) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
 Volllauf: **1298 passed | 8 skipped** bei 107 Dateien — `unit ci 1102/1102 · integration ci 127/127 ·
-adversarial ci 69/69`, Exit 0 · zuletzt `faa26d5` · **CI `31083864864` success** (erster Lauf mit dem
-neuen `meilisearch`-Service-Container)
+adversarial ci 69/69`, Exit 0 · zuletzt `d5f77cf` · **CI `31087687090` success** · **neu, kein
+Backlog-Task:** `pnpm gate` (Pre-Push-Gate, `88b6719`+`d5f77cf`), dreimal kalibriert — Details unter
+„Billig verifizieren" oben und in `06-status.md`
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -447,9 +448,16 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `faa26d5`. CI
-`31083864864` **success** — 107 Dateien, `unit 1102/1102 · integration 127/127 · adversarial 69/69`.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `d5f77cf`. CI
+`31087687090` **success** — 107 Dateien, `unit 1102/1102 · integration 127/127 · adversarial 69/69`.
 Nicht neu abzweigen, nicht neu reservieren.
+
+> **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
+> Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
+> an der exakt erwarteten Stelle, danach sauber zurückgesetzt). Fängt **nicht** 49a0bc1 (nur ein
+> Heuristik-`warn`) und **nicht** F64s hängenden Shutdown (per Definition nicht lokal reproduzierbar).
+> Details in `06-status.md` unter „Pre-Push-Gate" und in `07-session-handover.md` unter „Billig
+> verifizieren". Ändert an `JR-6-03`/`JR-6-04` als nächstem Schritt nichts.
 
 **Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034`, `ADR-035` sind
 entschieden; Gate, Pipeline, Backend-Adapter und der automatisierte Ende-zu-Ende-Test

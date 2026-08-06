@@ -846,7 +846,11 @@ test files`. Erster Lauf, der den neuen `meilisearch`-Service-Container tatsäch
   `MEILI_MASTER_KEY`, `JWT_SECRET`, `OA_TEST_REQUIRE_INFRA`) werden vor dem Overlay explizit aus einer
   Kopie von `process.env` gelöscht, damit `ci.yml`s eigene Erklärung — oder ihr Fehlen — für sie
   entscheidet, nicht die Entwicklerumgebung
-- **CI:** `<wird nach dem Push nachgetragen>`
+- **CI:** `31087687090` **success** für den Kopf-Commit `d5f77cf` (die Doku selbst) — 107 Dateien
+  unverändert gegenüber dem Vortag, `unit ci 1102/1102 · integration ci 127/127 · adversarial ci
+69/69`, `Suite inventory verified: unit 77/77, integration 23/23, adversarial 7/7, 0 unclassified
+test files`. Erwartungsgemäß unverändert — das Gate selbst ist reine Werkzeug-Infrastruktur, die
+  CI läuft nicht darüber
 - **Nicht Teil dieses Auftrags, wie vom Auftraggeber ausdrücklich ausgeschlossen:** F64s Ursache, F62,
   F60, F43, F39, F42, F17(b), die Doku-Diät, `JR-6-03`/`JR-6-04`
 - **Numerierung:** keine neue ADR, keine neue F-Nummer vergeben — dieser Auftrag hat keinen Bedarf an
