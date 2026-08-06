@@ -155,19 +155,23 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-06 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b`, `JR-6-03` erledigt** (`JR-6-02`
-insgesamt code-fertig, TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und
-F61 behoben, F62/F63/F64 offen) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig,
-eigener Upstream gesetzt) · Volllauf: **1301 passed | 8 skipped** bei 107 Dateien —
-`unit ci 1104/1104 · integration ci 128/128 · adversarial ci 69/69`, Exit 0 · zuletzt `3835e91` ·
-**CI `31105611002` success** · **`pnpm gate` (kein Backlog-Task):**
-`88b6719`+`d5f77cf`, F65-Fix `1611434` — unverändert seit der letzten Sitzung
+**Stand:** 2026-08-06 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b`, `JR-6-03` erledigt, `ADR-037`
+entschieden** (`JR-6-02` insgesamt code-fertig, TEST-Abnahme offen; ADR-010, ADR-033, ADR-034,
+ADR-035, ADR-037 entschieden; F59 und F61 behoben, F62/F63/F64 offen) · **Branch:**
+`claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf:
+**1301 passed | 8 skipped** bei 107 Dateien — `unit ci 1104/1104 · integration ci 128/128 ·
+adversarial ci 69/69` (unverändert seit `JR-6-03` — ADR-037 korrigierte drei Assertions, fügte keine
+hinzu), Exit 0 · zuletzt siehe „Nächster konkreter Schritt" unten für den Commit-Hash · **`pnpm gate`
+(kein Backlog-Task):** `88b6719`+`d5f77cf`, F65-Fix `1611434` — unverändert seit der letzten Sitzung
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
 > der Reservierung — sie trägt ihre Nummer seit dem 2026-07-27 und wurde in `JR-6-02` gefüllt. **033**,
-> **034** und **035** sind jetzt vergeben (Owner-Auflösung für die drei schwächeren Parse-Ergebnisse,
-> die Phase-B-Pipeline, die Automatisierung des Ende-zu-Ende-Tests); **036** bleibt reserviert.
+> **034** und **035** sind vergeben (Owner-Auflösung für die drei schwächeren Parse-Ergebnisse, die
+> Phase-B-Pipeline, die Automatisierung des Ende-zu-Ende-Tests); **036** ist mit der Doku-Diät gefüllt.
+> Nachschub **ADR-037–040** am 2026-08-06 auf dem Integrationszweig nachreserviert (`e8256f7`), weil
+> 033–036 erschöpft waren; **037** ist jetzt mit dem `duplicate_marker`-Event-Typ gefüllt (siehe unten),
+> 038–040 bleiben offen.
 
 > **E4 und E5 sind abgenommen und zurückgemergt** — E4 mit `JR-4-13`/`9503bc8`, E5 mit `JR-5-09`/`107346d`,
 > E3 mit `JR-3-08`/`185e9bd`. **Aus E4 ist kein Befund offen.**
@@ -184,18 +188,37 @@ ESMTP, prüft Quell- und Empfänger-ACL, fährt beim Start den Crash-Recovery-Sc
 Ende-zu-Ende-Test (ADR-035). Seit **`JR-6-03`** schreibt ein `'duplicate'`-Ergebnis, das eine **andere**
 Spool-Transaktion als die eigene betrifft, einen `duplicate_of`-Marker in den Ledger
 (`LedgerLookup.findOriginalReceiptSeq()`, `MIN(seq)` über Chain+Hash unterscheidet das von einem
-Job-Retry). **Was fehlt:** `JR-6-04` (Spool-Reconciler).
+Job-Retry). Seit **`ADR-037`** trägt dieser Marker einen eigenen `event_type`
+(`duplicate_marker`), nicht mehr `'receipt'` — eine Zählung von Receipts gegen angenommene Nachrichten
+(`verify`, E9) zählt ihn dadurch nicht mehr doppelt. **Was fehlt:** `JR-6-04` (Spool-Reconciler).
 
 ### Was diese Session gemacht hat
 
-**`JR-6-03` (Idempotenz/`duplicate_of`), Commit `5e9551f`.** Volle Begründung als Doc-Comment in
+**`ADR-037` (eigener Event-Typ für den `duplicate_of`-Marker).** Migration `0043_whole_meltdown.sql`
+(`ALTER TYPE ... ADD VALUE 'duplicate_marker'`, lokal gegen eine frische Datenbank geprüft — der neue
+Wert ist außerhalb der Migrations-Transaktion sofort nutzbar). Vokabular an drei Stellen synchron:
+`journalEventTypeEnum` (Schema), `JournalEventType` (`packages/types`), und
+`LedgerAppendRequest['eventType']` in `ledger-port.ts` — letzteres war bis jetzt eine **eigene,
+handkopierte** Literal-Union derselben Werte statt eines Imports, genau die F46-Form, die den
+fehlenden Wert unbemerkt ließ; jetzt importiert es `JournalEventType` direkt. 32 Dateien mit
+`event_type`/`'receipt'`-Treffern durchsucht, 3 geändert (der Marker selbst in `pipeline.ts`, der
+Enum-Vollständigkeitstest in `journal-ledger-schema.int.test.ts`, die `JR-6-03`-Zustellungsprobe in
+`journal-phase-b-e2e.int.test.ts` — deren Zählung war die eigentliche Falle: `event_type = 'receipt'`
+lieferte vorher 3 Zeilen für 2 Zustellungen, jetzt 2). Beide geänderten Tests kalibriert (Marker
+versehentlich wieder als `'receipt'` geschrieben, rot an der jeweils erwarteten Stelle,
+zurückgenommen). Volle Fassung in `05-entscheidungen.md` unter **ADR-037**.
+
+**Vorher, `JR-6-03` (Idempotenz/`duplicate_of`), Commit `5e9551f`.** Volle Begründung als Doc-Comment in
 `ledger-lookup-port.ts`/`pipeline.ts`, Kurzfassung im Sessionprotokoll (`06-status.md`,
-2026-08-06). Neue Methode `LedgerLookup.findOriginalReceiptSeq()` (Postgres: `SELECT MIN(seq)` über
-`chain_scope_id`+`content_sha256`+`event_type='receipt'`; Fake: dieselbe Logik über die
-In-Memory-Map), ein neuer `ledgerAppend`-Port in `PhaseBPipelineDeps`, und die Marker-Logik in der
-Owner-Schleife: `spool_txid: null`, `duplicate_of` das Original-`seq`, Verbindungsfelder `null` (kein
-neues SMTP-Ereignis). +3 Tests (2 `pipeline.test.ts`, 1 `journal-phase-b-e2e.int.test.ts`), beide
-kalibriert (Wächter invertiert, rot an der erwarteten Stelle, zurückgenommen).
+2026-08-06). Neue Methode `LedgerLookup.findOriginalReceiptSeq()`, ein neuer `ledgerAppend`-Port in
+`PhaseBPipelineDeps`, und die Marker-Logik in der Owner-Schleife. +3 Tests (2 `pipeline.test.ts`, 1
+`journal-phase-b-e2e.int.test.ts`), beide kalibriert.
+
+> **Eine eigene Nacharbeit aus dieser Session, wichtiger als der Code:** der Bericht zu `JR-6-03`
+> erreichte den Auftraggeber nicht, weil er nur als Text ausgegeben statt per Nachricht geschickt
+> wurde — die Rückfrage zur Drei-Zeilen-Lesart lief damit ins Leere, und der Statuseintrag behauptete
+> „an den Auftraggeber zurückgegeben", was nie zutraf. Seither: Berichte per Nachricht schicken, und
+> „zurückgegeben" erst schreiben, wenn eine Antwort da ist — vorher „offen, Rückfrage gestellt".
 
 ### Die Umgebung hat sich geändert — Referenz in `19-umgebung-windows-host.md`
 
@@ -214,9 +237,9 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `3835e91`. CI
-`31105611002` **success** — 107 Dateien, `unit 1104/1104 · integration 128/128 · adversarial 69/69`.
-Nicht neu abzweigen, nicht neu reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. CI-Lauf und Kopf-Commit
+für `ADR-037`: siehe den `ADR-037`-Sessionprotokoll-Eintrag in `06-status.md` (dort mit Zahlen
+nachgetragen, sobald gepusht). Nicht neu abzweigen, nicht neu reservieren.
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
@@ -246,8 +269,10 @@ Nicht neu abzweigen, nicht neu reservieren.
 > Meilisearch-CI-Auth, die zweifache Kalibrierung) steht in gleicher oder größerer Tiefe in
 > `05-entscheidungen.md` unter **ADR-035**.
 
-**`JR-6-03` ist erledigt** (`5e9551f`) — Umsetzung siehe „Was diese Session gemacht hat" oben, offene
-Auslegungsfrage (drei Ledger-Zeilen statt wörtlich zwei) siehe „Zur Entscheidung" unten.
+**`JR-6-03` und `ADR-037` sind erledigt** — Umsetzung siehe „Was diese Session gemacht hat" oben. Die
+Drei-Zeilen-Auslegungsfrage ist **entschieden**, nicht mehr offen: `2b62c26` korrigiert das
+Backlog-Kriterium selbst, `ADR-037` behebt den eigentlichen Fehler dahinter (der Marker brauchte einen
+eigenen Event-Typ, sonst hätte jede künftige Receipt-Zählung ihn mitgezählt).
 
 **Was `JR-6-04` zu tun hat** (Spool-Reconciler): ein periodischer Sweep über Spool-Einträge mit
 Ledger-Eintrag, aber unvollständiger Phase B, reiht sie nach — Redis ist Optimierung, nicht Autorität.
@@ -271,10 +296,9 @@ genau damit der Reconciler idempotent nachreihen kann.
 
 > **Zur Entscheidung beim Auftraggeber:**
 >
-> - **`JR-6-03`s Drei-Zeilen-Lesart** (neu): entspricht „drei Ledger-Zeilen je zweiter Zustellung"
->   (zwei unbedingte Phase-A-Receipts plus ein `duplicate_of`-Marker) der Absicht hinter „zwei
->   Ledger-Einträge, der zweite mit `duplicate_of`"? Blockiert `JR-6-04` nicht — die Marker-Zeile
->   selbst ändert sich durch die Antwort nicht, nur ihre Beschreibung. Details in `06-status.md`.
+> - **~~`JR-6-03`s Drei-Zeilen-Lesart~~ — entschieden.** Drei Zeilen sind die einzige implementierbare
+>   Form (append-only Ledger); der eigentliche Fehler war der fehlende eigene Event-Typ für den
+>   Marker, behoben mit **ADR-037**. Kein Entscheidungsbedarf mehr.
 > - **~~Soll ein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch gebaut werden?~~ —
 >   entschieden und erledigt** (Auftrag (a), siehe oben, ADR-035). Kein Entscheidungsbedarf mehr.
 > - **F64** (neu): soll der hängende Shutdown untersucht werden (welches Handle genau)? Ausdrücklich

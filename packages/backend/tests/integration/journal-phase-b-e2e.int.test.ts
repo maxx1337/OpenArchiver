@@ -390,12 +390,13 @@ suiteRequiring(
 				}
 
 				// The load-bearing check: dedup collapses the *object*, never the receipt (RFC section
-				// 4.5, skill journal-ledger section 5). Three ledger rows for two SMTP transactions --
-				// each delivery's own Phase-A receipt (`duplicate_of` null, unconditional), plus
-				// Phase B's marker for the second, `duplicate_of` the first's `seq` and `spool_txid`
-				// null (never either transaction's own -- see ledger-lookup-port.ts's doc comment on
-				// why reusing either would silently collapse `findBySpoolTxIds()`'s Map).
-				const rows = await harness!.sql<
+				// 4.5, skill journal-ledger section 5) -- and, since ADR-037, a `receipt` count now
+				// means exactly that: two receipts for two accepted transactions, never three. Before
+				// ADR-037 the marker was itself `event_type = 'receipt'`, so this same filter would have
+				// returned 3 rows for 2 deliveries -- the overcount `verify` (E9) would otherwise have
+				// inherited. Two separate queries, not one filtered differently, because "how many
+				// receipts" and "is there a marker" are two different claims this test makes.
+				const receiptRows = await harness!.sql<
 					{ seq: string; spool_txid: string | null; duplicate_of: string | null }[]
 				>`
 					select seq, spool_txid, duplicate_of
@@ -404,20 +405,37 @@ suiteRequiring(
 					   and event_type = 'receipt'
 					 order by seq
 				`;
-				expect(rows).toHaveLength(3);
-				const [receiptOne, receiptTwo, marker] = rows;
+				expect(receiptRows).toHaveLength(2);
+				const [receiptOne, receiptTwo] = receiptRows;
 				expect(BigInt(receiptOne!.seq)).toBe(first.receiptSeq);
 				expect(receiptOne!.spool_txid).not.toBeNull();
 				expect(receiptOne!.duplicate_of).toBeNull();
 				expect(BigInt(receiptTwo!.seq)).toBe(second.receiptSeq);
 				expect(receiptTwo!.spool_txid).not.toBeNull();
 				expect(receiptTwo!.duplicate_of).toBeNull();
-				expect(marker!.spool_txid).toBeNull();
-				expect(BigInt(marker!.duplicate_of!)).toBe(first.receiptSeq);
+
+				// The marker: `duplicate_of` the first receipt's seq, `spool_txid` null (never either
+				// transaction's own -- see ledger-lookup-port.ts's doc comment on why reusing either
+				// would silently collapse `findBySpoolTxIds()`'s Map), and its own event type -- never
+				// 'receipt' (ADR-037).
+				const markerRows = await harness!.sql<
+					{ seq: string; spool_txid: string | null; duplicate_of: string | null }[]
+				>`
+					select seq, spool_txid, duplicate_of
+					  from journal_ledger
+					 where chain_scope_id = ${source.id}
+					   and event_type = 'duplicate_marker'
+					 order by seq
+				`;
+				expect(markerRows).toHaveLength(1);
+				const marker = markerRows[0]!;
+				expect(marker.spool_txid).toBeNull();
+				expect(BigInt(marker.duplicate_of!)).toBe(first.receiptSeq);
 
 				coverageNotice(
-					`[JR-6-03] Phase-B e2e duplicate delivery: 1 archived object, 3 ledger receipts ` +
-						`(2 Phase-A + 1 duplicate_of marker at seq ${marker!.seq} -> ${first.receiptSeq})`
+					`[JR-6-03/ADR-037] Phase-B e2e duplicate delivery: 1 archived object, 2 receipts ` +
+						`(seq ${receiptOne!.seq}, ${receiptTwo!.seq}) + 1 duplicate_marker ` +
+						`(seq ${marker.seq} -> ${first.receiptSeq})`
 				);
 			} finally {
 				await ledgerSql.end().catch(() => undefined);

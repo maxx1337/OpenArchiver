@@ -2681,3 +2681,90 @@ Diese Abweichung gilt **nur für diese Diät**. Reine Doku-/ADR-Arbeit ohne Übe
 Epic-Arbeit bleibt Grundlagenarbeit und gehört weiter auf den Integrationszweig, wie `CLAUDE.md` §7 es
 verlangt. Reservierungen laufen mit der Abnahme des Epics aus; nicht gebrauchte Nummern fallen an den
 allgemeinen Vorrat zurück.
+
+## ADR-037 — Eigener `journal_event_type`-Wert für den `duplicate_of`-Marker
+
+**Status:** **entschieden** (2026-08-06) · **Entscheider:** Auftraggeber · **Nummer reserviert** auf
+dem Integrationszweig (`e8256f7`, Pool **037–040**, Grundlage und Anlass dort unter „ADR-037 bis
+ADR-040 — Nachschub für E6" — dieser Abschnitt füllt sie, statt die Begründung zu wiederholen).
+
+### Der Fehler, den diese Entscheidung schließt
+
+Der `duplicate_of`-Marker aus `JR-6-03` (`5e9551f`) trug `event_type = 'receipt'`, weil der Enum keinen
+anderen Wert kannte. Der einzige Diskriminator — `spool_txid is null` — stand nur in einem Doc-Comment,
+nie erzwungen: die Form von **F46** (zwei Seiten stimmen über etwas überein, das niemand prüft). Jede
+künftige Abfrage, die `receipt`-Zeilen gegen angenommene Nachrichten hält (`verify`, E9, wird das tun),
+hätte für zwei Zustellungen drei Receipts statt zwei gezählt.
+
+### Entschieden: eigener Enum-Wert per Migration, `duplicate_marker`
+
+Gegen die Alternative „so lassen, Invariante schriftlich festhalten" — Begründung für den Zeitpunkt
+(E7/E9 bauen auf der Semantik auf) steht in der Reservierung. Name **`duplicate_marker`**: sagt, was
+die Zeile ist, ohne wie eine Receipt zu klingen.
+
+### Migration
+
+`0043_whole_meltdown.sql`: `ALTER TYPE "public"."journal_event_type" ADD VALUE 'duplicate_marker';` —
+ein einzeiliger, additiver `ADD VALUE`, kein `DROP`/Rename. Lokal gegen eine frisch angelegte,
+leere Datenbank geprüft (`pnpm db:migrate` dort, dann in einer **separaten** Verbindung ein Insert mit
+dem neuen Wert): der neue Wert ist außerhalb der Migrations-Transaktion sofort benutzbar. Innerhalb der
+Migration selbst wird er nirgends verwendet — die Datei tut nur die eine `ALTER TYPE`-Anweisung —, also
+trifft die von Postgres dokumentierte „nicht in derselben Transaktion benutzbar"-Einschränkung diesen
+Ablauf ohnehin nicht.
+
+### Bestehende Zeilen bleiben unverändert — das ist korrekt, keine Lücke
+
+`event_type` ist eines der 16 gehashten Felder (`JournalLedgerRecord` in
+`packages/types/src/journal-ledger.types.ts`). Eine vor dieser Migration geschriebene Marker-Zeile hat
+ihren `chain_hash` bereits über `event_type = 'receipt'` berechnet, und der Ledger ist Append-only
+(ADR-009) — nichts daran wird nachträglich geändert, und nichts müsste: der Hash ist exakt so richtig
+wie das Byte, das ihn erzeugt hat. Die Erweiterung wirkt nur **vorwärts**, auf den nächsten Marker, den
+`runPhaseBPipeline()` schreibt. **Kein `FORMAT_VERSION`-Sprung nötig:** der kanonische Encoder
+(`stringField(record.eventType, 'eventType')` in `packages/journaling/src/ledger/canonical-encoding.ts`)
+hasht jeden String generisch — er hat keine feste Zuordnung von Event-Typ zu Byte-Code, der dieser Wert
+beitreten müsste.
+
+### Vokabular an drei Stellen nachgezogen (`CLAUDE.md` §5.4-Muster, hier auf `journal_event_type`)
+
+1. `packages/backend/src/database/schema/journal-ledger.ts` — `journalEventTypeEnum` (Quelle der
+   Wahrheit, per Migration erweitert)
+2. `packages/types/src/journal-ledger.types.ts` — `JournalEventType`-Union
+3. `packages/journaling/src/ledger/ledger-port.ts` — `LedgerAppendRequest['eventType']`
+
+Punkt 3 war bis zu dieser Entscheidung eine **eigene, handkopierte** Literal-Union derselben sechs
+Werte, nicht ein Import von `JournalEventType` — genau die Duplikation, die den fehlenden Wert
+unbemerkt ließ. Behoben, nicht nur ergänzt: `ledger-port.ts` importiert jetzt `JournalEventType` aus
+`@open-archiver/types` (die Abhängigkeit ist laut Architekturregel ohnehin erlaubt), also gibt es ab
+jetzt nur noch **eine** TypeScript-Quelle für diese Liste, nicht zwei, die zufällig übereinstimmen.
+
+### Zählende Verbraucher gefunden und bewertet
+
+32 Dateien mit `event_type`/`'receipt'`-Treffern durchsucht (grep über das Repository). **Drei**
+brauchten eine Änderung:
+
+- `packages/journaling/src/phase-b/pipeline.ts` — der Marker selbst, `eventType: 'receipt'` →
+  `'duplicate_marker'`.
+- `packages/backend/tests/integration/journal-ledger-schema.int.test.ts` — `carries every declared
+event type` erwartete die alten sechs Werte erschöpfend; jetzt sieben.
+- `packages/backend/tests/integration/journal-phase-b-e2e.int.test.ts` — die `JR-6-03`-Zustellungsprobe
+  filterte `event_type = 'receipt'` und erwartete drei Zeilen (die tragende Falle, die ADR-037 gerade
+  behebt); jetzt zwei getrennte Abfragen, `receipt` erwartet **zwei**, `duplicate_marker` erwartet
+  **eine** — die Zählung, die vorher zu hoch war, ist jetzt die Aussage, die der Test trifft.
+
+Die übrigen 29 Treffer sind Fixture-Defaults (ein beliebiger gültiger Event-Typ für einen Testaufbau,
+der nicht vom Marker handelt) oder Round-Trip-Prüfungen einer einzelnen, bekannten Zeile — keine
+Zählung von `receipt`-Zeilen gegen angenommene Nachrichten, also unverändert richtig.
+
+### Kalibriert
+
+Beide geänderten Tests: Marker versehentlich wieder als `'receipt'` geschrieben →
+`pipeline.test.ts` rot exakt an `expect(marker.eventType).toBe('duplicate_marker')`; die reale
+Ende-zu-Ende-Probe (`journal-phase-b-e2e.int.test.ts`, echtes Postgres) rot exakt an
+`expect(receiptRows).toHaveLength(2)` mit „got 3". Beide zurückgenommen, danach wieder grün.
+
+### Für die Konfliktauflösung beim Rückmerge
+
+`05-entscheidungen.md` ist jetzt auf **beiden** Seiten verändert: der Integrationszweig trägt die
+Reservierung „ADR-037 bis ADR-040 — Nachschub für E6" (Status **reserviert**), dieser Zweig trägt den
+oben gefüllten ADR-037-Abschnitt (Status **entschieden**). Beim Rückmerge gewinnt dieser Abschnitt; die
+Reservierungstabelle auf dem Integrationszweig muss um 037 gekürzt werden (038–040 bleiben offen).

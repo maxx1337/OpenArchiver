@@ -343,7 +343,12 @@ export async function runPhaseBPipeline(
 				await deps.ledgerAppend({
 					chainScopeId: archived.chainScopeId,
 					receivedAtMicros: BigInt(archived.receivedAt.getTime()) * 1000n,
-					eventType: 'receipt',
+					// ADR-037: a distinct event type, not 'receipt'. This row was written as 'receipt'
+					// before ADR-037 -- there was no other value for it -- which overcounted every
+					// query that holds receipt rows against accepted messages (verify, E9, will do
+					// exactly this). The discriminator (spool_txid is null) existed but only in a doc
+					// comment; this makes it a first-class, queryable fact instead.
+					eventType: 'duplicate_marker',
 					// Connection-level fields belong to the SMTP transaction that is *this* receipt
 					// (`archived.seq`, untouched, already durable) -- this marker records a link, not a
 					// new acceptance event, and has no connection of its own to describe.

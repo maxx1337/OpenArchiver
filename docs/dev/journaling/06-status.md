@@ -11,7 +11,8 @@ zuletzt.** Kurz: E6 läuft (`JR-6-01`, `JR-6-02a`, `JR-6-02b`, `JR-6-03` erledig
 code-fertig, TEST-Abnahme offen), plus das Pre-Push-Gate und F65 (beide Werkzeug-Infrastruktur/
 Nacharbeit, keine Backlog-Tasks). **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig; E1,
 E13, E2, E3, E4 und E5 sind zurückgemergt). Nummernkreise nach **ADR-032** reserviert: ADR-033–036
-(alle vergeben), F59–F70 (F59, F61, F65 vergeben).
+(alle vergeben) plus Nachschub **ADR-037–040** (`e8256f7`, Integrationszweig; **037** jetzt vergeben,
+038–040 offen), F59–F70 (F59, F61, F65 vergeben).
 
 > **Am 2026-08-01 zusätzlich entschieden: `ADR-025` — der Fork wird weitergeführt.** Die Frage des
 > Auftraggebers, ob angesichts einer kostenpflichtigen Upstream-Lizenz eine eigenständige Anwendung
@@ -185,7 +186,10 @@ F50 (`JR-4-21a`), F47 bei der Abnahme als längst behoben erkannt.
 Kriterien in `03-backlog.md`. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise auf dem
 Integrationszweig reserviert worden (`fc15edc`): **ADR-033–036** und **F59–F70**. `ADR-010` ist
 ausdrücklich **nicht** Teil der Reservierung — die Entscheidung „`processEmail` erweitern oder eigener
-Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` gefüllt.
+Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` gefüllt. Nachschub
+**ADR-037–040** ist am 2026-08-06 auf dem Integrationszweig nachreserviert worden (`e8256f7`), weil
+033–036 erschöpft waren; **037** ist mit dem `duplicate_marker`-Event-Typ gefüllt (siehe `JR-6-03`
+unten und `05-entscheidungen.md`).
 
 - [x] `JR-6-01` — `journal-inbound`-Worker als eigener Prozess, `start:journal-worker`, Queue-Parameter
       begründet (2026-08-05, `d0f4840`)
@@ -201,87 +205,20 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
           CI-Service-Container, zweimal kalibriert). `runPhaseBPipeline()` verbindet alles; **Ende-zu-Ende
           ist jetzt ein Test, kein manueller Nachweis mehr.**
 - [x] `JR-6-03` — Idempotenz: ein Objekt, **drei** Ledger-Zeilen — zwei Phase-A-Receipts plus
-      angehängter `duplicate_of`-Marker (2026-08-06, `5e9551f`; Kriterium im Backlog korrigiert, der
-      Ledger ist append-only)
+      angehängter Marker (2026-08-06, `5e9551f`; Kriterium im Backlog korrigiert, der Ledger ist
+      append-only). Marker trägt seit **ADR-037** einen eigenen `event_type`
+      (`duplicate_marker`), nicht mehr `'receipt'`
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
 - [ ] `JR-6-06` — TEST: Object-Store-Ausfall
 - [ ] `JR-6-07` — TEST: Soak, 100.000 Nachrichten (`nightly` plus `ci`-Smoke, F13-Frist heben)
 - [ ] `JR-6-08` — Abnahme E6
 
-> **`JR-6-01` ist erledigt (Rolle DEV, 2026-08-05), und drei Entscheidungen daraus gelten weiter.**
->
-> **(1) Der Queue-Vertrag liegt in `packages/journaling`, nicht neben der Queue.** `apps/smtp-ingress`
-> reiht den Phase-B-Hinweis nach dem `250` ein (Architektur §3 Schritt 7) und darf nicht aus
-> `packages/backend` importieren — eine Konstante neben dem `Queue`-Objekt hätte beide Seiten über ein
-> kopiertes Stringliteral übereinstimmen lassen. Das ist die Form von **F46**: zwei Dinge, die passen
-> mussten, passten nur per Konvention, und nichts schlug fehl, als sie aufhörten zu passen.
-> `packages/journaling/src/phase-b/queue-contract.ts` hat **keinen** BullMQ-Import — der Reconciler
-> muss entscheiden können, was einzureihen ist, ohne einen Redis-Client zu brauchen.
->
-> **(2) Die Payload trägt genau ein Feld, und das ist eine Zusicherung, keine Sparsamkeit.** Nur
-> `spoolTxId`. Alles Weitere — `seq`, `chainScopeId`, `journalingSourceId` — kommt über
-> `LedgerLookup.findBySpoolTxIds` aus derselben txid. Eine Kopie von `seq` in der Payload wäre eine
-> **zweite Quelle** für einen Wert, den der Ledger schon hält, und eine Payload, die ihrer Ledger-Zeile
-> widerspricht, wäre **nicht entdeckbar**: der Worker archivierte gegen den kopierten Wert und niemand
-> verglich die beiden. Der Reconciler, der Jobs allein aus Platte und Ledger baut, könnte diese Felder
-> ohnehin nicht anders herleiten — eine breitere Payload würde also bedeuten, dass die beiden
-> Einreihungswege **verschiedene Jobs** für denselben Spool-Eintrag erzeugen.
->
-> **(3) Der Processor wirft, statt zu quittieren.** Phase B existiert noch nicht (`JR-6-02`, ADR-010
-> offen). Ein **fertiger** Phase-B-Job behauptet, die Nachricht sei archiviert und durchsuchbar — und
-> genau das liest `JR-6-04`s Reconciler, um einen Spool-Eintrag liegen zu lassen. Ein Platzhalter, der
-> loggt und zurückkehrt, wäre kein harmloses Gerüst, sondern würde diese Behauptung **falsch und grün**
-> aufstellen. Das ist die Form von `JR-4-10` (zwei nutzlose Testfassungen, beide grün) und von **F48**
-> (zwölf rote CI-Läufe hinter einem Schritt, der nie lief): die Abwesenheit von Arbeit und ihr Erfolg
-> drucken gleich.
-
-**Zwei Dinge, die `JR-6-01` an Nebenwirkungen hat und die eine Folgesitzung kennen muss:**
-
-- **Der Worker ist absichtlich nicht in `pnpm start:workers`.** Begründung wie bei
-  `apps/smtp-ingress`, das nicht in `start:oss` steckt: der Journaling-Empfänger ist ein
-  Opt-in-Subsystem, die drei Worker in `start:workers` braucht jede Installation. **Der Preis ist
-  benannt, nicht verschwiegen:** wer den Ingress ausrollt und diesen Prozess vergisst, bekommt Post,
-  die **angenommen und nie archiviert** wird — nichts bricht laut, das `250` ist ehrlich, der Spool
-  wächst. Die Gegenmittel liegen bewusst anderswo: Spool-Tiefe und Phase-B-Backlog sind
-  Monitoring-Signale (**E10**), die Verdrahtung, die beide zusammen startet, ist **E11**.
-- **Die CI hat jetzt einen `valkey`-Service** — die erste Suite des Repositorys, die Redis statt
-  Postgres braucht, mitsamt `probeRedis()` im Harness. Er hat **kein Passwort**, und das ist eine
-  Einschränkung: ein Actions-Service-Container nimmt kein `command`, also ist `--requirepass` dort
-  nicht setzbar. Der AUTH-Pfad wird lokal ausgeübt (`docker-compose.yml` setzt das Passwort), und
-  `probeRedis()` ist absichtlich ein reiner TCP-Connect, damit ein **falsches** Passwort als
-  Verbindungsfehler ankommt und nicht als Skip. Wer AUTH in der CI abdecken will, nimmt einen
-  `docker run`-Schritt — nicht eine Änderung am geprüften Code.
-
-> **`JR-6-02a` ist erledigt (Rolle DEV, 2026-08-05) und besteht aus einer Entscheidung und einem Tor.**
->
-> **ADR-010 ist entschieden, und zwar gegen beide im ADR genannten Optionen.** Weder `processEmail()`
-> erweitern noch einen eigenen Pfad daneben stellen, sondern: **unverändert wiederverwenden, hinter einem
-> injizierten Port**. Volle Begründung (die Bestandsstellen, die genau für diesen Aufrufer gebaut sind,
-> warum „erweitern" ADR-025 verletzt hätte, und **F60** als das ernsteste, gemessen nicht tragende
-> Gegenargument) steht **in gleicher oder größerer Tiefe** in `05-entscheidungen.md` unter **ADR-010** —
-> am 2026-08-06 dorthin verschoben, nicht gekürzt (Doku-Diät).
->
-> **Das Tor** (`classifySpoolEntry()`) ist eine reine Funktion und entscheidet vor jedem Archivieren:
-> archiviert wird nur, wenn eine `receipt`-Zeile existiert **und** die Datei genau auf deren
-> `content_sha256` hasht. Fünf Urteile, jedes mit eigener Behandlung — `no_receipt` ist der **erwartete**
-> Ausgang eines Absturzes zwischen Spool-fsync und Ledger-Append (dem Sender wurde nie `250` gesagt,
-> Archivieren würde eine Annahme **erfinden**), und `receipt_without_hash` wird ausdrücklich **nicht** als
-> Mismatch gemeldet, weil das einen Betreiber nach Manipulation suchen ließe, wo ein Writer ein Pflichtfeld
-> weggelassen hat. **Größe ist bewusst kein zweites Tor:** der Hash hat schon entschieden, und eine
-> Receipt, deren eigene zwei Felder sich widersprechen, ist eine Frage für `verify` (E9) — sie darf keine
-> angenommene Nachricht unarchivierbar machen.
->
-> **Der Lese-Port hat zwei Methoden, und die Trennung ist der Zweck.** `measure()` hasht streamend und
-> läuft **vor** dem Urteil, also kommt ein verwaister oder manipulierter 50-MB-Eintrag nie in den Heap.
-> `read()` puffert — weil `parseJournalReport` und `StorageService.put()` beide einen ganzen Buffer
-> verlangen (F60) —, aber nur für Einträge, die das Tor passiert haben.
->
-> **Dabei einen Fehler eingebaut und vom eigenen Bestandstest gefangen:** `row.size_bytes === null` trifft
-> `undefined` nicht, und das Tor verzweigt auf `contentSha256 === null` — ein durchgereichtes `undefined`
-> hätte eine Receipt **ohne** Hash als **Manipulation** gemeldet. Jetzt `?? null`, mit zwei
-> Regressionsfällen für beide Nullish-Formen. Dass `ledger-lookup.test.ts` seine Zeilen selbst baut, ist
-> genau der Grund, warum es das gefunden hat.
+> \*\*Die technischen Notizen zu `JR-6-01` (drei Entscheidungen, zwei Nebenwirkungen) und
+> `JR-6-02a` (ADR-010-Verweis, das Tor mit seinen fünf Urteilen, der gefundene Nullish-Fehler)
+> liegen seit dem 2026-08-06 unverändert in
+> [`21-archiv-e6-jr601-jr602a-notizen.md`](21-archiv-e6-jr601-jr602a-notizen.md) (Doku-Diät,
+> Tokenbudget) — beide Tasks sind oben bereits als `[x]` erledigt markiert.
 
 > **ADR-033 ist entschieden (2026-08-05, erster Teil von `JR-6-02b`): Owner-Auflösung für die drei
 > Ergebnisarten ohne Journal-Report-Envelope.** Volle Begründung (Tabelle „was die drei schwächeren
@@ -542,7 +479,33 @@ files`
   Doc-Comment in `ledger-lookup-port.ts` und `pipeline.ts`, nicht in `05-entscheidungen.md`). Drei
   Ledger-Zeilen je zweimal zugestellter Nachricht (zwei Phase-A-Receipts, ein Marker) statt
   wörtlich zwei — Lesart begründet im Bericht an den Auftraggeber
-- **Offen:** `JR-6-04`–`JR-6-08` unverändert. Ob die Drei-Zeilen-Lesart der Auftraggeber-Absicht
-  entspricht, ist an ihn zurückgegeben
+- **Offen (Wortlaut am 2026-08-06 korrigiert):** `JR-6-04`–`JR-6-08` unverändert. Ob die
+  Drei-Zeilen-Lesart der Auftraggeber-Absicht entspricht — **Rückfrage gestellt, keine Antwort
+  abgewartet** (der Bericht mit der Rückfrage erreichte den Auftraggeber wegen eines eigenen Fehlers
+  nicht — Text ausgegeben statt per Nachricht geschickt). Zwei Stunden später ohne Bericht selbst
+  geprüft und entschieden: `2b62c26` korrigiert das Kriterium auf „drei Zeilen", `ADR-037` behebt den
+  eigentlichen Fehler (kein eigener Event-Typ). Siehe den Eintrag direkt darunter
 - **Nicht getan, absichtlich:** F64s Ursache, F62, F60, F43, F39, F42, F17(b) — wie ausdrücklich
+  ausgeschlossen
+
+### 2026-08-06 — `ADR-037`: eigener `journal_event_type`-Wert für den `duplicate_of`-Marker
+
+- **Rolle:** DEV (Subagent `senior-dev`) · **Auftrag:** kein Backlog-Task, Auftraggeber-Entscheidung
+  nach `JR-6-03`s Rückfrage, Nummer reserviert auf dem Integrationszweig (`e8256f7`, Pool 037–040)
+- **Commit:** siehe „Nächster konkreter Schritt" in `07-session-handover.md`
+- **Testzahl:** unverändert, **1301 passed | 8 skipped** bei 107 Dateien (drei Assertions korrigiert,
+  keine hinzugefügt/entfernt; `suite-inventory.ts` deshalb unverändert)
+- **CI-Lauf:** ebenda
+- **Entscheidungen:** **ADR-037** (voll in `05-entscheidungen.md`) — Migration
+  `0043_whole_meltdown.sql`, neuer Enum-Wert `duplicate_marker`; `ledger-port.ts`s
+  `LedgerAppendRequest['eventType']` importiert jetzt `JournalEventType` statt einer Kopie (F46 selbst
+  geschlossen)
+- **Verbraucher geprüft:** 32 Treffer auf `event_type`/`'receipt'`, **3 geändert** (`pipeline.ts`,
+  Enum-Vollständigkeitstest, `JR-6-03`s Zustellungsprobe), 29 unverändert (Fixtures/Einzelzeilen)
+- **Migration lokal geprüft:** `pnpm db:migrate` gegen frische Datenbank; neuer Wert sofort nutzbar
+- **Kalibriert:** Marker versehentlich wieder `'receipt'` → beide geänderten Tests rot exakt an ihrer
+  Zählungs-Assertion, zurückgenommen
+- **Offen:** `JR-6-04`–`JR-6-08` unverändert. `05-entscheidungen.md` auf beiden Zweigen verändert —
+  Konfliktauflösung beim Rückmerge steht im ADR-037-Abschnitt selbst
+- **Nicht getan, absichtlich:** F64s Ursache, F62, F60, F43, F39, F42, F17(b), `JR-6-04` ff. — wie
   ausgeschlossen

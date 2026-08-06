@@ -42,7 +42,9 @@ export class FakeLedgerLookup implements LedgerLookup {
 	 * two real Phase-A receipts would be) and this returns the smaller of the two seqs -- exactly what
 	 * the real backend would. This fake cannot represent a `null`-`spool_txid` marker row (its map is
 	 * keyed by `spool_txid`), so it does not exercise "a second call sees a marker row, not the true
-	 * original" -- that guarantee rests on the real `MIN(seq)` query alone.
+	 * original" -- that guarantee rests on the real `MIN(seq)` query alone. Since ADR-037 the
+	 * `eventType !== 'receipt'` filter below excludes a marker by its own event type too, not only by
+	 * `MIN(seq)` ordering, but this fake still cannot construct one to prove it.
 	 */
 	async findOriginalReceiptSeq(
 		chainScopeId: string,

@@ -18,6 +18,13 @@
  * The ledger holds **events**, not messages: an accepted SMTP transaction is a `receipt` even when
  * the message it carried is a duplicate of an earlier one. Object deduplication happens against the
  * object store, never by suppressing a receipt.
+ *
+ * `duplicate_marker` (ADR-037): the row `runPhaseBPipeline()` appends when a `'duplicate'` archive
+ * outcome names a genuinely different SMTP transaction's object (not this job's own retry) --
+ * `duplicate_of` points at the true original's `seq`, `spool_txid` is always `null`. Kept distinct
+ * from `receipt` because a query that counts `receipt` rows against accepted messages (`verify`, E9)
+ * must not count this row twice: `packages/backend/src/database/schema/journal-ledger.ts`'s doc
+ * comment on `journalEventTypeEnum` has the full history.
  */
 export type JournalEventType =
 	| 'receipt'
@@ -25,7 +32,8 @@ export type JournalEventType =
 	| 'parse_failed'
 	| 'retention_expiry'
 	| 'object_erased'
-	| 'legal_hold_set';
+	| 'legal_hold_set'
+	| 'duplicate_marker';
 
 /**
  * A JSON value that the canonical encoding is able to serialise deterministically.

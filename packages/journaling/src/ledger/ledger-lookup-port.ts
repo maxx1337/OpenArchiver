@@ -138,6 +138,18 @@ export interface LedgerLookup {
 	 * already resolved to (`SpoolEntryArchive.seq`), this is not a redelivery at all -- it is the *same*
 	 * job being retried after an earlier attempt archived the object but the run never got as far as
 	 * writing this marker, and the pipeline must not point `duplicate_of` at itself.
+	 *
+	 * ---------------------------------------------------------------------------------------------
+	 * `event_type = 'receipt'` here means exactly that, by construction (ADR-037)
+	 * ---------------------------------------------------------------------------------------------
+	 * A third, later delivery of the same content sees at most two candidate rows for "who was first":
+	 * the two genuine receipts. Before ADR-037 the marker this method's own caller appends also carried
+	 * `event_type = 'receipt'`, so a *second* redelivery's `MIN(seq)` query would have had the first
+	 * redelivery's marker in its candidate set too -- harmlessly, since a marker's `seq` is always larger
+	 * than the original it points at, so `MIN(seq)` still landed on the true original. ADR-037 gives the
+	 * marker its own `event_type` (`duplicate_marker`), so this filter now excludes markers by
+	 * construction rather than by that ordering argument -- one fewer thing a reader has to work through
+	 * to trust this query.
 	 */
 	findOriginalReceiptSeq(chainScopeId: string, contentSha256: Uint8Array): Promise<bigint | null>;
 }

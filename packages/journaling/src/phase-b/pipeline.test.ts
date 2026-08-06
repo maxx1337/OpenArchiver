@@ -329,7 +329,9 @@ suite(
 			// Neither the original's spool_txid nor this delivery's own -- see ledger-lookup-port.ts's
 			// doc comment on why either would silently collapse findBySpoolTxIds()'s Map.
 			expect(marker.spoolTxId).toBeNull();
-			expect(marker.eventType).toBe('receipt');
+			// ADR-037: a distinct event type, never 'receipt' -- a query holding receipt rows against
+			// accepted messages (verify, E9) must not count this row as a second receipt.
+			expect(marker.eventType).toBe('duplicate_marker');
 			expect(marker.chainScopeId).toBe(CHAIN_SCOPE_ID);
 			expect(marker.journalingSourceId).toBe(JOURNALING_SOURCE_ID);
 			expect(Buffer.from(marker.contentSha256!).toString('hex')).toBe(
