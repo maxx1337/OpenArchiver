@@ -104,11 +104,40 @@ export interface LedgerLookup {
 	 * (ADR-030 already leans on it: "`findBySpoolTxIds()` liefert genau einen Eintrag je `spool_txid`",
 	 * which is why a second `RCPT TO` for another chain gets `452 4.5.3` instead of a second receipt).
 	 * A second row carrying the same `spool_txid` would not fail here -- it would silently **collapse**,
-	 * and the caller would act on whichever row the database happened to return last. `JR-6-03` writes a
-	 * duplicate marker (`duplicate_of`) for a redelivered message and **must not** give that row the
-	 * original's `spool_txid`; if it ever needs to, this signature has to change first.
+	 * and the caller would act on whichever row the database happened to return last. `JR-6-03`'s
+	 * duplicate marker (see {@link findOriginalReceiptSeq} below) gives its row a `null` `spool_txid`
+	 * for exactly this reason -- neither the original's nor the redelivery's own would be safe to reuse.
 	 */
 	findBySpoolTxIds(
 		spoolTxIds: readonly string[]
 	): Promise<ReadonlyMap<string, LedgerEntryByTxId>>;
+
+	/**
+	 * `JR-6-03`: the `seq` of the **earliest** `receipt` row in `chainScopeId` whose `content_sha256`
+	 * equals `contentSha256`, or `null` if none exists.
+	 *
+	 * ---------------------------------------------------------------------------------------------
+	 * Why this is keyed by content, not by `spool_txid`
+	 * ---------------------------------------------------------------------------------------------
+	 * `archiveObject()` returning `{ kind: 'duplicate' }` tells the pipeline that this owner's object
+	 * already exists, but not *which* earlier receipt it came from -- `archivedEmailId` names a
+	 * `packages/backend` row this package must not query. What both receipts *do* share, by
+	 * construction (RFC section 6.1: the ledger hashes the raw wire bytes, never a transformation of
+	 * them), is `content_sha256` -- so resolving "the original" is a lookup by that column, scoped to
+	 * the chain so two different customers' byte-identical journal reports never collide.
+	 *
+	 * ---------------------------------------------------------------------------------------------
+	 * Why the earliest, and why that is never the caller's own receipt when it matters
+	 * ---------------------------------------------------------------------------------------------
+	 * `MIN(seq)` rather than "the other one": a redelivered message's own receipt (written
+	 * unconditionally by Phase A, `duplicateOf: null`, before Phase B ever runs -- see
+	 * `packages/journaling/src/spool/acceptance.ts`) also carries this `content_sha256`, so a query
+	 * that did not take the minimum could return the caller's own row. Taking the minimum resolves the
+	 * genuine question ("who received this content first") and, as a side effect, gives the caller its
+	 * own disambiguation for free: if the minimum equals the receipt this transaction's own `spool_txid`
+	 * already resolved to (`SpoolEntryArchive.seq`), this is not a redelivery at all -- it is the *same*
+	 * job being retried after an earlier attempt archived the object but the run never got as far as
+	 * writing this marker, and the pipeline must not point `duplicate_of` at itself.
+	 */
+	findOriginalReceiptSeq(chainScopeId: string, contentSha256: Uint8Array): Promise<bigint | null>;
 }

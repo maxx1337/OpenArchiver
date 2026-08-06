@@ -3,8 +3,10 @@ import {
 	NodeSpoolEntryReader,
 	NodeSpoolEntryReleaser,
 	PostgresLedgerLookup,
+	PostgresLedgerWriter,
 	runPhaseBPipeline,
 	type JournalInboundJobData,
+	type LedgerBackend,
 	type PhaseBAlert,
 } from '@open-archiver/journaling';
 import { IngestionService } from '../../services/IngestionService';
@@ -17,7 +19,11 @@ import {
 	JOURNAL_SPOOL_ROOT_VAR,
 	resolveJournalSpoolRoot,
 } from '../../workers/journal-inbound.options';
-import { createLedgerQuery, openBareLedgerConnection } from './journal-ledger-query-adapter';
+import {
+	createLedgerQuery,
+	openBareLedgerConnection,
+	postgresTransactor,
+} from './journal-ledger-query-adapter';
 import { DrizzleOrganizationDomainsAdapter } from './journal-organization-domains-adapter';
 import { createJournalArchiveObjectPort } from './journal-archive-object-adapter';
 
@@ -70,6 +76,42 @@ const indexingService = new IndexingService(databaseService, searchService, stor
 export const ledgerSql = openBareLedgerConnection();
 const ledgerLookup = new PostgresLedgerLookup(createLedgerQuery(ledgerSql));
 
+/**
+ * Lazily builds the `LedgerBackend` `JR-6-03`'s `duplicate_of` marker is appended through.
+ *
+ * Memoized rather than constructed at module load: unlike `ledgerLookup` above (a bare `SELECT`,
+ * safe against any connection state), building this needs an async `deployment_id` read
+ * (`PostgresLedgerWriter`'s own doc comment: read once, never per append) that module-level code
+ * cannot await without top-level `await`. On rejection the cached promise is reset to `null` so a
+ * later job -- not necessarily this one -- gets to retry, the same "do not make a transient failure
+ * permanent for the life of the process" reasoning `apps/smtp-ingress/src/index.ts`'s
+ * `JournalAcceptanceBootstrap` already applies to the equivalent read on that process.
+ */
+let ledgerBackendPromise: Promise<LedgerBackend> | null = null;
+function getLedgerBackend(): Promise<LedgerBackend> {
+	if (ledgerBackendPromise === null) {
+		ledgerBackendPromise = (async () => {
+			const rows = await ledgerSql<{ deployment_id: string }[]>`
+				select deployment_id from deployment_identity
+			`;
+			const deploymentId = rows[0]?.deployment_id;
+			if (deploymentId === undefined) {
+				throw new Error(
+					'deployment_identity has no row -- has this database been migrated?'
+				);
+			}
+			return new PostgresLedgerWriter({
+				deploymentId,
+				transactor: postgresTransactor(ledgerSql),
+			});
+		})();
+		ledgerBackendPromise.catch(() => {
+			ledgerBackendPromise = null;
+		});
+	}
+	return ledgerBackendPromise;
+}
+
 const spoolRoot = resolveJournalSpoolRoot(process.env[JOURNAL_SPOOL_ROOT_VAR]);
 const spoolEntryReader = new NodeSpoolEntryReader();
 const organizationDomains = new DrizzleOrganizationDomainsAdapter();
@@ -106,6 +148,7 @@ export const journalInboundProcessor = async (job: Job<JournalInboundJobData>) =
 		indexBatch: (pending) => indexingService.indexEmailBatch([...pending]),
 		releaseSpoolEntry,
 		alertSink: logPhaseBAlert,
+		ledgerAppend: async (request) => (await getLedgerBackend()).append(request),
 	});
 
 	if (result.parseKind === 'parse_failed') {

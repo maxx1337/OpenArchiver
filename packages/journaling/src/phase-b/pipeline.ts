@@ -6,6 +6,7 @@ import type {
 	SmtpTransactionEnvelope,
 } from '@open-archiver/types';
 import type { LedgerLookup } from '../ledger/ledger-lookup-port';
+import type { LedgerBackend } from '../ledger/ledger-port';
 import { incomingFilePath } from '../spool/layout';
 import { parseJournalReport } from '../parser/journal-report';
 import { resolveOwner } from '../parser/owner-resolution';
@@ -86,6 +87,13 @@ export interface PhaseBPipelineDeps {
 	readonly indexBatch: (pending: readonly PendingEmail[]) => Promise<void>;
 	readonly releaseSpoolEntry: SpoolEntryReleaser;
 	readonly alertSink: PhaseBAlertSink;
+	/**
+	 * `LedgerBackend.append()` (`JR-6-03`) -- writes the `duplicate_of` marker for a genuinely
+	 * redelivered owner. Injected as a bare function, matching `archiveObject`/`indexBatch` above,
+	 * rather than the whole `LedgerBackend`: this pipeline only ever calls `append()`, never opens a
+	 * transaction itself.
+	 */
+	readonly ledgerAppend: LedgerBackend['append'];
 }
 
 /** The gate refused to archive. Carries the verdict a caller may want to log alongside the alert. */
@@ -280,6 +288,13 @@ export async function runPhaseBPipeline(
 	const owners: PhaseBOwnerResult[] = [];
 	const toIndex: PendingEmail[] = [];
 
+	// `JR-6-03`: resolved at most once per spool entry, not per owner -- `chainScopeId`/
+	// `contentSha256Hex` are constant across the whole fan-out (they describe the spool file, not the
+	// owner), so every 'duplicate' outcome for this entry asks the same question. `undefined` means
+	// "not looked up yet"; `null` is a legitimate answer (see below) and must stay distinguishable
+	// from "haven't asked".
+	let originalReceiptSeq: bigint | null | undefined;
+
 	for (const candidate of ownerCandidatesOf(ownerResult)) {
 		const input: ArchiveObjectInput = {
 			ingestionSourceId: archived.chainScopeId,
@@ -298,6 +313,59 @@ export async function runPhaseBPipeline(
 		};
 		const outcome = await deps.archiveObject(input);
 		owners.push({ ownerEmail: candidate.email, method: candidate.method, outcome });
+
+		// `JR-6-03`, RFC section 4.5: the object is deduplicated, the receipt never is. A 'duplicate'
+		// outcome means processEmail() found this owner's object already archived -- but that can mean
+		// either of two different things, and only one of them calls for a new ledger row:
+		//
+		//   (a) a genuine redelivery: some *other* transaction's receipt (a smaller seq) already
+		//       carries this exact content_sha256 in this chain. The message was accepted twice, and
+		//       RFC section 4.5 requires the second acceptance to keep its own receipt in evidence --
+		//       this transaction's Phase-A receipt already does that (`archived.seq`, unconditional,
+		//       written before this pipeline ever ran); what is still missing is the link back to the
+		//       original, which this pipeline now appends as its own row (never as an edit to either
+		//       existing receipt -- the ledger has no UPDATE).
+		//   (b) the *same* job being retried after an earlier attempt archived this owner but the run
+		//       died before reaching this point (ADR-034 point 2): `findOriginalReceiptSeq()` then
+		//       resolves to this transaction's *own* receipt (`archived.seq`), because no other receipt
+		//       shares the content yet. Pointing `duplicate_of` at itself would be nonsensical and
+		//       would fabricate a second event for something that only happened once -- so this case
+		//       writes nothing and simply lets the unconditional `toIndex.push()` below repair the
+		//       interrupted retry, exactly as it already did before this slice.
+		if (outcome.kind === 'duplicate') {
+			if (originalReceiptSeq === undefined) {
+				originalReceiptSeq = await deps.ledgerLookup.findOriginalReceiptSeq(
+					archived.chainScopeId,
+					Buffer.from(archived.contentSha256Hex, 'hex')
+				);
+			}
+			if (originalReceiptSeq !== null && originalReceiptSeq !== archived.seq) {
+				await deps.ledgerAppend({
+					chainScopeId: archived.chainScopeId,
+					receivedAtMicros: BigInt(archived.receivedAt.getTime()) * 1000n,
+					eventType: 'receipt',
+					// Connection-level fields belong to the SMTP transaction that is *this* receipt
+					// (`archived.seq`, untouched, already durable) -- this marker records a link, not a
+					// new acceptance event, and has no connection of its own to describe.
+					remoteIp: null,
+					ehloName: null,
+					tlsVersion: null,
+					tlsCipher: null,
+					envelopeFrom: archived.envelopeFrom,
+					envelopeRcpt: archived.envelopeRcpt,
+					sizeBytes: BigInt(archived.sizeBytes),
+					contentSha256: Buffer.from(archived.contentSha256Hex, 'hex'),
+					duplicateOf: originalReceiptSeq,
+					journalingSourceId: archived.journalingSourceId,
+					// Never this transaction's own spool_txid, and never the original's -- both are
+					// already the key of an existing row, and `findBySpoolTxIds()`'s one-row-per-id
+					// assumption (ADR-030) would silently collapse a second one under either (see
+					// `ledger-lookup-port.ts`'s doc comment).
+					spoolTxId: null,
+					eventPayload: null,
+				});
+			}
+		}
 
 		if (outcome.kind === 'error') {
 			throw new PhaseBArchiveFailedError(spoolTxId, candidate.email, outcome.message);

@@ -787,7 +787,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// already), +5 in journal-inbound.options.test.ts (resolveJournalSpoolRoot()). owner-resolution.test.ts
 		// and spool-entry-gate.test.ts changed (normalizedEmail on OwnerResolutionWinner; envelope forwarding
 		// on SpoolEntryArchive) without adding tests, so they do not appear in this delta.
-		expectedTests: { ci: 1102, nightly: 3, manual: 0 },
+		//
+		// 1104 after JR-6-03 (duplicate_of) added +2 to pipeline.test.ts: a genuine cross-delivery
+		// redelivery writes exactly one duplicate_of marker (spool_txid null, pointing at the true
+		// original's seq via LedgerLookup.findOriginalReceiptSeq()'s MIN(seq)), and a same-job retry
+		// (the outcome's own receipt is the only match) writes none. No new file -- ledger-lookup.ts,
+		// ledger-lookup-port.ts and pipeline.ts changed without adding one.
+		expectedTests: { ci: 1104, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -889,7 +895,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// pipeline against real Postgres and real Meilisearch, fanned out to three owners, all found by
 		// search, spool file released. Calibrated twice (spool release disabled, fan-out truncated to
 		// the winner) -- both broke the test at the assertion each one should, both reverted clean.
-		expectedTests: { ci: 127, nightly: 0, manual: 0 },
+		//
+		// 128 after JR-6-03 added 1 to journal-phase-b-e2e.int.test.ts: the same content delivered
+		// twice under two spool transactions archives one object (the second delivery's outcome.kind
+		// is 'duplicate' against the first's archivedEmailId), and the real PostgresLedgerWriter/
+		// PostgresLedgerLookup pair durably appends a third ledger row for the second delivery --
+		// spool_txid null, duplicate_of the first delivery's own receipt seq -- read back and
+		// verified with a raw query against journal_ledger, never through the patched drizzle client.
+		expectedTests: { ci: 128, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',

@@ -34,6 +34,33 @@ export class FakeLedgerLookup implements LedgerLookup {
 		}
 		return result;
 	}
+
+	/**
+	 * `JR-6-03`: mirrors `PostgresLedgerLookup`'s `MIN(seq)` query over whatever a test has `.set()`,
+	 * scanning the same map `findBySpoolTxIds()` reads. A test that wants "this is a redelivery" sets
+	 * **two** entries with the same `chainScopeId`/`contentSha256` (one per simulated `spool_txid`, as
+	 * two real Phase-A receipts would be) and this returns the smaller of the two seqs -- exactly what
+	 * the real backend would. This fake cannot represent a `null`-`spool_txid` marker row (its map is
+	 * keyed by `spool_txid`), so it does not exercise "a second call sees a marker row, not the true
+	 * original" -- that guarantee rests on the real `MIN(seq)` query alone.
+	 */
+	async findOriginalReceiptSeq(
+		chainScopeId: string,
+		contentSha256: Uint8Array
+	): Promise<bigint | null> {
+		let min: bigint | null = null;
+		const needle = Buffer.from(contentSha256);
+		for (const entry of this.entries.values()) {
+			if (entry.eventType !== 'receipt') continue;
+			if (entry.chainScopeId !== chainScopeId) continue;
+			if (entry.contentSha256 === null) continue;
+			if (!Buffer.from(entry.contentSha256).equals(needle)) continue;
+			if (min === null || entry.seq < min) {
+				min = entry.seq;
+			}
+		}
+		return min;
+	}
 }
 
 /**

@@ -224,6 +224,9 @@ suiteRequiring(
 						// well-formed journal report and the receipt matches the spool bytes.
 						throw new Error(`unexpected Phase-B alert: ${JSON.stringify(alert)}`);
 					},
+					// JR-6-03: no duplicate delivery in this test -- the fan-out fixture is archived
+					// once, so this is never called, but the pipeline requires it structurally.
+					ledgerAppend: (request) => writer.append(request),
 				});
 
 				// 6. Every resolved owner archived, none skipped.
@@ -261,6 +264,160 @@ suiteRequiring(
 				coverageNotice(
 					`[JR-6-02b] Phase-B e2e: fan-out to ${result.owners.length} owner(s), ` +
 						`${createdEmailIds.length} indexed and found by search, spool file released`
+				);
+			} finally {
+				await ledgerSql.end().catch(() => undefined);
+			}
+		});
+
+		it("delivered twice: one archived object, the second delivery's ledger receipt gets a duplicate_of marker pointing at the first (JR-6-03)", async () => {
+			const spoolRoot = mkdtempSync(path.join(tmpdir(), 'oa-phase-b-e2e-dup-spool-'));
+			const ledgerSql = openBareLedgerConnection();
+
+			try {
+				// A source with no domain groups configured -- resolveOwner()'s to[0] heuristic picks
+				// the single recipient directly (same simplification pipeline.test.ts's own
+				// duplicate-marker suite uses), so this test's assertions stay about the marker, not
+				// about the fan-out the test above already covers.
+				const source = await seedIngestionSource(harness!.db, {
+					provider: 'smtp_journaling',
+					preserveOriginalFile: true,
+					name: `phase-b-e2e-dup-source-${generateTxId()}`,
+				});
+				const journalingSource = await seedJournalingSource(harness!.db, {
+					ingestionSourceId: source.id,
+					name: `phase-b-e2e-dup-journaling-source-${generateTxId()}`,
+				});
+
+				const raw = Buffer.from(
+					'From: alice@example.com\r\nTo: bob@example.com\r\n' +
+						'Subject: Redelivered notice\r\n\r\nBody.\r\n',
+					'utf8'
+				);
+				const contentSha256 = createHash('sha256').update(raw).digest();
+
+				const [deployment] = await harness!.sql<{ deployment_id: string }[]>`
+					select deployment_id from deployment_identity
+				`;
+				const writer = new PostgresLedgerWriter({
+					deploymentId: deployment!.deployment_id,
+					transactor: postgresTransactor(harness!.sql),
+				});
+
+				const searchService = new SearchService!();
+				await searchService.configureEmailIndex();
+				const storageService = new StorageService!();
+				const ingestionService = new IngestionService!();
+				const indexingService = new IndexingService!(
+					new DatabaseService!(),
+					searchService,
+					storageService
+				);
+
+				/**
+				 * Simulates one accepted SMTP transaction delivering `raw`: writes the spool file,
+				 * appends the Phase-A receipt this transaction would already have (unconditionally,
+				 * `duplicateOf: null` -- Phase A never dedups), then runs the real Phase-B pipeline
+				 * for it, through the real `writer` so a genuine `duplicate_of` marker is durably
+				 * appended.
+				 */
+				async function deliver(): Promise<{
+					result: PhaseBPipelineResult;
+					receiptSeq: bigint;
+				}> {
+					const txid = generateTxId();
+					const spoolPath = incomingFilePath(spoolRoot, txid);
+					await mkdir(path.dirname(spoolPath), { recursive: true });
+					await writeFile(spoolPath, raw);
+
+					const appended = await writer.append({
+						chainScopeId: source.id,
+						receivedAtMicros: BigInt(Date.now()) * 1000n,
+						eventType: 'receipt',
+						remoteIp: '203.0.113.9',
+						ehloName: 'mail.example.com',
+						tlsVersion: 'TLSv1.3',
+						tlsCipher: 'TLS_AES_256_GCM_SHA384',
+						envelopeFrom: 'alice@example.com',
+						envelopeRcpt: [journalingSource.routingAddress],
+						sizeBytes: BigInt(raw.length),
+						contentSha256,
+						duplicateOf: null,
+						journalingSourceId: journalingSource.id,
+						spoolTxId: txid,
+						eventPayload: null,
+					});
+
+					const result = await runPhaseBPipeline(txid, {
+						spoolRoot,
+						ledgerLookup: new PostgresLedgerLookup(createLedgerQuery(ledgerSql)),
+						spoolEntryReader: new NodeSpoolEntryReader!(),
+						organizationDomains: new DrizzleOrganizationDomainsAdapter!(),
+						archiveObject: createJournalArchiveObjectPort!(
+							ingestionService,
+							storageService
+						),
+						indexBatch: (pending: readonly PendingEmail[]) =>
+							indexingService.indexEmailBatch([...pending]),
+						releaseSpoolEntry: new NodeSpoolEntryReleaser!(),
+						alertSink: (alert) => {
+							throw new Error(`unexpected Phase-B alert: ${JSON.stringify(alert)}`);
+						},
+						ledgerAppend: (request) => writer.append(request),
+					});
+					return { result, receiptSeq: appended.seq };
+				}
+
+				// First delivery: a genuine, unseen object -- archives normally.
+				const first = await deliver();
+				expect(first.result.owners).toHaveLength(1);
+				expect(first.result.owners[0]!.outcome.kind).toBe('archived');
+				const firstOutcome = first.result.owners[0]!.outcome;
+				if (firstOutcome.kind !== 'archived') {
+					throw new Error('unreachable: asserted archived above');
+				}
+				const archivedEmailId = firstOutcome.archivedEmailId;
+				createdEmailIds.push(archivedEmailId);
+
+				// Second delivery: byte-identical content under a different spool transaction --
+				// `archiveObject()` must report 'duplicate' against the *same* archived object, never
+				// a second one.
+				const second = await deliver();
+				expect(second.result.owners).toHaveLength(1);
+				expect(second.result.owners[0]!.outcome.kind).toBe('duplicate');
+				if (second.result.owners[0]!.outcome.kind === 'duplicate') {
+					expect(second.result.owners[0]!.outcome.archivedEmailId).toBe(archivedEmailId);
+				}
+
+				// The load-bearing check: dedup collapses the *object*, never the receipt (RFC section
+				// 4.5, skill journal-ledger section 5). Three ledger rows for two SMTP transactions --
+				// each delivery's own Phase-A receipt (`duplicate_of` null, unconditional), plus
+				// Phase B's marker for the second, `duplicate_of` the first's `seq` and `spool_txid`
+				// null (never either transaction's own -- see ledger-lookup-port.ts's doc comment on
+				// why reusing either would silently collapse `findBySpoolTxIds()`'s Map).
+				const rows = await harness!.sql<
+					{ seq: string; spool_txid: string | null; duplicate_of: string | null }[]
+				>`
+					select seq, spool_txid, duplicate_of
+					  from journal_ledger
+					 where chain_scope_id = ${source.id}
+					   and event_type = 'receipt'
+					 order by seq
+				`;
+				expect(rows).toHaveLength(3);
+				const [receiptOne, receiptTwo, marker] = rows;
+				expect(BigInt(receiptOne!.seq)).toBe(first.receiptSeq);
+				expect(receiptOne!.spool_txid).not.toBeNull();
+				expect(receiptOne!.duplicate_of).toBeNull();
+				expect(BigInt(receiptTwo!.seq)).toBe(second.receiptSeq);
+				expect(receiptTwo!.spool_txid).not.toBeNull();
+				expect(receiptTwo!.duplicate_of).toBeNull();
+				expect(marker!.spool_txid).toBeNull();
+				expect(BigInt(marker!.duplicate_of!)).toBe(first.receiptSeq);
+
+				coverageNotice(
+					`[JR-6-03] Phase-B e2e duplicate delivery: 1 archived object, 3 ledger receipts ` +
+						`(2 Phase-A + 1 duplicate_of marker at seq ${marker!.seq} -> ${first.receiptSeq})`
 				);
 			} finally {
 				await ledgerSql.end().catch(() => undefined);

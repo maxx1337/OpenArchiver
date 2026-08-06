@@ -77,4 +77,23 @@ export class PostgresLedgerLookup implements LedgerLookup {
 		}
 		return result;
 	}
+
+	async findOriginalReceiptSeq(
+		chainScopeId: string,
+		contentSha256: Uint8Array
+	): Promise<bigint | null> {
+		const rows = await this.db.query<{ seq: string | bigint | null }>(
+			`SELECT MIN(seq) AS seq
+			   FROM journal_ledger
+			  WHERE chain_scope_id = $1
+			    AND event_type = 'receipt'
+			    AND content_sha256 = $2`,
+			[chainScopeId, contentSha256]
+		);
+		// MIN() over zero matching rows returns one row whose column is SQL NULL, not zero rows --
+		// `rows[0]` always exists here, but its `seq` may still be absent (`?? undefined` guards a
+		// driver that omits a NULL column entirely, same reasoning as `findBySpoolTxIds()` above).
+		const raw = rows[0]?.seq ?? undefined;
+		return raw === null || raw === undefined ? null : BigInt(raw);
+	}
 }

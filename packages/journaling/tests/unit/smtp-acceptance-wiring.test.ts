@@ -452,6 +452,28 @@ class InMemoryLedgerAndLookup implements LedgerBackend, LedgerLookup {
 		}
 		return out;
 	}
+
+	// JR-6-03: mirrors `PostgresLedgerLookup`'s `MIN(seq)` query over `entriesBySeq` rather than
+	// `bySpoolTxId` -- this file's own duplicate-marker rows (`spoolTxId: null`) would otherwise be
+	// invisible to this lookup, the same reason the real query is keyed by content, not by
+	// `spool_txid` (see `ledger-lookup-port.ts`).
+	async findOriginalReceiptSeq(
+		chainScopeId: string,
+		contentSha256: Uint8Array
+	): Promise<bigint | null> {
+		let min: bigint | null = null;
+		const needle = Buffer.from(contentSha256);
+		for (const { record } of this.entriesBySeq) {
+			if (record.eventType !== 'receipt') continue;
+			if (record.chainScopeId !== chainScopeId) continue;
+			if (record.contentSha256 === null) continue;
+			if (!Buffer.from(record.contentSha256).equals(needle)) continue;
+			if (min === null || record.seq < min) {
+				min = record.seq;
+			}
+		}
+		return min;
+	}
 }
 
 function noopAlertSink(): QuarantineAlertSink {

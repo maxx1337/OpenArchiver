@@ -1,5 +1,5 @@
 import postgres, { type Sql } from 'postgres';
-import type { LedgerQuery } from '@open-archiver/journaling';
+import type { LedgerQuery, LedgerTransactor } from '@open-archiver/journaling';
 import { encodeDatabaseUrl } from '../../helpers/db';
 
 /**
@@ -35,4 +35,35 @@ export function openBareLedgerConnection(): Sql {
 		throw new Error('DATABASE_URL is not set -- required for the journal-inbound worker.');
 	}
 	return postgres(encodeDatabaseUrl(process.env.DATABASE_URL));
+}
+
+/**
+ * A `LedgerTransactor` over the same bare `postgres-js` connection `createLedgerQuery()` reads
+ * with (`JR-6-03`) -- the write-side counterpart this worker needs to append a `duplicate_of`
+ * marker via `PostgresLedgerWriter`.
+ *
+ * A **third** copy of `apps/smtp-ingress/src/postgres-transactor.ts`'s ~15 lines (the second being
+ * `packages/backend/tests/support/postgres-transactor.ts`), for the same reason that doc comment
+ * gives: `packages/journaling` cannot depend on the `postgres` npm package, so this adapter cannot
+ * live there, and there is no shared location both this worker and the ingress app can import from
+ * without inverting the one-way dependency graph (ADR-025). Small, duplicated glue code is the
+ * accepted cost.
+ */
+export function postgresTransactor(sql: Sql): LedgerTransactor {
+	return {
+		async transaction<T>(run: (tx: LedgerQuery) => Promise<T>): Promise<T> {
+			return sql.begin(async (tx) => {
+				const handle: LedgerQuery = {
+					async query<Row>(
+						text: string,
+						values: readonly unknown[] = []
+					): Promise<Row[]> {
+						const rows = await tx.unsafe(text, values as never[]);
+						return rows as unknown as Row[];
+					},
+				};
+				return run(handle);
+			}) as Promise<T>;
+		},
+	};
 }

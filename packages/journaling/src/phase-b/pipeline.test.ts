@@ -5,6 +5,7 @@ import type { OrganizationDomainGroup, PendingEmail } from '@open-archiver/types
 import { loadFixture } from '../../tests/support/fixtures';
 import { FakeLedgerLookup, ledgerEntry } from '../../tests/support/fake-ledger-lookup';
 import { incomingFilePath } from '../spool/layout';
+import type { LedgerAppendRequest, LedgerBackend } from '../ledger/ledger-port';
 import type { MeasuredSpoolEntry } from './spool-entry-gate';
 import type { SpoolEntryReader } from './spool-entry-reader';
 import type { OrganizationDomainsPort } from './organization-domains-port';
@@ -98,6 +99,19 @@ class RecordingReleaser implements SpoolEntryReleaser {
 	}
 }
 
+/** Records every `LedgerBackend.append()` call `runPhaseBPipeline()` makes for a `duplicate_of` marker
+ *  (`JR-6-03`) -- a hand-written fake, following this file's own precedent for Phase-B-specific doubles. */
+class RecordingLedgerAppend {
+	readonly calls: LedgerAppendRequest[] = [];
+	private nextSeq = 100n;
+
+	readonly append: LedgerBackend['append'] = async (request) => {
+		this.calls.push(request);
+		const seq = this.nextSeq++;
+		return { seq, chainHash: new Uint8Array(32), prevChainHash: new Uint8Array(32) };
+	};
+}
+
 /** A receipt whose `content_sha256`/`size_bytes` describe exactly `bytes` -- an internally consistent, archivable row. */
 function receiptFor(bytes: Buffer, overrides: Parameters<typeof ledgerEntry>[0] = {}) {
 	return ledgerEntry({
@@ -123,6 +137,7 @@ function baseDeps(overrides: Partial<PhaseBPipelineDeps> = {}): PhaseBPipelineDe
 		indexBatch: async () => {},
 		releaseSpoolEntry: new RecordingReleaser(),
 		alertSink: () => {},
+		ledgerAppend: new RecordingLedgerAppend().append,
 		...overrides,
 	};
 }
@@ -263,6 +278,100 @@ suite(
 			for (const entry of indexedBatch) {
 				expect(entry.archivedEmailId).toBe('pre-existing-email');
 			}
+		});
+	}
+);
+
+suite(
+	'ci',
+	'runPhaseBPipeline() -- JR-6-03: duplicate_of marker for genuine redelivery, never for a same-job retry',
+	() => {
+		const raw = Buffer.from(
+			'From: alice@contoso.com\r\nTo: bob@contoso.com\r\nSubject: Redelivered\r\n\r\nBody.\r\n',
+			'utf8'
+		);
+		const envelope = {
+			envelopeFrom: 'alice@contoso.com',
+			envelopeRcpt: ['journal@example.com'],
+		};
+		const ORIGINAL_TXID = '01JZZAAAAAAAAAAAAAAAAAAAA0';
+
+		it('writes exactly one marker, duplicate_of the true original, when a different transaction delivered the same content earlier', async () => {
+			const ledger = new FakeLedgerLookup();
+			ledger.set(ORIGINAL_TXID, receiptFor(raw, { seq: 1n, ...envelope }));
+			ledger.set(TXID, receiptFor(raw, { seq: 2n, ...envelope }));
+
+			const ledgerAppend = new RecordingLedgerAppend();
+			const archive = new RecordingArchivePort(() => ({
+				kind: 'duplicate',
+				archivedEmailId: 'pre-existing-email',
+			}));
+
+			const result = await runPhaseBPipeline(
+				TXID,
+				baseDeps({
+					ledgerLookup: ledger,
+					spoolEntryReader: new FakeSpoolEntryReader(raw),
+					organizationDomains: new FakeOrganizationDomains([
+						{ main: 'contoso.com', aliases: [] },
+					]),
+					archiveObject: archive.port,
+					ledgerAppend: ledgerAppend.append,
+				})
+			);
+
+			expect(result.owners).toHaveLength(1);
+			// The pipeline resolved one owner and hit the 'duplicate' branch exactly once -- one marker,
+			// not one per owner and not zero.
+			expect(ledgerAppend.calls).toHaveLength(1);
+			const marker = ledgerAppend.calls[0]!;
+			expect(marker.duplicateOf).toBe(1n);
+			// Neither the original's spool_txid nor this delivery's own -- see ledger-lookup-port.ts's
+			// doc comment on why either would silently collapse findBySpoolTxIds()'s Map.
+			expect(marker.spoolTxId).toBeNull();
+			expect(marker.eventType).toBe('receipt');
+			expect(marker.chainScopeId).toBe(CHAIN_SCOPE_ID);
+			expect(marker.journalingSourceId).toBe(JOURNALING_SOURCE_ID);
+			expect(Buffer.from(marker.contentSha256!).toString('hex')).toBe(
+				createHash('sha256').update(raw).digest('hex')
+			);
+			expect(marker.sizeBytes).toBe(BigInt(raw.length));
+			expect(marker.envelopeFrom).toBe('alice@contoso.com');
+			expect(marker.envelopeRcpt).toEqual(['journal@example.com']);
+			// A link between two receipts, not a new SMTP acceptance event -- no connection to record.
+			expect(marker.remoteIp).toBeNull();
+			expect(marker.ehloName).toBeNull();
+			expect(marker.tlsVersion).toBeNull();
+			expect(marker.tlsCipher).toBeNull();
+			expect(marker.eventPayload).toBeNull();
+		});
+
+		it('writes no marker when the "duplicate" outcome is this same job retried, not a genuine redelivery', async () => {
+			const ledger = new FakeLedgerLookup();
+			// Only this job's own receipt exists -- findOriginalReceiptSeq() must resolve to its own seq,
+			// so the pipeline must recognise there is nothing to link to and stay silent.
+			ledger.set(TXID, receiptFor(raw, { seq: 5n, ...envelope }));
+
+			const ledgerAppend = new RecordingLedgerAppend();
+			const archive = new RecordingArchivePort(() => ({
+				kind: 'duplicate',
+				archivedEmailId: 'pre-existing-email',
+			}));
+
+			await runPhaseBPipeline(
+				TXID,
+				baseDeps({
+					ledgerLookup: ledger,
+					spoolEntryReader: new FakeSpoolEntryReader(raw),
+					organizationDomains: new FakeOrganizationDomains([
+						{ main: 'contoso.com', aliases: [] },
+					]),
+					archiveObject: archive.port,
+					ledgerAppend: ledgerAppend.append,
+				})
+			);
+
+			expect(ledgerAppend.calls).toHaveLength(0);
 		});
 	}
 );
