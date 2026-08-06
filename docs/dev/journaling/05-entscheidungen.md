@@ -2323,3 +2323,25 @@ Abschnitt gefüllt, nicht ein neuer angelegt (ADR-032 Punkt 2: eine Nummer wird 
 
 Reservierungen laufen mit der Abnahme des Epics aus. Nicht gebrauchte Nummern fallen an den
 allgemeinen Vorrat zurück; ein nachfolgendes Epic reserviert dann ab der ersten freien.
+
+## ADR-037 bis ADR-040 — Nachschub für E6
+
+**Status:** **reserviert** (2026-08-06) · **Grundlage:** ADR-032 Punkt 4, und die Aufforderung im
+Abschnitt darüber, weiteren Bedarf **hier** zu ergänzen
+
+**033–036 sind vollständig vergeben** (033 Owner-Auflösung, 034 Phase-B-Pipeline, 035 E2E-Test gegen
+echtes Meilisearch, 036 Doku-Diät auf dem Epic-Zweig statt auf dem Integrationszweig). `ADR-010` ist
+gefüllt. Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ab jetzt aus **037–040**.
+
+**Der konkrete Anlass ist bereits entschieden und braucht 037:** `JR-6-03` speichert den
+`duplicate_of`-Marker als `event_type = 'receipt'`, weil der Enum `journal_event_type` keinen Wert für
+einen Marker kennt. Damit zählt jede Abfrage, die `receipt`-Zeilen gegen angenommene Nachrichten
+hält, zu hoch — aus „eine Receipt je Nachricht" wird „Receipts ≥ Nachrichten", und genau diesen
+Vergleich zieht `verify` in E9. Ein Diskriminator existiert (der Marker trägt `spool_txid` null), aber
+**implizit, in einem Doc-Comment** — das ist die Form von **F46**: zwei Seiten stimmen über etwas
+überein, das niemand prüft. Der Auftraggeber hat am 2026-08-06 den **eigenen Enum-Wert per Migration**
+entschieden, gegen die Alternative „so lassen und die Invariante schriftlich festhalten". Begründung
+für den Zeitpunkt: E7 (WORM) und E9 (`verify`) bauen auf dieser Semantik auf; danach ist die Änderung
+teuer, heute ist sie eine Migration.
+
+Reservierungen laufen mit der Abnahme des Epics aus, unverändert.
