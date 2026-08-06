@@ -898,7 +898,10 @@ test files`. Erwartungsgemäß unverändert — das Gate selbst ist reine Werkze
       Zeilen DB-Isolation entfernt), mit gültigem `DATABASE_URL`/`REDIS_PASSWORD` gelaufen → Gate
       meldet weiterhin exakt dieselbe `AssertionError` wie zuvor, **Exit 1**. Zurückgesetzt,
       `git diff --cached --stat` danach leer
-- **Commit:** `<wird nach dem Push nachgetragen>`
+- **Commit:** `1611434`. **CI:** `31090714283` **success** — 107 Dateien unverändert,
+  `unit ci 1102/1102 · integration ci 127/127 · adversarial ci 69/69`,
+  `Suite inventory verified: unit 77/77, integration 23/23, adversarial 7/7, 0 unclassified test
+files`
 - **Entscheidung, wie vom Prüfer offengelassen:** kein automatisches Herleiten von
   `DATABASE_URL`/`REDIS_PASSWORD` aus einer laufenden Docker-Instanz. Begründung: ein geratener
   Zugangsdatensatz ist seine eigene Fehlerklasse — ein falsch geratenes `REDIS_PASSWORD` sähe exakt

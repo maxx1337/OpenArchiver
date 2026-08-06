@@ -159,9 +159,9 @@ aus F64 (per Definition nur in CI beobachtbar).
 TEST-Abnahme offen; ADR-010, ADR-033, ADR-034, ADR-035 entschieden; F59 und F61 behoben, F62/F63/F64
 neu) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) ·
 Volllauf: **1298 passed | 8 skipped** bei 107 Dateien — `unit ci 1102/1102 · integration ci 127/127 ·
-adversarial ci 69/69`, Exit 0 · zuletzt `d5f77cf` · **CI `31087687090` success** · **neu, kein
-Backlog-Task:** `pnpm gate` (Pre-Push-Gate, `88b6719`+`d5f77cf`), dreimal kalibriert — Details unter
-„Billig verifizieren" oben und in `06-status.md`
+adversarial ci 69/69`, Exit 0 · zuletzt `1611434` · **CI `31090714283` success** · **neu, kein
+Backlog-Task:** `pnpm gate` (Pre-Push-Gate, `88b6719`+`d5f77cf`, F65-Fix `1611434`), dreimal kalibriert
+plus einmal nachkalibriert — Details unter „Billig verifizieren" oben und in `06-status.md`
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -454,8 +454,8 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `d5f77cf`. CI
-`31087687090` **success** — 107 Dateien, `unit 1102/1102 · integration 127/127 · adversarial 69/69`.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream, zuletzt `1611434`. CI
+`31090714283` **success** — 107 Dateien, `unit 1102/1102 · integration 127/127 · adversarial 69/69`.
 Nicht neu abzweigen, nicht neu reservieren.
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
@@ -464,6 +464,16 @@ Nicht neu abzweigen, nicht neu reservieren.
 > Heuristik-`warn`) und **nicht** F64s hängenden Shutdown (per Definition nicht lokal reproduzierbar).
 > Details in `06-status.md` unter „Pre-Push-Gate" und in `07-session-handover.md` unter „Billig
 > verifizieren". Ändert an `JR-6-03`/`JR-6-04` als nächstem Schritt nichts.
+>
+> **Nacharbeit `F65` (`1611434`), von TEST unabhängig gefunden und gemessen:** `DATABASE_URL` und
+> `REDIS_PASSWORD` sind Host-Infrastruktur, kein Prüfgegenstand, und wurden vorher asymmetrisch
+> behandelt — ein fehlendes `DATABASE_URL` überspringt Schritt 4/4 zwar korrekt, nannte aber nie die
+> dadurch ungeprüften Klassen (`9af1492`/`41c407e`), und ein fehlendes/falsches `REDIS_PASSWORD` wurde
+> **gar nicht** geprüft und führte zu vier `NOAUTH`-Stacktraces mitten im Testlauf — **Exit 1 auf
+> sauberem Baum** (die F35-Form). Behoben mit `probeRedisRequiresAuth()` (spricht `PING`/`AUTH` selbst,
+> vor jedem Build/Spawn) und benannten Skip-Meldungen für beide Fälle. Kalibriert gegen alle drei vom
+> Prüfer gemessenen Zustände plus einer Gegenprobe, dass `41c407e`s ursprüngliche Kalibrierung weiter
+> greift. Details in `06-status.md` unter „F65".
 
 **Erledigt: `JR-6-01`, `JR-6-02a`, `JR-6-02b`.** `ADR-010`, `ADR-033`, `ADR-034`, `ADR-035` sind
 entschieden; Gate, Pipeline, Backend-Adapter und der automatisierte Ende-zu-Ende-Test
