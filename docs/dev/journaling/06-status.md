@@ -530,7 +530,10 @@ Gegenprobe bestanden: nächster Schritt bleibt aus README→Status→Handover al
 - **Testzahl:** +3 gegenüber `JR-6-02b`s Stand (+2 `pipeline.test.ts`, +1
   `journal-phase-b-e2e.int.test.ts`). Volllauf **1301 passed | 8 skipped** bei 107 Dateien, Exit 0,
   `unit ci 1104/1104 · integration ci 128/128 · adversarial ci 69/69`
-- **CI-Lauf:** noch nicht geprüft — folgt nach `git push`
+- **CI-Lauf:** `31105611002` **success** (Kopf-Commit `3835e91`) — 107 Dateien,
+  `unit ci 1104/1104 · integration ci 128/128 · adversarial ci 69/69`,
+  `Suite inventory verified: unit 77/77, integration 23/23, adversarial 7/7, 0 unclassified test
+files`
 - **Entscheidungen:** keine neue ADR (Nummernkreis war laut Auftrag vor Vergabe zu erfragen; die
   Herleitung — `spool_txid: null`, `eventType: 'receipt'` wiederverwendet, `MIN(seq)` über
   `chain_scope_id`+`content_sha256` unterscheidet echte Wiederzustellung von Job-Retry — steht als
