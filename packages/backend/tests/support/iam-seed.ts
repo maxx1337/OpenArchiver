@@ -150,6 +150,10 @@ export async function seedJournalingSource(
 		/** `journaling_sources.smtp_password_hash` (`JR-4-05c`) -- a bcrypt hash, never a plaintext
 		 * password. Left `undefined`/unset means `null`. */
 		smtpPasswordHash?: string | null;
+		/** `journaling_sources.organization_domains` (`JR-6-02b`, ADR-035) -- the domain groups
+		 *  `resolveOwner()` matches against. Left unset means the column default (`[]`), the
+		 *  no-groups-configured heuristic path every existing caller of this helper already got. */
+		organizationDomains?: { main: string; aliases: string[] }[];
 	}
 ): Promise<SeededJournalingSource> {
 	const suffix = randomUUID().slice(0, 8);
@@ -164,6 +168,7 @@ export async function seedJournalingSource(
 			routingAddress: options.routingAddress ?? `journal-${suffix}@journaling.test.invalid`,
 			smtpUsername: options.smtpUsername ?? null,
 			smtpPasswordHash: options.smtpPasswordHash ?? null,
+			organizationDomains: options.organizationDomains ?? [],
 		})
 		.returning();
 	return {

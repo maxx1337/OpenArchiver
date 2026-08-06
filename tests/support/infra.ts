@@ -131,3 +131,55 @@ export function probeRedis(timeoutMs = 1500): Promise<Probe> {
 	cache.set(key, result);
 	return result;
 }
+
+/**
+ * Is there a reachable Meilisearch for a suite that needs real search (`JR-6-02b`'s Phase-B
+ * end-to-end test, ADR-035)?
+ *
+ * Reads `MEILI_HOST`, the same variable `packages/backend/src/config/search.ts` reads, with the same
+ * default (`http://127.0.0.1:7700`) -- a probe that says "reachable" is a statement about the host
+ * `SearchService` will actually connect to. Duplicating the default rather than importing that module
+ * is the same instinct `probeRedis()` already documents: the harness stays free of the packages it
+ * tests.
+ *
+ * A plain TCP connect against the parsed host/port, like `probePostgres()`/`probeRedis()` -- it
+ * proves something is listening, not that `MEILI_MASTER_KEY` is right. Measured directly (not
+ * assumed) against a container started the same way a GitHub Actions service container would be
+ * (`image`/`env`/`ports`, no `command`): Meilisearch's `/health` responds without authentication, but
+ * every other endpoint requires the configured key, and a *wrong* key gets `403` rather than
+ * connection failure -- so a misconfigured `MEILI_MASTER_KEY` reaches the test that actually calls
+ * `SearchService` as a real assertion failure, never disguised as "Meilisearch is not running".
+ */
+export function probeMeilisearch(timeoutMs = 1500): Promise<Probe> {
+	const raw = process.env.MEILI_HOST || 'http://127.0.0.1:7700';
+	const key = `meilisearch:${raw}`;
+	const cached = cache.get(key);
+	if (cached) {
+		return cached;
+	}
+	const result = (async (): Promise<Probe> => {
+		let url: URL;
+		try {
+			url = new URL(raw);
+		} catch {
+			return {
+				available: false,
+				reason: `MEILI_HOST is not a parseable URL (${JSON.stringify(raw)})`,
+				target: '(unparseable)',
+			};
+		}
+		const host = url.hostname || '127.0.0.1';
+		const port = Number(url.port || (url.protocol === 'https:' ? '443' : '80'));
+		const target = `${host}:${port}`;
+		const reachable = await probeTcp(host, port, timeoutMs);
+		return reachable
+			? { available: true, reason: `Meilisearch reachable at ${target}`, target }
+			: {
+					available: false,
+					reason: `no Meilisearch listening at ${target} (MEILI_HOST=${raw}) -- suite skipped`,
+					target,
+				};
+	})();
+	cache.set(key, result);
+	return result;
+}

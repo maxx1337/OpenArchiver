@@ -833,7 +833,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// as its own process, proven to bind the queue and to *fail* a Phase-B job rather than report an
 		// unarchived message as completed. First suite in the repository that needs Redis rather than
 		// Postgres -- see probeRedis() in tests/support/infra.ts.
-		expectedFiles: 22,
+		//
+		// 23 after JR-6-02b (ADR-035) added journal-phase-b-e2e.int.test.ts: the real Phase-B pipeline
+		// against real Postgres and real Meilisearch -- spool file to searchable hit, fan-out to three
+		// owners, spool release. First suite that needs Meilisearch -- see probeMeilisearch() in
+		// tests/support/infra.ts.
+		expectedFiles: 23,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -879,7 +884,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// The last one always executes but branches on the platform: Windows has no POSIX signals, so
 		// the graceful path is verified on the Linux CI runner only and a coverageNotice says so on
 		// Windows. Deliberately not a skipIf -- these numbers are exact and must not differ per platform.
-		expectedTests: { ci: 126, nightly: 0, manual: 0 },
+		//
+		// 127 after JR-6-02b (ADR-035) added 1 in journal-phase-b-e2e.int.test.ts: the real Phase-B
+		// pipeline against real Postgres and real Meilisearch, fanned out to three owners, all found by
+		// search, spool file released. Calibrated twice (spool release disabled, fan-out truncated to
+		// the winner) -- both broke the test at the assertion each one should, both reverted clean.
+		expectedTests: { ci: 127, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
