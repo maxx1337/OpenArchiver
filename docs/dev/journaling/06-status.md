@@ -200,7 +200,9 @@ Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` g
           Postgres über die bestehende Harness-Bindung und echtes Meilisearch über einen neuen
           CI-Service-Container, zweimal kalibriert). `runPhaseBPipeline()` verbindet alles; **Ende-zu-Ende
           ist jetzt ein Test, kein manueller Nachweis mehr.**
-- [x] `JR-6-03` — Idempotenz: ein Objekt, zwei Receipts, `duplicate_of` (2026-08-06, `5e9551f`)
+- [x] `JR-6-03` — Idempotenz: ein Objekt, **drei** Ledger-Zeilen — zwei Phase-A-Receipts plus
+      angehängter `duplicate_of`-Marker (2026-08-06, `5e9551f`; Kriterium im Backlog korrigiert, der
+      Ledger ist append-only)
 - [ ] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität)
 - [ ] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
 - [ ] `JR-6-06` — TEST: Object-Store-Ausfall
