@@ -2643,16 +2643,41 @@ Disziplin, die `seedIngestionSource()` für Postgres-Zeilen schon anwendet.
 - **Verworfen:** DI-Umbau von `IngestionService`/`StorageService` (unnötig, siehe oben) und die
   Harness-Ausnahme (Begründung des Auftraggebers bleibt gültig).
 
-## ADR-036 — reserviert für E6 (Phase-B-Worker)
+## ADR-036 — Doku-Diät (E6): Ausnahme von der Regel, dass Grundlagenarbeit auf den Integrationszweig gehört
 
-**Status:** **reserviert** (2026-08-05) · **Grundlage:** ADR-032 Punkt 4
+**Status:** **entschieden** (2026-08-06) · **Entscheider:** Auftraggeber · **Grundlage:** ADR-032
+Punkt 4, `CLAUDE.md` §7
 
-Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**;
+Der Zweig `claude/journaling-e6-phase-b-worker` schöpfte ADR-Nummern ausschließlich aus **033–036**;
 **033** ist mit der Owner-Auflösung für die schwächeren Parse-Ergebnisse vergeben, **034** mit der
-Phase-B-Pipeline, **035** mit der Automatisierung des Ende-zu-Ende-Tests (alle oben). Wer während E6
-eine weitere Nummer braucht, ergänzt sie **hier auf dem Integrationszweig** und nicht auf dem
-Epic-Zweig — die Reservierung ist nur wirksam, solange der Vorrat an der Stelle geführt wird, die beim
-Rückmerge gewinnt.
+Phase-B-Pipeline, **035** mit der Automatisierung des Ende-zu-Ende-Tests (alle oben). **036** war bis
+zum 2026-08-06 nur reserviert; mit diesem Eintrag ist der Vorrat erschöpft — eine weitere Nummer für
+E6 braucht eine neue Reservierung auf dem Integrationszweig.
 
-Reservierungen laufen mit der Abnahme des Epics aus. Nicht gebrauchte Nummern fallen an den
-allgemeinen Vorrat zurück; ein nachfolgendes Epic reserviert dann ab der ersten freien.
+### Die Regel, von der abgewichen wird
+
+`CLAUDE.md` §7: „Grundlagenarbeit (Doku, ADRs, Agent-Infrastruktur) gehört direkt auf den
+Integrationsbranch." Epic-Zweige tragen Epic-Arbeit, nicht Projektgedächtnis-Pflege — genau deshalb
+kollidierten bei E4/E5s parallelen Zweigen ADR-Nummern, Befundnummern und Dateinamen gleichzeitig
+(ADR-032).
+
+### Die Abweichung
+
+Die Doku-Diät vom 2026-08-06 (Fortsetzung der vom 2026-08-03) läuft **auf dem Epic-Zweig**, nicht auf
+dem Integrationszweig.
+
+### Begründung
+
+`06-status.md` und `07-session-handover.md` — die beiden größten Ziele der Diät — werden von der
+**laufenden** E6-Arbeit aktiv beschrieben und stehen nur auf dem Epic-Zweig im aktuellen Stand. Eine
+Diät auf dem Integrationszweig hätte parallel zur E6-Arbeit denselben zwei Dateien gearbeitet und beim
+Rückmerge einen Handkonflikt in genau den Dateien garantiert, die das Projektgedächtnis tragen — die
+schlechteste denkbare Stelle für eine manuelle Konfliktauflösung. Das ist dieselbe Fehlerklasse, vor
+der ADR-032 warnt (zwei Zweige, ein Vorrat), nur an Dateiinhalten statt an Nummernkreisen.
+
+### Konsequenz
+
+Diese Abweichung gilt **nur für diese Diät**. Reine Doku-/ADR-Arbeit ohne Überlappung mit laufender
+Epic-Arbeit bleibt Grundlagenarbeit und gehört weiter auf den Integrationszweig, wie `CLAUDE.md` §7 es
+verlangt. Reservierungen laufen mit der Abnahme des Epics aus; nicht gebrauchte Nummern fallen an den
+allgemeinen Vorrat zurück.
