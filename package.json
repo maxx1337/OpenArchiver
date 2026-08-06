@@ -35,7 +35,8 @@
 		"test:integration": "dotenv -- vitest run --project integration",
 		"test:adversarial": "dotenv -- vitest run --project adversarial",
 		"test:nightly": "dotenv -- cross-env OA_TEST_CLASSES=ci,nightly vitest run",
-		"test:manual": "dotenv -- cross-env OA_TEST_CLASSES=manual vitest run"
+		"test:manual": "dotenv -- cross-env OA_TEST_CLASSES=manual vitest run",
+		"gate": "dotenv -- node scripts/pre-push-gate.mjs"
 	},
 	"dependencies": {
 		"concurrently": "^9.2.0",
