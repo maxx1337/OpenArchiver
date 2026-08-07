@@ -843,8 +843,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 23 after JR-6-02b (ADR-035) added journal-phase-b-e2e.int.test.ts: the real Phase-B pipeline
 		// against real Postgres and real Meilisearch -- spool file to searchable hit, fan-out to three
 		// owners, spool release. First suite that needs Meilisearch -- see probeMeilisearch() in
-		// tests/support/infra.ts.
-		expectedFiles: 25,
+		// tests/support/infra.ts. 24 after JR-6-04 added journal-spool-reconciler.int.test.ts. 25 after
+		// JR-6-05 added journal-hash-before-encryption.int.test.ts. 26 after JR-6-06 added
+		// journal-object-store-outage.int.test.ts: a fake ArchiveObjectPort standing in for a stopped
+		// object store (this repository has no MinIO/S3 service to stop -- see that file's own module
+		// doc comment for why the DI seam is the equally-faithful substitute), against real Postgres and
+		// real Redis/BullMQ -- SMTP acceptance unaffected by a Phase-B failure it just observed, and a
+		// two-entry backlog draining completely through the reconciler once a working port replaces the
+		// failing one.
+		expectedFiles: 26,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -902,7 +909,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// PostgresLedgerLookup pair durably appends a third ledger row for the second delivery --
 		// spool_txid null, duplicate_of the first delivery's own receipt seq -- read back and
 		// verified with a raw query against journal_ledger, never through the patched drizzle client.
-		expectedTests: { ci: 131, nightly: 0, manual: 0 },
+		// 133 after JR-6-06 added 2 to journal-object-store-outage.int.test.ts: SMTP acceptance still
+		// answering 250 right after a real runPhaseBPipeline() call has thrown for a different
+		// transaction (condition 1), and a two-entry backlog failing under real BullMQ retry/backoff
+		// against a down object store, then draining completely once a real archiveObject port and one
+		// reconciler sweep (JR-6-04) replace it -- no job retried by hand (condition 2). Both cases
+		// recompute the real hash chain before and after and require zero findings (condition 3).
+		expectedTests: { ci: 133, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
