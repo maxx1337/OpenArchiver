@@ -297,6 +297,106 @@ When `requireTls` is enabled on a source, connections without TLS (STARTTLS) are
 
 ---
 
+## WORM Storage (Object Lock)
+
+Open Archiver can store every archived object — the raw EML and its extracted attachments — under a **WORM** (Write Once, Read Many) guarantee: once written, an object cannot be deleted or have its retention shortened, by anyone, for as long as its retention period runs. This section explains what that guarantee actually is, what it costs you, and how to configure it responsibly. Read the whole section — in the order it is written — before you set a retention period.
+
+### Retention under COMPLIANCE mode is irreversible — read this before choosing a period
+
+The only backend that provides a real WORM guarantee is S3-compatible object storage with **Object Lock in COMPLIANCE mode** (see [Choosing a Retention Period](#choosing-a-retention-period-and-enabling-object-lock) below for how to enable it). Once you turn this on and Open Archiver writes an object under it, the following is true for the entire retention period **and there is no override**:
+
+- Amazon S3 (and Object-Lock-compliant alternatives such as MinIO) itself — not Open Archiver's code, not your IAM policy — refuses every request to delete that object version, to shorten its retention date, or to change its lock mode away from COMPLIANCE. This applies to **every** principal, including the bucket owner and the AWS account root user.
+- There is no support escalation, no "break glass" procedure, and no emergency override for a bucket administrator who changes their mind. AWS is explicit about this: COMPLIANCE mode is designed so that _nobody_ can undo it before the retention date, full stop.
+- This is enforced **per object version**, from the moment it is written, for exactly the number of days configured at that time (`STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS`). Extending an object's retention later is possible; shortening it is not.
+- Object Lock must be enabled on the bucket **at bucket-creation time**. It cannot be turned on for an existing bucket. If you decide to adopt this after already running against a bucket without Object Lock, you need a new bucket and a migration of existing objects — objects already written are not retroactively protected.
+
+Practical consequence: whatever number of days you configure is a number of days you are **committing to**, including against your own future operational needs — a decommissioned deployment, a storage-cost reduction, a data subject erasure request under a "right to be forgotten" regime, or simply outgrowing the retention you originally picked. Confirm with your own legal/compliance function what retention period your jurisdiction and industry actually require before you commit to a number (this is a factual description of the AWS mechanism, not legal advice). Article 17(3) GDPR and equivalent regimes generally carve out an exception for retention required by law — but whether that exception covers your specific case is a question for counsel, not for this guide.
+
+If you are not ready to make that commitment yet, do not set `STORAGE_S3_OBJECT_LOCK_MODE` — running without it costs you the WORM guarantee, not the archiving feature itself; everything else in this guide works identically either way.
+
+### Choosing a retention period and enabling Object Lock
+
+1. Create a **new** S3 bucket with Object Lock enabled at creation time (the AWS console has an "Enable Object Lock" checkbox on bucket creation; via CLI, `aws s3api create-bucket ... --object-lock-enabled-for-bucket` followed by `aws s3api put-object-lock-configuration`). For MinIO, pass `--with-lock` to `mc mb`, or enable it via the console at bucket creation.
+2. Decide on a retention period, in days, having read the section above.
+3. Set in `.env`:
+
+    ```
+    STORAGE_TYPE=s3
+    STORAGE_S3_OBJECT_LOCK_MODE=COMPLIANCE
+    STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS=<your chosen number of days>
+    ```
+
+    (plus the usual `STORAGE_S3_*` connection settings — see [Environment Variables](#environment-variables) in `.env.example`.) `COMPLIANCE` is the only supported mode; `GOVERNANCE` mode allows a sufficiently-privileged principal to shorten or remove retention (`s3:BypassGovernanceRetention`), which defeats the point of a WORM guarantee against an insider or a compromised credential, so Open Archiver does not offer it as an option.
+
+4. Restart Open Archiver. From that point on, every object `StorageService`/`S3StorageProvider` writes carries `ObjectLockMode: COMPLIANCE` and `ObjectLockRetainUntilDate` computed as write-time + the configured number of days.
+5. This is not retroactive: objects written before you enabled Object Lock, or to a bucket that did not have it enabled at creation, are not protected. Only new writes after this configuration is live are covered.
+
+### Least-privilege credentials for the S3 backend
+
+The IAM credentials Open Archiver uses to reach the bucket should be able to write and read objects, but should **not** be able to defeat the WORM guarantee even if the credential itself is ever compromised. Concretely, the policy attached to that principal must **not** grant:
+
+- `s3:DeleteObject` / `s3:DeleteObjectVersion` — no path to remove an object at all.
+- `s3:BypassGovernanceRetention` — irrelevant under COMPLIANCE mode (S3 rejects it outright there), but denying it explicitly means the credential can never be used to defeat retention if the bucket is ever misconfigured or downgraded to GOVERNANCE mode.
+- `s3:PutObjectRetention` without a floor — Open Archiver itself needs `s3:PutObjectRetention` (it is required for the `x-amz-object-lock-*` headers sent with every `PutObject`/multipart upload; see the AWS documentation on Object Lock permissions), but the policy should restrict what that permission can be used for via the `s3:object-lock-remaining-retention-days` condition key: deny any `PutObjectRetention` call that would leave **fewer** days of retention remaining than your configured minimum. This lets the credential extend retention (harmless) but not shorten it (defeats the guarantee) — the AWS-documented pattern for "extend-only" retention changes. Note this is defense-in-depth: under COMPLIANCE mode, S3 already refuses a shortening `PutObjectRetention` call unconditionally at the service level; this condition additionally protects against the credential being reused against a GOVERNANCE-mode bucket, or against a future mode change.
+
+Example policy (replace `YOUR_BUCKET` and the numeric floor with your configured `STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS`):
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "AllowArchiveWrites",
+			"Effect": "Allow",
+			"Action": [
+				"s3:PutObject",
+				"s3:PutObjectRetention",
+				"s3:GetObject",
+				"s3:GetObjectRetention",
+				"s3:ListBucket",
+				"s3:GetBucketObjectLockConfiguration"
+			],
+			"Resource": ["arn:aws:s3:::YOUR_BUCKET", "arn:aws:s3:::YOUR_BUCKET/*"]
+		},
+		{
+			"Sid": "DenyDeletion",
+			"Effect": "Deny",
+			"Action": ["s3:DeleteObject", "s3:DeleteObjectVersion", "s3:BypassGovernanceRetention"],
+			"Resource": "arn:aws:s3:::YOUR_BUCKET/*"
+		},
+		{
+			"Sid": "DenyRetentionShortening",
+			"Effect": "Deny",
+			"Action": "s3:PutObjectRetention",
+			"Resource": "arn:aws:s3:::YOUR_BUCKET/*",
+			"Condition": {
+				"NumericLessThan": {
+					"s3:object-lock-remaining-retention-days": "365"
+				}
+			}
+		}
+	]
+}
+```
+
+This is a starting point, not a certified compliance artifact — review it against your own security baseline before use. `JR-7-05` (a separate, later task) verifies against a real MinIO instance with Object Lock enabled that a deletion attempt under this policy actually fails; this document only describes the intended policy shape.
+
+### Local filesystem storage is not WORM
+
+`STORAGE_TYPE=local` provides **no real WORM guarantee**. It is a plain filesystem: the same OS user that runs Open Archiver already has write and delete permission on it (it needs that for normal ingestion), and anyone with OS-level access to the host — a compromised application process, an administrator with shell access, a container escape — can modify or delete archived files with no vendor-enforced or cryptographic barrier stopping them. If your compliance requirement is a real, audit-defensible WORM guarantee, use the S3 backend with Object Lock in COMPLIANCE mode described above; that guarantee is enforced by the storage layer itself, independent of Open Archiver's own code, its database, or its credentials.
+
+The measures below are **deterrence, not WORM**. Each one can be bypassed by whoever has root/administrator privileges on the host — that is a fundamental limit of any OS-level control compared to Object Lock, not a bug in how it's configured here.
+
+- **Dedicated mount.** Put `STORAGE_LOCAL_ROOT_PATH` on its own partition or volume, separate from the application and the OS. This limits the blast radius of an unrelated filesystem incident (a `rm -rf` typo elsewhere, a disk-full condition on another volume) and makes it possible to remount the volume read-only for periods where no new archival writes are expected.
+- **Restrictive Unix permissions.** Run the Open Archiver process under a dedicated, unprivileged user. Do not make the storage root group- or world-writable. Consider a periodic job that changes completed subdirectories to `500` (read + execute only, no write) for the owning user once you are confident no further writes are expected there — this removes the running application's own casual ability to overwrite or delete without first explicitly reversing the permission change.
+- **`chattr +i` (immutable flag) — Linux only, and only on filesystems that support extended attributes** (ext2/3/4, XFS, Btrfs; **not** overlayfs, which is what many container runtimes use for the root filesystem — this generally still works if `STORAGE_LOCAL_ROOT_PATH` is a bind mount or named volume backed by a real filesystem on the host, which is the setup this project's `docker-compose.yml` uses, but verify on your own host). Setting this flag means even the owning process cannot write, truncate, rename, or delete the file without first clearing the flag with `chattr -i`, which itself requires root or the `CAP_LINUX_IMMUTABLE` capability.
+
+    Open Archiver can set this automatically: set `STORAGE_LOCAL_HARDEN_IMMUTABLE=true` in `.env`. After each successful write, `LocalFileSystemProvider` attempts `chattr +i` on the file, best-effort — it is skipped entirely on non-Linux platforms, and any failure (missing `chattr` binary, unsupported filesystem, insufficient privilege) is logged and does **not** fail the write, since local storage is not real WORM regardless of whether the flag succeeds.
+
+    **This also blocks Open Archiver's own later deletion of that file**, including any retention-policy-driven expiry — until an operator manually runs `chattr -i` on it, deletion of that specific file will fail. That is the deterrence model working as intended (nobody, including the running application, can casually undo it), but it means you should not enable this flag on a deployment where automatic retention-expiry deletion of local-storage objects is something you rely on, without also planning for the manual `chattr -i` step that expiry would then require.
+
+---
+
 ## Health Check
 
 The SMTP listener exposes a health endpoint:
