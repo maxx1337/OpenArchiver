@@ -3,12 +3,19 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { createReadStream, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { logger } from '../../config/logger';
+
+const execFileAsync = promisify(execFile);
 
 export class LocalFileSystemProvider implements IStorageProvider {
 	private readonly rootPath: string;
+	private readonly hardenImmutable: boolean;
 
 	constructor(config: LocalStorageConfig) {
 		this.rootPath = config.rootPath;
+		this.hardenImmutable = config.hardenImmutable ?? false;
 	}
 
 	async put(filePath: string, content: Buffer | NodeJS.ReadableStream): Promise<void> {
@@ -21,6 +28,34 @@ export class LocalFileSystemProvider implements IStorageProvider {
 		} else {
 			const writeStream = createWriteStream(fullPath);
 			await pipeline(content, writeStream);
+		}
+
+		if (this.hardenImmutable) {
+			await this.tryMakeImmutable(fullPath);
+		}
+	}
+
+	/**
+	 * Best-effort deterrence hardening (JR-7-03): sets the Linux `chattr +i` (immutable)
+	 * flag on a freshly written file. This is NOT real WORM/Object Lock -- root can clear
+	 * it, it only takes effect on Linux with an ext-family filesystem, and it also blocks
+	 * this application's own later deletions of the same file (e.g. retention-policy
+	 * expiry) until an operator manually runs `chattr -i`. Skipped entirely on non-Linux
+	 * platforms. Failures (missing `chattr` binary, non-supporting filesystem, insufficient
+	 * privilege) are logged and swallowed -- a failed hardening attempt must never fail the
+	 * write it is protecting.
+	 */
+	private async tryMakeImmutable(fullPath: string): Promise<void> {
+		if (process.platform !== 'linux') {
+			return;
+		}
+		try {
+			await execFileAsync('chattr', ['+i', fullPath]);
+		} catch (error) {
+			logger.warn(
+				{ err: error },
+				'Failed to set immutable flag (chattr +i) on stored file; continuing without it'
+			);
 		}
 	}
 

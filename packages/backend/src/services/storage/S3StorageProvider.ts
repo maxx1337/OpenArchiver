@@ -14,6 +14,8 @@ import { Readable } from 'stream';
 export class S3StorageProvider implements IStorageProvider {
 	private readonly client: S3Client;
 	private readonly bucket: string;
+	private readonly objectLockMode?: S3StorageConfig['objectLockMode'];
+	private readonly objectLockRetainUntilDays?: number;
 
 	constructor(config: S3StorageConfig) {
 		this.client = new S3Client({
@@ -26,15 +28,31 @@ export class S3StorageProvider implements IStorageProvider {
 			forcePathStyle: config.forcePathStyle,
 		});
 		this.bucket = config.bucket;
+		this.objectLockMode = config.objectLockMode;
+		this.objectLockRetainUntilDays = config.objectLockRetainUntilDays;
 	}
 
 	async put(path: string, content: Buffer | NodeJS.ReadableStream): Promise<void> {
+		// Object Lock parameters are only attached when explicitly configured (JR-7-01).
+		// Absent config produces the exact same PutObject/UploadPart calls as before —
+		// existing callers (IngestionService, StorageService, ...) are unaffected.
+		const objectLockParams =
+			this.objectLockMode && this.objectLockRetainUntilDays
+				? {
+						ObjectLockMode: this.objectLockMode,
+						ObjectLockRetainUntilDate: new Date(
+							Date.now() + this.objectLockRetainUntilDays * 24 * 60 * 60 * 1000
+						),
+					}
+				: {};
+
 		const upload = new Upload({
 			client: this.client,
 			params: {
 				Bucket: this.bucket,
 				Key: path,
 				Body: content instanceof Readable ? content : Readable.from(content),
+				...objectLockParams,
 			},
 		});
 
