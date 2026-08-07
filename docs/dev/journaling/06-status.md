@@ -10,14 +10,15 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` 
 zuletzt.** Kurz: E6 läuft (`JR-6-01`…`JR-6-07` erledigt; `JR-6-02` insgesamt code-fertig,
 TEST-Abnahme separat unter `JR-6-08`). **Rollentrennung PO/DEV/TEST ist wieder aktiv** (aufgehoben
 während `JR-6-04`/`JR-6-05`, siehe dortige Einträge) — `JR-6-06` und `JR-6-07` sind wieder von der
-Rolle TEST unabhängig umgesetzt, nicht vom PO selbst. **`JR-6-07`s akzeptierter Pfad (Linux) ist auf
-diesem Branch bisher nie beobachtet worden** — auf diesem Windows-Host endet jede Nachricht im
-451-Fail-Safe-Zweig, siehe Eintrag unten.
+Rolle TEST unabhängig umgesetzt, nicht vom PO selbst. **`JR-6-07`s akzeptierter Pfad ist inzwischen
+auf echtem Linux (WSL2) verifiziert** — 100 Nachrichten sauber, aber die vollen 100.000 scheitern am
+eigenen 3h-Budget, Ursache gefunden und als **F66** dokumentiert (`checkSpoolHighWaterMark()` läuft
+bei jeder Annahme über den gesamten Spool, O(n²) bei wachsendem Rückstand). Siehe Eintrag unten.
 Der WIP-Zweig `wip/journaling-jr-6-04` ist gelöscht (lokal + remote), sein Inhalt war vollständig in
 `JR-6-04` aufgegangen. **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig; E1, E13, E2, E3,
 E4 und E5 sind zurückgemergt). Nummernkreise nach **ADR-032** reserviert: ADR-033–036 (alle vergeben)
 plus Nachschub **ADR-037–040** (`e8256f7`, Integrationszweig; **037** vergeben, 038 mit `JR-6-04`
-gefüllt, 039–040 offen), F59–F70 (F59, F61, F65 vergeben).
+gefüllt, 039–040 offen), F59–F70 (F59, F61, F65, F66 vergeben).
 
 > **CI-Lücke, Entscheidung 2026-08-07 (kein ADR, Werkzeug-Policy):** GitHub Actions erzeugt seit
 > `37b471d` keine zuverlässigen Läufe mehr für diesen Zweig (Ursache außerhalb des Codes, siehe
@@ -424,15 +425,24 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
   zweimal unabhängig reproduziert** (zwei separate Läufe, beide am exakt selben 600.000ms-Timeout
   gescheitert) — die TEST-Sitzung selbst hatte in ihrem finalen Bericht auch einen sauberen
   3.002ms-Lauf, die Störung ist also echt intermittierend, nicht deterministisch
-- **Offene Verifikationslücke, wichtig für `JR-6-08`:** der **akzeptierte** Pfad (`250`, `seq`
-  lückenlos, `verify` grün, echter Durchsatz) ist auf diesem Branch bisher **nie** beobachtet worden —
-  weder von der TEST-Sitzung noch vom PO, weil jeder lokale Lauf auf diesem Windows-Host im
-  Fail-Safe-Zweig endet. Echte Verifikation der committeten Zahlen (100/100.000) braucht Linux
-  (Zielplattform, `02-architektur.md` §7) — genau die CI-Lücke, die seit `37b471d` offen ist.
-  **Empfehlung an den Auftraggeber:** vor `JR-6-08` einen echten Linux-Lauf (GitHub CI oder manuell)
-  erzwingen, nicht nur auf Windows-Fail-Safe-Verifikation vertrauen
 - **Testzahl:** +1 `adversarial`-Datei (`journal-soak.adv.test.ts`), `expectedTests` ci 69→70,
-  nightly 2→3. Volllauf beim PO: **1321 passed | 1 failed | 9 skipped** bei 112 Dateien (der eine
-  Fehlschlag ist der oben beschriebene, bereits dokumentierte Windows-Stall, keine Regression) — bei
-  einem sauberen Durchlauf laut TEST-Bericht **1322 passed | 9 skipped**
+  nightly 2→3. Volllauf beim PO auf Windows: **1321 passed | 1 failed | 9 skipped** bei 112 Dateien
+  (der eine Fehlschlag ist der dokumentierte Windows-Stall, keine Regression) — bei einem sauberen
+  Durchlauf laut TEST-Bericht **1322 passed | 9 skipped**
 - **Offen:** `JR-6-08`
+
+**Nachtrag (PO, selber Tag): echte Linux-Verifikation über WSL2/Ubuntu 24.04**, natives ext4 (nicht
+`/mnt/*`), Docker-Container über `localhost` erreicht (WSL2 teilt sich das Netz mit Windows). **Der
+akzeptierte Pfad ist damit zum ersten Mal in diesem Projekt bewiesen:** `ci`-Smoke (100 Nachrichten,
+10 Verbindungen) lief sauber durch — 1758ms, 56,9/s, `seq` lückenlos 1..100, `verifyChain()` 0
+Findings. Der `nightly`-Lauf (100.000 Nachrichten) scheiterte dagegen **auch auf echtem Linux** am
+eigenen 3h-Budget (`Error: Test timed out in 10800000ms`), nicht an einer Assertion. Ursache
+gefunden, gemessen und dokumentiert: **F66** — `checkSpoolHighWaterMark()` durchläuft bei jeder
+SMTP-Annahme den kompletten Spool-Baum, was bei wachsendem, unabgeräumtem Rückstand zu O(n²)
+Gesamtkosten führt (Diagnoselauf: Momentanrate fällt von ~33/s auf ~2,3/s innerhalb der ersten 4.500
+von 10.000 Nachrichten). Volle Analyse in `09-befunde-bestandscode.md` unter F66. **Damit ist
+`JR-6-07`s Timeout kein WSL-/Antivirus-Artefakt, sondern ein reproduzierter, echter
+Performance-Befund** — betrifft potenziell auch reale, länger andauernde Phase-B-Ausfälle
+(`JR-6-06`-Szenario bei größerem Rückstand). Blockiert `JR-6-08` nach Einschätzung des PO nicht
+zwingend (Acceptance-Contract-Korrektheit unberührt, nur die Latenzgarantie unter Rückstand), sollte
+aber vor Produktionsfreigabe adressiert werden. Zur Entscheidung beim Auftraggeber vorgelegt.

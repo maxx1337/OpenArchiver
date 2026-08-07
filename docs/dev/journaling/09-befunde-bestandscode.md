@@ -69,66 +69,74 @@ mitgeführt. Sie ersetzt das Lesen der Datei nicht, sie ersetzt das **Durchblät
 Volltexte stehen unverändert darunter, und wer nur wissen will, ob eine Nummer offen ist,
 findet es hier.
 
-| Nr.      | Befund                                                                                                                                                | Schwere | Status    |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------- |
-| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                                                                              | hoch    | behoben   |
-| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                                                                                      | mittel  | offen     |
-| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                                                                               | mittel  | behoben   |
-| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                                                                       | mittel  | offen     |
-| **F5 **  | { field: null } wird zu "field" = NULL                                                                                                                | niedrig | offen     |
-| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                                                                                  | niedrig | behoben   |
-| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                                                                              | hoch    | behoben   |
-| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                                                                         | mittel  | behoben   |
-| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                                                                             | niedrig | offen     |
-| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                                                                               | niedrig | offen     |
-| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                                                                       | mittel  | behoben   |
-| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen                                                                      | mittel  | behoben   |
-| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft                                                               | niedrig | offen     |
-| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                                                                                     | mittel  | behoben   |
-| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                                                                               | niedrig | behoben   |
-| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                                                                         | niedrig | behoben   |
-| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt                                                                | mittel  | behoben   |
-| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                                                                             | niedrig | offen     |
-| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                                                                             | mittel  | behoben   |
-| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                                                                                | mittel  | behoben   |
-| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                                                                        | niedrig | —         |
-| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                                                                               | niedrig | behoben   |
-| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig                                                               | niedrig | offen     |
-| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                                                                          | niedrig | behoben   |
-| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch                                                            | niedrig | behoben   |
-| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                                                                            | mittel  | behoben   |
-| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic…                                                        | mittel  | behoben   |
-| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                                                                                | niedrig | behoben   |
-| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig                                                                   | niedrig | behoben   |
-| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem…                                                        | mittel  | behoben   |
-| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde                                                                     | mittel  | offen     |
-| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                                 | niedrig | offen     |
-| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                           | niedrig | offen     |
-| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                            | niedrig | offen     |
-| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | behoben   |
-| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                           | keine   | widerlegt |
-| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                        | mittel  | offen     |
-| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                        | hoch    | behoben   |
-| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was …                                                        | niedrig | —         |
-| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität…                                                        | mittel  | offen     |
-| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                                                                        | niedrig | offen     |
-| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt                                                          | niedrig | offen     |
-| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                                                                                | mittel  | offen     |
-| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                                  | hoch    | behoben   |
-| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                        | mittel  | behoben   |
-| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                        | hoch    | behoben   |
-| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | behoben   |
-| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                                    | hoch    | behoben   |
-| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben   |
-| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | behoben   |
-| **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
-| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | behoben   |
-| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | behoben   |
-| **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben   |
-| **F55**  | kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                                                | mittel  | behoben   |
-| **F56**  | kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                                         | mittel  | behoben   |
-| **F57**  | `pnpm test` war nicht in `dotenv --` gewickelt — ohne exportiertes `DATABASE_URL` übersprang die ganze `integration`-Suite, der Lauf sah grün aus     | mittel  | behoben   |
-| **F58**  | Whitespace in einer konfigurierten Domain landete unverändert in der Eigentümeradresse (`alice@ company.com`)                                         | mittel  | behoben   |
+| Nr.      | Befund                                                                                                                                                | Schwere | Status     |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
+| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                                                                              | hoch    | behoben    |
+| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                                                                                      | mittel  | offen      |
+| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                                                                               | mittel  | behoben    |
+| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                                                                       | mittel  | offen      |
+| **F5 **  | { field: null } wird zu "field" = NULL                                                                                                                | niedrig | offen      |
+| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                                                                                  | niedrig | behoben    |
+| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                                                                              | hoch    | behoben    |
+| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                                                                         | mittel  | behoben    |
+| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                                                                             | niedrig | offen      |
+| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                                                                               | niedrig | offen      |
+| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                                                                       | mittel  | behoben    |
+| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen                                                                      | mittel  | behoben    |
+| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft                                                               | niedrig | offen      |
+| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                                                                                     | mittel  | behoben    |
+| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                                                                               | niedrig | behoben    |
+| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                                                                         | niedrig | behoben    |
+| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt                                                                | mittel  | behoben    |
+| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                                                                             | niedrig | offen      |
+| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                                                                             | mittel  | behoben    |
+| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                                                                                | mittel  | behoben    |
+| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                                                                        | niedrig | —          |
+| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                                                                               | niedrig | behoben    |
+| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig                                                               | niedrig | offen      |
+| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                                                                          | niedrig | behoben    |
+| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch                                                            | niedrig | behoben    |
+| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                                                                            | mittel  | behoben    |
+| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic…                                                        | mittel  | behoben    |
+| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                                                                                | niedrig | behoben    |
+| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig                                                                   | niedrig | behoben    |
+| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem…                                                        | mittel  | behoben    |
+| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde                                                                     | mittel  | offen      |
+| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                                 | niedrig | offen      |
+| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                           | niedrig | offen      |
+| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                            | niedrig | offen      |
+| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | behoben    |
+| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                           | keine   | widerlegt  |
+| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                        | mittel  | offen      |
+| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                        | hoch    | behoben    |
+| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was …                                                        | niedrig | —          |
+| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität…                                                        | mittel  | offen      |
+| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                                                                        | niedrig | offen      |
+| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt                                                          | niedrig | offen      |
+| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                                                                                | mittel  | offen      |
+| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                                  | hoch    | behoben    |
+| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                        | mittel  | behoben    |
+| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                        | hoch    | behoben    |
+| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | behoben    |
+| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                                    | hoch    | behoben    |
+| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben    |
+| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | behoben    |
+| **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben    |
+| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | behoben    |
+| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | behoben    |
+| **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben    |
+| **F55**  | kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                                                | mittel  | behoben    |
+| **F56**  | kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                                         | mittel  | behoben    |
+| **F57**  | `pnpm test` war nicht in `dotenv --` gewickelt — ohne exportiertes `DATABASE_URL` übersprang die ganze `integration`-Suite, der Lauf sah grün aus     | mittel  | behoben    |
+| **F58**  | Whitespace in einer konfigurierten Domain landete unverändert in der Eigentümeradresse (`alice@ company.com`)                                         | mittel  | behoben    |
+| **F59**  | latenter Defekt beim `journal-inbound`-Worker-Boot, nie ein beobachteter Fehlschlag zugeordnet                                                        | niedrig | behoben    |
+| **F60**  | `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht                                            | mittel  | offen (E7) |
+| **F61**  | zurückgesetzter Socket reißt den SMTP-Empfänger ab — Ablehnungspfade ohne `error`-Handler                                                             | mittel  | behoben    |
+| **F62**  | `IJournalInboundJob` ist totes Gerüst, in der Architektur-Doku noch als künftiger Payload beworben                                                    | niedrig | offen      |
+| **F63**  | `journal-inbound`-Worker zieht Storage/DB in den Modulscope, CI-Umgebung war darauf nicht vorbereitet                                                 | mittel  | behoben    |
+| **F64**  | Worker beendet sich nach `worker.close()` nicht selbst — ein offenes Handle hält den Prozess am Leben                                                 | mittel  | offen      |
+| **F65**  | Pre-Push-Gate behandelte eigene Infrastruktur-Vorbedingungen (`DATABASE_URL`/`REDIS_PASSWORD`) asymmetrisch                                           | niedrig | behoben    |
+| **F66**  | `checkSpoolHighWaterMark()` läuft bei jeder SMTP-Annahme über den gesamten Spool — O(n²) Gesamtkosten bei wachsendem Rückstand                        | hoch    | offen      |
 
 ---
 
@@ -3714,3 +3722,69 @@ diesem Umbau — zurückgesetzt, `git diff --cached --stat` danach leer.
 
 **Schwere:** niedrig — kein Produktionscode betroffen, aber ein Gate, das auf sauberem Baum rot wird,
 verliert das Vertrauen, von dem seine Wirkung abhängt (dieselbe Lehre wie F35).
+
+## F66 — `checkSpoolHighWaterMark()` durchläuft bei jeder SMTP-Annahme den gesamten Spool-Baum: O(n²) Gesamtkosten bei wachsendem Rückstand
+
+**Gefunden:** PO, während der `JR-6-07`-Nachverifikation auf echtem Linux (WSL2/Ubuntu 24.04, natives
+ext4, nicht über `/mnt/*`) · **Status:** **offen**, Schwere **hoch** — Ursache bereits in
+`layout.ts`s eigenem Kommentar seit `JR-3-01`/`JR-3-04` als „links open" benannt, aber nie behoben,
+und diese Scheibe ist der erste **empirische** Beleg, dass es kein theoretisches Randproblem ist.
+
+**Fundort:** `packages/journaling/src/spool/layout.ts` — `checkSpoolHighWaterMark()` ruft
+`computeDirectoryUsageBytes()` auf, das den kompletten Spool-Baum (`incoming/` **und**
+`quarantine/`, alle 256 Shard-Verzeichnisse) durchläuft und **jede einzelne Datei** `stat()`-t.
+Aufgerufen von `packages/journaling/src/spool/acceptance.ts:290`, **vor jeder einzelnen
+SMTP-Annahme** („reject before a single byte is written"). Der Kommentar in `layout.ts` (Zeilen
+44–52) benennt das Problem selbst wörtlich: „doing it once per SMTP transaction at meaningful spool
+depth is `O(entries)` work on the hot path the acceptance contract is supposed to keep fast. A
+maintained running counter [...] is the likely production shape; this module deliberately does not
+decide that."
+
+**Nicht das Sharding.** 256 Shard-Verzeichnisse (Git-Style, erstes Byte von `SHA-256(txid)`) sind bei
+10.000–100.000 Nachrichten mit ~39–390 Dateien pro Shard trivial für jedes Dateisystem. Der Fehler
+liegt allein darin, dass der **gesamte** Baum bei **jeder** Annahme neu durchlaufen wird, egal wie
+groß er schon ist.
+
+**Gemessen, nicht vermutet.** Ein diagnostischer Soak-Lauf (`JR-6-07`s Testdatei, temporär auf 10.000
+Nachrichten/20-Minuten-Budget reduziert und mit Fortschrittsprotokollierung alle 500 Nachrichten
+versehen — nicht committet, reine Diagnose) auf echtem Linux ergab eine klar monotone,
+nicht-plateauende Verlangsamung der **Momentanrate**:
+
+| Nachrichten-Fenster | Momentanrate |
+| ------------------- | ------------ |
+| 0–500               | ~33/s        |
+| 500–1.000           | ~15,5/s      |
+| 1.000–1.500         | ~10,6/s      |
+| 1.500–2.000         | ~7,2/s       |
+| 2.000–2.500         | ~5,9/s       |
+| 3.000–3.500         | ~4,3/s       |
+| 4.000–4.500         | ~2,3/s       |
+
+Der Lauf erreichte 5.000 von 10.000 Nachrichten nach ~1.011.000ms und lief danach in das
+20-Minuten-Diagnose-Timeout. Ein vorheriger, unveränderter Lauf mit den committeten 100.000
+Nachrichten scheiterte bereits am eigenen 3-Stunden-Budget (`NIGHTLY_SOAK_BUDGET_MS`) — nicht an
+einer Assertion, sondern an `Error: Test timed out in 10800000ms`. Beide Zahlen sind konsistent mit
+O(n²): die kumulierte Zeit bis N Nachrichten wächst quadratisch, nicht linear.
+
+**Warum das über `JR-6-07`s Testrahmen hinausgeht:** Der Soak-Test lässt den Spool bewusst
+unabgeräumt (Phase A only, siehe `journal-soak.adv.test.ts`s eigene Scope-Begründung), was diesen
+Effekt künstlich verstärkt gegenüber normalem Betrieb, in dem Phase B kontinuierlich abräumt. Aber
+genau dieselbe Bedingung — ein wachsender, unabgeräumter Spool — entsteht bei jedem **echten**,
+länger andauernden Phase-B-Ausfall (`JR-6-06`s Szenario, nur bei realistisch viel größerem
+Rückstand als den 1–2 Nachrichten, die dort getestet wurden). Jede neu ankommende Nachricht während
+eines solchen Ausfalls würde messbar langsamer akzeptiert als die vorherige. Das bedroht nicht die
+**Korrektheit** der zentralen Randbedingung aus `CLAUDE.md` („`250 OK` erst nach fsync von Spool und
+Ledger") — die bleibt erfüllt — aber ihre **Latenzgarantie** wächst unbegrenzt mit dem Rückstand, und
+bei genug Rückstand drohen SMTP-client-seitige Timeouts, die den Sender zu Wiederholungsversuchen
+oder im Extremfall zu einem NDR zwingen könnten.
+
+**Naheliegender Fix** (nicht umgesetzt, da außerhalb des Scopes dieser Verifikationssitzung): der im
+Code selbst vorgeschlagene „maintained running counter" — bei jedem Schreiben inkrementiert, bei
+jeder Freigabe durch Phase B oder den Reconciler (`JR-6-04`) dekrementiert, gegen einen vollen
+Verzeichnis-Walk beim Crash-Recovery-Scan (`JR-3-05`) abgeglichen, der ohnehin beim Start läuft.
+
+**Vorgeschlagene Zuordnung:** E7 (WORM-Storage), wo `S3StorageProvider`/Spool-Layout ohnehin
+angefasst werden — analog zu F60. **Blockiert `JR-6-08` nach Einschätzung des PO nicht zwingend**
+(die Acceptance-Contract-Korrektheit ist unberührt), sollte aber vor einer Produktionsfreigabe mit
+realistischen Backlog-Größen behoben oder zumindest mit einer dokumentierten Grenze versehen werden.
+Zur Entscheidung beim Auftraggeber vorgelegt.

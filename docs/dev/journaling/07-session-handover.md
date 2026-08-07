@@ -168,14 +168,15 @@ warten. `act` geprüft, nicht installiert — `pnpm gate` fängt dieselben Fehle
 `.claude/agents/senior-dev.md`/`tester.md` auf `model: opusplan` umgestellt (Auftraggeber), committet
 in `10eec78`
 
-> **Wichtige offene Verifikationslücke für `JR-6-08`:** `JR-6-07`s **akzeptierter** Pfad (Linux) ist
-> auf diesem Branch bisher **nie** beobachtet worden. Auf diesem Windows-Host scheitert jede Nachricht
-> im dokumentierten `451`-Fail-Safe-Zweig (POSIX-only Directory-Fsync), und zusätzlich reproduziert ein
-> intermittierender, Windows-Defender-verdächtiger 600s-Stall bei kleinen Nachrichtenmengen (vom PO
-> zweimal unabhängig bestätigt, von der TEST-Sitzung dreimal bei 1.000 Nachrichten und zweimal von fünf
-> bei 100). **Vor `JR-6-08` sollte ein echter Linux-Lauf her** (GitHub CI, sobald die CI-Lücke behoben
-> ist, oder manuell) — sonst bleibt die zentrale Aussage von `JR-6-07` (`seq` lückenlos, `verify` grün,
-> Durchsatz) auf diesem Projekt komplett unverifiziert.
+> **`JR-6-07`s akzeptierter Pfad ist inzwischen auf echtem Linux verifiziert** (WSL2/Ubuntu 24.04,
+> natives ext4, PO-Sitzung nach dem Wunsch des Auftraggebers) — `ci`-Smoke (100 Nachrichten) lief
+> sauber: 56,9/s, `seq` lückenlos, `verifyChain()` 0 Findings. **Aber:** der volle `nightly`-Lauf
+> (100.000) scheitert auch auf Linux am eigenen 3h-Budget — kein Plattformartefakt, sondern ein
+> reproduzierter, echter Befund: **F66**, `checkSpoolHighWaterMark()` durchläuft bei jeder Annahme den
+> gesamten Spool, O(n²) bei wachsendem Rückstand (Details: `09-befunde-bestandscode.md`). **Für
+> `JR-6-08` zu klären:** blockiert F66 die Abnahme, oder wird es wie F60 nach E7 verschoben? Der PO
+> tendiert zu Letzterem (Acceptance-Contract-Korrektheit ist unberührt, nur die Latenz unter
+> Rückstand) — Entscheidung liegt beim Auftraggeber.
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -277,10 +278,10 @@ hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e
 > von den Sitzungen, die `JR-6-06`/`JR-6-07` umgesetzt haben — genau der Mechanismus, der in E13 vier
 > Runden lang echte Defekte gefunden hat.
 >
-> **Vor `JR-6-08` zu klären:** `JR-6-07`s akzeptierter Pfad ist auf diesem Projekt bislang nie
-> beobachtet worden (nur der Windows-Fail-Safe-Zweig lief, und der nur intermittierend sauber durch).
-> Ein echter Linux-Lauf (GitHub CI, sobald `37b471d`s Problem behoben ist, oder eine manuelle
-> Linux-Session) wäre die stärkere Grundlage für die Abnahme als eine weitere Windows-Bestätigung.
+> **Vor `JR-6-08` zu klären:** `JR-6-07`s akzeptierter Pfad ist jetzt auf echtem Linux verifiziert
+> (`ci`-Smoke sauber), aber der `nightly`-Umfang deckt **F66** auf (O(n²) durch
+> `checkSpoolHighWaterMark()` bei wachsendem Rückstand) — eine Entscheidung, ob das E6 blockiert oder
+> wie F60 nach E7 verschoben wird, steht noch aus.
 
 Der Prompt für die nächste Sitzung:
 
@@ -397,9 +398,14 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 ### Offene Fragen an den Auftraggeber
 
-**Stand 2026-08-05 — was wirklich offen ist, in dieser Reihenfolge:**
+**Stand 2026-08-07 — was wirklich offen ist, in dieser Reihenfolge:**
 
-0. **`F60`: `StorageService.put()` puffert Streams, obwohl die Signatur Streams verspricht** — jetzt
+0. **`F66` (neu, Schwere hoch): `checkSpoolHighWaterMark()` ist O(n²) bei wachsendem Spool-Rückstand**
+   — gemessen auf echtem Linux (WSL2), nicht nur vermutet. Blockiert `JR-6-08` oder wird wie `F60`
+   nach E7 verschoben? PO-Empfehlung: E7, aus demselben Grund wie F60 (Storage/Spool-Layout wird dort
+   ohnehin angefasst) — Acceptance-Contract-Korrektheit ist unberührt, nur die Latenz unter Rückstand.
+   Volle Analyse: `09-befunde-bestandscode.md`.
+1. **`F60`: `StorageService.put()` puffert Streams, obwohl die Signatur Streams verspricht** — jetzt
    beheben oder E7 zuordnen? **Empfehlung: E7**, wo `S3StorageProvider` für Object Lock ohnehin
    angefasst wird. Zu entscheiden ist dort auch, **wie**: die Verschlüsselung auf einen Stream-Cipher
    umstellen (`createCipheriv` kann streamen) oder die Signatur ehrlich auf `Buffer` verengen. Die
@@ -416,11 +422,11 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
    Wahrscheinlichkeit korrekt (`writeDurableSpoolFile()` streamt), der **Nachweis** trägt nicht. Der
    Aufwand ist klein (dieselbe Kalibrierung einmal dort fahren), aber es ist Nacharbeit an E3 und
    damit eine Entscheidung, keine Aufgabe. **Blockiert E6 nicht.**
-2. **`F39`** (niedrig, Testharness) und **`F42`** (niedrig, totes `tsconfig.build.json`) — beheben
+1. **`F39`** (niedrig, Testharness) und **`F42`** (niedrig, totes `tsconfig.build.json`) — beheben
    oder bewusst akzeptieren? Beide blockieren nichts. Sinnvoller Ort für F39 wäre die nächste Arbeit
    an `packages/journaling`, also E6.
-3. **`F17(b)`** — Rollen-Bootstrap reparieren? Unverändert eine Produktentscheidung, kein Teil von E6.
-4. ~~**Die Doku-Diät**~~ — **erledigt am 2026-08-06.** Pflichtlektüre war auf über 70 000 Tokens
+1. **`F17(b)`** — Rollen-Bootstrap reparieren? Unverändert eine Produktentscheidung, kein Teil von E6.
+1. ~~**Die Doku-Diät**~~ — **erledigt am 2026-08-06.** Pflichtlektüre war auf über 70 000 Tokens
    gewachsen; jetzt unter 40 000. Vorher/Nachher-Tabelle mit Methode in `06-status.md` unter
    „Doku-Diät (E6)".
 
