@@ -924,8 +924,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 5 after JR-3-06/JR-3-07
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
 		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
-		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts.
-		expectedFiles: 7,
+		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts. 8 after JR-6-07 added
+		// journal-soak.adv.test.ts.
+		expectedFiles: 8,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -971,7 +972,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// every further RCPT TO past the limit is rejected rather than just the first one, and the
 		// unmodified default configuration accepts at least the RFC 5321 section 4.5.3.1.8 floor of
 		// 100 recipients.
-		expectedTests: { ci: 69, nightly: 2, manual: 1 },
+		// 70 ci / 3 nightly after JR-6-07 added journal-soak.adv.test.ts: one `ci` smoke test (1,000
+		// messages over 10 real SMTP connections) and one `nightly` test (100,000 messages over 25
+		// connections), sharing one core -- see that file's own doc comment for the Windows
+		// directory-fsync platform gap (fs-port.ts) that makes every message on this host fail at
+		// 451 before reaching the ledger, and how both variants assert that failure mode explicitly
+		// instead of silently skipping.
+		expectedTests: { ci: 70, nightly: 3, manual: 1 },
 	},
 ];
 
