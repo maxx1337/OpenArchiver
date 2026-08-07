@@ -155,20 +155,27 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-07 — **E6 läuft: `JR-6-01`…`JR-6-06` erledigt, `JR-6-07` läuft** (`JR-6-02`
-insgesamt code-fertig, TEST-Abnahme separat unter `JR-6-08`; ADR-010, ADR-033–035, ADR-037, ADR-038
-entschieden; F59/F61 behoben, F62/F63/F64 offen) · **Rollentrennung PO/DEV/TEST ist wieder aktiv**
-(war während `JR-6-04`/`JR-6-05` aufgehoben, weil der DEV-Subagent ins Wochenlimit lief) ·
-`wip/journaling-jr-6-04` ist gelöscht (lokal+remote), Inhalt vollständig in `JR-6-04` aufgegangen ·
-**Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf,
-vom PO unabhängig nachgerechnet: **1321 passed | 8 skipped** bei 111 Dateien — `unit ci 1119/1119 ·
-integration ci 133/133 · adversarial ci 69/69`, Exit 0 · zuletzt `e72b48a` (`JR-6-06`) · **CI: offen**
-seit `37b471d` (GitHub Actions erzeugt keine zuverlässigen Läufe mehr für diesen Zweig, Ursache
-außerhalb des Codes) — **Policy ab 2026-08-07: `pnpm gate` lokal vor jedem Push, echtes CI gebündelt
-einmal vor dem Rückmerge**, statt je Commit auf einen Lauf zu warten. `act` geprüft, nicht installiert
-— `pnpm gate` fängt dieselben Fehlerklassen bereits · `.claude/agents/senior-dev.md`/`tester.md` auf
-`model: opusplan` umgestellt (Auftraggeber), noch uncommittet, geht in den nächsten inhaltlichen
-Commit
+**Stand:** 2026-08-07 — **E6 läuft: `JR-6-01`…`JR-6-07` erledigt** (`JR-6-02` insgesamt code-fertig,
+TEST-Abnahme separat unter `JR-6-08`; ADR-010, ADR-033–035, ADR-037, ADR-038 entschieden; F59/F61
+behoben, F62/F63/F64 offen) · **Rollentrennung PO/DEV/TEST ist wieder aktiv** (war während
+`JR-6-04`/`JR-6-05` aufgehoben, weil der DEV-Subagent ins Wochenlimit lief) · `wip/journaling-jr-6-04`
+ist gelöscht (lokal+remote), Inhalt vollständig in `JR-6-04` aufgegangen · **Branch:**
+`claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · zuletzt `c27e291`
+(`JR-6-07`-Nacharbeit) · **CI: offen** seit `37b471d` (GitHub Actions erzeugt keine zuverlässigen
+Läufe mehr für diesen Zweig, Ursache außerhalb des Codes) — **Policy ab 2026-08-07: `pnpm gate` lokal
+vor jedem Push, echtes CI gebündelt einmal vor dem Rückmerge**, statt je Commit auf einen Lauf zu
+warten. `act` geprüft, nicht installiert — `pnpm gate` fängt dieselben Fehlerklassen bereits ·
+`.claude/agents/senior-dev.md`/`tester.md` auf `model: opusplan` umgestellt (Auftraggeber), committet
+in `10eec78`
+
+> **Wichtige offene Verifikationslücke für `JR-6-08`:** `JR-6-07`s **akzeptierter** Pfad (Linux) ist
+> auf diesem Branch bisher **nie** beobachtet worden. Auf diesem Windows-Host scheitert jede Nachricht
+> im dokumentierten `451`-Fail-Safe-Zweig (POSIX-only Directory-Fsync), und zusätzlich reproduziert ein
+> intermittierender, Windows-Defender-verdächtiger 600s-Stall bei kleinen Nachrichtenmengen (vom PO
+> zweimal unabhängig bestätigt, von der TEST-Sitzung dreimal bei 1.000 Nachrichten und zweimal von fünf
+> bei 100). **Vor `JR-6-08` sollte ein echter Linux-Lauf her** (GitHub CI, sobald die CI-Lücke behoben
+> ist, oder manuell) — sonst bleibt die zentrale Aussage von `JR-6-07` (`seq` lückenlos, `verify` grün,
+> Durchsatz) auf diesem Projekt komplett unverifiziert.
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -201,18 +208,31 @@ Reconciler-Sweep liegengebliebene Spool-Einträge zurück in die Queue, wenn Red
 (Redis ist Optimierung, nicht Autorität). Seit **`JR-6-05`** ist belegt, dass `content_sha256` über
 die Plaintext-Wire-Bytes läuft, nicht über das Chiffrat. Seit **`JR-6-06`** ist belegt, dass ein
 Object-Store-Ausfall den Acceptance-Contract nicht berührt, der Backlog nach Erholung über genau
-diesen Reconciler abläuft, und die Kette währenddessen unberührt bleibt. **Was fehlt:** `JR-6-07`
-(Soak-Test, läuft) und `JR-6-08` (Abnahme).
+diesen Reconciler abläuft, und die Kette währenddessen unberührt bleibt. Seit **`JR-6-07`** existiert
+ein Soak-Test über echtes SMTP (`nightly` 100.000 / `ci` 100 Nachrichten), dessen akzeptierter Pfad auf
+diesem Windows-Host aber bisher nie beobachtet wurde (siehe Verifikationslücke oben). **Was fehlt:**
+`JR-6-08` (Abnahme, eigene Sitzung, idealerweise nach einem echten Linux-Lauf von `JR-6-07`).
 
 ### Was diese Session gemacht hat
 
 **`JR-6-06` (Object-Store-Ausfall-Test), Rolle TEST, unabhängige Sitzung, Commit `e72b48a`.**
 Rollentrennung damit wieder aktiv (war während `JR-6-04`/`JR-6-05` aufgehoben). Kurzfassung siehe
 `06-status.md` unter „2026-08-07 — `JR-6-06`"; vom PO unabhängig nachgerechnet: Volllauf **1321
-passed | 8 skipped** bei 111 Dateien, Exit 0. **Daneben, PO:** `wip/journaling-jr-6-04`
-gelöscht (lokal+remote, Inhalt war in `JR-6-04` aufgegangen), CI-Gate-Policy entschieden (`pnpm gate`
-je Push, echtes CI gebündelt vor dem Rückmerge, `act` geprüft und bewusst nicht eingerichtet), `JR-6-07`
-an eine zweite unabhängige TEST-Sitzung delegiert.
+passed | 8 skipped** bei 111 Dateien, Exit 0.
+
+**`JR-6-07` (Soak über echtes SMTP), Rolle TEST, zweite unabhängige Sitzung, Commits `8565585`+`c27e291`.**
+Traf während der Umsetzung ihr Wochenlimit — vom PO auf `wip/journaling-jr-6-07` gesichert und in den
+Arbeitsbaum zurückgespielt, danach von derselben Sitzung fortgesetzt. Kurzfassung siehe `06-status.md`
+unter „2026-08-07 — `JR-6-07`". **Vom PO zweimal unabhängig reproduziert:** derselbe intermittierende
+600s-Stall, den der TEST-Bericht selbst schon dokumentiert hatte (Windows-Defender-Verdacht) — echte,
+bestätigte Umgebungseigenschaft, keine neue Erkenntnis, aber jetzt doppelt unabhängig belegt.
+**Wichtig:** der akzeptierte (Linux-)Pfad des Soak-Tests ist auf diesem Branch bislang nie beobachtet
+worden, siehe Verifikationslücke oben.
+
+**Daneben, PO:** `wip/journaling-jr-6-04` gelöscht (lokal+remote, Inhalt war in `JR-6-04` aufgegangen),
+CI-Gate-Policy entschieden (`pnpm gate` je Push, echtes CI gebündelt vor dem Rückmerge, `act` geprüft
+und bewusst nicht eingerichtet), einen stale gewordenen Kommentar in `suite-inventory.ts` gefunden
+(von der TEST-Sitzung in `c27e291` behoben).
 
 **Vorher, `ADR-037` (eigener Event-Typ für den `duplicate_of`-Marker).** Migration `0043_whole_meltdown.sql`
 (`ALTER TYPE ... ADD VALUE 'duplicate_marker'`, lokal gegen eine frische Datenbank geprüft — der neue
@@ -248,14 +268,19 @@ gebraucht, **wenn die lokale Infrastruktur klemmt**, nicht bei jedem Sessionstar
 unverändert in [`19-umgebung-windows-host.md`](19-umgebung-windows-host.md). Die zwei E13-Notizen, die
 hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e2.md`.
 
-### Nächster konkreter Schritt — **`JR-6-07` läuft, dann Abnahme `JR-6-08`**
+### Nächster konkreter Schritt — **Abnahme `JR-6-08`, idealerweise nach einem echten Linux-Lauf**
 
-> **`JR-6-06` ist gelandet** (`e72b48a`), unabhängig von TEST umgesetzt. **Die Rollentrennung ist
-> damit wieder aktiv** — sie war während `JR-6-04`/`JR-6-05` aufgehoben, weil der DEV-Subagent ins
-> Wochenlimit lief und der Auftraggeber die Fertigstellung durch den PO angewiesen hatte. **`JR-6-08`
-> (Abnahme) bleibt trotzdem eine eigene, dritte TEST-Sitzung**, unabhängig von den Sitzungen, die
-> `JR-6-06`/`JR-6-07` umgesetzt haben — genau der Mechanismus, der in E13 vier Runden lang echte
-> Defekte gefunden hat.
+> **`JR-6-06` und `JR-6-07` sind gelandet** (`e72b48a`, `8565585`+`c27e291`), beide unabhängig von TEST
+> umgesetzt. **Die Rollentrennung ist damit wieder aktiv** — sie war während `JR-6-04`/`JR-6-05`
+> aufgehoben, weil der DEV-Subagent ins Wochenlimit lief und der Auftraggeber die Fertigstellung durch
+> den PO angewiesen hatte. **`JR-6-08` (Abnahme) bleibt eine eigene, dritte TEST-Sitzung**, unabhängig
+> von den Sitzungen, die `JR-6-06`/`JR-6-07` umgesetzt haben — genau der Mechanismus, der in E13 vier
+> Runden lang echte Defekte gefunden hat.
+>
+> **Vor `JR-6-08` zu klären:** `JR-6-07`s akzeptierter Pfad ist auf diesem Projekt bislang nie
+> beobachtet worden (nur der Windows-Fail-Safe-Zweig lief, und der nur intermittierend sauber durch).
+> Ein echter Linux-Lauf (GitHub CI, sobald `37b471d`s Problem behoben ist, oder eine manuelle
+> Linux-Session) wäre die stärkere Grundlage für die Abnahme als eine weitere Windows-Bestätigung.
 
 Der Prompt für die nächste Sitzung:
 
@@ -265,14 +290,16 @@ und arbeite den nächsten Schritt ab.
 ```
 
 **Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter **inhaltlicher**
-Commit trägt `JR-6-06` (`e72b48a`), lokaler Volllauf **1321 passed | 8 skipped** bei 111 Dateien,
-Exit 0 — `unit ci 1119/1119 · integration ci 133/133 · adversarial ci 69/69`. Gleichstand deshalb
-gegen `git ls-remote` prüfen, nicht gegen einen Hash hier. Nicht neu abzweigen, nicht neu reservieren.
+Commit trägt `JR-6-07`s Nacharbeit (`c27e291`). **Lokaler Volllauf auf diesem Windows-Host ist
+derzeit nicht verlässlich grün** — `journal-soak.adv.test.ts`s `ci`-Variante stallt intermittierend
+600s (Windows-Defender-Verdacht, dokumentiert), reproduziert vom PO 2/2, von TEST 3/3 bei 1.000 und
+2/5 bei 100 Nachrichten; bei einem sauberen Durchlauf **1322 passed | 9 skipped** bei 112 Dateien.
+Gleichstand gegen `git ls-remote` prüfen, nicht gegen einen Hash hier. Nicht neu abzweigen, nicht neu
+reservieren.
 
-**Was noch offen ist, in dieser Reihenfolge:** `JR-6-07` (TEST: Soak, 100 000 Nachrichten als
-`nightly` plus schnelle `ci`-Smoke-Variante, **`OA_TEST_PG_STALE_MS` über die erwartete Laufzeit
-heben**, F13 — läuft bereits in einer eigenen, unabhängigen TEST-Sitzung), `JR-6-08` (Abnahme, eigene
-dritte Sitzung, unabhängig von den Sitzungen, die `JR-6-06`/`JR-6-07` umgesetzt haben).
+**Was noch offen ist:** `JR-6-08` (Abnahme, eigene dritte Sitzung, unabhängig von den Sitzungen, die
+`JR-6-06`/`JR-6-07` umgesetzt haben) — idealerweise erst nach einem echten Linux-Lauf von `JR-6-07`
+(siehe Verifikationslücke oben).
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot

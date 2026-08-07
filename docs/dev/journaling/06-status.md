@@ -7,10 +7,12 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
 **Letzte Aktualisierung:** 2026-08-07 — **Details im Sessionprotokoll unten, jüngste Einträge
-zuletzt.** Kurz: E6 läuft (`JR-6-01`…`JR-6-06` erledigt; `JR-6-02` insgesamt code-fertig,
-TEST-Abnahme separat unter `JR-6-08`), `JR-6-07` läuft (unabhängige TEST-Sitzung). **Rollentrennung
-PO/DEV/TEST ist wieder aktiv** (aufgehoben während `JR-6-04`/`JR-6-05`, siehe dortige Einträge) —
-`JR-6-06` und `JR-6-07` sind wieder von der Rolle TEST unabhängig umgesetzt, nicht vom PO selbst.
+zuletzt.** Kurz: E6 läuft (`JR-6-01`…`JR-6-07` erledigt; `JR-6-02` insgesamt code-fertig,
+TEST-Abnahme separat unter `JR-6-08`). **Rollentrennung PO/DEV/TEST ist wieder aktiv** (aufgehoben
+während `JR-6-04`/`JR-6-05`, siehe dortige Einträge) — `JR-6-06` und `JR-6-07` sind wieder von der
+Rolle TEST unabhängig umgesetzt, nicht vom PO selbst. **`JR-6-07`s akzeptierter Pfad (Linux) ist auf
+diesem Branch bisher nie beobachtet worden** — auf diesem Windows-Host endet jede Nachricht im
+451-Fail-Safe-Zweig, siehe Eintrag unten.
 Der WIP-Zweig `wip/journaling-jr-6-04` ist gelöscht (lokal + remote), sein Inhalt war vollständig in
 `JR-6-04` aufgegangen. **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig; E1, E13, E2, E3,
 E4 und E5 sind zurückgemergt). Nummernkreise nach **ADR-032** reserviert: ADR-033–036 (alle vergeben)
@@ -67,22 +69,22 @@ nicht.
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                                                    | Fertig / Gesamt                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                                                | 6 / 6                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                                                  | 10 / 10                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                                                       | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                                               | 11 / 11                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                                                   | 9 / 9                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)                                  | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
-| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                                                  | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (`JR-6-01`, `JR-6-03`–`JR-6-06` erledigt; `JR-6-02` code-fertig mit `a`+`b`, TEST-Abnahme unter `JR-6-08`; `JR-6-07` läuft) | 5 / 8 + `JR-6-02` code-fertig. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` gilt erst mit Abnahme als fertig         |
-| 8           | E7   | WORM-Storage                       | offen                                                                                                                                     | 0 / 6                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                                                     | 0 / 6                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                                                     | 0 / 8                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                                                     | 0 / 8                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                                                     | 0 / 10                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                                                     | 0 / 9                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                                   | Fertig / Gesamt                                                                                                                 |
+| ----------- | ---- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                               | 6 / 6                                                                                                                           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                                 | 10 / 10                                                                                                                         |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                                      | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                              | 11 / 11                                                                                                                         |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                                  | 9 / 9                                                                                                                           |
+| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)                 | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
+| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                                 | 9 / 9                                                                                                                           |
+| 7           | E6   | Phase-B-Worker                     | **in Arbeit** (`JR-6-01`, `JR-6-03`–`JR-6-07` erledigt; `JR-6-02` code-fertig mit `a`+`b`, TEST-Abnahme unter `JR-6-08`) | 6 / 8 + `JR-6-02` code-fertig. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` gilt erst mit Abnahme als fertig         |
+| 8           | E7   | WORM-Storage                       | offen                                                                                                                    | 0 / 6                                                                                                                           |
+| 9           | E8   | Anchoring                          | offen                                                                                                                    | 0 / 6                                                                                                                           |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                                    | 0 / 8                                                                                                                           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                                    | 0 / 8                                                                                                                           |
+| 12          | E11  | Compliance-Features                | offen                                                                                                                    | 0 / 10                                                                                                                          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                                    | 0 / 9                                                                                                                           |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-029**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-030**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -223,8 +225,9 @@ unten und `05-entscheidungen.md`).
 - [x] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität) (2026-08-06, ADR-038)
 - [x] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
 - [x] `JR-6-06` — TEST: Object-Store-Ausfall (2026-08-07, `e72b48a`, unabhängige TEST-Sitzung)
-- [~] `JR-6-07` — TEST: Soak, 100.000 Nachrichten (`nightly` plus `ci`-Smoke, F13-Frist heben) —
-  läuft, unabhängige TEST-Sitzung
+- [x] `JR-6-07` — TEST: Soak, 100.000 Nachrichten (`nightly` plus `ci`-Smoke, F13-Frist heben)
+      (2026-08-07, `8565585`+`c27e291`, unabhängige TEST-Sitzung — **Windows-Verifikationslücke, siehe
+      Eintrag unten**)
 - [ ] `JR-6-08` — Abnahme E6
 
 > \*\*Die technischen Notizen zu `JR-6-01` (drei Entscheidungen, zwei Nebenwirkungen) und
@@ -395,3 +398,41 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
 - **Bewusst nicht getan:** kein echtes MinIO/S3 in `docker-compose.yml`/`ci.yml` ohne explizite
   Entscheidung, keine SIZE-Grenzfall-Tests (anderer Testplan-Abschnitt), `F63`/`F64` nicht angefasst
 - **Offen:** `JR-6-07`, `JR-6-08`
+
+### 2026-08-07 — `JR-6-07`: Soak-Test über echtes SMTP
+
+- **Rolle:** TEST, unabhängige Sitzung (unterbrochen durch Wochenlimit, vom PO gesichert auf
+  `wip/journaling-jr-6-07` und danach fortgesetzt, siehe Session-Handover)
+- **Commits:** `8565585` (Kernstück), `c27e291` (Nacharbeit: stale Kommentar in
+  `suite-inventory.ts` korrigiert, vom PO gefunden)
+- **Entscheidung Phase A vs. A+B (TEST-Entscheidung, keine ADR):** nur Phase A (SMTP-Accept +
+  Ledger) — das Backlog-Kriterium (`seq` lückenlos, `verify` grün, Durchsatz) ist reine
+  Phase-A-Aussage, Phase-B-Korrektheit deckt `journal-phase-b-e2e.int.test.ts` bereits ab
+- **`CI_MESSAGES` bewusst 100 statt der ursprünglich geplanten 1.000** (im Datei-Kopfkommentar
+  ausführlich begründet): drei von drei Versuchen bei 1.000 scheiterten reproduzierbar an einem
+  600s-Pro-Nachricht-Stall. Das Backlog fixiert nur die `nightly`-Menge (100.000, unverändert), nicht
+  die `ci`-Menge — keine stille Reduktion im Sinn des Akzeptanzkriteriums
+- **`OA_TEST_PG_STALE_MS`** = `NIGHTLY_SOAK_BUDGET_MS × 3` = 9h, exakt das `JR-2-08`/F13-Muster
+  übernommen
+- **Windows-Fsync-Plattformlücke wie bei `JR-6-06`**, unabhängig gegengeprüft (kein Handle-Leak in
+  `durable-write.ts`/`fs-port.ts`, beide schließen im `finally`): auf diesem Host endet jede Nachricht
+  im `451`-Zweig, beide Varianten assertieren das explizit statt zu skippen
+- **Wichtiger, unabhängig bestätigter Befund:** ein reproduzierbarer 600s-Einzelnachricht-Stall,
+  unabhängig von der Nebenläufigkeit (10 und 3 Verbindungen gleichermaßen betroffen — schließt einen
+  Lock-Bug im Code aus). `Get-MpComputerStatus` bestätigt aktiven Windows-Defender-Echtzeitschutz;
+  Arbeitshypothese: dessen Scan reagiert auf die für den Soak typische Kleindateierstellung. **Vom PO
+  zweimal unabhängig reproduziert** (zwei separate Läufe, beide am exakt selben 600.000ms-Timeout
+  gescheitert) — die TEST-Sitzung selbst hatte in ihrem finalen Bericht auch einen sauberen
+  3.002ms-Lauf, die Störung ist also echt intermittierend, nicht deterministisch
+- **Offene Verifikationslücke, wichtig für `JR-6-08`:** der **akzeptierte** Pfad (`250`, `seq`
+  lückenlos, `verify` grün, echter Durchsatz) ist auf diesem Branch bisher **nie** beobachtet worden —
+  weder von der TEST-Sitzung noch vom PO, weil jeder lokale Lauf auf diesem Windows-Host im
+  Fail-Safe-Zweig endet. Echte Verifikation der committeten Zahlen (100/100.000) braucht Linux
+  (Zielplattform, `02-architektur.md` §7) — genau die CI-Lücke, die seit `37b471d` offen ist.
+  **Empfehlung an den Auftraggeber:** vor `JR-6-08` einen echten Linux-Lauf (GitHub CI oder manuell)
+  erzwingen, nicht nur auf Windows-Fail-Safe-Verifikation vertrauen
+- **Testzahl:** +1 `adversarial`-Datei (`journal-soak.adv.test.ts`), `expectedTests` ci 69→70,
+  nightly 2→3. Volllauf beim PO: **1321 passed | 1 failed | 9 skipped** bei 112 Dateien (der eine
+  Fehlschlag ist der oben beschriebene, bereits dokumentierte Windows-Stall, keine Regression) — bei
+  einem sauberen Durchlauf laut TEST-Bericht **1322 passed | 9 skipped**
+- **Offen:** `JR-6-08`
