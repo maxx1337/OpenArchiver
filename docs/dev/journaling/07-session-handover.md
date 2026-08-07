@@ -155,241 +155,54 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-07 — **E6 ist fertig, abgenommen mit `JR-6-08`** (unabhängige TEST-Sitzung,
-Protokoll `docs/dev/journaling/22-abnahme-e6.md`, Commit `eba887a`, angenommen — kein Kriterium von
-`JR-6-01`–`JR-6-07` verletzt; ADR-010, ADR-033–035, ADR-037, ADR-038 entschieden; F59/F61/F63/F65
-behoben, F60/F62/F64/F66 offen und bewusst nicht blockierend). **Rollentrennung PO/DEV/TEST ist
-wieder aktiv** (war während `JR-6-04`/`JR-6-05` aufgehoben) · `wip/journaling-jr-6-04` ist gelöscht
-(lokal+remote) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream
-gesetzt) · zuletzt `eba887a` · **CI ist wieder grün** — die „CI-Lücke seit `37b471d`" ist seit
-`JR-6-06`s Commit (`31136887457`) nicht mehr aktuell, Ursache des ursprünglichen Problems unbekannt,
-Fund der `JR-6-08`-Sitzung, gegengeprüft per `gh run list` (sieben aufeinanderfolgende `success`-Läufe
-plus der Abnahme-Commit selbst). Die `pnpm gate`-Policy bleibt trotzdem sinnvoll ·
-`.claude/agents/senior-dev.md`/`tester.md` auf `model: opusplan` (Auftraggeber), committet in `10eec78`
+**Stand:** 2026-08-08 — **E6 ist abgenommen und zurückgemergt.** `JR-6-08` (unabhängige TEST-Sitzung,
+Protokoll `22-abnahme-e6.md`, Commit `eba887a`) hat E6 ohne Auflagen angenommen; der Rückmerge nach
+`claude/enterprise-product-implementation-cxmmqe` ist vollzogen (`b5b7c8a`, `--no-ff`, kein Squash).
+Damit sind **E1, E13, E2, E3, E4, E5 und E6** zurückgemergt — **E7 (WORM-Storage) ist das nächste
+offene Epic.** Diese Datei und `06-status.md` sind am selben Tag erneut auf Diät gesetzt worden: das
+vollständige E6-Sessionprotokoll (`JR-6-04`–`JR-6-08`, Rückmerge) liegt jetzt in
+[`23-archiv-e6.md`](23-archiv-e6.md), fortsetzend zu
+[`21-archiv-e6-jr601-jr602a-notizen.md`](21-archiv-e6-jr601-jr602a-notizen.md).
 
-> **F66** (`checkSpoolHighWaterMark()` ist O(n²) bei wachsendem Spool-Rückstand, gefunden während der
-> `JR-6-07`-Linux-Verifikation über WSL2) — **entschieden: nach E7 verschoben**, blockiert `JR-6-08`
-> nicht. Details: `09-befunde-bestandscode.md`.
-
-> **Nächster Schritt: Rückmerge nach `claude/enterprise-product-implementation-cxmmqe`** (ADR-014,
-> `--no-ff`, kein Squash — wie bei E2/E3/E4/E5/E13). Noch nicht vollzogen, Entscheidung/Freigabe beim
-> Auftraggeber.
-
-> **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
-> **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
-> der Reservierung — sie trägt ihre Nummer seit dem 2026-07-27 und wurde in `JR-6-02` gefüllt. **033**,
-> **034** und **035** sind vergeben (Owner-Auflösung für die drei schwächeren Parse-Ergebnisse, die
-> Phase-B-Pipeline, die Automatisierung des Ende-zu-Ende-Tests); **036** ist mit der Doku-Diät gefüllt.
-> Nachschub **ADR-037–040** am 2026-08-06 auf dem Integrationszweig nachreserviert (`e8256f7`), weil
-> 033–036 erschöpft waren; **037** ist jetzt mit dem `duplicate_marker`-Event-Typ gefüllt (siehe unten),
-> 038–040 bleiben offen.
-
-> **E4 und E5 sind abgenommen und zurückgemergt** — E4 mit `JR-4-13`/`9503bc8`, E5 mit `JR-5-09`/`107346d`,
-> E3 mit `JR-3-08`/`185e9bd`. **Aus E4 ist kein Befund offen.**
+> **Zwei Befunde sind bereits E7 zugeordnet, nicht neu zu entscheiden:** **F60**
+> (`StorageService.put()` puffert Streams) und **F66** (`checkSpoolHighWaterMark()` ist O(n²) bei
+> wachsendem Spool-Rückstand, gemessen auf echtem Linux während der `JR-6-07`-Verifikation). Beide in
+> `09-befunde-bestandscode.md`.
 
 ### Der Stand in einem Satz
 
-**Der Empfangspfad steht, der Parser steht, Phase B hat einen vollständigen Verarbeitungspfad mit
-automatisiertem Ende-zu-Ende-Beleg, und Idempotenz ist jetzt Teil davon.** `apps/smtp-ingress` spricht
-ESMTP, prüft Quell- und Empfänger-ACL, fährt beim Start den Crash-Recovery-Scan und antwortet auf
-`DATA`/`BDAT … LAST` mit `250 … queued as <seq>` erst nach Spool-fsync **und** Ledger-Append. Seit
-`JR-6-01` gibt es den `journal-inbound`-Worker als eigenen Prozess; seit `JR-6-02a` das **Tor**; seit
-`JR-6-02b` die vollständige Pipeline (`runPhaseBPipeline()`): parsen (E5) → Owner auflösen
-(ADR-033/034) → archivieren (ADR-010) → indexieren → Spool-Datei löschen, mit automatisiertem
-Ende-zu-Ende-Test (ADR-035). Seit **`JR-6-03`** schreibt ein `'duplicate'`-Ergebnis, das eine **andere**
-Spool-Transaktion als die eigene betrifft, einen `duplicate_of`-Marker in den Ledger
-(`LedgerLookup.findOriginalReceiptSeq()`, `MIN(seq)` über Chain+Hash unterscheidet das von einem
-Job-Retry). Seit **`ADR-037`** trägt dieser Marker einen eigenen `event_type`
-(`duplicate_marker`), nicht mehr `'receipt'` — eine Zählung von Receipts gegen angenommene Nachrichten
-(`verify`, E9) zählt ihn dadurch nicht mehr doppelt. Seit **`JR-6-04`** holt ein periodischer
-Reconciler-Sweep liegengebliebene Spool-Einträge zurück in die Queue, wenn Redis sie verloren hat
-(Redis ist Optimierung, nicht Autorität). Seit **`JR-6-05`** ist belegt, dass `content_sha256` über
-die Plaintext-Wire-Bytes läuft, nicht über das Chiffrat. Seit **`JR-6-06`** ist belegt, dass ein
-Object-Store-Ausfall den Acceptance-Contract nicht berührt, der Backlog nach Erholung über genau
-diesen Reconciler abläuft, und die Kette währenddessen unberührt bleibt. Seit **`JR-6-07`** existiert
-ein Soak-Test über echtes SMTP (`nightly` 100.000 / `ci` 100 Nachrichten), dessen akzeptierter Pfad auf
-diesem Windows-Host aber bisher nie beobachtet wurde — inzwischen auf echtem Linux (WSL2) verifiziert,
-siehe unten. **Seit `JR-6-08` ist E6 vollständig abgenommen.** Was fehlt, ist nur noch der
-**Rückmerge** nach `claude/enterprise-product-implementation-cxmmqe`.
+**E1–E6 stehen vollständig und sind zurückgemergt.** Der Empfangspfad (`apps/smtp-ingress`, ESMTP,
+Quell-/Empfänger-ACL, Crash-Recovery-Scan, `250 … queued as <seq>` erst nach Spool-fsync **und**
+Ledger-Append) und der Journal-Report-Parser stehen seit E4/E5. Seit E6 gibt es die vollständige
+Phase-B-Pipeline (`runPhaseBPipeline()`: eigener `journal-inbound`-Worker, Owner-Auflösung,
+Archivierung über `processEmail()`, Indexierung, Spool-Freigabe), Idempotenz mit eigenem
+Ledger-Event-Typ (`duplicate_marker`, ADR-037), einen Spool-Reconciler (ADR-038), die
+Hash-vor-Verschlüsselung-Garantie, einen Object-Store-Ausfalltest und einen Soak-Test über echtes
+SMTP (`nightly` 100.000 / `ci` 100 Nachrichten). Volles Detail: `06-status.md` und `23-archiv-e6.md`.
 
-### Was diese Session gemacht hat
+### Nächster konkreter Schritt — **E7 beginnen (WORM-Storage)**
 
-**`JR-6-08` (Abnahme E6), Rolle TEST, dritte unabhängige Sitzung, Commit `eba887a`.** Urteil:
-**angenommen**, kein Kriterium verletzt. Drei unabhängige, übereinstimmende Volllaufnachweise
-desselben Commits `7fe5e8d` (Windows, Linux/WSL2, echte GitHub-CI), `JR-6-06`/`JR-6-07`s Kernaussagen
-zusätzlich selbst auf Linux mit eigenem Seed reproduziert statt nur den Vorberichten geglaubt. Fund:
-die „CI-Lücke seit `37b471d`" ist seit `JR-6-06`s Commit nicht mehr aktuell — sieben grüne Läufe in
-Folge, unten korrigiert. Volle Fassung: `06-status.md` unter „`JR-6-08`" und
-`docs/dev/journaling/22-abnahme-e6.md`.
+Kriterien in `03-backlog.md`, Abschnitt E7. Neuen Epic-Zweig von der Integrationsbranch abzweigen —
+**sofort den Upstream setzen**, das ist die Falle aus `CLAUDE.md` §7:
 
-**Daneben, PO:** Statuspflege (`06-status.md`, diese Datei, `README.md`) auf den Abnahmestand
-nachgezogen, CI-Lücken-Behauptung korrigiert.
-
-**Davor, `JR-6-06` (Object-Store-Ausfall-Test), Rolle TEST, unabhängige Sitzung, Commit `e72b48a`.**
-Rollentrennung damit wieder aktiv (war während `JR-6-04`/`JR-6-05` aufgehoben). Kurzfassung siehe
-`06-status.md` unter „2026-08-07 — `JR-6-06`"; vom PO unabhängig nachgerechnet: Volllauf **1321
-passed | 8 skipped** bei 111 Dateien, Exit 0.
-
-**`JR-6-07` (Soak über echtes SMTP), Rolle TEST, zweite unabhängige Sitzung, Commits `8565585`+`c27e291`.**
-Traf während der Umsetzung ihr Wochenlimit — vom PO auf `wip/journaling-jr-6-07` gesichert und in den
-Arbeitsbaum zurückgespielt, danach von derselben Sitzung fortgesetzt. Kurzfassung siehe `06-status.md`
-unter „2026-08-07 — `JR-6-07`". **Vom PO zweimal unabhängig reproduziert:** derselbe intermittierende
-600s-Stall, den der TEST-Bericht selbst schon dokumentiert hatte (Windows-Defender-Verdacht) — echte,
-bestätigte Umgebungseigenschaft, keine neue Erkenntnis, aber jetzt doppelt unabhängig belegt.
-**Wichtig:** der akzeptierte (Linux-)Pfad des Soak-Tests ist auf diesem Branch bislang nie beobachtet
-worden, siehe Verifikationslücke oben.
-
-**Daneben, PO:** `wip/journaling-jr-6-04` gelöscht (lokal+remote, Inhalt war in `JR-6-04` aufgegangen),
-CI-Gate-Policy entschieden (`pnpm gate` je Push, echtes CI gebündelt vor dem Rückmerge, `act` geprüft
-und bewusst nicht eingerichtet), einen stale gewordenen Kommentar in `suite-inventory.ts` gefunden
-(von der TEST-Sitzung in `c27e291` behoben).
-
-**Vorher, `ADR-037` (eigener Event-Typ für den `duplicate_of`-Marker).** Migration `0043_whole_meltdown.sql`
-(`ALTER TYPE ... ADD VALUE 'duplicate_marker'`, lokal gegen eine frische Datenbank geprüft — der neue
-Wert ist außerhalb der Migrations-Transaktion sofort nutzbar). Vokabular an drei Stellen synchron:
-`journalEventTypeEnum` (Schema), `JournalEventType` (`packages/types`), und
-`LedgerAppendRequest['eventType']` in `ledger-port.ts` — letzteres war bis jetzt eine **eigene,
-handkopierte** Literal-Union derselben Werte statt eines Imports, genau die F46-Form, die den
-fehlenden Wert unbemerkt ließ; jetzt importiert es `JournalEventType` direkt. 32 Dateien mit
-`event_type`/`'receipt'`-Treffern durchsucht, 3 geändert (der Marker selbst in `pipeline.ts`, der
-Enum-Vollständigkeitstest in `journal-ledger-schema.int.test.ts`, die `JR-6-03`-Zustellungsprobe in
-`journal-phase-b-e2e.int.test.ts` — deren Zählung war die eigentliche Falle: `event_type = 'receipt'`
-lieferte vorher 3 Zeilen für 2 Zustellungen, jetzt 2). Beide geänderten Tests kalibriert (Marker
-versehentlich wieder als `'receipt'` geschrieben, rot an der jeweils erwarteten Stelle,
-zurückgenommen). Volle Fassung in `05-entscheidungen.md` unter **ADR-037**.
-
-**Vorher, `JR-6-03` (Idempotenz/`duplicate_of`), Commit `5e9551f`.** Volle Begründung als Doc-Comment in
-`ledger-lookup-port.ts`/`pipeline.ts`, Kurzfassung im Sessionprotokoll (`06-status.md`,
-2026-08-06). Neue Methode `LedgerLookup.findOriginalReceiptSeq()`, ein neuer `ledgerAppend`-Port in
-`PhaseBPipelineDeps`, und die Marker-Logik in der Owner-Schleife. +3 Tests (2 `pipeline.test.ts`, 1
-`journal-phase-b-e2e.int.test.ts`), beide kalibriert.
-
-> **Eine eigene Nacharbeit aus dieser Session, wichtiger als der Code:** der Bericht zu `JR-6-03`
-> erreichte den Auftraggeber nicht, weil er nur als Text ausgegeben statt per Nachricht geschickt
-> wurde — die Rückfrage zur Drei-Zeilen-Lesart lief damit ins Leere, und der Statuseintrag behauptete
-> „an den Auftraggeber zurückgegeben", was nie zutraf. Seither: Berichte per Nachricht schicken, und
-> „zurückgegeben" erst schreiben, wenn eine Antwort da ist — vorher „offen, Rückfrage gestellt".
-
-### Die Umgebung hat sich geändert — Referenz in `19-umgebung-windows-host.md`
-
-**Verschoben am 2026-08-06** (Doku-Diät, inhaltlich unverändert) — diese Anleitung (Docker Desktop,
-Wegwerf-Cluster, Docker Sandboxes, `git`/`ssh-agent` unter Windows, `pg_ctl`-Fallstricke) wird
-gebraucht, **wenn die lokale Infrastruktur klemmt**, nicht bei jedem Sessionstart. Vollständig und
-unverändert in [`19-umgebung-windows-host.md`](19-umgebung-windows-host.md). Die zwei E13-Notizen, die
-hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e2.md`.
-
-### Nächster konkreter Schritt — **Rückmerge nach `claude/enterprise-product-implementation-cxmmqe`**
-
-> **E6 ist vollständig abgenommen** (`JR-6-08`, `eba887a`) — alle drei TEST-Sitzungen (`JR-6-06`,
-> `JR-6-07`, `JR-6-08`) liefen unabhängig von den jeweils implementierenden Sitzungen, genau wie das
-> in E13 verlangte Verfahren. **F66** (E7 zugeordnet) und die übrigen offenen, nicht blockierenden
-> Befunde (F60, F62, F64) sind zur Kenntnis genommen, nicht Teil der Abnahme.
-
-**Rückmerge, wie bei E2/E3/E4/E5/E13:** `--no-ff`, **kein Squash** (die Abnahmerunden und
-Zwischenschritte sind der Beleg, dass das Verfahren gewirkt hat). Kein Pull Request ohne ausdrückliche
-Aufforderung (`CLAUDE.md` §7). Nach dem Merge: E7 (WORM-Storage) ist das nächste Epic, mit F60 und
-F66 als bekannten, bereits zugeordneten Startpunkten.
-
-Der Prompt für die nächste Sitzung:
-
-```
-Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.md
-und arbeite den nächsten Schritt ab.
+```bash
+git fetch origin claude/enterprise-product-implementation-cxmmqe
+git checkout -b claude/journaling-e7-worm-storage \
+    origin/claude/enterprise-product-implementation-cxmmqe
+git push -u origin claude/journaling-e7-worm-storage
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter Commit
-`eba887a` (`JR-6-08`-Abnahmeprotokoll). Volllauf, dreifach unabhängig übereinstimmend (Windows, Linux,
-echte GitHub-CI): **1322 passed | 9 skipped** bei 112 Dateien, Exit 0 — `unit ci 1119/1119 ·
-integration ci 133/133 · adversarial ci 70/70`. Gleichstand gegen `git ls-remote` prüfen, nicht gegen
-einen Hash hier.
+**Zwei Startpunkte liegen schon bereit, beide bereits E7 zugeordnet, nicht neu zu entscheiden:**
 
-**Was noch offen ist:** der Rückmerge selbst (siehe oben), danach E7.
+- **F60** — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur
+  Streams verspricht. Zu entscheiden dort: Verschlüsselung auf einen Stream-Cipher umstellen
+  (`createCipheriv` kann streamen) oder die Signatur ehrlich auf `Buffer` verengen.
+- **F66** — `checkSpoolHighWaterMark()` durchläuft bei jeder SMTP-Annahme den gesamten Spool-Baum,
+  O(n²) bei wachsendem Rückstand. Naheliegender Fix (im Code selbst vorgeschlagen): ein mitgeführter
+  Zähler statt eines vollen Verzeichnis-Walks pro Nachricht.
 
-> **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
-> Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
-> an der exakt erwarteten Stelle, danach sauber zurückgesetzt). Fängt **nicht** 49a0bc1 (nur ein
-> Heuristik-`warn`) und **nicht** F64s hängenden Shutdown (per Definition nicht lokal reproduzierbar).
-> Details in `06-status.md` unter „Pre-Push-Gate" und in `07-session-handover.md` unter „Billig
-> verifizieren". Ändert an `JR-6-03`/`JR-6-04` als nächstem Schritt nichts.
->
-> **Nacharbeit `F65` (`1611434`) ist erledigt:** das Gate behandelte seine eigenen
-> Infrastruktur-Vorbedingungen (`DATABASE_URL`, `REDIS_PASSWORD`) asymmetrisch. Volle Fassung in
-> `09-befunde-bestandscode.md` unter **F65** — die Ausführung stand hier ein **drittes** Mal und ist am
-> 2026-08-06 auf diesen Verweis gekürzt worden, nachdem geprüft war, dass das Register dieselbe Tiefe
-> trägt. Praktische Folge für dich: `corepack pnpm gate` braucht **beide** Variablen, sonst benennt es
-> selbst die ungeprüft gebliebenen Klassen.
-
-> **`F63`/`F64` lesen, bevor der nächste Worker echten DB-/Storage-Zugriff bekommt** — `JR-6-04`s
-> Reconciler **ist** dieser Fall, F63 nennt ihn selbst als Beispiel. Volle Fassung in
-> `09-befunde-bestandscode.md`; `F64` (hängender Shutdown, reales Produktionsverhalten) auf Anweisung
-> nicht weiter untersucht.
-
-> **Auftrag (a), erledigt (Fortsetzung derselben Sitzung, `32fa49f`):** der Ende-zu-Ende-Test ist
-> automatisiert. Volle Begründung (die DI-Naht, die schon existierte, die gemessene
-> Meilisearch-CI-Auth, die zweifache Kalibrierung) steht in gleicher oder größerer Tiefe in
-> `05-entscheidungen.md` unter **ADR-035**.
-
-**`JR-6-03` und `ADR-037` sind erledigt** — Umsetzung siehe „Was diese Session gemacht hat" oben. Die
-Drei-Zeilen-Auslegungsfrage ist **entschieden**, nicht mehr offen: `2b62c26` korrigiert das
-Backlog-Kriterium selbst, `ADR-037` behebt den eigentlichen Fehler dahinter (der Marker brauchte einen
-eigenen Event-Typ, sonst hätte jede künftige Receipt-Zählung ihn mitgezählt).
-
-**Was `JR-6-04` zu tun hat** (Spool-Reconciler): ein periodischer Sweep über Spool-Einträge mit
-Ledger-Eintrag, aber unvollständiger Phase B, reiht sie nach — Redis ist Optimierung, nicht Autorität.
-`journalInboundJobId()` (`queue-contract.ts`) ist bereits deterministisch aus der `spoolTxId` abgeleitet,
-genau damit der Reconciler idempotent nachreihen kann.
-
-**Zwei Dinge, die beim Weiterarbeiten zählen:**
-
-1. **Der lokale Volllauf braucht weiterhin einen Build vorher:**
-   `corepack pnpm --filter @open-archiver/journaling build` und
-   `corepack pnpm --filter @open-archiver/backend build`. Der `copy-assets`-Schritt des Backends
-   scheitert auf diesem Host (`pnpm` nicht im PATH), **nach** dem `tsc` — für die Tests genügt das.
-2. **Für einen echten Volllauf werden jetzt mehr Umgebungsvariablen gebraucht als vorher** (seit
-   `JR-6-02b` die Backend-Adapter gegen `IngestionService`/`StorageService`/`SearchService` verdrahtet):
-   `STORAGE_TYPE=local`, `STORAGE_LOCAL_ROOT_PATH=<schreibbarer Pfad>`,
-   `ENCRYPTION_KEY=<32+ Bytes>`, `JWT_SECRET=<beliebig>`, `MEILI_MASTER_KEY`, `MEILI_HOST` — zusätzlich
-   zu `DATABASE_URL`/`OA_TEST_REQUIRE_INFRA=1`/`REDIS_*`. Ohne sie scheitern **einige**
-   Integrationstestdateien schon beim Import (`Invalid STORAGE_TYPE: undefined` bzw.
-   `ENCRYPTION_KEY is not set`) — sichtbar als „Failed Suites", nicht als stiller Skip, aber leicht mit
-   einer echten Regression zu verwechseln, wenn man die Fehlermeldung nicht liest.
-
-> **Zur Entscheidung beim Auftraggeber:**
->
-> - **~~`JR-6-03`s Drei-Zeilen-Lesart~~ — entschieden.** Drei Zeilen sind die einzige implementierbare
->   Form (append-only Ledger); der eigentliche Fehler war der fehlende eigene Event-Typ für den
->   Marker, behoben mit **ADR-037**. Kein Entscheidungsbedarf mehr.
-> - **~~Soll ein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch gebaut werden?~~ —
->   entschieden und erledigt** (Auftrag (a), siehe oben, ADR-035). Kein Entscheidungsbedarf mehr.
-> - **F64** (neu): soll der hängende Shutdown untersucht werden (welches Handle genau)? Ausdrücklich
->   noch nicht angefasst, auf Anweisung. Blockiert `JR-6-03`/`JR-6-04` nicht — `process.exit(0)` bleibt
->   der Produktionscode, bis jemand die Ursache findet und einen echten Fix vorschlägt.
-> - **F62** (unverändert, niedrige Schwere): soll `IJournalInboundJob` aus `packages/types` entfernt
->   werden? Unbenutzt, aber ein exportierter Typ könnte theoretisch extern importiert sein. Blockiert
->   nichts.
-> - **F60** (unverändert): `StorageService.put()` puffert einen Stream. Vorgeschlagene Zuordnung E7.
->   Blockiert `JR-6-03`/`JR-6-04` nicht.
-> - **F43**, **F39**, **F42**, **F17(b)** — unverändert, blockieren nichts.
-> - **Die Doku-Diät** — **erledigt am 2026-08-06** (dieser Auftrag). Pflichtlektüre unter 40 000
->   Tokens, Vorher/Nachher-Tabelle in `06-status.md`.
-
-### Was davor passiert ist — die Historie steht in `06-status.md`
-
-**Diese Datei führt keine Sessionhistorie mehr.** Bis zum 2026-07-30 trug sie neun „Was davor passiert
-ist"-Abschnitte mit rund 550 Zeilen — jeder von ihnen die Kurzfassung eines Protokolls, das in
-`06-status.md` mit Kommandos und Ausgaben vollständig steht, und jeder Block verwies dafür selbst
-dorthin. Der Kopf dieser Datei verlangt seit dem ersten Tag, dass der untere Teil **überschrieben** wird
-statt angehängt; die Regel war verletzt, und eine doppelt geführte Historie ist die verlässlichste
-Quelle für Widersprüche (am 2026-07-28 genau so passiert).
-
-Wer die Vorgeschichte braucht, liest `06-status.md` — dort in dieser Reihenfolge (neueste zuerst):
-`JR-13-18`, Abnahme `JR-13-09b`, `JR-13-17`, Abnahme `JR-13-09a`, Nacharbeit `JR-13-13`–`JR-13-15`, Abnahme
-`JR-13-09`, `JR-13-07`, Grün-Lauf der Fixes `JR-13-02`–`JR-13-06`, der Testwiderspruch (ADR-018), Rot-Läufe
-`JR-13-01`, dazu E1 in `11-archiv-e1.md`. `JR-13-08` steht ebenfalls in `06-status.md`.
-
-**Was hier bleibt** und nicht nach `06-status.md` gehört, weil es kein Protokoll ist: der aktuelle Stand
-und der nächste Schritt (oben), die Umgebungsbeschreibung, die **Fallstricke** (unten — sie werden
-projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftraggeber und die Vorlage.
+Beide betreffen `S3StorageProvider`/Spool-Layout, die E7 ohnehin für Object Lock anfasst — daher die
+Zuordnung.
 
 ### Was ein neuer Agent zuerst lesen muss
 
@@ -397,55 +210,40 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 2. `docs/dev/journaling/06-status.md` — verbindlicher Stand
 3. diese Datei
 4. `CLAUDE.md` — Repo-Konventionen und Fallstricke
-5. Für die eigentliche Task: `03-backlog.md` (Akzeptanzkriterien) und `02-architektur.md`
+5. Für die eigentliche Task: `03-backlog.md` (Akzeptanzkriterien E7) und `02-architektur.md`
 
 ### Offene Fragen an den Auftraggeber
 
-**Stand 2026-08-07 — was wirklich offen ist, in dieser Reihenfolge:**
+**Stand 2026-08-08 — was wirklich offen ist:**
 
-0. ~~**`F66`: `checkSpoolHighWaterMark()` ist O(n²) bei wachsendem Spool-Rückstand**~~ — **entschieden
-   2026-08-07: nach E7 verschoben** (analog F60), blockiert `JR-6-08` nicht. Gemessen auf echtem
-   Linux (WSL2), nicht nur vermutet. Volle Analyse: `09-befunde-bestandscode.md`.
-1. **`F60`: `StorageService.put()` puffert Streams, obwohl die Signatur Streams verspricht** — jetzt
-   beheben oder E7 zuordnen? **Empfehlung: E7**, wo `S3StorageProvider` für Object Lock ohnehin
-   angefasst wird. Zu entscheiden ist dort auch, **wie**: die Verschlüsselung auf einen Stream-Cipher
-   umstellen (`createCipheriv` kann streamen) oder die Signatur ehrlich auf `Buffer` verengen. Die
-   zweite Variante ist kleiner und schlechter — sie macht die Grenze sichtbar, hebt sie aber nicht auf.
-   **Blockiert E6 nicht:** die Vollpufferung ist bewusst hingenommen (bei 50 MB und Concurrency 3 liegen
-   im schlechtesten Fall drei Nachrichten doppelt im Heap).
-    > **~~`F59`~~ und ~~`F61`~~ sind behoben.** F61 war die wahre Ursache der roten Läufe, F59 ein
-    > latenter Defekt, dem nie ein beobachteter Fehlschlag zugeordnet werden konnte. Ein roter Lauf an
-    > `ingress-process-boot.test.ts` ist damit **wieder eine Aussage** — und er meldet jetzt Exit-Code,
-    > Signal und `stderr` mit, was diese Runde gekostet hat, weil er es vorher nicht tat.
-1. **`F43`: soll `JR-3-02`s Speichernachweis nachgemessen werden?** Das ist die einzige Frage, die
-   ein **abgenommenes** Epic berührt. `heapUsed` kann Vollpufferung in Node-`Buffer`n nicht sehen —
+1. **`F43`: soll `JR-3-02`s Speichernachweis nachgemessen werden?** Die einzige Frage, die ein
+   **abgenommenes** Epic (E3) berührt. `heapUsed` kann Vollpufferung in Node-`Buffer`n nicht sehen —
    gemessen, mit absichtlich eingebauter Regression kalibriert. Der **Code** ist mit hoher
-   Wahrscheinlichkeit korrekt (`writeDurableSpoolFile()` streamt), der **Nachweis** trägt nicht. Der
-   Aufwand ist klein (dieselbe Kalibrierung einmal dort fahren), aber es ist Nacharbeit an E3 und
-   damit eine Entscheidung, keine Aufgabe. **Blockiert E6 nicht.**
-1. **`F39`** (niedrig, Testharness) und **`F42`** (niedrig, totes `tsconfig.build.json`) — beheben
-   oder bewusst akzeptieren? Beide blockieren nichts. Sinnvoller Ort für F39 wäre die nächste Arbeit
-   an `packages/journaling`, also E6.
-1. **`F17(b)`** — Rollen-Bootstrap reparieren? Unverändert eine Produktentscheidung, kein Teil von E6.
-1. ~~**Die Doku-Diät**~~ — **erledigt am 2026-08-06.** Pflichtlektüre war auf über 70 000 Tokens
-   gewachsen; jetzt unter 40 000. Vorher/Nachher-Tabelle mit Methode in `06-status.md` unter
-   „Doku-Diät (E6)".
+   Wahrscheinlichkeit korrekt (`writeDurableSpoolFile()` streamt), der **Nachweis** trägt nicht.
+   Kleiner Aufwand, aber Nacharbeit an einem abgenommenen Epic, also eine Entscheidung. Blockiert
+   nichts.
+2. **`F39`** (niedrig, Testharness) und **`F42`** (niedrig, totes `tsconfig.build.json`) — beheben
+   oder bewusst akzeptieren? Beide blockieren nichts.
+3. **`F17(b)`** — Rollen-Bootstrap reparieren? Unverändert eine Produktentscheidung.
+4. **`F62`** (niedrig): soll `IJournalInboundJob` aus `packages/types` entfernt werden? Unbenutzt,
+   aber ein exportierter Typ könnte theoretisch extern importiert sein. Blockiert nichts.
+5. **`F64`** (mittel): der hängende Shutdown nach `worker.close()` — auf Anweisung nicht untersucht.
+   Die `JR-6-08`-Abnahmesitzung hat das unabhängig als vertretbar bewertet (Workaround ändert die
+   Korrektheit nicht, betrifft nur Prozessende). Blockiert nichts, aber weiterhin ungeklärt.
 
-**Beantwortet und nicht mehr offen (Archiv):** alle bis 2026-08-05 abgeschlossenen Fragen — E2/E13-Ära,
-`ADR-006`/`ADR-007`/`ADR-017`/`ADR-020`/`ADR-029`, `F7`/`F12`/`F17`–`F26`, geschlossene Pull Requests,
-`JR-1-05c`, `JR-13-12`/`-16`/`-17` — liegen seit 2026-08-06 unverändert in
-[`20-archiv-offene-fragen-bis-jr6.md`](20-archiv-offene-fragen-bis-jr6.md) (Doku-Diät).
+**Beantwortet und nicht mehr offen (Archiv):** alle bis 2026-08-07 abgeschlossenen Fragen — E2/E13-Ära,
+E6 (F59/F60/F65/F66-Zuordnung, die Doku-Diäten vom 2026-08-03/08-06), `ADR-006`/`ADR-007`/`ADR-017`/
+`ADR-020`/`ADR-029`, `F7`/`F12`/`F17`–`F26`, `JR-1-05c`, `JR-13-12`/`-16`/`-17` — liegen in
+[`20-archiv-offene-fragen-bis-jr6.md`](20-archiv-offene-fragen-bis-jr6.md) und den E6-Archivdateien.
 
 Die folgenden Punkte werden zum jeweiligen Epic zur Entscheidung vorgelegt und sind in
 `05-entscheidungen.md` als offene ADRs geführt:
 
-| Wann      | Frage                                                                                                                                                                                                                                                                                                                      |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~E2~~    | ~~Kanonische Kodierung und Genesis-String endgültig fixieren (ADR-006)~~ — **entschieden 2026-07-31 (`JR-2-03`):** 16 gehashte Felder statt der acht aus RFC §5.2, Genesis mit `deployment_id` und `chain_scope_id` als UUID-Textform, eigene `deployment_identity`-Tabelle, Merkle nach RFC 6962, mit Testvektoren        |
-| ~~E2~~    | ~~Eine Kette global oder eine pro Mandant (ADR-007)~~ — **entschieden 2026-07-31: je Mandant, `chain_scope_id` = `ingestion_sources.id`**                                                                                                                                                                                  |
-| ~~E7/E8~~ | ~~Welche TSA?~~ **Entschieden 2026-07-31, ADR-023:** kein Standard-URL; qualifizierte eIDAS-TSA in der Produktion mit GoBD-Anspruch, `open-tsa.eu` als kostenlose Option ohne diesen Anspruch und als echte TSA in `nightly`, `ci` hermetisch. **Ankerform: ADR-022** — ein Token über die Merkle-Wurzel aller Kettenköpfe |
-| E7        | Aufbewahrungsfrist für Object Lock COMPLIANCE. **Vorher lesen:** unter COMPLIANCE ist vorzeitige Löschung technisch unmöglich, auch für uns                                                                                                                                                                                |
-| E12       | Steht ein echter Exchange-Online-Tenant für `JR-12-08` zur Verfügung? Ohne ihn ist E12 nicht abnehmbar; Mocks sind kein Ersatz                                                                                                                                                                                             |
+| Wann | Frage                                                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| E7   | Aufbewahrungsfrist für Object Lock COMPLIANCE. **Vorher lesen:** unter COMPLIANCE ist vorzeitige Löschung technisch unmöglich, auch für uns |
+| E8   | ADR-008: TSA-Ausfallverhalten bestätigen                                                                                                    |
+| E12  | Steht ein echter Exchange-Online-Tenant für `JR-12-08` zur Verfügung? Ohne ihn ist E12 nicht abnehmbar; Mocks sind kein Ersatz              |
 
 ### Fallstricke — jetzt in `15-fallstricke.md`
 

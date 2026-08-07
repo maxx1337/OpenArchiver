@@ -51,6 +51,8 @@ SEC 17a-4, FINRA 4511, MiFID II).
 | 19    | `19-umgebung-windows-host.md`          | Windows-Host-Infrastruktur: Docker Desktop, Wegwerf-Cluster, `sbx`, `git`/`ssh-agent` — **Referenz, nicht Lektüre** | wenn die lokale Infrastruktur klemmt       |
 | 20    | `20-archiv-offene-fragen-bis-jr6.md`   | Beantwortete/entschiedene Fragen an den Auftraggeber, E2/E13-Ära bis `JR-6-02b`                                     | nur für Historie, nie für die nächste Task |
 | 21    | `21-archiv-e6-jr601-jr602a-notizen.md` | Technische Notizen zu `JR-6-01`/`JR-6-02a`, aus `06-status.md` ausgegliedert                                        | nur für Historie, nie für die nächste Task |
+| 22    | `22-abnahme-e6.md`                     | Abnahmeprotokoll E6 (`JR-6-08`): Kriterium → Beleg → Urteil                                                         | nur bei Fragen zur E6-Abnahme              |
+| 23    | `23-archiv-e6.md`                      | Sessionprotokoll E6, `JR-6-04`–`JR-6-08` plus Rückmerge, aus `06-status.md` ausgegliedert                           | nur für Historie, nie für die nächste Task |
 | 11–14 | Archivdateien                          | Protokolle und Task-Tabellen der **abgenommenen** Epics (E1, E13, E2, E3)                                           | nur für Historie, nie für die nächste Task |
 
 > **`17-parallelbetrieb.md` hieß bis zum Rückmerge von E4 `12-parallelbetrieb.md`.** Sie kollidierte
@@ -133,16 +135,17 @@ Deshalb steht hier nur noch das Gerüst:
 | E3     | **abgenommen + gemergt** — Spool und Acceptance-Contract                       |
 | E4     | **abgenommen + gemergt** — `smtp-ingress`-Service                              |
 | E5     | **abgenommen + gemergt** — Journal-Report-Parser                               |
-| **E6** | **abgenommen** (`JR-6-08`, 2026-08-07) — Phase-B-Worker, Rückmerge offen       |
+| E6     | **abgenommen + gemergt** (`JR-6-08`, `b5b7c8a`) — Phase-B-Worker               |
 | E7–E12 | offen                                                                          |
 
-**Diese Zeile war bis zum 2026-08-06 stehen geblieben, als E4 noch „Rückmerge offen" und E5/E6 noch
-„offen" waren** — derselbe Fehler, vor dem dieser Abschnitt selbst warnt. Aktuell: **Was heute steht**
-— der Empfangspfad (ESMTP mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`/`BDAT`,
-`STARTTLS`, `AUTH`; Quell-/Empfänger-ACL; Crash-Recovery-Scan; `250 … queued as <seq>` erst nach fsync
-von Spool **und** Ledger) und der Journal-Report-Parser stehen und sind zurückgemergt. E6 baut Phase B
-darauf auf: eigener Worker-Prozess, das Archivierungs-Tor, die vollständige Pipeline
-(`runPhaseBPipeline()`), automatisiert bis zum durchsuchbaren Treffer.
+**Diese Zeile war bis zum 2026-08-08 stehen geblieben, als E6 noch „Rückmerge offen" war** — derselbe
+Fehler, vor dem dieser Abschnitt selbst warnt. Aktuell: **Was heute steht** — der Empfangspfad (ESMTP
+mit `PIPELINING`, `8BITMIME`, `SMTPUTF8`, `SIZE`, `CHUNKING`/`BDAT`, `STARTTLS`, `AUTH`;
+Quell-/Empfänger-ACL; Crash-Recovery-Scan; `250 … queued as <seq>` erst nach fsync von Spool **und**
+Ledger), der Journal-Report-Parser, und seit E6 die vollständige Phase-B-Pipeline
+(`runPhaseBPipeline()`: eigener Worker-Prozess, Archivierungs-Tor, parsen → Owner auflösen →
+archivieren → indexieren → Spool freigeben, automatisiert bis zum durchsuchbaren Treffer) stehen und
+sind zurückgemergt. E7 (WORM-Storage) ist das nächste offene Epic.
 
 **Wo der nächste Schritt steht:** `07-session-handover.md`. **Wo die Entscheidungen stehen:**
 `05-entscheidungen.md`.

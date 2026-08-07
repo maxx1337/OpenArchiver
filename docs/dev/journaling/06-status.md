@@ -6,14 +6,14 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-07 — **Details im Sessionprotokoll unten, jüngste Einträge
-zuletzt.** Kurz: **E6 ist fertig, abgenommen mit `JR-6-08`** (unabhängige TEST-Sitzung, Protokoll
-`22-abnahme-e6.md`, Commit `eba887a`) — Rückmerge in den Integrationszweig steht noch aus, siehe
-„Nächster Schritt". Der WIP-Zweig `wip/journaling-jr-6-04` ist gelöscht (lokal + remote), sein Inhalt
-war vollständig in `JR-6-04` aufgegangen. **Branch:** `claude/journaling-e6-phase-b-worker`
-(Epic-Zweig; E1, E13, E2, E3, E4 und E5 sind bereits zurückgemergt). Nummernkreise nach **ADR-032**
-reserviert: ADR-033–036 (alle vergeben) plus Nachschub **ADR-037–040** (`e8256f7`, Integrationszweig;
-**037** vergeben, 038 mit `JR-6-04` gefüllt, 039–040 offen), F59–F70 (F59, F61, F65, F66 vergeben).
+**Letzte Aktualisierung:** 2026-08-08 — **Details im Archiv, siehe unten.** Kurz: **E6 ist fertig,
+abgenommen mit `JR-6-08` und zurückgemergt** (`b5b7c8a`, `--no-ff`, kein Squash, auf
+`claude/enterprise-product-implementation-cxmmqe`). Damit sind **E1, E13, E2, E3, E4, E5 und E6**
+zurückgemergt; nur E7–E12 sind noch offen. Diese Datei ist am 2026-08-08 erneut auf Diät gesetzt
+worden (das vollständige E6-Sessionprotokoll liegt jetzt in `23-archiv-e6.md`, fortsetzend zu
+`21-archiv-e6-jr601-jr602a-notizen.md`). Nummernkreise nach **ADR-032**: ADR-033–038 sind vergeben,
+**039–040 sind mit dem Rückmerge an den allgemeinen Vorrat zurückgefallen** (nie gebraucht), F59–F70
+(F59, F61, F65, F66 vergeben, F60/F62/F64/F66 offen und E6 nicht mehr blockierend).
 
 > **CI-Lücke — korrigiert 2026-08-07 (Fund der `JR-6-08`-Abnahmesitzung):** Der Satz „GitHub Actions
 > erzeugt seit `37b471d` keine zuverlässigen Läufe mehr" **stimmt seit `JR-6-06`s Commit
@@ -66,22 +66,22 @@ nicht.
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                          | Fertig / Gesamt                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                      | 6 / 6                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                        | 10 / 10                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                             | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                     | 11 / 11                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                         | 9 / 9                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)        | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
-| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                        | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **abgenommen** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Protokoll `22-abnahme-e6.md`), Rückmerge offen | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
-| 8           | E7   | WORM-Storage                       | offen                                                                                                           | 0 / 6                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                           | 0 / 6                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                           | 0 / 8                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                           | 0 / 8                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                           | 0 / 10                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                           | 0 / 9                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                   | Fertig / Gesamt                                                                                                                 |
+| ----------- | ---- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                               | 6 / 6                                                                                                                           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                 | 10 / 10                                                                                                                         |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                      | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                              | 11 / 11                                                                                                                         |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                           |
+| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
+| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                           |
+| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)              | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
+| 8           | E7   | WORM-Storage                       | offen                                                                                                    | 0 / 6                                                                                                                           |
+| 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                           |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                    | 0 / 8                                                                                                                           |
+| 12          | E11  | Compliance-Features                | offen                                                                                                    | 0 / 10                                                                                                                          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                    | 0 / 9                                                                                                                           |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-029**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-030**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -192,60 +192,29 @@ F50 (`JR-4-21a`), F47 bei der Abnahme als längst behoben erkannt.
 > vollständige Sessionprotokoll liegt seit dem 2026-08-04 in `18-archiv-e4-e5.md`**, inhaltlich
 > unverändert: alle 21 Scheiben, die Befunde F42–F58 in ihrer Entstehung, und die Zahlen je Lauf.
 
-## E6 — Phase-B-Worker (**fertig, abgenommen 2026-08-07 mit `JR-6-08`**, Zweig `claude/journaling-e6-phase-b-worker`, Rückmerge offen)
+## E6 — Phase-B-Worker (**fertig, abgenommen 2026-08-07 mit `JR-6-08`, zurückgemergt 2026-08-08 mit `b5b7c8a`**)
 
-Kriterien in `03-backlog.md`. Vor der ersten Scheibe sind nach **ADR-032** die Nummernkreise auf dem
-Integrationszweig reserviert worden (`fc15edc`): **ADR-033–036** und **F59–F70**. `ADR-010` ist
-ausdrücklich **nicht** Teil der Reservierung — die Entscheidung „`processEmail` erweitern oder eigener
-Journaling-Pfad" trägt diese Nummer seit dem 2026-07-27 und wird in `JR-6-02` gefüllt. Nachschub
-**ADR-037–040** ist am 2026-08-06 auf dem Integrationszweig nachreserviert worden (`e8256f7`), weil
-033–036 erschöpft waren; **037** ist mit dem `duplicate_marker`-Event-Typ gefüllt (siehe `JR-6-03`
-unten und `05-entscheidungen.md`).
+8 / 8 Tasks (Backlog-IDs nach ADR-021: `JR-6-02` zählt mit `a`+`b`). Der Worker (`journal-inbound`,
+eigener Prozess seit `JR-6-01`) fährt die vollständige Phase-B-Pipeline
+(`runPhaseBPipeline()`, ADR-010/033/034/035): parsen → Owner auflösen → archivieren → indexieren →
+Spool freigeben. Idempotenz über einen eigenen Ledger-Event-Typ (`JR-6-03`, ADR-037), ein
+Spool-Reconciler holt Rückstand aus einer geleerten Redis-Queue zurück (`JR-6-04`, ADR-038),
+`content_sha256` läuft nachweislich über Plaintext vor der Verschlüsselung (`JR-6-05`), ein
+Object-Store-Ausfall berührt den Acceptance-Contract nicht (`JR-6-06`), und ein Soak-Test über echtes
+SMTP beweist `seq`-Lückenlosigkeit und Durchsatz (`JR-6-07`, `nightly` 100.000 / `ci` 100 Nachrichten).
 
-- [x] `JR-6-01` — `journal-inbound`-Worker als eigener Prozess, `start:journal-worker`, Queue-Parameter
-      begründet (2026-08-05, `d0f4840`)
-- [~] `JR-6-02` — Verarbeitung Spool → Parser → Storage → `archived_emails` → Index → Spool frei.
-  **Aufgeteilt nach ADR-021:**
-    - [x] `JR-6-02a` — **ADR-010 entschieden** (`41068aa`) plus das Tor, das entscheidet, ob eine
-          Spool-Datei überhaupt archiviert werden darf (`fba499c`)
-    - [x] `JR-6-02b` — **Code fertig, Abnahme durch TEST offen.** Erledigt: **ADR-033** (Owner-Auflösung
-          für `plain_bcc`/`ndr`/`parse_failed`), **ADR-034** (Fan-out über jeden aufgelösten Owner,
-          Backend-Adapter auf `processEmail()`, Indexierung, Spool-Freigabe als Löschen) und **ADR-035**
-          (der Ende-zu-Ende-Test ist automatisiert, `journal-phase-b-e2e.int.test.ts`, gegen echtes
-          Postgres über die bestehende Harness-Bindung und echtes Meilisearch über einen neuen
-          CI-Service-Container, zweimal kalibriert). `runPhaseBPipeline()` verbindet alles; **Ende-zu-Ende
-          ist jetzt ein Test, kein manueller Nachweis mehr.**
-- [x] `JR-6-03` — Idempotenz: ein Objekt, **drei** Ledger-Zeilen — zwei Phase-A-Receipts plus
-      angehängter Marker (2026-08-06, `5e9551f`; Kriterium im Backlog korrigiert, der Ledger ist
-      append-only). Marker trägt seit **ADR-037** einen eigenen `event_type`
-      (`duplicate_marker`), nicht mehr `'receipt'`
-- [x] `JR-6-04` — Spool-Reconciler (Redis ist Optimierung, nicht Autorität) (2026-08-06, ADR-038)
-- [x] `JR-6-05` — Hash-vor-Verschlüsselung festschreiben und testen
-- [x] `JR-6-06` — TEST: Object-Store-Ausfall (2026-08-07, `e72b48a`, unabhängige TEST-Sitzung)
-- [x] `JR-6-07` — TEST: Soak, 100.000 Nachrichten (`nightly` plus `ci`-Smoke, F13-Frist heben)
-      (2026-08-07, `8565585`+`c27e291`, unabhängige TEST-Sitzung — **Windows-Verifikationslücke, siehe
-      Eintrag unten**)
-- [x] `JR-6-08` — Abnahme E6 (2026-08-07, unabhängige TEST-Sitzung, Protokoll `22-abnahme-e6.md`,
-      Commit `eba887a` — angenommen, kein Kriterium verletzt)
+Abnahme `JR-6-08`: unabhängige TEST-Sitzung, kein Kriterium verletzt, drei übereinstimmende
+Volllaufnachweise (Windows, Linux/WSL2, echte GitHub-CI). Dabei korrigierter Fund: die zuvor
+dokumentierte „CI-Lücke seit `37b471d`" war seit `JR-6-06`s Commit bereits wieder geschlossen.
+Offene, nicht blockierende Befunde **F60** und **F66** (beide E7 zugeordnet), **F62**/**F64**
+(niedrig/mittel, unzugeordnet).
 
-> \*\*Die technischen Notizen zu `JR-6-01` (drei Entscheidungen, zwei Nebenwirkungen) und
-> `JR-6-02a` (ADR-010-Verweis, das Tor mit seinen fünf Urteilen, der gefundene Nullish-Fehler)
-> liegen seit dem 2026-08-06 unverändert in
-> [`21-archiv-e6-jr601-jr602a-notizen.md`](21-archiv-e6-jr601-jr602a-notizen.md) (Doku-Diät,
-> Tokenbudget) — beide Tasks sind oben bereits als `[x]` erledigt markiert.
-
-> **ADR-033 ist entschieden (2026-08-05, erster Teil von `JR-6-02b`): Owner-Auflösung für die drei
-> Ergebnisarten ohne Journal-Report-Envelope.** Volle Begründung (Tabelle „was die drei schwächeren
-> Ergebnisarten tragen", die Verneinung „`envelopeRcpt` wird nie als Owner benutzt", warum der
-> kopfzeilen-abgeleitete Envelope schwächer aber echt ist) steht **in gleicher oder größerer Tiefe** in
-> `05-entscheidungen.md` unter **ADR-033** — am 2026-08-06 dorthin verschoben, nicht gekürzt (Doku-Diät).
-
-> **F61** (der zurückgesetzte Socket, der den ganzen Empfänger abriss, weil die Ablehnungspfade keinen
-> `error`-Handler anhängten) ist die tatsächliche Ursache der roten Läufe, die zweimal F59 zugeschrieben
-> wurden — inklusive des Lehrsatzes über den Diagnosewert einer Zusicherung. Volle Fassung (Schwere,
-> Fundort, Regressionstest, die vier Diagnoseschritte, die plattformunabhängige Reproduktion) steht **in
-> gleicher oder größerer Tiefe** in `09-befunde-bestandscode.md` unter **F61** — am 2026-08-06 dorthin
-> verschoben, nicht gekürzt (Doku-Diät).
+> **Das vollständige Sessionprotokoll liegt in [`23-archiv-e6.md`](23-archiv-e6.md)** (`JR-6-04`–`JR-6-08`,
+> Doku-Diät 2026-08-08) und, fortsetzend davor, in
+> [`21-archiv-e6-jr601-jr602a-notizen.md`](21-archiv-e6-jr601-jr602a-notizen.md) (`JR-6-01`–`ADR-037`).
+> Das Abnahmeprotokoll (Kriterium → Beleg → Urteil) steht separat in
+> [`22-abnahme-e6.md`](22-abnahme-e6.md). ADR-010, ADR-033–038 in `05-entscheidungen.md`. Befunde
+> F59–F66 in `09-befunde-bestandscode.md`.
 
 ---
 
@@ -271,202 +240,18 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
 
 ## Sessionprotokoll
 
-> **Hier stehen nur die Zeilen des laufenden Epics — das ist E6, unten.** E4 und E5 sind bereits
-> abgenommen und zurückgemergt; ihre Protokolle liegen im Archiv.
+> **Kein Epic läuft gerade — E6 ist abgenommen und zurückgemergt, E7 hat noch nicht begonnen.** Diese
+> Sektion ist deshalb aktuell leer; das nächste Epic füllt sie neu. Alle bisherigen Protokolle liegen
+> im Archiv:
 >
-> | Zeitraum                       | liegt in                               |
-> | ------------------------------ | -------------------------------------- |
-> | Planung bis Abschluss von E3   | `13-archiv-sessionprotokoll-bis-e3.md` |
-> | E4 und E5 (2026-08-02 … 08-04) | `18-archiv-e4-e5.md`                   |
+> | Zeitraum                               | liegt in                               |
+> | -------------------------------------- | -------------------------------------- |
+> | Planung bis Abschluss von E3           | `13-archiv-sessionprotokoll-bis-e3.md` |
+> | E4 und E5 (2026-08-02 … 08-04)         | `18-archiv-e4-e5.md`                   |
+> | E6, `JR-6-01`–`ADR-037`                | `21-archiv-e6-jr601-jr602a-notizen.md` |
+> | E6, `JR-6-04`–`JR-6-08` plus Rückmerge | `23-archiv-e6.md`                      |
 >
-> Beide inhaltlich unverändert ausgegliedert.
-
-> **Diese Datei ist am 2026-08-04 von 230 000 auf unter 50 000 Zeichen geschrumpft** — die beiden
-> Protokolle machten 195 000 davon aus. Die Regel dahinter steht im `README.md`: das Protokoll eines
-> Epics wandert ins Archiv, **sobald** es zurückgemergt ist. Sie wurde bei E4/E5 eingehalten, weil die
-> Datei sonst bei jeder Sitzung wieder 64 000 Tokens Pflichtlektüre erzeugt hätte.
-
-> **Kein Tabellenformat für Einträge, seit dem 2026-08-03.** Prettier richtet Tabellen auf die längste
-> Zelle aus, und bei Einträgen dieser Länge kostet das Padding ein Vielfaches des Inhalts — damals
-> gemessen: 147 908 Zeichen Inhalt, 346 564 nach dem Ausrichten. Ein Eintrag ist deshalb ein Abschnitt.
-> **Neue Einträge kurz und in Feldform** (Task, Commit, Testzahl, CI-Lauf, Entscheidungen, offen).
-
-### Sessionprotokolle `JR-6-01` bis `ADR-037` — verschoben
-
-> Die Protokolle der abgeschlossenen E6-Scheiben (`JR-6-01`, `JR-6-02a`, `JR-6-02b`, die E2E-Automatisierung,
-> das Pre-Push-Gate, `F65`, die Doku-Diät, `JR-6-03`, `ADR-037`) stehen seit dem 2026-08-06 in
-> `21-archiv-e6-jr601-jr602a-notizen.md` — inhaltlich unverändert, verschoben als Budgetausgleich für den
-> `JR-6-04`-Eintrag. Entscheidungen: `05-entscheidungen.md`. Befunde: `09-befunde-bestandscode.md`.
-
-### 2026-08-06 — `JR-6-04`: Spool-Reconciler
-
-- **Rolle:** PO im Eigenbau. Der DEV-Subagent lief mitten in der Scheibe in sein Wochenlimit; der
-  Auftraggeber hat daraufhin ausdrücklich angewiesen, das Epic selbst fertigzustellen. Die
-  Rollentrennung ist damit für den Rest von E6 aufgehoben — **was bedeutet, dass `JR-6-08` nicht von
-  mir abgenommen werden kann** (siehe „Offen")
-- **Aufgesetzt auf:** dem gesicherten WIP des DEV-Agenten (`wip/journaling-jr-6-04`) — Reconciler,
-  Backend-Adapter, Worker-Registrierung und Optionen samt Tests waren fertig, es fehlten der
-  Integrationstest, ADR-038, das Inventar und die Doku
-- **Entscheidungen:** **ADR-038** (wiederkehrender Job auf der bestehenden Queue, kein eigener
-  Prozess, nicht im `sync-scheduler`). Dazu **eine eigene, kleine Naht:** `enqueueForReconcile()` ist
-  aus `journal-inbound.processor.ts` in `journal-reconcile-enqueue.ts` gezogen worden
-- **Der Grund dafür ist gemessen, nicht vermutet:** der Prozessor baut `StorageService` im
-  Modulscope, und `config/storage.ts` wirft **beim Import** ohne `STORAGE_TYPE` (**F63 Fall 1**). Der
-  Integrationstest von dort zu importieren riss **23 von 109 Testdateien** mit
-  `Invalid STORAGE_TYPE: undefined` ab. Eine Funktion, deren einzige Abhängigkeit Redis ist, hängt
-  jetzt auch im Importgraphen nicht mehr am Storage
-- **Testzahl:** +17 gegenüber `ADR-037`s Stand (+15 `unit`: 11 in `journal-inbound.options.test.ts`
-  durch drei `it.each`-Blöcke, 4 in `reconciler.test.ts`; +2 `integration` im neuen
-  `journal-spool-reconciler.int.test.ts`). Volllauf **1318 passed | 8 skipped** bei 109 Dateien,
-  Exit 0, `unit ci 1119/1119 · integration ci 130/130 · adversarial ci 69/69`
-- **Der Integrationstest belegt zwei Aussagen, die nur echtes BullMQ hergibt:** eine leere Queue wird
-  aus Spool und Ledger wieder gefüllt (drei Einträge, je unter eigener deterministischer Job-Id, mit
-  Ein-Feld-Payload), und ein im `failed`-Set gestrandeter Job wird **retried** — wobei der Test
-  zuvor **selbst messt**, dass ein blankes `add()` ihn `failed` lässt. Quarantäne und Advisory-Lock
-  sind bewusst **nicht** wiederholt: `JR-4-18` deckt sie gegen echtes Postgres und echte Platte ab
-- **Queue-Isolation:** testeigener Queue-Name je Lauf. `journal-inbound-worker.int.test.ts` verbietet
-  ausdrücklich, die geteilte Queue zu leeren („a queue that a later epic will feed"); ein eindeutig
-  benannter Queue-Name **ist** eine geleerte Queue und kollidiert unter Vitests parallelen Dateien mit
-  nichts. Dafür nimmt `enqueueForReconcile()` die Queue als Parameter mit Produktions-Default
-- **Offen:** `JR-6-05`–`JR-6-07`. **`JR-6-08` (Abnahme E6) ist durch diese Scheibe blockiert:** wer
-  implementiert hat, kann nicht unabhängig abnehmen — genau dieser Mechanismus hat in E13 vier Runden
-  lang echte Defekte gefunden. Braucht eine eigene TEST-Sitzung
-- **Nicht getan, absichtlich:** F64s Ursache, F62, F60, F43, F39, F42, F17(b)
-
-### 2026-08-06 — `JR-6-05`: Hash über Plaintext, Verschlüsselung danach
-
-- **Rolle:** PO im Eigenbau (Rollentrennung aufgehoben, siehe `JR-6-04`)
-- **Test:** `packages/backend/tests/integration/journal-hash-before-encryption.int.test.ts` — echte
-  Pipeline, echtes Postgres, Verschlüsselung **eingeschaltet**; `indexBatch` ist ein Stub, weil die
-  Aussage nichts mit Suche zu tun hat und die Anforderung so bei Postgres bleibt
-- **Was er belegt:** die Bytes im Storage sind wirklich Chiffrat (Präfix `oa_enc_idf_v1::`, eigener
-  Hash **verschieden** vom Ledger-Wert, länger als der Klartext) → entschlüsselt → **byteidentisch**
-  zur Wire-Fixture → neu gehasht = Ledger-`content_sha256` = `archived_emails.storage_hash_sha256`,
-  und `size_bytes` ist die **Klartext**länge, nicht die gepolsterte Chiffratlänge
-- **`ci.yml` setzt jetzt `STORAGE_ENCRYPTION_KEY`** (64 Hex, testonly). Ohne Schlüssel sind Klartext
-  und gespeicherte Bytes dieselben Bytes, „Rehash = Ledger-Wert" gilt dann **unabhängig von der
-  Reihenfolge** — der Test meldet das per `coverageNotice` namentlich („HASH-BEFORE-ENCRYPTION
-  ORDERING IS NOT verified") statt dasselbe Grün zu drucken wie ein Lauf, der es bewiesen hat. Kein
-  `skipIf`
-- **Kalibriert:** mit Schlüssel „the ordering claim is verified this run" (1007 Chiffratbytes); ohne
-  Schlüssel die Nicht-geprüft-Meldung. Der **invertierte** Fall (Hash über Chiffrat) ist strukturell
-  unmöglich zu bestehen — der Test behauptet gleichzeitig `storage_hash = rehash = wireDigest` und
-  `hash(Chiffrat) ≠ wireDigest` —, aber **nicht gemessen**, weil dafür Produktionscode in
-  `processEmail()` verdreht werden müsste. Offen benannt statt als gemessen ausgegeben
-- **Ein Fehler auf dem Weg, gemessen statt geraten:** die erste Fassung setzte `STORAGE_*` im
-  Modulscope und erwartete, dass der dynamische Import sie sieht. Tut er nicht — eine **statische**
-  Importkante zieht `config/storage.ts` vorher herein, die Datei landete im Ambient-Root und war
-  **unverschlüsselt**. Sichtbar wurde es als `ENOENT`; die stille Hälfte wäre schlimmer gewesen, denn
-  ein unverschlüsseltes Objekt erfüllt „Rehash = Ledger-Wert" ebenfalls. Konfiguration wird jetzt
-  **gelesen**, nicht gesetzt
-- **Testzahl:** +1 `integration` (1 Datei). Volllauf **1319 passed | 8 skipped** bei 110 Dateien,
-  Exit 0, `unit ci 1119/1119 · integration ci 131/131 · adversarial ci 69/69`
-- **CI-Lauf: offen.** GitHub Actions erzeugt seit `37b471d` keine Läufe mehr für diesen Zweig (dieser
-  Lauf wurde nach 15 Minuten abgebrochen, für `0f2db70` und `afa8200` entstand gar keiner). Das
-  Repository ist öffentlich, es gibt keine `concurrency`-Regel und kein `timeout-minutes` — Ursache
-  liegt außerhalb dieses Codes. **Der CI-Beleg für `JR-6-04` und `JR-6-05` fehlt damit** (F48: lokal
-  grün ist nicht der ganze Beleg)
-- **Offen:** `JR-6-06`, `JR-6-07`, `JR-6-08`
-
-### 2026-08-07 — `JR-6-06`: Object-Store-Ausfall-Test
-
-- **Rolle:** TEST, unabhängige Sitzung — **Rollentrennung ab dieser Scheibe wieder aktiv** (war
-  während `JR-6-04`/`JR-6-05` aufgehoben)
-- **Commit:** `e72b48a`, gepusht auf `claude/journaling-e6-phase-b-worker`
-- **Simulation:** kein echtes MinIO/S3 (Repo hat keins) — stattdessen ein Fake-`ArchiveObjectPort`,
-  der `{kind:'error'}` liefert, in exakt der Form, in die `IngestionService.processEmail()` jeden
-  echten Storage-Fehler (inklusive `ECONNREFUSED`) über `ProcessEmailError` bereits umwandelt.
-  Aus Sicht von `runPhaseBPipeline()` nicht unterscheidbar von einem echten Ausfall (ADR-010s Port
-  trägt genau das). Offen benannte Lücke: ein echter S3/MinIO-`ECONNREFUSED` durch
-  `S3StorageProvider` selbst ist nicht geprüft
-- **Zwei Tests, drei Bedingungen:** (1+3) ein beobachtet fehlgeschlagener `runPhaseBPipeline()`-Aufruf
-  hindert eine neue SMTP-Transaktion nicht an `250 … queued as N`, der hängengebliebene Eintrag bleibt
-  unangetastet, Kette sauber. (2+3) zwei Backlog-Einträge scheitern unter echtem BullMQ-Retry, danach
-  übernimmt `runSpoolReconcile()` (`JR-6-04`/ADR-038) — kein manuelles Retry — beide laufen zu
-  `completed`, Kette vor/nach Erholung neu verifiziert, 0 Findings
-- **Windows-Plattformlücke wie bei `journal-smtp-accept-e2e.int.test.ts`:** Verzeichnis-fsync ist
-  POSIX-only, `accept()` antwortet auf diesem Host mit `451` statt `250` — per `coverageNotice`
-  branch-geprüft benannt, nicht stillschweigend geskippt. Linux-CI durchläuft den `250`-Zweig
-- **Testzahl:** +2 `integration` (1 Datei, `journal-object-store-outage.int.test.ts`), `suite-inventory.ts`
-  aktualisiert (`expectedFiles` 25→26, `integration ci` 131→133). **Unabhängig nachgerechnet (PO,
-  dieser Eintrag):** Volllauf **1321 passed | 8 skipped** bei 111 Dateien, Exit 0 — `unit ci 1119/1119
-· integration ci 133/133 · adversarial ci 69/69`, deckungsgleich mit dem TEST-Bericht
-- **CI-Lauf:** nicht ausgelöst/geprüft — bekanntes offenes Problem seit `37b471d` (siehe „CI-Lücke"
-  oben), keine neue Erkenntnis dieser Scheibe
-- **Bewusst nicht getan:** kein echtes MinIO/S3 in `docker-compose.yml`/`ci.yml` ohne explizite
-  Entscheidung, keine SIZE-Grenzfall-Tests (anderer Testplan-Abschnitt), `F63`/`F64` nicht angefasst
-- **Offen:** `JR-6-07`, `JR-6-08`
-
-### 2026-08-07 — `JR-6-07`: Soak-Test über echtes SMTP
-
-- **Rolle:** TEST, unabhängige Sitzung (unterbrochen durch Wochenlimit, vom PO gesichert auf
-  `wip/journaling-jr-6-07` und danach fortgesetzt, siehe Session-Handover)
-- **Commits:** `8565585` (Kernstück), `c27e291` (Nacharbeit: stale Kommentar in
-  `suite-inventory.ts` korrigiert, vom PO gefunden)
-- **Entscheidung Phase A vs. A+B (TEST-Entscheidung, keine ADR):** nur Phase A (SMTP-Accept +
-  Ledger) — das Backlog-Kriterium (`seq` lückenlos, `verify` grün, Durchsatz) ist reine
-  Phase-A-Aussage, Phase-B-Korrektheit deckt `journal-phase-b-e2e.int.test.ts` bereits ab
-- **`CI_MESSAGES` bewusst 100 statt der ursprünglich geplanten 1.000** (im Datei-Kopfkommentar
-  ausführlich begründet): drei von drei Versuchen bei 1.000 scheiterten reproduzierbar an einem
-  600s-Pro-Nachricht-Stall. Das Backlog fixiert nur die `nightly`-Menge (100.000, unverändert), nicht
-  die `ci`-Menge — keine stille Reduktion im Sinn des Akzeptanzkriteriums
-- **`OA_TEST_PG_STALE_MS`** = `NIGHTLY_SOAK_BUDGET_MS × 3` = 9h, exakt das `JR-2-08`/F13-Muster
-  übernommen
-- **Windows-Fsync-Plattformlücke wie bei `JR-6-06`**, unabhängig gegengeprüft (kein Handle-Leak in
-  `durable-write.ts`/`fs-port.ts`, beide schließen im `finally`): auf diesem Host endet jede Nachricht
-  im `451`-Zweig, beide Varianten assertieren das explizit statt zu skippen
-- **Wichtiger, unabhängig bestätigter Befund:** ein reproduzierbarer 600s-Einzelnachricht-Stall,
-  unabhängig von der Nebenläufigkeit (10 und 3 Verbindungen gleichermaßen betroffen — schließt einen
-  Lock-Bug im Code aus). `Get-MpComputerStatus` bestätigt aktiven Windows-Defender-Echtzeitschutz;
-  Arbeitshypothese: dessen Scan reagiert auf die für den Soak typische Kleindateierstellung. **Vom PO
-  zweimal unabhängig reproduziert** (zwei separate Läufe, beide am exakt selben 600.000ms-Timeout
-  gescheitert) — die TEST-Sitzung selbst hatte in ihrem finalen Bericht auch einen sauberen
-  3.002ms-Lauf, die Störung ist also echt intermittierend, nicht deterministisch
-- **Testzahl:** +1 `adversarial`-Datei (`journal-soak.adv.test.ts`), `expectedTests` ci 69→70,
-  nightly 2→3. Volllauf beim PO auf Windows: **1321 passed | 1 failed | 9 skipped** bei 112 Dateien
-  (der eine Fehlschlag ist der dokumentierte Windows-Stall, keine Regression) — bei einem sauberen
-  Durchlauf laut TEST-Bericht **1322 passed | 9 skipped**
-- **Offen:** `JR-6-08`
-
-**Nachtrag (PO, selber Tag): echte Linux-Verifikation über WSL2/Ubuntu 24.04**, natives ext4 (nicht
-`/mnt/*`), Docker-Container über `localhost` erreicht (WSL2 teilt sich das Netz mit Windows). **Der
-akzeptierte Pfad ist damit zum ersten Mal in diesem Projekt bewiesen:** `ci`-Smoke (100 Nachrichten,
-10 Verbindungen) lief sauber durch — 1758ms, 56,9/s, `seq` lückenlos 1..100, `verifyChain()` 0
-Findings. Der `nightly`-Lauf (100.000 Nachrichten) scheiterte dagegen **auch auf echtem Linux** am
-eigenen 3h-Budget (`Error: Test timed out in 10800000ms`), nicht an einer Assertion. Ursache
-gefunden, gemessen und dokumentiert: **F66** — `checkSpoolHighWaterMark()` durchläuft bei jeder
-SMTP-Annahme den kompletten Spool-Baum, was bei wachsendem, unabgeräumtem Rückstand zu O(n²)
-Gesamtkosten führt (Diagnoselauf: Momentanrate fällt von ~33/s auf ~2,3/s innerhalb der ersten 4.500
-von 10.000 Nachrichten). Volle Analyse in `09-befunde-bestandscode.md` unter F66. **Damit ist
-`JR-6-07`s Timeout kein WSL-/Antivirus-Artefakt, sondern ein reproduzierter, echter
-Performance-Befund** — betrifft potenziell auch reale, länger andauernde Phase-B-Ausfälle
-(`JR-6-06`-Szenario bei größerem Rückstand). **Entschieden vom Auftraggeber (2026-08-07): F66 wird
-nach E7 verschoben** (analog F60), blockiert `JR-6-08` nicht — die Acceptance-Contract-Korrektheit
-ist unberührt, nur die Latenzgarantie unter Rückstand.
-
-### 2026-08-07 — `JR-6-08`: Abnahme E6
-
-- **Rolle:** TEST, unabhängige Sitzung — hat keine E6-Scheibe selbst umgesetzt, weder vor noch
-  während der aufgehobenen Rollentrennung
-- **Urteil: angenommen.** Kein Kriterium von `JR-6-01`–`JR-6-07` verletzt. Protokoll:
-  `docs/dev/journaling/22-abnahme-e6.md`, Commit `eba887a`, gepusht
-- **Drei unabhängige, übereinstimmende Volllaufnachweise** desselben Commits `7fe5e8d`: Windows
-  (dieser Host) und Linux (WSL2/Ubuntu 24.04, natives ext4) je **1322 passed | 9 skipped** bei 112
-  Dateien, Exit 0, `unit ci 1119/1119 · integration ci 133/133 · adversarial ci 70/70`; dazu der
-  echte GitHub-CI-Lauf `31195544522` (`success`, 3:14 min) mit `Suite inventory verified: unit 78/78,
-integration 26/26, adversarial 8/8`. `pnpm lint` und `pnpm gate` grün
-- **Eigene Reproduktion über die Vorberichte hinaus:** `JR-6-06`s Bedingung 1 (auf Windows strukturell
-  nicht messbar) und `JR-6-07`s Kernbehauptung (`seq` lückenlos, `verifyChain()` 0 Findings) selbst
-  auf Linux mit eigenem Zufalls-Seed neu beobachtet, nicht nur den früheren WSL2-Bericht der
-  PO-Sitzung übernommen. Den vollen `nightly`-Soak (100.000, Stundenlaufzeit) nicht selbst gefahren —
-  F66 ist bereits entschieden, eine erneute Bestätigung desselben Timeouts hätte nichts Neues bewiesen
-- **F64 (hängender Shutdown) eigenständig bewertet, wie angefordert:** vertretbar, nicht blockierend
-  — der Workaround ändert die Korrektheit nicht, betrifft nur Prozessende, Schwere korrekt als
-  „mittel" geführt
-- **Wichtiger Fund, korrigiert den dokumentierten Stand:** die „CI-Lücke seit `37b471d`" trifft seit
-  `JR-6-06`s Commit (`31136887457`) nicht mehr zu — sieben aufeinanderfolgende grüne Läufe, siehe
-  „CI-Lücke" oben (korrigiert)
-- **Nicht getan:** Statusdateien nicht selbst geändert (Auftrag), F60/F62/F66 nicht neu bewertet (nur
-  zur Kenntnis genommen, wie angewiesen)
-- **Offen:** Rückmerge nach `claude/enterprise-product-implementation-cxmmqe` (ADR-014) — noch nicht
-  vollzogen, Entscheidung beim Auftraggeber
+> Alle inhaltlich unverändert ausgegliedert, nach derselben Regel (`README.md`): das Protokoll eines
+> Epics wandert ins Archiv, **sobald** es zurückgemergt ist — sonst wird diese Datei bei jeder Sitzung
+> erneut zur vollen Pflichtlektüre. **Neue Einträge kurz und in Feldform** (Task, Commit, Testzahl,
+> CI-Lauf, Entscheidungen, offen), kein Tabellenformat (Prettier-Padding-Kosten, siehe Archiv).
