@@ -133,7 +133,7 @@ Deshalb steht hier nur noch das Gerüst:
 | E3     | **abgenommen + gemergt** — Spool und Acceptance-Contract                       |
 | E4     | **abgenommen + gemergt** — `smtp-ingress`-Service                              |
 | E5     | **abgenommen + gemergt** — Journal-Report-Parser                               |
-| **E6** | **in Arbeit** — Phase-B-Worker, Zweig `claude/journaling-e6-phase-b-worker`    |
+| **E6** | **abgenommen** (`JR-6-08`, 2026-08-07) — Phase-B-Worker, Rückmerge offen       |
 | E7–E12 | offen                                                                          |
 
 **Diese Zeile war bis zum 2026-08-06 stehen geblieben, als E4 noch „Rückmerge offen" und E5/E6 noch

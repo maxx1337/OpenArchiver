@@ -155,26 +155,25 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-07 — **E6 läuft: `JR-6-01`…`JR-6-07` erledigt** (`JR-6-02` insgesamt code-fertig,
-TEST-Abnahme separat unter `JR-6-08`; ADR-010, ADR-033–035, ADR-037, ADR-038 entschieden; F59/F61
-behoben, F62/F63/F64 offen) · **Rollentrennung PO/DEV/TEST ist wieder aktiv** (war während
-`JR-6-04`/`JR-6-05` aufgehoben, weil der DEV-Subagent ins Wochenlimit lief) · `wip/journaling-jr-6-04`
-ist gelöscht (lokal+remote), Inhalt vollständig in `JR-6-04` aufgegangen · **Branch:**
-`claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · zuletzt `c27e291`
-(`JR-6-07`-Nacharbeit) · **CI: offen** seit `37b471d` (GitHub Actions erzeugt keine zuverlässigen
-Läufe mehr für diesen Zweig, Ursache außerhalb des Codes) — **Policy ab 2026-08-07: `pnpm gate` lokal
-vor jedem Push, echtes CI gebündelt einmal vor dem Rückmerge**, statt je Commit auf einen Lauf zu
-warten. `act` geprüft, nicht installiert — `pnpm gate` fängt dieselben Fehlerklassen bereits ·
-`.claude/agents/senior-dev.md`/`tester.md` auf `model: opusplan` umgestellt (Auftraggeber), committet
-in `10eec78`
+**Stand:** 2026-08-07 — **E6 ist fertig, abgenommen mit `JR-6-08`** (unabhängige TEST-Sitzung,
+Protokoll `docs/dev/journaling/22-abnahme-e6.md`, Commit `eba887a`, angenommen — kein Kriterium von
+`JR-6-01`–`JR-6-07` verletzt; ADR-010, ADR-033–035, ADR-037, ADR-038 entschieden; F59/F61/F63/F65
+behoben, F60/F62/F64/F66 offen und bewusst nicht blockierend). **Rollentrennung PO/DEV/TEST ist
+wieder aktiv** (war während `JR-6-04`/`JR-6-05` aufgehoben) · `wip/journaling-jr-6-04` ist gelöscht
+(lokal+remote) · **Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream
+gesetzt) · zuletzt `eba887a` · **CI ist wieder grün** — die „CI-Lücke seit `37b471d`" ist seit
+`JR-6-06`s Commit (`31136887457`) nicht mehr aktuell, Ursache des ursprünglichen Problems unbekannt,
+Fund der `JR-6-08`-Sitzung, gegengeprüft per `gh run list` (sieben aufeinanderfolgende `success`-Läufe
+plus der Abnahme-Commit selbst). Die `pnpm gate`-Policy bleibt trotzdem sinnvoll ·
+`.claude/agents/senior-dev.md`/`tester.md` auf `model: opusplan` (Auftraggeber), committet in `10eec78`
 
-> **`JR-6-07`s akzeptierter Pfad ist inzwischen auf echtem Linux verifiziert** (WSL2/Ubuntu 24.04,
-> natives ext4, PO-Sitzung nach dem Wunsch des Auftraggebers) — `ci`-Smoke (100 Nachrichten) lief
-> sauber: 56,9/s, `seq` lückenlos, `verifyChain()` 0 Findings. **Aber:** der volle `nightly`-Lauf
-> (100.000) scheitert auch auf Linux am eigenen 3h-Budget — kein Plattformartefakt, sondern ein
-> reproduzierter, echter Befund: **F66**, `checkSpoolHighWaterMark()` durchläuft bei jeder Annahme den
-> gesamten Spool, O(n²) bei wachsendem Rückstand (Details: `09-befunde-bestandscode.md`).
-> **Entschieden (2026-08-07): F66 wird nach E7 verschoben** (analog F60), blockiert `JR-6-08` nicht.
+> **F66** (`checkSpoolHighWaterMark()` ist O(n²) bei wachsendem Spool-Rückstand, gefunden während der
+> `JR-6-07`-Linux-Verifikation über WSL2) — **entschieden: nach E7 verschoben**, blockiert `JR-6-08`
+> nicht. Details: `09-befunde-bestandscode.md`.
+
+> **Nächster Schritt: Rückmerge nach `claude/enterprise-product-implementation-cxmmqe`** (ADR-014,
+> `--no-ff`, kein Squash — wie bei E2/E3/E4/E5/E13). Noch nicht vollzogen, Entscheidung/Freigabe beim
+> Auftraggeber.
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -209,12 +208,24 @@ die Plaintext-Wire-Bytes läuft, nicht über das Chiffrat. Seit **`JR-6-06`** is
 Object-Store-Ausfall den Acceptance-Contract nicht berührt, der Backlog nach Erholung über genau
 diesen Reconciler abläuft, und die Kette währenddessen unberührt bleibt. Seit **`JR-6-07`** existiert
 ein Soak-Test über echtes SMTP (`nightly` 100.000 / `ci` 100 Nachrichten), dessen akzeptierter Pfad auf
-diesem Windows-Host aber bisher nie beobachtet wurde (siehe Verifikationslücke oben). **Was fehlt:**
-`JR-6-08` (Abnahme, eigene Sitzung, idealerweise nach einem echten Linux-Lauf von `JR-6-07`).
+diesem Windows-Host aber bisher nie beobachtet wurde — inzwischen auf echtem Linux (WSL2) verifiziert,
+siehe unten. **Seit `JR-6-08` ist E6 vollständig abgenommen.** Was fehlt, ist nur noch der
+**Rückmerge** nach `claude/enterprise-product-implementation-cxmmqe`.
 
 ### Was diese Session gemacht hat
 
-**`JR-6-06` (Object-Store-Ausfall-Test), Rolle TEST, unabhängige Sitzung, Commit `e72b48a`.**
+**`JR-6-08` (Abnahme E6), Rolle TEST, dritte unabhängige Sitzung, Commit `eba887a`.** Urteil:
+**angenommen**, kein Kriterium verletzt. Drei unabhängige, übereinstimmende Volllaufnachweise
+desselben Commits `7fe5e8d` (Windows, Linux/WSL2, echte GitHub-CI), `JR-6-06`/`JR-6-07`s Kernaussagen
+zusätzlich selbst auf Linux mit eigenem Seed reproduziert statt nur den Vorberichten geglaubt. Fund:
+die „CI-Lücke seit `37b471d`" ist seit `JR-6-06`s Commit nicht mehr aktuell — sieben grüne Läufe in
+Folge, unten korrigiert. Volle Fassung: `06-status.md` unter „`JR-6-08`" und
+`docs/dev/journaling/22-abnahme-e6.md`.
+
+**Daneben, PO:** Statuspflege (`06-status.md`, diese Datei, `README.md`) auf den Abnahmestand
+nachgezogen, CI-Lücken-Behauptung korrigiert.
+
+**Davor, `JR-6-06` (Object-Store-Ausfall-Test), Rolle TEST, unabhängige Sitzung, Commit `e72b48a`.**
 Rollentrennung damit wieder aktiv (war während `JR-6-04`/`JR-6-05` aufgehoben). Kurzfassung siehe
 `06-status.md` unter „2026-08-07 — `JR-6-06`"; vom PO unabhängig nachgerechnet: Volllauf **1321
 passed | 8 skipped** bei 111 Dateien, Exit 0.
@@ -267,19 +278,17 @@ gebraucht, **wenn die lokale Infrastruktur klemmt**, nicht bei jedem Sessionstar
 unverändert in [`19-umgebung-windows-host.md`](19-umgebung-windows-host.md). Die zwei E13-Notizen, die
 hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e2.md`.
 
-### Nächster konkreter Schritt — **Abnahme `JR-6-08`, idealerweise nach einem echten Linux-Lauf**
+### Nächster konkreter Schritt — **Rückmerge nach `claude/enterprise-product-implementation-cxmmqe`**
 
-> **`JR-6-06` und `JR-6-07` sind gelandet** (`e72b48a`, `8565585`+`c27e291`), beide unabhängig von TEST
-> umgesetzt. **Die Rollentrennung ist damit wieder aktiv** — sie war während `JR-6-04`/`JR-6-05`
-> aufgehoben, weil der DEV-Subagent ins Wochenlimit lief und der Auftraggeber die Fertigstellung durch
-> den PO angewiesen hatte. **`JR-6-08` (Abnahme) bleibt eine eigene, dritte TEST-Sitzung**, unabhängig
-> von den Sitzungen, die `JR-6-06`/`JR-6-07` umgesetzt haben — genau der Mechanismus, der in E13 vier
-> Runden lang echte Defekte gefunden hat.
->
-> **Vor `JR-6-08` zu klären:** `JR-6-07`s akzeptierter Pfad ist jetzt auf echtem Linux verifiziert
-> (`ci`-Smoke sauber), aber der `nightly`-Umfang deckt **F66** auf (O(n²) durch
-> `checkSpoolHighWaterMark()` bei wachsendem Rückstand) — eine Entscheidung, ob das E6 blockiert oder
-> wie F60 nach E7 verschoben wird, steht noch aus.
+> **E6 ist vollständig abgenommen** (`JR-6-08`, `eba887a`) — alle drei TEST-Sitzungen (`JR-6-06`,
+> `JR-6-07`, `JR-6-08`) liefen unabhängig von den jeweils implementierenden Sitzungen, genau wie das
+> in E13 verlangte Verfahren. **F66** (E7 zugeordnet) und die übrigen offenen, nicht blockierenden
+> Befunde (F60, F62, F64) sind zur Kenntnis genommen, nicht Teil der Abnahme.
+
+**Rückmerge, wie bei E2/E3/E4/E5/E13:** `--no-ff`, **kein Squash** (die Abnahmerunden und
+Zwischenschritte sind der Beleg, dass das Verfahren gewirkt hat). Kein Pull Request ohne ausdrückliche
+Aufforderung (`CLAUDE.md` §7). Nach dem Merge: E7 (WORM-Storage) ist das nächste Epic, mit F60 und
+F66 als bekannten, bereits zugeordneten Startpunkten.
 
 Der Prompt für die nächste Sitzung:
 
@@ -288,17 +297,13 @@ Weiter mit dem Journaling-Projekt. Lies docs/dev/journaling/07-session-handover.
 und arbeite den nächsten Schritt ab.
 ```
 
-**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter **inhaltlicher**
-Commit trägt `JR-6-07`s Nacharbeit (`c27e291`). **Lokaler Volllauf auf diesem Windows-Host ist
-derzeit nicht verlässlich grün** — `journal-soak.adv.test.ts`s `ci`-Variante stallt intermittierend
-600s (Windows-Defender-Verdacht, dokumentiert), reproduziert vom PO 2/2, von TEST 3/3 bei 1.000 und
-2/5 bei 100 Nachrichten; bei einem sauberen Durchlauf **1322 passed | 9 skipped** bei 112 Dateien.
-Gleichstand gegen `git ls-remote` prüfen, nicht gegen einen Hash hier. Nicht neu abzweigen, nicht neu
-reservieren.
+**Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter Commit
+`eba887a` (`JR-6-08`-Abnahmeprotokoll). Volllauf, dreifach unabhängig übereinstimmend (Windows, Linux,
+echte GitHub-CI): **1322 passed | 9 skipped** bei 112 Dateien, Exit 0 — `unit ci 1119/1119 ·
+integration ci 133/133 · adversarial ci 70/70`. Gleichstand gegen `git ls-remote` prüfen, nicht gegen
+einen Hash hier.
 
-**Was noch offen ist:** `JR-6-08` (Abnahme, eigene dritte Sitzung, unabhängig von den Sitzungen, die
-`JR-6-06`/`JR-6-07` umgesetzt haben) — idealerweise erst nach einem echten Linux-Lauf von `JR-6-07`
-(siehe Verifikationslücke oben).
+**Was noch offen ist:** der Rückmerge selbst (siehe oben), danach E7.
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
