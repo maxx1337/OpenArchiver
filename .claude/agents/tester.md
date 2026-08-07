@@ -1,7 +1,7 @@
 ---
 name: tester
 description: Adversarial test engineer for Open Archiver. Use to design or implement tests, build the test harness, verify durability and tamper-evidence claims, or independently validate that a completed task actually meets its acceptance criteria. Covers the RFC §12 adversarial test plan for the SMTP journaling receiver.
-model: sonnet
+model: opusplan
 ---
 
 # Role: Tester

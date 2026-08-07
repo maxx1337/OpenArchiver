@@ -155,14 +155,20 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-06 — **E6 läuft: `JR-6-01`, `JR-6-02a`, `JR-6-02b`, `JR-6-03` erledigt, `ADR-037`
-entschieden** (`JR-6-02` insgesamt code-fertig, TEST-Abnahme offen; ADR-010, ADR-033, ADR-034,
-ADR-035, ADR-037 entschieden; F59 und F61 behoben, F62/F63/F64 offen) · **Branch:**
-`claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf:
-**1301 passed | 8 skipped** bei 107 Dateien — `unit ci 1104/1104 · integration ci 128/128 ·
-adversarial ci 69/69` (unverändert seit `JR-6-03` — ADR-037 korrigierte drei Assertions, fügte keine
-hinzu), Exit 0 · zuletzt `37ba891` · **CI `31115643168` success** · **`pnpm gate` (kein
-Backlog-Task):** `88b6719`+`d5f77cf`, F65-Fix `1611434` — unverändert seit der letzten Sitzung
+**Stand:** 2026-08-07 — **E6 läuft: `JR-6-01`…`JR-6-06` erledigt, `JR-6-07` läuft** (`JR-6-02`
+insgesamt code-fertig, TEST-Abnahme separat unter `JR-6-08`; ADR-010, ADR-033–035, ADR-037, ADR-038
+entschieden; F59/F61 behoben, F62/F63/F64 offen) · **Rollentrennung PO/DEV/TEST ist wieder aktiv**
+(war während `JR-6-04`/`JR-6-05` aufgehoben, weil der DEV-Subagent ins Wochenlimit lief) ·
+`wip/journaling-jr-6-04` ist gelöscht (lokal+remote), Inhalt vollständig in `JR-6-04` aufgegangen ·
+**Branch:** `claude/journaling-e6-phase-b-worker` (Epic-Zweig, eigener Upstream gesetzt) · Volllauf,
+vom PO unabhängig nachgerechnet: **1321 passed | 8 skipped** bei 111 Dateien — `unit ci 1119/1119 ·
+integration ci 133/133 · adversarial ci 69/69`, Exit 0 · zuletzt `e72b48a` (`JR-6-06`) · **CI: offen**
+seit `37b471d` (GitHub Actions erzeugt keine zuverlässigen Läufe mehr für diesen Zweig, Ursache
+außerhalb des Codes) — **Policy ab 2026-08-07: `pnpm gate` lokal vor jedem Push, echtes CI gebündelt
+einmal vor dem Rückmerge**, statt je Commit auf einen Lauf zu warten. `act` geprüft, nicht installiert
+— `pnpm gate` fängt dieselben Fehlerklassen bereits · `.claude/agents/senior-dev.md`/`tester.md` auf
+`model: opusplan` umgestellt (Auftraggeber), noch uncommittet, geht in den nächsten inhaltlichen
+Commit
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -190,11 +196,25 @@ Spool-Transaktion als die eigene betrifft, einen `duplicate_of`-Marker in den Le
 (`LedgerLookup.findOriginalReceiptSeq()`, `MIN(seq)` über Chain+Hash unterscheidet das von einem
 Job-Retry). Seit **`ADR-037`** trägt dieser Marker einen eigenen `event_type`
 (`duplicate_marker`), nicht mehr `'receipt'` — eine Zählung von Receipts gegen angenommene Nachrichten
-(`verify`, E9) zählt ihn dadurch nicht mehr doppelt. **Was fehlt:** `JR-6-04` (Spool-Reconciler).
+(`verify`, E9) zählt ihn dadurch nicht mehr doppelt. Seit **`JR-6-04`** holt ein periodischer
+Reconciler-Sweep liegengebliebene Spool-Einträge zurück in die Queue, wenn Redis sie verloren hat
+(Redis ist Optimierung, nicht Autorität). Seit **`JR-6-05`** ist belegt, dass `content_sha256` über
+die Plaintext-Wire-Bytes läuft, nicht über das Chiffrat. Seit **`JR-6-06`** ist belegt, dass ein
+Object-Store-Ausfall den Acceptance-Contract nicht berührt, der Backlog nach Erholung über genau
+diesen Reconciler abläuft, und die Kette währenddessen unberührt bleibt. **Was fehlt:** `JR-6-07`
+(Soak-Test, läuft) und `JR-6-08` (Abnahme).
 
 ### Was diese Session gemacht hat
 
-**`ADR-037` (eigener Event-Typ für den `duplicate_of`-Marker).** Migration `0043_whole_meltdown.sql`
+**`JR-6-06` (Object-Store-Ausfall-Test), Rolle TEST, unabhängige Sitzung, Commit `e72b48a`.**
+Rollentrennung damit wieder aktiv (war während `JR-6-04`/`JR-6-05` aufgehoben). Kurzfassung siehe
+`06-status.md` unter „2026-08-07 — `JR-6-06`"; vom PO unabhängig nachgerechnet: Volllauf **1321
+passed | 8 skipped** bei 111 Dateien, Exit 0. **Daneben, PO:** `wip/journaling-jr-6-04`
+gelöscht (lokal+remote, Inhalt war in `JR-6-04` aufgegangen), CI-Gate-Policy entschieden (`pnpm gate`
+je Push, echtes CI gebündelt vor dem Rückmerge, `act` geprüft und bewusst nicht eingerichtet), `JR-6-07`
+an eine zweite unabhängige TEST-Sitzung delegiert.
+
+**Vorher, `ADR-037` (eigener Event-Typ für den `duplicate_of`-Marker).** Migration `0043_whole_meltdown.sql`
 (`ALTER TYPE ... ADD VALUE 'duplicate_marker'`, lokal gegen eine frische Datenbank geprüft — der neue
 Wert ist außerhalb der Migrations-Transaktion sofort nutzbar). Vokabular an drei Stellen synchron:
 `journalEventTypeEnum` (Schema), `JournalEventType` (`packages/types`), und
@@ -228,14 +248,14 @@ gebraucht, **wenn die lokale Infrastruktur klemmt**, nicht bei jedem Sessionstar
 unverändert in [`19-umgebung-windows-host.md`](19-umgebung-windows-host.md). Die zwei E13-Notizen, die
 hier ohne eigene Überschrift dahinter standen, liegen jetzt in `12-archiv-e13-e2.md`.
 
-### Nächster konkreter Schritt — **`JR-6-05`, dann `JR-6-06`/`JR-6-07`, dann Abnahme**
+### Nächster konkreter Schritt — **`JR-6-07` läuft, dann Abnahme `JR-6-08`**
 
-> **`JR-6-04` ist gelandet** (ADR-038). Der WIP-Zweig `wip/journaling-jr-6-04` ist damit überflüssig
-> und kann gelöscht werden. **Die Rollentrennung ist ab dieser Scheibe aufgehoben** — der DEV-Subagent
-> lief in sein Wochenlimit, der Auftraggeber hat die Fertigstellung durch den PO angewiesen. **Folge
-> für `JR-6-08`: die Abnahme braucht eine eigene TEST-Sitzung**, weil niemand die eigene Arbeit
-> unabhängig abnehmen kann. In E13 hat genau dieser Mechanismus vier Runden lang echte Defekte
-> gefunden; er ist kein Formalismus.
+> **`JR-6-06` ist gelandet** (`e72b48a`), unabhängig von TEST umgesetzt. **Die Rollentrennung ist
+> damit wieder aktiv** — sie war während `JR-6-04`/`JR-6-05` aufgehoben, weil der DEV-Subagent ins
+> Wochenlimit lief und der Auftraggeber die Fertigstellung durch den PO angewiesen hatte. **`JR-6-08`
+> (Abnahme) bleibt trotzdem eine eigene, dritte TEST-Sitzung**, unabhängig von den Sitzungen, die
+> `JR-6-06`/`JR-6-07` umgesetzt haben — genau der Mechanismus, der in E13 vier Runden lang echte
+> Defekte gefunden hat.
 
 Der Prompt für die nächste Sitzung:
 
@@ -245,17 +265,14 @@ und arbeite den nächsten Schritt ab.
 ```
 
 **Der Zweig steht:** `claude/journaling-e6-phase-b-worker`, eigener Upstream. Letzter **inhaltlicher**
-Commit trägt `JR-6-04`, lokaler Volllauf **1318 passed | 8 skipped** bei 109 Dateien, Exit 0 —
-`unit ci 1119/1119 · integration ci 130/130 · adversarial ci 69/69`; danach nur der Doku-Nachtrag mit
-der CI-Nummer. Gleichstand deshalb gegen `git ls-remote` prüfen, nicht gegen einen Hash hier. Nicht
-neu abzweigen, nicht neu reservieren.
+Commit trägt `JR-6-06` (`e72b48a`), lokaler Volllauf **1321 passed | 8 skipped** bei 111 Dateien,
+Exit 0 — `unit ci 1119/1119 · integration ci 133/133 · adversarial ci 69/69`. Gleichstand deshalb
+gegen `git ls-remote` prüfen, nicht gegen einen Hash hier. Nicht neu abzweigen, nicht neu reservieren.
 
-**Was noch offen ist, in dieser Reihenfolge:** `JR-6-05` (Hash-vor-Verschlüsselung festschreiben und
-testen: `content_sha256` über die Plaintext-Wire-Bytes, `StorageService` verschlüsselt danach — Test:
-Objekt exportieren, entschlüsseln, Hash neu berechnen, identisch zum Ledger-Wert), `JR-6-06` (TEST:
-Storage nicht erreichbar ⇒ weiterhin quittiert, Backlog läuft nach Erholung ab, Kette unberührt),
-`JR-6-07` (TEST: Soak, 100 000 Nachrichten als `nightly` plus schnelle `ci`-Smoke-Variante, **`OA_TEST_PG_STALE_MS`
-über die erwartete Laufzeit heben**, F13), `JR-6-08` (Abnahme, eigene Sitzung).
+**Was noch offen ist, in dieser Reihenfolge:** `JR-6-07` (TEST: Soak, 100 000 Nachrichten als
+`nightly` plus schnelle `ci`-Smoke-Variante, **`OA_TEST_PG_STALE_MS` über die erwartete Laufzeit
+heben**, F13 — läuft bereits in einer eigenen, unabhängigen TEST-Sitzung), `JR-6-08` (Abnahme, eigene
+dritte Sitzung, unabhängig von den Sitzungen, die `JR-6-06`/`JR-6-07` umgesetzt haben).
 
 > **Dazwischen (`88b6719`/`d5f77cf`, kein Backlog-Task): das lokale Pre-Push-Gate `pnpm gate`.**
 > Kalibriert gegen drei der sechs `JR-6-02b`-CI-Fehlschläge (0264405, 9af1492, 41c407e — jeweils rot
