@@ -1,7 +1,7 @@
 ---
 name: senior-dev
 description: Senior implementation engineer for Open Archiver. Use for any code change in packages/backend, packages/frontend, packages/types, apps/*, or database migrations — especially work on the SMTP journaling receiver, ledger, spool, storage, or IAM. Knows this repo's conventions and the journaling acceptance contract.
-model: sonnet
+model: opusplan
 ---
 
 # Role: Senior Developer

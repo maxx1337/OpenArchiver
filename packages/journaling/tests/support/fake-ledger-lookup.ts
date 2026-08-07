@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { LedgerEntryByTxId, LedgerLookup } from '../../src/ledger/ledger-lookup-port';
 
 /**
@@ -33,9 +34,59 @@ export class FakeLedgerLookup implements LedgerLookup {
 		}
 		return result;
 	}
+
+	/**
+	 * `JR-6-03`: mirrors `PostgresLedgerLookup`'s `MIN(seq)` query over whatever a test has `.set()`,
+	 * scanning the same map `findBySpoolTxIds()` reads. A test that wants "this is a redelivery" sets
+	 * **two** entries with the same `chainScopeId`/`contentSha256` (one per simulated `spool_txid`, as
+	 * two real Phase-A receipts would be) and this returns the smaller of the two seqs -- exactly what
+	 * the real backend would. This fake cannot represent a `null`-`spool_txid` marker row (its map is
+	 * keyed by `spool_txid`), so it does not exercise "a second call sees a marker row, not the true
+	 * original" -- that guarantee rests on the real `MIN(seq)` query alone. Since ADR-037 the
+	 * `eventType !== 'receipt'` filter below excludes a marker by its own event type too, not only by
+	 * `MIN(seq)` ordering, but this fake still cannot construct one to prove it.
+	 */
+	async findOriginalReceiptSeq(
+		chainScopeId: string,
+		contentSha256: Uint8Array
+	): Promise<bigint | null> {
+		let min: bigint | null = null;
+		const needle = Buffer.from(contentSha256);
+		for (const entry of this.entries.values()) {
+			if (entry.eventType !== 'receipt') continue;
+			if (entry.chainScopeId !== chainScopeId) continue;
+			if (entry.contentSha256 === null) continue;
+			if (!Buffer.from(entry.contentSha256).equals(needle)) continue;
+			if (min === null || entry.seq < min) {
+				min = entry.seq;
+			}
+		}
+		return min;
+	}
 }
 
-/** Build a minimal, valid {@link LedgerEntryByTxId} with sensible defaults, overridable per field. */
+/**
+ * The bytes {@link ledgerEntry}'s default `contentSha256` is the hash of, so the default row is
+ * **internally consistent**: its hash and its `sizeBytes` describe one and the same message.
+ *
+ * That consistency is the point. `JR-6-02a`'s gate compares a receipt's `content_sha256` against a
+ * measurement of the file on disk, and a default of `null` (or of 32 zero bytes) would make the default
+ * row one that no real receipt can be -- so a Phase-B test built on it would be exercising an
+ * impossible input while looking like it exercised the ordinary one.
+ */
+export const DEFAULT_LEDGER_ENTRY_CONTENT = Buffer.from(
+	'Return-Path: <sender@example.com>\r\nSubject: fake\r\n\r\nbody\r\n',
+	'utf8'
+);
+
+/**
+ * Build a minimal, valid {@link LedgerEntryByTxId} with sensible defaults, overridable per field.
+ *
+ * The defaults describe a **`receipt`** for {@link DEFAULT_LEDGER_ENTRY_CONTENT}. A Phase-B test that
+ * measures its own bytes must override `contentSha256` and `sizeBytes` together -- overriding only one
+ * produces a self-contradicting receipt, which is a legitimate thing to test but never an accident worth
+ * having.
+ */
 export function ledgerEntry(overrides: Partial<LedgerEntryByTxId> = {}): LedgerEntryByTxId {
 	return {
 		seq: 1n,
@@ -43,6 +94,15 @@ export function ledgerEntry(overrides: Partial<LedgerEntryByTxId> = {}): LedgerE
 		journalingSourceId: null,
 		remoteIp: '192.0.2.25',
 		receivedAt: new Date('2026-08-01T10:00:00.000Z'),
+		eventType: 'receipt',
+		contentSha256: new Uint8Array(
+			createHash('sha256').update(DEFAULT_LEDGER_ENTRY_CONTENT).digest()
+		),
+		sizeBytes: BigInt(DEFAULT_LEDGER_ENTRY_CONTENT.length),
+		// JR-6-02b: null by default, same posture as `journalingSourceId` above -- a caller exercising
+		// the envelope fields overrides them explicitly rather than relying on an arbitrary default.
+		envelopeFrom: null,
+		envelopeRcpt: null,
 		...overrides,
 	};
 }

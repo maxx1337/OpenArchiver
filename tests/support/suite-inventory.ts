@@ -208,7 +208,37 @@ export const SUITES: readonly SuiteSpec[] = [
 		// doc comment for the three near-misses it replaces).
 		//
 		// 67 = 23 (shared base) + 5 (E5) + 39 (E4), see the fork note above.
-		expectedFiles: 67,
+		//
+		// 69 after JR-6-01 (E6) added two: packages/journaling/src/phase-b/queue-contract.test.ts (the
+		// Phase-B queue contract -- names, payload width, deterministic job id) and
+		// packages/backend/src/workers/journal-inbound.options.test.ts (the worker's queue parameters,
+		// including that maxStalledCount stays 0). The worker entry point itself has no unit test on
+		// purpose: importing it constructs a BullMQ Worker and opens a Redis connection, so it is
+		// measured by spawning the compiled process in the integration suite instead.
+		//
+		// 72 after JR-6-02a added three under packages/journaling/src/phase-b/: spool-entry-gate.test.ts
+		// (the decision whether a spool entry may be archived at all), alerts.test.ts (the severity split
+		// E5 deliberately left to E6) and spool-entry-reader.test.ts (streaming hash against a one-shot
+		// hash, across several read chunks).
+		//
+		// 73 after the F59 fix added packages/journaling/src/ingress/graceful-exit.test.ts. The helper it
+		// tests lives in this package rather than in apps/smtp-ingress for a harness reason worth knowing:
+		// no project glob reaches apps/, so a test file placed there would be collected by nobody -- the
+		// unclassified-file check would fail the run, which is the correct outcome and the reason the
+		// testable part of the fix went where tests can see it.
+		//
+		// 74 after F61 added tests/unit/smtp-connection-reset-crash.test.ts -- the actual cause of the red
+		// CI runs that F59 had been blamed for twice. EsmtpServer.handleConnection()'s rejection paths
+		// returned without ever attaching a socket 'error' listener, so a client that reset while being
+		// refused crashed the whole receiver with an uncaught ECONNRESET.
+		//
+		// 75 after JR-6-02b added packages/journaling/src/phase-b/owner-envelope.test.ts (ADR-033: owner
+		// resolution for the three parse results that carry no journal-report envelope).
+		//
+		// 77 after JR-6-02b's second slice added packages/journaling/src/phase-b/pipeline.test.ts (the
+		// orchestration: gate -> parse -> resolve -> archive -> index -> release, ADR-034) and
+		// packages/journaling/src/phase-b/spool-entry-releaser.test.ts (spool-file deletion, ADR-034).
+		expectedFiles: 78,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -706,7 +736,64 @@ export const SUITES: readonly SuiteSpec[] = [
 		// JournalAcceptancePort.accept() actually received.
 		//
 		// 991 ci = 371 (shared base) + 141 (E5) + 479 (E4), see the fork note above.
-		expectedTests: { ci: 991, nightly: 3, manual: 0 },
+		//
+		// 1019 after JR-6-01 (E6) added 28: 13 in queue-contract.test.ts (the two pinned wire names, the
+		// one-field payload width, and 10 on journalInboundJobId() -- determinism, no collision over
+		// 2000 ULIDs, and 7 malformed inputs each rejected rather than encoded, because a colliding job
+		// id makes BullMQ *drop* an enqueue silently); 15 in journal-inbound.options.test.ts (13 on the
+		// concurrency override -- 6 of them malformed forms a real shell or compose file can produce,
+		// none of which may fall back to the default -- and 2 that pin maxStalledCount to 0 and
+		// lockDuration to ten minutes, the two parameters whose values JR-6-03's dedup correctness and
+		// long synchronous MIME parsing respectively depend on).
+		//
+		// 1054 after JR-6-02a added 35: 20 in spool-entry-gate.test.ts, 9 in alerts.test.ts, 8 in
+		// spool-entry-reader.test.ts. The gate's 20 are the shape that matters -- every case asserts
+		// `mayArchive()` explicitly, including the five that must refuse, and two of them are a
+		// counter-check against a plausible wrong gate ("a ledger row exists, so archive it") which passes
+		// every positive assertion in the file and fails exactly the three that decide integrity. Without
+		// that pair, the suite would be satisfiable by a function that archives unconditionally.
+		//
+		// 1056 after JR-6-02a also added 2 to ledger-lookup.test.ts: absent-vs-SQL-NULL for the two new
+		// nullable columns. That pair is a regression test for a defect this slice introduced and its own
+		// test caught -- `row.size_bytes === null` does not match `undefined`, and the gate branches on
+		// `contentSha256 === null`, so an `undefined` would have reported a hashless receipt as tampering.
+		//
+		// 1065 after the F59 fix added 9 in graceful-exit.test.ts. Note what those 9 do *not* do: they do
+		// not re-assert that a spawned ingress prints "shutting down". That assertion is the one that
+		// flapped (1 of 3 CI runs), so repeating it would measure the runner's mood. They pin the
+		// **mechanism** instead -- the promise does not resolve before the stream reports the write, and it
+		// resolves anyway when the stream never does -- against a stream whose callback the test fires
+		// itself. One of the 9 is a counter-check that reproduces the unfixed shape (write, then "exit"
+		// without waiting) and shows the write still in flight at the moment the process would have died.
+		//
+		// 1070 after F61 added 5 in smtp-connection-reset-crash.test.ts. They are calibrated, and the
+		// calibration is the point: with the fix reverted the run reports `Unhandled Errors: Error: read
+		// ECONNRESET` -- on Windows too. The *symptom* that exposed F61 was Linux-only (a lost shutdown
+		// line, blamed on F59 for two rounds); the *cause* is not, so this suite measures it on every host.
+		// `socket.resetAndDestroy()` sends a real RST, which is what makes the peer's next read fail every
+		// time instead of sometimes.
+		//
+		// 1081 after JR-6-02b added 11 in owner-envelope.test.ts (ADR-033). Four of them are the ones that
+		// matter: a journal_report result is handed misleading raw bytes and must ignore them, and three
+		// build the ADR's central trap -- an `envelopeRcpt` of `archive@ourcompany.com`, whose domain IS
+		// configured, so a resolver that reached for it would report a confident `primary-domain-match` on
+		// the archive mailbox instead of the real recipient. A wrong owner that presents itself as right is
+		// worse than an admittedly unknown one, and that is what those cases hold in place.
+		//
+		// 1102 after JR-6-02b's second slice (the pipeline itself, ADR-034): +11 in the new
+		// pipeline.test.ts (orchestration order, all four parse kinds, five refusal/error paths), +3 in
+		// the new spool-entry-releaser.test.ts, +2 in ledger-lookup.test.ts (envelope_from/envelope_rcpt
+		// null-normalisation, widening LedgerEntryByTxId for the same reason JR-6-02a widened it once
+		// already), +5 in journal-inbound.options.test.ts (resolveJournalSpoolRoot()). owner-resolution.test.ts
+		// and spool-entry-gate.test.ts changed (normalizedEmail on OwnerResolutionWinner; envelope forwarding
+		// on SpoolEntryArchive) without adding tests, so they do not appear in this delta.
+		//
+		// 1104 after JR-6-03 (duplicate_of) added +2 to pipeline.test.ts: a genuine cross-delivery
+		// redelivery writes exactly one duplicate_of marker (spool_txid null, pointing at the true
+		// original's seq via LedgerLookup.findOriginalReceiptSeq()'s MIN(seq)), and a same-job retry
+		// (the outcome's own receipt is the only match) writes none. No new file -- ledger-lookup.ts,
+		// ledger-lookup-port.ts and pipeline.ts changed without adding one.
+		expectedTests: { ci: 1119, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -748,7 +835,23 @@ export const SUITES: readonly SuiteSpec[] = [
 		// attacker-controlled ehloName cannot be represented in Postgres text -- 3 cases: the direct
 		// PostgresLedgerWriter.append() rejection, that the chain still accepts a normal append
 		// afterward, and the real wire protocol producing 451, never a crash or a silent 250).
-		expectedFiles: 21,
+		// 22 after JR-6-01 (E6) added journal-inbound-worker.int.test.ts: the compiled worker spawned
+		// as its own process, proven to bind the queue and to *fail* a Phase-B job rather than report an
+		// unarchived message as completed. First suite in the repository that needs Redis rather than
+		// Postgres -- see probeRedis() in tests/support/infra.ts.
+		//
+		// 23 after JR-6-02b (ADR-035) added journal-phase-b-e2e.int.test.ts: the real Phase-B pipeline
+		// against real Postgres and real Meilisearch -- spool file to searchable hit, fan-out to three
+		// owners, spool release. First suite that needs Meilisearch -- see probeMeilisearch() in
+		// tests/support/infra.ts. 24 after JR-6-04 added journal-spool-reconciler.int.test.ts. 25 after
+		// JR-6-05 added journal-hash-before-encryption.int.test.ts. 26 after JR-6-06 added
+		// journal-object-store-outage.int.test.ts: a fake ArchiveObjectPort standing in for a stopped
+		// object store (this repository has no MinIO/S3 service to stop -- see that file's own module
+		// doc comment for why the DI seam is the equally-faithful substitute), against real Postgres and
+		// real Redis/BullMQ -- SMTP acceptance unaffected by a Phase-B failure it just observed, and a
+		// two-entry backlog draining completely through the reconciler once a working port replaces the
+		// failing one.
+		expectedFiles: 26,
 		// 55 before JR-2-04; 71 with the 16 schema tests of journal_ledger/deployment_identity;
 		// 79 with the 8 append-only tests of JR-2-05; 87 with the 8 writer tests of JR-2-06.
 		// 92 after JR-2-07: the same 5 contract cases, against PostgresLedgerWriter this time. 94 after
@@ -785,7 +888,34 @@ export const SUITES: readonly SuiteSpec[] = [
 		// producing a promotion however many retries elapse.
 		// 121 after JR-4-15 added 3 to smtp-ingress-envelope-hostile-values.int.test.ts (see the
 		// expectedFiles comment above for what each proves).
-		expectedTests: { ci: 121, nightly: 0, manual: 0 },
+		// 126 after JR-6-01 added 5 in journal-inbound-worker.int.test.ts, each spawning the compiled
+		// worker: it comes up and logs the parameters it chose; it picks a job off the queue and *fails*
+		// it (the load-bearing one -- a completed Phase-B job claims a message is archived); an unknown
+		// job name fails too rather than completing; a malformed concurrency override aborts startup
+		// before the "started" line (which is what proves the entry point calls the validator its own
+		// unit test covers -- F46 was two things verified separately and never together); and SIGTERM.
+		// The last one always executes but branches on the platform: Windows has no POSIX signals, so
+		// the graceful path is verified on the Linux CI runner only and a coverageNotice says so on
+		// Windows. Deliberately not a skipIf -- these numbers are exact and must not differ per platform.
+		//
+		// 127 after JR-6-02b (ADR-035) added 1 in journal-phase-b-e2e.int.test.ts: the real Phase-B
+		// pipeline against real Postgres and real Meilisearch, fanned out to three owners, all found by
+		// search, spool file released. Calibrated twice (spool release disabled, fan-out truncated to
+		// the winner) -- both broke the test at the assertion each one should, both reverted clean.
+		//
+		// 128 after JR-6-03 added 1 to journal-phase-b-e2e.int.test.ts: the same content delivered
+		// twice under two spool transactions archives one object (the second delivery's outcome.kind
+		// is 'duplicate' against the first's archivedEmailId), and the real PostgresLedgerWriter/
+		// PostgresLedgerLookup pair durably appends a third ledger row for the second delivery --
+		// spool_txid null, duplicate_of the first delivery's own receipt seq -- read back and
+		// verified with a raw query against journal_ledger, never through the patched drizzle client.
+		// 133 after JR-6-06 added 2 to journal-object-store-outage.int.test.ts: SMTP acceptance still
+		// answering 250 right after a real runPhaseBPipeline() call has thrown for a different
+		// transaction (condition 1), and a two-entry backlog failing under real BullMQ retry/backoff
+		// against a down object store, then draining completely once a real archiveObject port and one
+		// reconciler sweep (JR-6-04) replace it -- no job retried by hand (condition 2). Both cases
+		// recompute the real hash chain before and after and require zero findings (condition 3).
+		expectedTests: { ci: 133, nightly: 0, manual: 0 },
 	},
 	{
 		name: 'adversarial',
@@ -794,8 +924,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// and journal-ledger-tamper.adv.test.ts (Testplan 12.5 cases (a) to (h)). 5 after JR-3-06/JR-3-07
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
 		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
-		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts.
-		expectedFiles: 7,
+		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts. 8 after JR-6-07 added
+		// journal-soak.adv.test.ts.
+		expectedFiles: 8,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -841,7 +972,15 @@ export const SUITES: readonly SuiteSpec[] = [
 		// every further RCPT TO past the limit is rejected rather than just the first one, and the
 		// unmodified default configuration accepts at least the RFC 5321 section 4.5.3.1.8 floor of
 		// 100 recipients.
-		expectedTests: { ci: 69, nightly: 2, manual: 1 },
+		// 70 ci / 3 nightly after JR-6-07 added journal-soak.adv.test.ts: one `ci` smoke test (100
+		// messages over 10 real SMTP connections -- reduced from an original 1,000 after three full
+		// local runs at that count each reproducibly hung on this host, see that file's own doc
+		// comment) and one `nightly` test (100,000 messages over 25 connections), sharing one core
+		// -- also see that file's own doc comment for the Windows
+		// directory-fsync platform gap (fs-port.ts) that makes every message on this host fail at
+		// 451 before reaching the ledger, and how both variants assert that failure mode explicitly
+		// instead of silently skipping.
+		expectedTests: { ci: 70, nightly: 3, manual: 1 },
 	},
 ];
 

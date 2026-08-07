@@ -116,7 +116,11 @@ export {
 
 // E5 (journal-report parser) and E4 (SMTP ingress) grew this barrel independently on two branches;
 // the back-merge of E4 keeps both sets of exports.
-export { KNOWN_ENVELOPE_FIELD_NAMES, parseEnvelope } from './parser/envelope';
+export {
+	KNOWN_ENVELOPE_FIELD_NAMES,
+	parseEnvelope,
+	parseHeaderAddressList,
+} from './parser/envelope';
 export {
 	isSmimeWrappedContentType,
 	isSmimeWrappedMessage,
@@ -200,6 +204,13 @@ export {
 export { matchesCidr, parseCidr, type ParsedCidr } from './ingress/cidr';
 
 export {
+	DEFAULT_FLUSH_TIMEOUT_MS,
+	writeLineThenFlush,
+	type FlushableStream,
+	type FlushOutcome,
+} from './ingress/graceful-exit';
+
+export {
 	diffM365Ranges,
 	formatM365RangeDiff,
 	M365_ENDPOINTS_BASE_URL,
@@ -249,3 +260,68 @@ export {
 	PerSourceConnectionLimiter,
 	PerSourceTransactionRateLimiter,
 } from './ingress/connection-rate-limiter';
+
+export {
+	JOURNAL_INBOUND_JOB_NAME,
+	JOURNAL_INBOUND_QUEUE_NAME,
+	JOURNAL_RECONCILE_JOB_ID,
+	JOURNAL_RECONCILE_JOB_NAME,
+	journalInboundJobId,
+	type JournalInboundJobData,
+} from './phase-b/queue-contract';
+
+export {
+	classifySpoolEntry,
+	mayArchive,
+	type MeasuredSpoolEntry,
+	type SpoolEntryArchive,
+	type SpoolEntryContentMismatch,
+	type SpoolEntryNoReceipt,
+	type SpoolEntryNotAReceipt,
+	type SpoolEntryReceiptWithoutHash,
+	type SpoolEntryVerdict,
+} from './phase-b/spool-entry-gate';
+
+export { NodeSpoolEntryReader, type SpoolEntryReader } from './phase-b/spool-entry-reader';
+
+export {
+	ownerEnvelopeFor,
+	type OwnerEnvelopeFidelity,
+	type OwnerEnvelopeSource,
+} from './phase-b/owner-envelope';
+
+export {
+	alertSeverityFor,
+	noopPhaseBAlertSink,
+	type PhaseBAlert,
+	type PhaseBAlertSeverity,
+	type PhaseBAlertSink,
+} from './phase-b/alerts';
+
+export {
+	type ArchiveObjectInput,
+	type ArchiveObjectOutcome,
+	type ArchiveObjectPort,
+	type ArchiveObjectRecipient,
+} from './phase-b/archive-object-port';
+
+export { type OrganizationDomainsPort } from './phase-b/organization-domains-port';
+
+export { NodeSpoolEntryReleaser, type SpoolEntryReleaser } from './phase-b/spool-entry-releaser';
+
+export {
+	PhaseBArchiveFailedError,
+	PhaseBOwnerConfigMissingError,
+	PhaseBSpoolEntryRefusedError,
+	PhaseBSpoolFileUnreadableError,
+	runPhaseBPipeline,
+	type PhaseBOwnerResult,
+	type PhaseBPipelineDeps,
+	type PhaseBPipelineResult,
+} from './phase-b/pipeline';
+
+export {
+	runSpoolReconcile,
+	type SpoolReconcileOptions,
+	type SpoolReconcileResult,
+} from './phase-b/reconciler';

@@ -192,8 +192,17 @@ suite('ci', 'apps/smtp-ingress process boot (JR-4-01)', () => {
 		});
 		const output = collectOutput(child);
 		let exited = false;
-		child.once('close', () => {
+		// F59, second round: the shutdown assertion below failed on CI while reporting **only** stdout,
+		// so it was impossible to tell from the log whether the handler had run and lost its line or
+		// whether the process had died some other way. The exit code, the terminating signal and stderr
+		// are the three things that distinguish those, and none of them were being recorded. Captured
+		// here and folded into the assertion message -- a diagnostic, not a behaviour change.
+		let exitCode: number | null = null;
+		let exitSignal: NodeJS.Signals | null = null;
+		child.once('close', (code, signal) => {
 			exited = true;
+			exitCode = code;
+			exitSignal = signal;
 		});
 
 		try {
@@ -230,7 +239,12 @@ suite('ci', 'apps/smtp-ingress process boot (JR-4-01)', () => {
 		// a termination signal). The stricter assertion below is the real behaviour this code is
 		// written for and is what runs in CI (Linux); on Windows only "it did stop" is checked.
 		if (process.platform !== 'win32') {
-			expect(output.stdout()).toContain('shutting down');
+			expect(
+				output.stdout(),
+				`exit code ${exitCode}, terminating signal ${exitSignal}\n` +
+					`--- stderr ---\n${output.stderr() || '(empty)'}\n` +
+					`--- stdout ---\n${output.stdout() || '(empty)'}`
+			).toContain('shutting down');
 		}
 	}, 20_000);
 });

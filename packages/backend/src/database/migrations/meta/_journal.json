@@ -302,6 +302,13 @@
       "when": 1785522185774,
       "tag": "0042_journal_ledger_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786027644010,
+      "tag": "0043_whole_meltdown",
+      "breakpoints": true
     }
   ]
 }

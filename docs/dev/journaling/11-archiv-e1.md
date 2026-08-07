@@ -799,3 +799,57 @@ Dateien grün (über die Prettier-API gegen eine LF-Normalisierung in Node gepr�
 abgebaut.
 
 ---
+
+## E1 — Test- und CI-Fundament: die F14–F16-Notiz aus derselben Kopf-Notiz
+
+**Ausgegliedert am 2026-08-06 aus dem Kopf von `06-status.md` (Doku-Diät, inhaltlich unverändert).**
+Diese Notiz stammt aus der Zeit unmittelbar nach `JR-1-06a` und vor `JR-1-05c` — die Befunde
+F14–F16 sind seither in `JR-1-05c` behoben (siehe oben in dieser Datei).
+
+> **E1 ist abgenommen (`JR-1-06a`, 2026-07-28) und in den Integrationsbranch gemergt** (`efb769c`,
+> `--no-ff`). Alle 15 Kriterien aus `JR-1-06` sowie die Kriterien von `JR-1-04a` und `JR-1-05b` sind
+> erneut und unabhängig geprüft: **alle erfüllt**, keines nur übernommen. F12 ist als behoben
+> bestätigt (10 nebenläufige Runden, 0 Rückstände). **F13 bleibt offen** (Entscheidung des
+> Auftraggebers).
+>
+> Drei **neue** Befunde am Messinstrument sind eröffnet: **F14** (Klassen-Umetikettierung umgeht die
+> Inventurprüfung), **F15** (`minimumFiles`-Spiel verdeckt eine gelöschte Testdatei) und **F16**
+> (Rückstand nach Modul-Throw wird lokal nicht angekündigt). Keiner bricht ein Akzeptanzkriterium.
+> Sie gehören nach **`JR-1-05c`** — nicht nach `JR-13-05`, das ist E13s Task für F8; der Verweis in der
+> ersten Fassung dieses Abschnitts war falsch.
+>
+> **`JR-1-05c` ist vor E2 fällig.** Der Wächter zählt **Dateien statt ausgeführter Tests**: wer die
+> vier Integrationsdateien auf `nightly` umklassifiziert, schaltet die Suite ab, und beide Wächter
+> melden grün. Solange das offen ist, belegt ein grüner CI-Lauf **nicht**, dass die Integration-Suite
+> gelaufen ist — und auf genau diesen Tests ruht jede Durability-Aussage in E2/E3.
+>
+> Nächster Schritt: **`JR-13-07`** (Rolle DEV), danach `JR-13-08` und die Abnahme `JR-13-09`. Vorher
+> braucht der PO eine Entscheidung zum verbleibenden roten Test (siehe unten).
+
+---
+
+## E0 — die sechs zentralen Befunde aus `06-status.md`
+
+**Ausgegliedert am 2026-08-06 aus `06-status.md` (Doku-Diät, inhaltlich unverändert).** E0 ist
+abgeschlossen, bevor E1 überhaupt begann; diese Befunde sind reine Historie.
+
+1. **Der Enterprise-SMTP-Listener ist Closed Source und in diesem Repository nicht vorhanden.** Nur
+   Schema, Typen, Frontend-Formular, i18n-Strings, Env-Variablen und eine Doku-Seite, die abwesenden
+   Code beschreibt. `apps/open-archiver-enterprise` und `packages/enterprise` fehlen.
+2. **Der dokumentierte Enterprise-Ablauf erfüllt RFC §3 nicht** (Tempfile + BullMQ-Enqueue statt
+   fsync'd Spool + Ledger vor `250`). Der Receiver wird daher direkt RFC-konform neu gebaut.
+3. **Null Tests und kein Test-Runner im gesamten Repository.** Deshalb ist E1 das erste Epic.
+4. **Doku-Drift im IAM:** `docs/services/iam-service/iam-policy.md` listet die Action `export` nicht
+   und beschreibt `manage` falsch. Der **Code ist korrekt** — `iam.types.ts` und
+   `iam-policy/policy-validator.ts` enthalten beide `export`. Behebung in `JR-11-03`.
+5. Kein CLI im Repository — `verify` (E9) baut die Basis mit `node:util` `parseArgs`, ohne neue
+   Dependency.
+6. **ADR-004 war falsch und hätte die internen Dokumente veröffentlicht.** VitePress baut ohne
+   `srcExclude` jede `.md` unter `docs/` zu einer Seite, und `search.provider: 'local'` indexiert
+   sie — die Sidebar hat damit nichts zu tun. Behoben durch `srcExclude: ['dev/**']` in
+   `docs/.vitepress/config.mts`. Nie wirksam geworden, weil nichts auf `main` liegt.
+   **Nachweis erbracht:** `pnpm docs:build` läuft durch, `dist/dev/` existiert nicht, kein Satz aus
+   `08-risiken.md` im Suchindex; Gegenkontrolle über `dist/SUMMARY.html` (nicht in der Sidebar, aber
+   30 KB gebaut und indexiert) belegt den Mechanismus.
+
+---

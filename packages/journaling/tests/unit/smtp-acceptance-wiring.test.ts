@@ -427,6 +427,16 @@ class InMemoryLedgerAndLookup implements LedgerBackend, LedgerLookup {
 				journalingSourceId: request.journalingSourceId,
 				remoteIp: request.remoteIp,
 				receivedAt: new Date(Number(request.receivedAtMicros / 1000n)),
+				// JR-6-02a widened `LedgerEntryByTxId` with the three fields Phase B verifies a spool
+				// file against; JR-6-02b widened it again with envelopeFrom/envelopeRcpt (parseJournalReport()'s
+				// NDR signal). Mirrored straight off the request rather than defaulted: this fake exists
+				// to report what `append()` was actually called with, and a fake that substituted its own
+				// `eventType` or hash here would let a caller that passes the wrong one look correct.
+				eventType: request.eventType,
+				contentSha256: request.contentSha256,
+				sizeBytes: request.sizeBytes,
+				envelopeFrom: request.envelopeFrom,
+				envelopeRcpt: request.envelopeRcpt,
 			});
 		}
 		return { seq, chainHash: computed, prevChainHash };
@@ -441,6 +451,28 @@ class InMemoryLedgerAndLookup implements LedgerBackend, LedgerLookup {
 			if (entry) out.set(id, entry);
 		}
 		return out;
+	}
+
+	// JR-6-03: mirrors `PostgresLedgerLookup`'s `MIN(seq)` query over `entriesBySeq` rather than
+	// `bySpoolTxId` -- this file's own duplicate-marker rows (`spoolTxId: null`) would otherwise be
+	// invisible to this lookup, the same reason the real query is keyed by content, not by
+	// `spool_txid` (see `ledger-lookup-port.ts`).
+	async findOriginalReceiptSeq(
+		chainScopeId: string,
+		contentSha256: Uint8Array
+	): Promise<bigint | null> {
+		let min: bigint | null = null;
+		const needle = Buffer.from(contentSha256);
+		for (const { record } of this.entriesBySeq) {
+			if (record.eventType !== 'receipt') continue;
+			if (record.chainScopeId !== chainScopeId) continue;
+			if (record.contentSha256 === null) continue;
+			if (!Buffer.from(record.contentSha256).equals(needle)) continue;
+			if (min === null || record.seq < min) {
+				min = record.seq;
+			}
+		}
+		return min;
 	}
 }
 

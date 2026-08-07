@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { CaslPolicy } from '@open-archiver/types';
+import { CryptoService } from '../../src/services/CryptoService';
 import * as schema from '../../src/database/schema';
 import {
 	roles,
@@ -84,7 +85,18 @@ export interface SeededSource {
 
 export async function seedIngestionSource(
 	db: SeedDatabase,
-	options: { userId?: string | null; name?: string; status?: 'active' | 'paused' } = {}
+	options: {
+		userId?: string | null;
+		name?: string;
+		status?: 'active' | 'paused';
+		/** Defaults to `'generic_imap'`, the ordinary case every existing caller of this helper
+		 *  wants. `JR-6-02b`'s Phase-B tests need `'smtp_journaling'` -- the provider
+		 *  `ArchiveObjectPort`'s backend adapter refuses to archive into anything else. */
+		provider?: 'generic_imap' | 'smtp_journaling';
+		/** `JR-6-02b`: journaling's backing source is always `preserveOriginalFile: true`
+		 *  (GoBD raw-EML mode) -- defaults to `false`, matching the column default. */
+		preserveOriginalFile?: boolean;
+	} = {}
 ): Promise<SeededSource> {
 	const suffix = randomUUID().slice(0, 8);
 	const name = options.name ?? `source-${suffix}`;
@@ -93,8 +105,15 @@ export async function seedIngestionSource(
 		.values({
 			userId: options.userId ?? null,
 			name,
-			provider: 'generic_imap',
+			provider: options.provider ?? 'generic_imap',
 			status: options.status ?? 'active',
+			preserveOriginalFile: options.preserveOriginalFile ?? false,
+			// `IngestionService.findById()` always tries to decrypt `credentials`, for every provider,
+			// and throws if that fails -- a `null` column (this helper's behaviour before JR-6-02b)
+			// happened to never matter because no existing caller ran a seeded source through
+			// `findById()`/`processEmail()`. An empty encrypted object is a valid, decryptable
+			// placeholder for providers (like `smtp_journaling`) that need no real ones.
+			credentials: CryptoService.encryptObject({}),
 		})
 		.returning();
 	return { id: source!.id, name };
@@ -131,6 +150,10 @@ export async function seedJournalingSource(
 		/** `journaling_sources.smtp_password_hash` (`JR-4-05c`) -- a bcrypt hash, never a plaintext
 		 * password. Left `undefined`/unset means `null`. */
 		smtpPasswordHash?: string | null;
+		/** `journaling_sources.organization_domains` (`JR-6-02b`, ADR-035) -- the domain groups
+		 *  `resolveOwner()` matches against. Left unset means the column default (`[]`), the
+		 *  no-groups-configured heuristic path every existing caller of this helper already got. */
+		organizationDomains?: { main: string; aliases: string[] }[];
 	}
 ): Promise<SeededJournalingSource> {
 	const suffix = randomUUID().slice(0, 8);
@@ -145,6 +168,7 @@ export async function seedJournalingSource(
 			routingAddress: options.routingAddress ?? `journal-${suffix}@journaling.test.invalid`,
 			smtpUsername: options.smtpUsername ?? null,
 			smtpPasswordHash: options.smtpPasswordHash ?? null,
+			organizationDomains: options.organizationDomains ?? [],
 		})
 		.returning();
 	return {

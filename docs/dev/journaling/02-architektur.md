@@ -155,8 +155,14 @@ Schritt 7 ist **Optimierung, nicht Autorität.** Der Spool ist autoritativ. Ein 
 periodisch den Spool nach Einträgen, die einen Ledger-Eintrag haben, aber noch nicht Phase-B-fertig
 sind, und reiht sie nach. Damit ist ein Redis-Ausfall kein Datenverlust und rechtfertigt kein `4xx`.
 
-`IJournalInboundJob` (`packages/types/src/journaling.types.ts`) bleibt als Payload nutzbar; sein
-Feld `tempFilePath` verweist künftig auf den Spool-Pfad, nicht auf `tmpdir()`.
+> **Korrektur (`JR-6-02b`, F62):** Der Satz oben stammt aus der Zeit vor `JR-6-01` und ist überholt.
+> `IJournalInboundJob` (`packages/types/src/journaling.types.ts`) hat **keinen** Aufrufer im
+> Repository und wird **nicht** als Phase-B-Payload verwendet — `JR-6-01` hat auf Messung stattdessen
+> `JournalInboundJobData` (`packages/journaling/src/phase-b/queue-contract.ts`) mit genau einem Feld
+> (`spoolTxId`) entschieden, mit ausführlicher Begründung in `06-status.md`s `JR-6-01`-Eintrag (F46:
+> eine Kopie von `seq`/`chainScopeId` wäre eine zweite, nicht gegen den Ledger geprüfte Quelle). Der
+> Typ ist ein Überbleibsel und sollte bei Gelegenheit entfernt werden, statt weiter als „künftig
+> nutzbar" beworben zu sein.
 
 ### Statuscodes
 

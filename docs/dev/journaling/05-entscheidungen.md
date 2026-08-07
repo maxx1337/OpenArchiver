@@ -641,15 +641,88 @@ Datenbank.
 
 ## ADR-010 — `processEmail` erweitern oder eigener Journaling-Pfad
 
-**Status:** **offen** — zu entscheiden in E6 (`JR-6-02`)
+**Status:** **entschieden** (2026-08-05, `JR-6-02a`) · **Entscheider:** PO auf Messung ·
+**Quelle:** RFC §2/§7, Architektur §6
 
-`IngestionService.processEmail()` enthält die vollständige Hash-, Dedupe- und
-Storage-Pfad-Logik (Drei-Gate-Dedupe plus Byte-Hash-Gate) und ist bereits umfangreich. Erweitern
-oder einen journaling-spezifischen Pfad daneben stellen?
+`IngestionService.processEmail()` enthält die vollständige Hash-, Dedupe- und Storage-Pfad-Logik
+(Drei-Gate-Dedupe plus Byte-Hash-Gate) und ist bereits umfangreich. Erweitern oder einen
+journaling-spezifischen Pfad daneben stellen?
 
-**Abwägung:** Wiederverwendung vermeidet divergierende Dedupe-Semantik — der teuerste denkbare
-Fehler in diesem Projekt. Ein separater Pfad hält den Journaling-Code lesbar, riskiert aber genau
-diese Divergenz. Entscheidung erst, wenn der Parser (E5) zeigt, wie stark die Metadatenform abweicht.
+Die ursprüngliche Abwägung lautete: Wiederverwendung vermeidet divergierende Dedupe-Semantik — **der
+teuerste denkbare Fehler in diesem Projekt** —, ein separater Pfad hält den Journaling-Code lesbar,
+riskiert aber genau diese Divergenz. Entschieden werden sollte erst, „wenn der Parser (E5) zeigt, wie
+stark die Metadatenform abweicht". Der Parser steht seit E5, die Bedingung ist erfüllt.
+
+### Entscheidung: **keine der beiden.** Wiederverwenden — **unverändert** — hinter einem injizierten Port
+
+`processEmail()` wird **nicht angefasst** und **nicht nachgebaut**. Die Phase-B-Pipeline liegt in
+`packages/journaling/src/phase-b/` und erreicht das Archivieren über einen Port
+(`ArchiveObjectPort`), dessen einzige Implementierung in `packages/backend` `processEmail()`
+**unmodifiziert** aufruft.
+
+**Erstens, weil der Bestand für genau diesen Aufrufer gebaut ist** — das ist der Fund, der die Frage
+entscheidet, und er stand in keiner der beiden Optionen:
+
+| Stelle im Bestand                                    | Was sie beweist                                                                                                                            |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `processEmail(…, skipTempFileCleanup)`               | Der Parameter ist laut Kommentar „für die **journaling fan-out loop**, die `processEmail()` mehrfach mit demselben `EmailObject` aufruft"  |
+| `isJournaled: source.provider === 'smtp_journaling'` | Wird an **drei** `INSERT`-Stellen gesetzt; `smtp_journaling` steht im `ingestionProviderEnum` und in `IngestionCredentials`                |
+| `preserveOriginalFile`-Modus                         | Speichert `rawEmlBuffer` **unverändert**, hasht ihn **vor** `storage.put()`, erzeugt **keine** Attachment-Zeilen — Byte-Treue plus ADR-006 |
+| Gate 2 (Shared-File-Reference)                       | Eine physische Datei, **N** `archived_emails`-Zeilen mit je eigenem `userEmail` — genau die Fan-out-Form, die ein Journal-Report braucht   |
+
+Diese Verdrahtung lag im **Enterprise-Overlay**, das in diesem Repository fehlt (CLAUDE.md §2). Der
+Aufrufer ist weg, die für ihn gebaute Schnittstelle ist da. Sie nachzubauen hieße, eine zweite
+Dedupe-Semantik neben eine bestehende zu stellen, die für diesen Fall schon Vorkehrungen trägt.
+
+**Zweitens, weil „erweitern" ADR-025 verletzt.** Journaling-Semantik in `processEmail()` hineinzulegen
+heißt, sie in `packages/backend` entstehen zu lassen — und zwar so, dass sie sich nur mit ihm zusammen
+betreiben lässt. Genau das verbietet ADR-025, und nicht aus Ästhetik: es kassiert die Option, die
+Herauslösung eine **Verpackungsentscheidung** bleiben zu lassen. Ein Port kostet eine Datei und hält
+beide Regeln gleichzeitig ein — Architektur §6 („Worker in `packages/backend`") und ADR-025
+(„Logik nicht dort").
+
+**Drittens, weil das Gegenargument gemessen nicht trägt.** Der ernsteste Einwand gegen
+Wiederverwendung war der Speicher: `processEmail()` liest mit `readFile()` die **ganze** Nachricht in
+den Heap, während E3 (`JR-3-02`) ausdrücklich streamt, um genau das zu vermeiden. Nachgemessen am
+Code: **`StorageService.put()` puffert einen übergebenen Stream ohnehin sofort zu einem Buffer**
+(`streamToBuffer()`, weil AES-256-CBC über ganze Buffer läuft) — obwohl die Signatur von
+`IStorageProvider.put()` `Buffer | NodeJS.ReadableStream` verspricht. **Ein eigener Pfad würde also
+genauso puffern.** Die Volllpufferung ist eine Eigenschaft der Storage-Schicht, nicht von
+`processEmail()`, und damit **kein Unterscheidungsmerkmal zwischen den Optionen**. Als eigener Befund
+festgehalten: **F60**, zuzuordnen zu **E7** (WORM-Storage), wo der S3-Provider ohnehin angefasst wird.
+
+### Was die Pipeline trotzdem selbst tun muss — und warum das kein Widerspruch ist
+
+Wiederverwendung heißt nicht, dass `processEmail()` Phase B **ist**. Drei Zusagen kann es
+konstruktionsbedingt nicht erfüllen, weil es den Ledger nicht kennt. Sie liegen deshalb **vor** dem
+Port, in `packages/journaling`:
+
+1. **`content_sha256` ist die Autorität, nicht der `Message-ID`-Header.** `processEmail()`s Gate 1 und
+   2 schlüsseln auf `messageIdHeader`; RFC §4.5 und `JR-6-03` verlangen Objekt-Dedupe auf
+   `content_sha256`. Das ist **die** Divergenz, vor der diese ADR warnt — sie wird nicht dadurch
+   vermieden, dass man den Bestand benutzt, sondern dadurch, dass die Pipeline den Hash **vorher**
+   prüft und dem Port eine hash-abgeleitete Identität übergibt. Ein Journal-Report mit gefälschtem
+   oder fehlendem `Message-ID` deduped damit dennoch korrekt.
+2. **Die Spool-Bytes werden gegen die Ledger-Zeile geprüft, bevor irgendetwas archiviert wird.** Stimmt
+   der Hash der Spool-Datei nicht mit dem `content_sha256` der Receipt überein, ist die Datei nicht
+   das, was quittiert wurde ⇒ **Quarantäne und Alarm, nie archivieren, nie löschen**.
+3. **Jede Receipt bleibt im Ledger.** `processEmail()` gibt bei einem Duplikat `null` zurück — für
+   Phase B bedeutet das nicht „nichts zu tun", sondern „Objekt existiert, jetzt `duplicate_of`
+   schreiben" (`JR-6-03`). Ein Empfangsereignis ist nicht die Nachricht.
+
+### Konsequenz
+
+- `packages/backend` bekommt **einen Adapter**, keine Journaling-Logik. Der Prüfpunkt jedes Reviews im
+  Journaling-Umfeld (ADR-025) bleibt anwendbar.
+- **`processEmail()` bleibt unverändert.** Wer es doch anfassen muss, hat diese ADR zu ändern, nicht zu
+  umgehen — und muss dann sagen, was mit der Herauslösungsoption geschieht.
+- Der Journaling-Pfad benutzt eine `ingestion_sources`-Zeile mit `provider = 'smtp_journaling'` und
+  `preserveOriginalFile = true`. Beides existiert; `isJournaled` folgt daraus von allein.
+- **Verworfen: `processEmail()` erweitern.** Verletzt ADR-025, wächst eine Methode mit drei
+  Dedupe-Gates weiter, und der einzige gemessene Vorteil (Speicher) existiert nicht.
+- **Verworfen: eigener Storage-/Dedupe-Pfad.** Erzeugt die zweite Dedupe-Semantik, die diese ADR als
+  teuersten denkbaren Fehler benennt — und zwar ohne Gegenwert, weil der Bestand die Fan-out-Form
+  schon hat.
 
 ## ADR-011 — Ledger-Backend: Postgres zuerst, steckbar
 
@@ -2307,41 +2380,448 @@ Fehler wäre stumm geblieben.
 nicht, weil die Epic-Nummer im Präfix steht — genau die Eigenschaft, die den anderen drei Kreisen
 fehlt. Wenn ein künftiger Kreis neu entsteht, ist das die Vorlage.
 
-## ADR-033 bis ADR-036 — reserviert für E6 (Phase-B-Worker)
+## ADR-033 — Owner-Auflösung für `plain_bcc`, `ndr` und `parse_failed`: derselbe Resolver, eine zweite Envelope-Quelle
 
-**Status:** **reserviert** (2026-08-05) · **Grundlage:** ADR-032 Punkt 4
+**Status:** **entschieden** (2026-08-05, `JR-6-02b`) · **Entscheider:** PO ·
+**Quelle:** RFC §6.2, `docs/enterprise/journaling/guide.md` („How Owner Resolution Works"), die von E5
+ausdrücklich offen gelassene Frage
 
-Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ADR-Nummern ausschließlich aus **033–036**.
-Wer während E6 eine weitere Nummer braucht, ergänzt sie **hier auf dem Integrationszweig** und nicht
-auf dem Epic-Zweig — die Reservierung ist nur wirksam, solange der Vorrat an der Stelle geführt wird,
-die beim Rückmerge gewinnt.
+`resolveOwner()` ist auf `OwnerResolutionEnvelope` typisiert, also auf `to`/`cc`/`bcc`/`sender` eines
+**Journal-Report-Envelopes** — und nur `JournalReportParsed` trägt einen. E5 hat das bewusst so
+getypt und die Folgefrage ausdrücklich weitergegeben:
 
-**Die in E6 fällige Entscheidung trägt bereits eine Nummer:** `ADR-010` (`processEmail` erweitern
-oder eigener Journaling-Pfad) steht seit dem 2026-07-27 als _offen_ in dieser Datei und ist
-`JR-6-02` zugeordnet. Sie ist **keine** der vier reservierten — für sie wird der bestehende
-Abschnitt gefüllt, nicht ein neuer angelegt (ADR-032 Punkt 2: eine Nummer wird nie umgewidmet).
+> „Whether/how to resolve an owner for those two kinds is an open question left to whichever later
+> slice needs it."
 
-Reservierungen laufen mit der Abnahme des Epics aus. Nicht gebrauchte Nummern fallen an den
-allgemeinen Vorrat zurück; ein nachfolgendes Epic reserviert dann ab der ersten freien.
+`JR-6-02b` ist diese Scheibe: Phase B muss **jede** Nachricht archivieren, auch eine, die nicht als
+Journal-Report geparst werden konnte — abgelehnt wird nichts, die Receipt existiert schon.
 
-## ADR-037 bis ADR-040 — Nachschub für E6
+### Was die drei schwächeren Ergebnisarten tatsächlich tragen
 
-**Status:** **reserviert** (2026-08-06) · **Grundlage:** ADR-032 Punkt 4, und die Aufforderung im
-Abschnitt darüber, weiteren Bedarf **hier** zu ergänzen
+| Art            | Vorhanden                                                                        | **Nicht** vorhanden             |
+| -------------- | -------------------------------------------------------------------------------- | ------------------------------- |
+| `plain_bcc`    | `SmtpTransactionEnvelope` (`envelopeFrom`, `envelopeRcpt`), `ExtractableHeaders` | `to`/`cc`/`bcc` als Adressliste |
+| `ndr`          | dasselbe, plus `signals`                                                         | dasselbe                        |
+| `parse_failed` | `ExtractableHeaders` (`subject`, `from`, `messageId`)                            | jede Envelope-Information       |
 
-**033–036 sind vollständig vergeben** (033 Owner-Auflösung, 034 Phase-B-Pipeline, 035 E2E-Test gegen
-echtes Meilisearch, 036 Doku-Diät auf dem Epic-Zweig statt auf dem Integrationszweig). `ADR-010` ist
-gefüllt. Der Zweig `claude/journaling-e6-phase-b-worker` schöpft ab jetzt aus **037–040**.
+### Entscheidung
 
-**Der konkrete Anlass ist bereits entschieden und braucht 037:** `JR-6-03` speichert den
-`duplicate_of`-Marker als `event_type = 'receipt'`, weil der Enum `journal_event_type` keinen Wert für
-einen Marker kennt. Damit zählt jede Abfrage, die `receipt`-Zeilen gegen angenommene Nachrichten
-hält, zu hoch — aus „eine Receipt je Nachricht" wird „Receipts ≥ Nachrichten", und genau diesen
-Vergleich zieht `verify` in E9. Ein Diskriminator existiert (der Marker trägt `spool_txid` null), aber
-**implizit, in einem Doc-Comment** — das ist die Form von **F46**: zwei Seiten stimmen über etwas
-überein, das niemand prüft. Der Auftraggeber hat am 2026-08-06 den **eigenen Enum-Wert per Migration**
-entschieden, gegen die Alternative „so lassen und die Invariante schriftlich festhalten". Begründung
-für den Zeitpunkt: E7 (WORM) und E9 (`verify`) bauen auf dieser Semantik auf; danach ist die Änderung
-teuer, heute ist sie eine Migration.
+1. **`resolveOwner()` wird nicht verbreitert.** E5s Typisierung bleibt: ein Resolver, der die ganze
+   Union nimmt und zur Laufzeit einen Ersatz errät, ist genau das, was dort verworfen wurde.
+2. **Für die drei Arten wird der Envelope aus den eigenen RFC-5322-Kopfzeilen der Außenmail gebaut**
+   (`To`/`Cc`/`Bcc`/`From` über `splitHeaderAndBody()` plus `parseHeaderAddressList()`) und **derselbe**
+   `resolveOwner()` darüber laufen gelassen. **Ein Resolver, zwei Envelope-Quellen** — dieselbe
+   Begründung wie in ADR-010 für die Dedupe: zwei Implementierungen derselben Zuordnungsregel wären der
+   teuerste denkbare Fehler, und die Regel ist hier „welche Domain gehört uns".
+3. **`envelopeRcpt` wird nie als Owner benutzt.** Das ist die tragende Festlegung. Bei einer
+   Plain-BCC-Kopie ist `RCPT TO` **die Archivadresse selbst** (E5 hat das gemessen und dokumentiert:
+   Postfix spielt die Originalempfänger auf dem `always_bcc`-Zweig nicht nach). Sie als Owner zu nehmen
+   würde jede solche Nachricht **einem Pseudo-Postfach** zuschreiben — und dabei wie eine **gelungene**
+   Auflösung aussehen. Ein falscher Owner, der sich als richtig ausgibt, ist schlimmer als ein
+   eingeräumt unbekannter.
+4. **Die Fidelität wird mitgeführt** (`'journal-report'` / `'rfc5322-headers'` / `'none'`), damit ein
+   kopfzeilen-abgeleiteter Owner nie mit einem report-abgeleiteten verwechselt wird. `resolveOwner()`
+   unterscheidet über `OwnerResolutionMethod` schon, **wie sehr** man `ownerEmail` trauen darf; diese
+   Angabe sagt zusätzlich, **woher der Eingang kam**.
 
-Reservierungen laufen mit der Abnahme des Epics aus, unverändert.
+### Warum der kopfzeilen-abgeleitete Envelope schwächer, aber echt ist
+
+- **`plain_bcc`:** `To`/`Cc` der Außenmail **sind** die Empfängerkopfzeilen der Originalnachricht — die
+  BCC-Kopie ist eine Kopie derselben Bytes, Postfix schreibt sie nicht um. Das ist keine Notlösung,
+  sondern die beste vorhandene Quelle.
+- **`ndr`:** die Empfängerkopfzeile eines Bounce ist der **ursprüngliche Absender**, und das ist für
+  einen Bounce der richtige Owner. `extractableHeaders.from` wäre es **nicht** — dort steht der
+  Mailer-Daemon.
+- **`parse_failed`:** was lesbar ist, wird gelesen; was nicht, führt zu `fallback`.
+
+**Ehrlich benannt, weil es kein Resolver behebt:** in Plain-BCC-Betrieb ist ein **reiner
+BCC-Empfänger spurlos verloren** (E5: „any genuine Bcc recipient is gone without a trace"). Das ist
+eine Eigenschaft dieses Betriebsmodus, nicht ein Mangel der Auflösung. Es gehört in die Betreiberdoku
+neben die Empfehlung, echtes Journaling zu benutzen — und es ist der Grund, warum die Fidelität
+mitgeführt wird statt weggeglättet.
+
+### Konsequenz
+
+- `parseHeaderAddressList()` in `parser/envelope.ts` ist jetzt **exportiert** und kennt `'From'`. Kein
+  zweiter Adressparser; ADR-027 bleibt eingehalten (`mailparser` ist die einzige Parsing-Abhängigkeit).
+- Löst die Auflösung nichts auf (`method === 'fallback'`), wird der konfigurierte Unresolved-Owner
+  benutzt, die Zeile markiert und **alarmiert** — nie abgelehnt.
+- **Verworfen: aus `envelopeRcpt` einen Owner machen.** Siehe Punkt 3.
+- **Verworfen: die drei Arten gar nicht auflösen und pauschal in ein Sammelpostfach legen.** Das wirft
+  die `To`/`Cc`-Information weg, die in zwei der drei Fälle vorhanden **und** korrekt ist.
+
+## ADR-034 — Phase-B-Pipeline: Fan-out über jeden aufgelösten Owner, Spool-Freigabe ist Löschen, kein E2E-Suchbeleg in der CI
+
+**Status:** **entschieden** (2026-08-05, `JR-6-02b`) · **Entscheider:** DEV, auf Messung ·
+**Quelle:** Architektur §6, ADR-010, ADR-033, `docs/dev/journaling/07-session-handover.md`s
+Auftragstext für `JR-6-02b`
+
+`JR-6-02b` verbindet Gate (`JR-6-02a`), Parser (E5) und Owner-Auflösung (ADR-033) zu
+`runPhaseBPipeline()` (`packages/journaling/src/phase-b/pipeline.ts`) und schließt drei Fragen, die
+keine der vorherigen Entscheidungen schon beantwortet hatte.
+
+### 1. Fan-out: jeder aufgelöste Owner wird archiviert, nicht nur der Gewinner
+
+`resolveOwner()` liefert einen Gewinner **plus** `additionalMatches` — andere `to`/`cc`/`bcc`-Adressen,
+die ebenfalls eine konfigurierte Domain treffen (JR-5-07 harte Vorgabe 4). Bisher hatte das niemand
+konsumiert. `JR-6-02b`s Auftrag ("je aufgelöstem Owner ein `processEmail`-Aufruf") verlangt genau das:
+die Pipeline archiviert Gewinner **und** jeden zusätzlichen Treffer, dedupliziert auf die normalisierte
+Adresse (derselbe Empfänger in `To` und `Cc` archiviert einmal, nicht zweimal).
+
+**Konsequenz für `OwnerResolutionWinner`:** `additionalMatches` trug bisher nur `{field, address}` —
+die rohe, nicht normalisierte Adresse. Für den Fan-out fehlte die alias-zu-primär-Domain-Normalisierung
+je Treffer. Ergänzt um `normalizedEmail` (`packages/types/src/journal-parser.types.ts`), berechnet in
+`winnerOf()` genau wie für den Gewinner selbst — ein Resolver, eine Normalisierungsregel, für alle
+Treffer gleich (dieselbe Begründung wie ADR-010 für die Dedupe-Semantik). `owner-resolution.test.ts`
+ist entsprechend angepasst (`normalizedEmail` in jeder `winner`/`additionalMatches`-Zusicherung), ohne
+neue Fälle — die bestehenden Tests beweisen weiterhin dasselbe Verhalten, nur mit dem vollständigeren
+Objekt.
+
+### 2. `content_sha256` ist die Identität, die `processEmail()`s Gates sehen — nicht der echte `Message-Id`-Header
+
+ADR-010 warnt ausdrücklich vor der Divergenz zwischen `processEmail()`s `messageIdHeader`-Schlüsselung
+und RFC §4.5s Hash-Dedupe. Der Backend-Adapter (`journal-archive-object-adapter.ts`) löst das, indem er
+den `EmailObject.headers`-Eintrag `message-id` **synthetisch aus dem verifizierten
+`contentSha256Hex`** baut (`<phase-b-sha256-<hex>@journal.internal>`) — nie aus dem tatsächlichen
+Header der Nachricht. Ein Journal-Report mit gefälschtem oder fehlendem `Message-Id` dedupliziert damit
+korrekt auf Objekt-Identität.
+
+**Ein `null` von `processEmail()` wird nicht als „nichts zu tun" behandelt.** Der Adapter löst die
+**bereits existierende** `archived_emails`-Zeile mit demselben Schlüssel auf, den Gate 1 benutzt hat,
+und gibt `{kind: 'duplicate', archivedEmailId}` zurück — nicht nur `{kind: 'duplicate'}`. Grund: ein
+Retry desselben Jobs (nach einem Absturz zwischen erfolgreichem Archivieren und der Indexierung) sieht
+beim zweiten Versuch für **alle** Owner „bereits vorhanden" und würde ohne die Id nichts mehr
+indexieren — die Nachricht bliebe archiviert, aber nie durchsuchbar. Mit der Id indexiert die Pipeline
+jeden Owner **unbedingt**, ob frisch archiviert oder als Duplikat erkannt.
+
+### 3. Spool-Freigabe ist Löschen, keine dritte Spool-Verzeichnisebene
+
+`SpoolEntryReleaser.release()` (`packages/journaling/src/phase-b/spool-entry-releaser.ts`) löscht die
+Spool-Datei per `fs.unlink`. Kein neues `SpoolFileSystem`-Verfahren (sechs bestehende Implementierungen
+hätten eine neue Pflichtmethode für einen Concern gebraucht, der nur Phase B betrifft — dieselbe
+Begründung, die `spool-entry-reader.ts` schon für den Lese-Port gab). Kein drittes Spool-Verzeichnis
+neben `incoming/`/`quarantine/`: die Architektur dokumentiert keines, und die dauerhafte Aufzeichnung
+nach erfolgreicher Phase B ist das archivierte Objekt plus die Ledger-Receipt, nicht die Spool-Kopie.
+Aufgerufen **ausschließlich** als letzter Schritt von `runPhaseBPipeline()`, nachdem jeder Owner
+archiviert (oder korrekt als Duplikat erkannt) **und** indexiert wurde — ein Fehler an jeder früheren
+Stelle wirft, bevor die Datei je gelöscht wird.
+
+### 4. Der Prozessor wirft für jeden Nicht-Erfolg — keine Rückgabe eines Fehlerwerts
+
+`runPhaseBPipeline()` wirft (nie ein Ergebnisobjekt mit `success: false`) für: Gate-Ablehnung
+(`PhaseBSpoolEntryRefusedError`, nach dem Alert), eine unlesbare Spool-Datei
+(`PhaseBSpoolFileUnreadableError`), fehlende Owner-Konfiguration (`PhaseBOwnerConfigMissingError`) und
+einen Archivierungsfehler (`PhaseBArchiveFailedError`). `journal-inbound.processor.ts` fängt das nicht
+ab — ein rejecteter Promise lässt BullMQ den Job scheitern lassen, was `JR-6-04`s Reconciler und einen
+Betreiber gleichermaßen lesen können. Diese Haltung ist keine neue Entscheidung, sondern die
+Durchsetzung dessen, was `JR-6-01` schon für den Platzhalter-Prozessor festgelegt hatte.
+
+### 5. `envelope_from`/`envelope_rcpt` mussten den Ledger-Lookup erneut verlassen
+
+`LedgerEntryByTxId` (`JR-3-05`) trug diese beiden Felder nicht — der einzige bisherige Aufrufer
+(Crash-Recovery) brauchte sie nicht. `parseJournalReport()`s NDR/Plain-BCC-Unterscheidung braucht aber
+genau `envelope_from`s Null-Reverse-Path-Signal (RFC §5321.5.5). Erweitert um beide Felder (`?? null`
+für fehlende Spalten, dieselbe Absicherung wie bei `content_sha256`/`size_bytes` in `JR-6-02a`) und bis
+in `SpoolEntryArchive` durchgereicht — derselbe Fund, aus demselben Grund, den `JR-6-02a` schon einmal
+für `eventType`/`content_sha256`/`size_bytes` gemacht hat: der Lese-Port wächst mit dem, was Phase B
+tatsächlich braucht, nicht mit dem, was ein früherer Aufrufer zufällig schon abgefragt hatte.
+
+### 6. Kein automatisierter Ende-zu-Ende-Test gegen echtes Meilisearch — mit einem manuellen Beleg statt eines geschätzten
+
+**Zwei unabhängige Gründe, nicht nur einer:**
+
+- **Die CI hat keinen Meilisearch-Service-Container.** `.github/workflows/ci.yml` startet `postgres`
+  und `valkey` (seit `JR-6-01`), aber kein `meilisearch` — ein committeter Test, der echte Suche
+  braucht, könnte in der CI grundsätzlich nicht laufen, unabhängig von jeder anderen Entscheidung.
+  Einen Service-Container hinzuzufügen ist dieselbe Art Infrastrukturentscheidung wie `JR-6-01`s
+  `valkey`-Container — eine, die dem Auftraggeber vorgelegt wird, nicht nebenbei in dieser Scheibe
+  mitgezogen wird.
+- **Die neuen Backend-Adapter hängen am Prozess-Singleton `db`**, genau wie `IngestionService` und
+  jeder bestehende Service in `packages/backend` (keine Dependency Injection einer Datenbankverbindung
+  — anders als `packages/journaling`, wo das die Regel ist). Der Test-Harness isoliert
+  Integrationstests dagegen über `acquireTestDatabase()` in eine **eigene** Wegwerf-Datenbank je Datei.
+  Beides gleichzeitig zu wollen — echte Adapter, echte Isolation — geht mit dem heutigen Zuschnitt
+  nicht ohne eine Dependency-Injection-Änderung an `IngestionService`/`StorageService`, die über diese
+  Scheibe hinausgeht.
+
+**Was stattdessen steht:** ein manueller Lauf gegen echtes Postgres, echtes Meilisearch und das echte
+Dateisystem (`docker-compose`-Infrastruktur dieses Hosts, `basic-journal-report.eml`-Fixture),
+protokolliert im Sitzungsbericht — Fan-out auf drei Owner (`bob`/`carol`/`dave@contoso.com`), alle drei
+archiviert, indexiert, per Volltextsuche nach `"Quarterly numbers"` mit drei Treffern gefunden, die
+Spool-Datei nach Abschluss gelöscht. Das ist **einmal** demonstriert, nicht durch einen Lauf, den
+irgendjemand wiederholen kann, ohne die Schritte von Hand nachzubauen — der Unterschied zwischen einem
+Beleg und einem Test. Ob ein committeter Test diesen Grad an Beleg verdient (und mit welcher der beiden
+oben genannten Änderungen), ist eine Entscheidung des Auftraggebers.
+
+## ADR-035 — Der Ende-zu-Ende-Test wird automatisiert, gegen echtes Meilisearch, über die bestehende Harness-Bindung — kein DI-Umbau von `IngestionService`/`StorageService`
+
+**Status:** **entschieden** (2026-08-05, `JR-6-02b`) · **Entscheider:** Auftraggeber, auf Vorlage von DEV
+· **Quelle:** `03-backlog.md`s Akzeptanzkriterium von `JR-6-02`/`JR-6-08` („Ende-zu-Ende von der
+Spool-Datei bis zum durchsuchbaren Treffer"), DEVs Sitzungsbericht zu `JR-6-02b`
+
+**Entschieden: ein manueller, einmaliger Nachweis erfüllt das Akzeptanzkriterium nicht.** Er fängt
+keine Regression und macht E6 ohne Weiteres nicht abnehmbar (`JR-6-08`). Der Test wird automatisiert
+— `packages/backend/tests/integration/journal-phase-b-e2e.int.test.ts`.
+
+### Die Weggabelung: DI-Umbau vs. Harness-Ausnahme — beide verworfen, eine dritte gefunden
+
+DEVs Bericht zu `JR-6-02b` nannte zwei Wege: (i) `IngestionService`/`StorageService` um eine
+injizierbare Datenbankverbindung erweitern, oder (ii) eine dokumentierte Ausnahme vom
+Isolationsprinzip der Test-Harness (der neue Test liefe gegen die geteilte Wartungsdatenbank statt
+gegen eine eigene, migrierte). Der Auftraggeber hat (i) vorgezogen — **eine Ausnahme vom
+Isolationsprinzip wäre dauerhaft und würde die Aussagekraft jedes künftigen Integrationstests mit
+verwässern, nicht nur die dieses einen; eine DI-Naht ist örtlich und testbar.**
+
+**Bei der Umsetzung stellte sich heraus: (i) ist bereits vorhanden, nur ungenutzt.**
+`packages/backend/tests/support/pg-harness.ts` hat seit `JR-1-04` genau diesen Mechanismus:
+`harness.bindAsProcessDatabaseUrl()` setzt `process.env.DATABASE_URL` auf die isolierte, migrierte
+Datenbank, **bevor** `src/database`s Singleton importiert wird — und ein per dynamischem `import()`
+verzögerter Import von `IngestionService`/`StorageService`/den neuen Phase-B-Adaptern **nach** dieser
+Bindung lässt deren `db`-Singleton korrekt gegen die isolierte Datenbank auflösen. `mongoToMeli()`,
+`FilterBuilder` und `predefined-roles.int.test.ts` benutzen diesen Weg bereits. Kein Zeilenumbau an
+`IngestionService`/`StorageService` — beide bleiben unverändert, wie ADR-010 es für `processEmail()`
+schon verlangt.
+
+**Konsequenz für die ursprüngliche Weggabelung:** Route (i) wird genommen, aber nicht als neue
+Dependency-Injection-Naht, sondern als **Wiederverwendung** einer bereits bestehenden. Route (ii)
+bleibt verworfen — die Begründung des Auftraggebers dagegen gilt unverändert, auch wenn (i) am Ende
+billiger war als angenommen.
+
+### Meilisearch in der CI — gemessen, nicht angenommen wie bei `valkey`
+
+`JR-6-01`s `valkey`-Service-Container hat eine dokumentierte Einschränkung: ein Service-Container
+nimmt kein `command`, und `valkey-server --requirepass …` ist genau das — der Broker läuft in der CI
+deshalb ohne Passwort. Für Meilisearch **wurde geprüft, ob dieselbe Einschränkung zutrifft**, statt es
+anzunehmen: `MEILI_MASTER_KEY` ist eine dokumentierte Umgebungsvariable
+(`https://www.meilisearch.com/docs/learn/security/basic_security`), keine Kommandozeilenoption.
+Gemessen an einem Container, der exakt so gestartet wurde, wie ein GitHub-Actions-Service-Container
+ihn startet (`docker run -e MEILI_MASTER_KEY=... -p 7700:7700 getmeili/meilisearch:v1.38`, kein
+`command`): `/health` antwortet ohne Schlüssel, `/indexes` antwortet `401` ohne Schlüssel, `403` mit
+falschem Schlüssel, `200` mit dem richtigen. Authentifizierung ist damit in der CI **vollständig**
+prüfbar — anders als bei `valkey`, keine Einschränkung zu dokumentieren.
+
+`probeMeilisearch()` (`tests/support/infra.ts`) folgt demselben Muster wie `probeRedis()`: ein reiner
+TCP-Connect, der nur Erreichbarkeit prüft, nie den Schlüssel. Eine falsche `MEILI_MASTER_KEY` erreicht
+den Test deshalb als echter Fehlschlag beim tatsächlichen `SearchService`-Aufruf, nicht als Skip — F48
+zum dritten Mal vermieden, nicht wiederholt.
+
+### Was der Test beweist, und wie er kalibriert wurde
+
+Dieselbe Kette wie der manuelle Nachweis (ADR-034 Punkt 6): Spool-Datei → Tor → Parsen →
+Owner-Fan-out → `processEmail()` → Indexierung → Volltextsuche findet **jeden** aufgelösten Owner →
+Spool-Datei danach gelöscht. Der Fan-out auf drei Owner (`bob`/`carol`/`dave@contoso.com`) ist Teil
+der Zusicherung, nicht Kulisse — er ist der Grund, warum E5 existiert.
+
+**Zweimal kalibriert, nach dem Muster von `JR-13-09c`:** ein Glied absichtlich entfernt, Rot gesehen,
+zurückgenommen, Grün bestätigt.
+
+1. Spool-Freigabe deaktiviert (`releaseSpoolEntry.release()` auskommentiert) → Test schlägt exakt an
+   der Zusicherung „Spool-Datei ist gelöscht" fehl (`ENOENT` erwartet, Datei existierte noch).
+2. Fan-out auf den Gewinner verkürzt (`ownerCandidatesOf(ownerResult).slice(0, 1)`) → Test schlägt
+   exakt an der Owner-Liste fehl (`['bob@contoso.com']` statt aller drei).
+
+Beide Male nach dem Zurücknehmen wieder grün, mit identischem `git diff` (keine Restspur der
+Kalibrierung im committeten Code).
+
+### Warum die Suchassertionen nach `ingestionSourceId` filtern statt Trefferzahlen zu zählen
+
+Der Meilisearch-Index `emails` ist — anders als die Postgres-Datenbank — nicht je Testdatei isoliert:
+lokal ist es derselbe Index wie jeder andere reale Lauf gegen dieselbe Meilisearch-Instanz (in der CI
+dagegen frisch, weil der Service-Container keinen Zustand vom letzten Lauf trägt). Eine Zusicherung
+„die Suche nach X liefert 3 Treffer" wäre heute wahr und in dem Moment falsch, in dem irgendetwas
+anderes ein Dokument mit demselben Fixture-Text indexiert. Jede Zusicherung filtert deshalb auf die
+`ingestionSourceId` dieses Laufs, und `afterAll` löscht die erzeugten Dokumente wieder — dieselbe
+Disziplin, die `seedIngestionSource()` für Postgres-Zeilen schon anwendet.
+
+### Konsequenz
+
+- `packages/backend/tests/support/iam-seed.ts`s `seedJournalingSource()` bekommt ein optionales
+  `organizationDomains`-Feld (Default `[]`, der Spaltendefault — kein bestehender Aufrufer ändert sein
+  Verhalten).
+- `.github/workflows/ci.yml` bekommt einen `meilisearch`-Service-Container plus
+  `MEILI_HOST`/`MEILI_MASTER_KEY` im Job-`env:`.
+- **Verworfen:** DI-Umbau von `IngestionService`/`StorageService` (unnötig, siehe oben) und die
+  Harness-Ausnahme (Begründung des Auftraggebers bleibt gültig).
+
+## ADR-036 — Doku-Diät (E6): Ausnahme von der Regel, dass Grundlagenarbeit auf den Integrationszweig gehört
+
+**Status:** **entschieden** (2026-08-06) · **Entscheider:** Auftraggeber · **Grundlage:** ADR-032
+Punkt 4, `CLAUDE.md` §7
+
+Der Zweig `claude/journaling-e6-phase-b-worker` schöpfte ADR-Nummern ausschließlich aus **033–036**;
+**033** ist mit der Owner-Auflösung für die schwächeren Parse-Ergebnisse vergeben, **034** mit der
+Phase-B-Pipeline, **035** mit der Automatisierung des Ende-zu-Ende-Tests (alle oben). **036** war bis
+zum 2026-08-06 nur reserviert; mit diesem Eintrag ist der Vorrat erschöpft — eine weitere Nummer für
+E6 braucht eine neue Reservierung auf dem Integrationszweig.
+
+### Die Regel, von der abgewichen wird
+
+`CLAUDE.md` §7: „Grundlagenarbeit (Doku, ADRs, Agent-Infrastruktur) gehört direkt auf den
+Integrationsbranch." Epic-Zweige tragen Epic-Arbeit, nicht Projektgedächtnis-Pflege — genau deshalb
+kollidierten bei E4/E5s parallelen Zweigen ADR-Nummern, Befundnummern und Dateinamen gleichzeitig
+(ADR-032).
+
+### Die Abweichung
+
+Die Doku-Diät vom 2026-08-06 (Fortsetzung der vom 2026-08-03) läuft **auf dem Epic-Zweig**, nicht auf
+dem Integrationszweig.
+
+### Begründung
+
+`06-status.md` und `07-session-handover.md` — die beiden größten Ziele der Diät — werden von der
+**laufenden** E6-Arbeit aktiv beschrieben und stehen nur auf dem Epic-Zweig im aktuellen Stand. Eine
+Diät auf dem Integrationszweig hätte parallel zur E6-Arbeit denselben zwei Dateien gearbeitet und beim
+Rückmerge einen Handkonflikt in genau den Dateien garantiert, die das Projektgedächtnis tragen — die
+schlechteste denkbare Stelle für eine manuelle Konfliktauflösung. Das ist dieselbe Fehlerklasse, vor
+der ADR-032 warnt (zwei Zweige, ein Vorrat), nur an Dateiinhalten statt an Nummernkreisen.
+
+### Konsequenz
+
+Diese Abweichung gilt **nur für diese Diät**. Reine Doku-/ADR-Arbeit ohne Überlappung mit laufender
+Epic-Arbeit bleibt Grundlagenarbeit und gehört weiter auf den Integrationszweig, wie `CLAUDE.md` §7 es
+verlangt. Reservierungen laufen mit der Abnahme des Epics aus; nicht gebrauchte Nummern fallen an den
+allgemeinen Vorrat zurück.
+
+## ADR-037 — Eigener `journal_event_type`-Wert für den `duplicate_of`-Marker
+
+**Status:** **entschieden** (2026-08-06) · **Entscheider:** Auftraggeber · **Nummer reserviert** auf
+dem Integrationszweig (`e8256f7`, Pool **037–040**, Grundlage und Anlass dort unter „ADR-037 bis
+ADR-040 — Nachschub für E6" — dieser Abschnitt füllt sie, statt die Begründung zu wiederholen).
+
+### Der Fehler, den diese Entscheidung schließt
+
+Der `duplicate_of`-Marker aus `JR-6-03` (`5e9551f`) trug `event_type = 'receipt'`, weil der Enum keinen
+anderen Wert kannte. Der einzige Diskriminator — `spool_txid is null` — stand nur in einem Doc-Comment,
+nie erzwungen: die Form von **F46** (zwei Seiten stimmen über etwas überein, das niemand prüft). Jede
+künftige Abfrage, die `receipt`-Zeilen gegen angenommene Nachrichten hält (`verify`, E9, wird das tun),
+hätte für zwei Zustellungen drei Receipts statt zwei gezählt.
+
+### Entschieden: eigener Enum-Wert per Migration, `duplicate_marker`
+
+Gegen die Alternative „so lassen, Invariante schriftlich festhalten" — Begründung für den Zeitpunkt
+(E7/E9 bauen auf der Semantik auf) steht in der Reservierung. Name **`duplicate_marker`**: sagt, was
+die Zeile ist, ohne wie eine Receipt zu klingen.
+
+### Migration
+
+`0043_whole_meltdown.sql`: `ALTER TYPE "public"."journal_event_type" ADD VALUE 'duplicate_marker';` —
+ein einzeiliger, additiver `ADD VALUE`, kein `DROP`/Rename. Lokal gegen eine frisch angelegte,
+leere Datenbank geprüft (`pnpm db:migrate` dort, dann in einer **separaten** Verbindung ein Insert mit
+dem neuen Wert): der neue Wert ist außerhalb der Migrations-Transaktion sofort benutzbar. Innerhalb der
+Migration selbst wird er nirgends verwendet — die Datei tut nur die eine `ALTER TYPE`-Anweisung —, also
+trifft die von Postgres dokumentierte „nicht in derselben Transaktion benutzbar"-Einschränkung diesen
+Ablauf ohnehin nicht.
+
+### Bestehende Zeilen bleiben unverändert — das ist korrekt, keine Lücke
+
+`event_type` ist eines der 16 gehashten Felder (`JournalLedgerRecord` in
+`packages/types/src/journal-ledger.types.ts`). Eine vor dieser Migration geschriebene Marker-Zeile hat
+ihren `chain_hash` bereits über `event_type = 'receipt'` berechnet, und der Ledger ist Append-only
+(ADR-009) — nichts daran wird nachträglich geändert, und nichts müsste: der Hash ist exakt so richtig
+wie das Byte, das ihn erzeugt hat. Die Erweiterung wirkt nur **vorwärts**, auf den nächsten Marker, den
+`runPhaseBPipeline()` schreibt. **Kein `FORMAT_VERSION`-Sprung nötig:** der kanonische Encoder
+(`stringField(record.eventType, 'eventType')` in `packages/journaling/src/ledger/canonical-encoding.ts`)
+hasht jeden String generisch — er hat keine feste Zuordnung von Event-Typ zu Byte-Code, der dieser Wert
+beitreten müsste.
+
+### Vokabular an drei Stellen nachgezogen (`CLAUDE.md` §5.4-Muster, hier auf `journal_event_type`)
+
+1. `packages/backend/src/database/schema/journal-ledger.ts` — `journalEventTypeEnum` (Quelle der
+   Wahrheit, per Migration erweitert)
+2. `packages/types/src/journal-ledger.types.ts` — `JournalEventType`-Union
+3. `packages/journaling/src/ledger/ledger-port.ts` — `LedgerAppendRequest['eventType']`
+
+Punkt 3 war bis zu dieser Entscheidung eine **eigene, handkopierte** Literal-Union derselben sechs
+Werte, nicht ein Import von `JournalEventType` — genau die Duplikation, die den fehlenden Wert
+unbemerkt ließ. Behoben, nicht nur ergänzt: `ledger-port.ts` importiert jetzt `JournalEventType` aus
+`@open-archiver/types` (die Abhängigkeit ist laut Architekturregel ohnehin erlaubt), also gibt es ab
+jetzt nur noch **eine** TypeScript-Quelle für diese Liste, nicht zwei, die zufällig übereinstimmen.
+
+### Zählende Verbraucher gefunden und bewertet
+
+32 Dateien mit `event_type`/`'receipt'`-Treffern durchsucht (grep über das Repository). **Drei**
+brauchten eine Änderung:
+
+- `packages/journaling/src/phase-b/pipeline.ts` — der Marker selbst, `eventType: 'receipt'` →
+  `'duplicate_marker'`.
+- `packages/backend/tests/integration/journal-ledger-schema.int.test.ts` — `carries every declared
+event type` erwartete die alten sechs Werte erschöpfend; jetzt sieben.
+- `packages/backend/tests/integration/journal-phase-b-e2e.int.test.ts` — die `JR-6-03`-Zustellungsprobe
+  filterte `event_type = 'receipt'` und erwartete drei Zeilen (die tragende Falle, die ADR-037 gerade
+  behebt); jetzt zwei getrennte Abfragen, `receipt` erwartet **zwei**, `duplicate_marker` erwartet
+  **eine** — die Zählung, die vorher zu hoch war, ist jetzt die Aussage, die der Test trifft.
+
+Die übrigen 29 Treffer sind Fixture-Defaults (ein beliebiger gültiger Event-Typ für einen Testaufbau,
+der nicht vom Marker handelt) oder Round-Trip-Prüfungen einer einzelnen, bekannten Zeile — keine
+Zählung von `receipt`-Zeilen gegen angenommene Nachrichten, also unverändert richtig.
+
+### Kalibriert
+
+Beide geänderten Tests: Marker versehentlich wieder als `'receipt'` geschrieben →
+`pipeline.test.ts` rot exakt an `expect(marker.eventType).toBe('duplicate_marker')`; die reale
+Ende-zu-Ende-Probe (`journal-phase-b-e2e.int.test.ts`, echtes Postgres) rot exakt an
+`expect(receiptRows).toHaveLength(2)` mit „got 3". Beide zurückgenommen, danach wieder grün.
+
+### Für die Konfliktauflösung beim Rückmerge
+
+`05-entscheidungen.md` ist jetzt auf **beiden** Seiten verändert: der Integrationszweig trägt die
+Reservierung „ADR-037 bis ADR-040 — Nachschub für E6" (Status **reserviert**), dieser Zweig trägt den
+oben gefüllten ADR-037-Abschnitt (Status **entschieden**). Beim Rückmerge gewinnt dieser Abschnitt; die
+Reservierungstabelle auf dem Integrationszweig muss um 037 gekürzt werden (038–040 bleiben offen).
+
+## ADR-038 — Der Reconciler ist ein wiederkehrender Job auf der bestehenden `journal-inbound`-Queue, kein eigener Prozess und nicht im `sync-scheduler`
+
+**Status:** **entschieden** (2026-08-06, `JR-6-04`) · **Nummer:** aus dem nach ADR-032 reservierten
+Kreis 037–040
+
+**Die Frage.** Architektur §3 verlangt, dass ein Reconciler „periodisch" den Spool nach Einträgen
+sweept, die einen Ledger-Eintrag haben, aber noch nicht Phase-B-fertig sind. Wo läuft dieses
+„periodisch"? Drei Möglichkeiten standen offen: ein vierter Worker-Prozess, ein Job im bestehenden
+`sync-scheduler.ts`, oder ein wiederkehrender Job auf der Queue, die der `journal-inbound`-Worker
+schon bedient.
+
+**Die Entscheidung: der dritte Weg.** `journalInboundQueue.add(JOURNAL_RECONCILE_JOB_NAME, {}, {
+jobId, repeat })`, registriert vom `journal-inbound`-Worker unmittelbar nach dem Bau seines `Worker`,
+mit einem zweiten `case` im Job-Dispatch.
+
+**Warum nicht der `sync-scheduler`.** Er läuft nach der Prozesstabelle in `CLAUDE.md` §3 in **jeder**
+OSS-Installation, unbedingt. Der Journaling-Empfänger ist dagegen **Opt-in** — genau deshalb steckt
+der `journal-inbound`-Worker nicht in `pnpm start:workers` und `apps/smtp-ingress` nicht in
+`start:oss`. Einen Sweep für ein Subsystem aus einem Prozess zu planen, den auch jemand fährt, der
+das Subsystem nie ausgerollt hat, hätte diese Grenze aufgeweicht: der Job wäre in jeder Installation
+registriert und liefe gegen einen Spool, den es dort nicht gibt.
+
+**Warum kein eigener Prozess.** Er bräuchte dieselbe Postgres-Verbindung, dieselbe
+Spool-Wurzel-Auflösung und dieselbe Shutdown-Behandlung wie der `journal-inbound`-Worker — und **F63
+und F64 sind die gemessenen Kosten genau dieser Verdrahtung**, einmal schon bezahlt. Ein zweiter
+Prozess hätte sie ein zweites Mal fällig gemacht, für eine Aufgabe, die pro Durchlauf eine gebündelte
+Ledger-Abfrage und einen `readdir`-Walk kostet. Der Sweep teilt jetzt `ledgerLookup`, `spoolRoot` und
+`ledgerSql` mit dem Prozess, der sie ohnehin hält, testet und beim Herunterfahren schließt.
+
+**Der Preis, benannt statt entdeckt:** wer den `journal-inbound`-Worker nicht ausrollt, hat auch
+keinen Reconciler — dieselbe Kette, die schon im Doc-Comment des Workers steht („Post, die angenommen
+und nie archiviert wird"). Das Sicherheitsnetz hängt am selben Prozess wie die Arbeit, die es
+absichert. Gegenmittel bleiben **E10** (Monitoring von Spool-Tiefe und Phase-B-Backlog) und **E11**
+(Deployment-Verdrahtung).
+
+**Zwei Eigenschaften, die die Entscheidung tragen und gemessen sind, nicht angenommen.**
+`queue.add()` mit festem `jobId` und gleichem `repeat` ist idempotent — die Registrierung bei **jedem**
+Worker-Start ist deshalb harmlos und braucht kein „genau einmal"-Verfahren. Und `add()` mit
+deterministischer `jobId` ist ein **No-op**, solange BullMQ die Id kennt, auch im `failed`-Set: ein
+Reconciler, der nur `add()` aufruft, hätte einen gescheiterten Job als „wieder eingereiht" gemeldet
+und ihn für immer liegen lassen. Deshalb `retry()` für `failed`/`completed`, und deshalb prüft
+`journal-spool-reconciler.int.test.ts` diese No-op-Eigenschaft **selbst**, statt sie aus der
+Dokumentation zu zitieren.
+
+**Der Sweep selbst ist bewusst dünn** und in `reconciler.ts`s Modulkommentar begründet:
+`runExclusiveCrashRecoveryScan()` aus `JR-3-05`/`JR-4-18` plus eine Schleife. „Datei liegt in
+`incoming/` und hat eine Ledger-Zeile" ist **genau** dessen `requeue`-Liste, weil eine Datei
+`incoming/` erst mit `SpoolEntryReleaser.release()` am Ende einer erfolgreichen Phase B verlässt. Ein
+zweiter Spool-Walk hätte die Sharding-, `readdir`- und Quarantäne-Race-Analyse von `JR-3-05`
+verdoppelt, ohne etwas hinzuzufügen. **Exklusiv** und nicht der blanke Scan, weil dieser Sweep und der
+Boot-Scan von `apps/smtp-ingress` jetzt wirklich aus zwei unabhängigen Prozessen gegen denselben Spool
+laufen.
+
+**Verworfene Nebenoption:** eine eigene Queue für den Sweep. Sie hätte einen eigenen Worker oder einen
+eigenen `case` in diesem gebraucht — und der Reconciler braucht keine Isolation von den Jobs, die er
+selbst einreiht.

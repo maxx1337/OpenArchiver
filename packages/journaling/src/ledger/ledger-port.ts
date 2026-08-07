@@ -1,3 +1,5 @@
+import type { JournalEventType } from '@open-archiver/types';
+
 /**
  * The database port of the ledger (`JR-2-06`, prepares `JR-2-07`).
  *
@@ -50,13 +52,14 @@ export interface LedgerAppendRequest {
 	readonly chainScopeId: string;
 	/** Microseconds since the epoch, UTC, always a whole millisecond (ADR-006 section 3.1). */
 	readonly receivedAtMicros: bigint;
-	readonly eventType:
-		| 'receipt'
-		| 'anchor'
-		| 'parse_failed'
-		| 'retention_expiry'
-		| 'object_erased'
-		| 'legal_hold_set';
+	/**
+	 * `JournalEventType` from `@open-archiver/types`, not a second, hand-copied literal union
+	 * (ADR-037): this field used to repeat `journalEventTypeEnum`'s value list by hand, and that
+	 * duplication is exactly why `'duplicate_marker'` could be missing from one copy and no type
+	 * error would say so — the F46 shape. `packages/journaling` is already allowed to depend on
+	 * `@open-archiver/types` (architecture doc section 2); this just uses that allowance here too.
+	 */
+	readonly eventType: JournalEventType;
 	/** Canonical textual form; run it through `normalizeRemoteIp()` first. */
 	readonly remoteIp: string | null;
 	readonly ehloName: string | null;

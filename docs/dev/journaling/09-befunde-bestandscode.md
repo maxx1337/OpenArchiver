@@ -24,13 +24,13 @@ Drei Kategorien, im Kopf jedes Befunds ausgewiesen:
 
 | Kategorie                  | Bedeutung                                                                              | Befunde                                         |
 | -------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29                 |
+| **Bestandscode**           | Defekt im vorhandenen Produktionscode des Repositorys                                  | F1–F10, F17, F19, F20, F26, F29, F60            |
 | **Vorgegebenes Verfahren** | Defekt in einer im Backlog vorgegebenen Schrittfolge, **nicht** im Produktionscode     | F11, F18, F21, F22                              |
 | **Testharness**            | Defekt in dem in E1 neu gebauten Testcode — unsere eigene Arbeit, kein Bestandsproblem | F12–F16, F23, F24, F39, F41, F43, F47, F48, F49 |
 | **Doku über eigenen Code** | Unzutreffende Aussage über den eigenen Code oder in der veröffentlichten Betreiberdoku | F25, F27, F28, F30, F31–F34                     |
 | **Entwicklungsumgebung**   | Defekt, der nur die Arbeitsfähigkeit betrifft, nicht das ausgelieferte Produkt         | F35, F42                                        |
 | **Deployment**             | Defekt in der ausgelieferten Betriebsumgebung, nicht im Code selbst                    | F37                                             |
-| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46                         |
+| **Neuer Code**             | Defekt in Produktionscode, der in diesem Projekt selbst entstanden ist (ab E2)         | F38, F40, F44, F45, F46, F58, F59, F61          |
 
 Herkunft: `JR-1-03` (F1–F6), `JR-1-04` (F7–F10), `JR-1-05` (F11), die Abnahme `JR-1-06` (F12), die
 Nacharbeit `JR-1-04a` (F13), die Abnahme `JR-1-06a` (F14–F16), `JR-13-01` (F17–F23), die Abnahme
@@ -69,66 +69,74 @@ mitgeführt. Sie ersetzt das Lesen der Datei nicht, sie ersetzt das **Durchblät
 Volltexte stehen unverändert darunter, und wer nur wissen will, ob eine Nummer offen ist,
 findet es hier.
 
-| Nr.      | Befund                                                                                                                                                | Schwere | Status    |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------- |
-| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                                                                              | hoch    | behoben   |
-| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                                                                                      | mittel  | offen     |
-| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                                                                               | mittel  | behoben   |
-| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                                                                       | mittel  | offen     |
-| **F5 **  | { field: null } wird zu "field" = NULL                                                                                                                | niedrig | offen     |
-| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                                                                                  | niedrig | behoben   |
-| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                                                                              | hoch    | behoben   |
-| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                                                                         | mittel  | behoben   |
-| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                                                                             | niedrig | offen     |
-| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                                                                               | niedrig | offen     |
-| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                                                                       | mittel  | behoben   |
-| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen                                                                      | mittel  | behoben   |
-| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft                                                               | niedrig | offen     |
-| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                                                                                     | mittel  | behoben   |
-| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                                                                               | niedrig | behoben   |
-| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                                                                         | niedrig | behoben   |
-| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt                                                                | mittel  | behoben   |
-| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                                                                             | niedrig | offen     |
-| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                                                                             | mittel  | behoben   |
-| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                                                                                | mittel  | behoben   |
-| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                                                                        | niedrig | —         |
-| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                                                                               | niedrig | behoben   |
-| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig                                                               | niedrig | offen     |
-| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                                                                          | niedrig | behoben   |
-| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch                                                            | niedrig | behoben   |
-| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                                                                            | mittel  | behoben   |
-| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic…                                                        | mittel  | behoben   |
-| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                                                                                | niedrig | behoben   |
-| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig                                                                   | niedrig | behoben   |
-| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem…                                                        | mittel  | behoben   |
-| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde                                                                     | mittel  | offen     |
-| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                                 | niedrig | offen     |
-| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                           | niedrig | offen     |
-| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                            | niedrig | offen     |
-| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | behoben   |
-| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                           | keine   | widerlegt |
-| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                        | mittel  | offen     |
-| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                        | hoch    | behoben   |
-| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was …                                                        | niedrig | —         |
-| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität…                                                        | mittel  | offen     |
-| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                                                                        | niedrig | offen     |
-| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt                                                          | niedrig | offen     |
-| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                                                                                | mittel  | offen     |
-| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                                  | hoch    | behoben   |
-| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                        | mittel  | behoben   |
-| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                        | hoch    | behoben   |
-| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | behoben   |
-| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                                    | hoch    | behoben   |
-| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben   |
-| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | behoben   |
-| **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben   |
-| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | behoben   |
-| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | behoben   |
-| **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben   |
-| **F55**  | kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                                                | mittel  | behoben   |
-| **F56**  | kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                                         | mittel  | behoben   |
-| **F57**  | `pnpm test` war nicht in `dotenv --` gewickelt — ohne exportiertes `DATABASE_URL` übersprang die ganze `integration`-Suite, der Lauf sah grün aus     | mittel  | behoben   |
-| **F58**  | Whitespace in einer konfigurierten Domain landete unverändert in der Eigentümeradresse (`alice@ company.com`)                                         | mittel  | behoben   |
+| Nr.      | Befund                                                                                                                                                | Schwere | Status     |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
+| **F1 **  | SQL-Injection über Policy-Condition-Keys                                                                                                              | hoch    | behoben    |
+| **F2 **  | AppAbility-Typ schützt Row-Level-Prüfungen nicht                                                                                                      | mittel  | offen      |
+| **F3 **  | Fail-open-Übersetzung in mongoToDrizzle                                                                                                               | mittel  | behoben    |
+| **F4 **  | Zweiter Operator wird stillschweigend verworfen                                                                                                       | mittel  | offen      |
+| **F5 **  | { field: null } wird zu "field" = NULL                                                                                                                | niedrig | offen      |
+| **F6 **  | { action: [], subject: 'x' } besteht die Validierung                                                                                                  | niedrig | behoben    |
+| **F7 **  | FilterBuilder ist fail-open, wenn keine can-Regel greift                                                                                              | hoch    | behoben    |
+| **F8 **  | Der cannot-Ausschluss verarbeitet Operator-Bedingungen falsch                                                                                         | mittel  | behoben    |
+| **F9 **  | mongoToMeli-Platzhalter greift nur bei skalarer Bedingung                                                                                             | niedrig | offen      |
+| **F10 ** | Die expandierte IN-Liste ist unsortiert                                                                                                               | niedrig | offen      |
+| **F11 ** | Die vorgegebene CI-Schrittfolge ist auf einem frischen Checkout nicht lauffähig                                                                       | mittel  | behoben    |
+| **F12 ** | Zwei gleichzeitige Integrationsläufe kollidieren auf einem festen Datenbanknamen                                                                      | mittel  | behoben    |
+| **F13 ** | Der unbeschränkte Sweep kann einen fremden Lauf treffen, der länger als die Frist läuft                                                               | niedrig | offen      |
+| **F14 ** | Die Suite-Inventur wacht über Dateien, nicht über gelaufene Tests                                                                                     | mittel  | behoben    |
+| **F15 ** | minimumFiles verdeckt eine gelöschte Testdatei, sobald die Suite wächst                                                                               | niedrig | behoben    |
+| **F16 ** | Rückstand nach einem Modul-Throw wird lokal nicht angekündigt                                                                                         | niedrig | behoben    |
+| **F17 ** | Zwei der drei „ausgelieferten" Rollen werden in einer echten Installation nie angelegt                                                                | mittel  | behoben    |
+| **F18 ** | ADR-017s Aussage über den null-Zweig gilt je Aufrufstelle, nicht je Rolle                                                                             | niedrig | offen      |
+| **F19 ** | Ein can mit leerem conditions-Objekt bedeutet Vollzugriff                                                                                             | mittel  | behoben    |
+| **F20 ** | Ein cannot ohne Bedingungen wird vollständig ignoriert                                                                                                | mittel  | behoben    |
+| **F21 ** | JR-13-06s Allowlist widerspricht drei bestehenden, grünen Pins                                                                                        | niedrig | —          |
+| **F22 ** | F3s $or-Beispiel beschreibt die Wirkungsrichtung falsch                                                                                               | niedrig | behoben    |
+| **F23 ** | tsconfig.test.json und tsconfig.json sind sich über globale Augmentierungen nicht einig                                                               | niedrig | offen      |
+| **F24 ** | Ein gefilterter pnpm test -t "…" hinterlässt Testdatenbanken                                                                                          | niedrig | behoben    |
+| **F25 ** | Die Statusaussage „F4 und F5 sind im Code als bewusst offen kommentiert" ist für F5 falsch                                                            | niedrig | behoben    |
+| **F26 ** | Ein can mit falsy, aber vorhandenem conditions bedeutet weiter Vollzugriff                                                                            | mittel  | behoben    |
+| **F27 ** | Query 2 der Betreiberanleitung hat falsch-negative: conditions als Skalar oder Array wird nic…                                                        | mittel  | behoben    |
+| **F28 ** | Query 3 prüft Keys nicht für Regeln mit subject: "all"                                                                                                | niedrig | behoben    |
+| **F29 ** | PolicyValidator und mongoToDrizzle sind sich über die erlaubte Key-Form nicht einig                                                                   | niedrig | behoben    |
+| **F30 ** | Die Betreiberabfrage prüft die Form von conditions nur an der Wurzel, der Übersetzer an jedem…                                                        | mittel  | behoben    |
+| **F31 ** | Der Verhaltenscheck behauptet die Vollständigkeit, die der Abfrage genommen wurde                                                                     | mittel  | offen      |
+| **F32 ** | Der zitierte Fehlertext gilt nur für ein policies, das ein Objekt ist                                                                                 | niedrig | offen      |
+| **F33 ** | „is skipped without a row" untertreibt, was die Abfrage tut                                                                                           | niedrig | offen      |
+| **F34 ** | „The known case" liest sich als Aufzählung, ist aber keine                                                                                            | niedrig | offen      |
+| **F35 ** | pnpm lint ist auf einem Windows-Host strukturell rot: keine .gitattributes                                                                            | mittel  | behoben    |
+| **F36 ** | widerlegt: die Prettier-Warnung an access-control-changes.md ist reines F35                                                                           | keine   | widerlegt  |
+| **F37 ** | die Anwendung verbindet als Superuser und Tabelleneigentümer, und kann damit jede Datenbank-S…                                                        | mittel  | offen      |
+| **F38 ** | event_payload wird doppelt JSON-kodiert gespeichert, sobald der Treiber nicht durch drizzle g…                                                        | hoch    | behoben    |
+| **F39 ** | ein Eigenschaftstest trägt die Eigenschaft nur im Namen: das Längenpräfix ist nicht das, was …                                                        | niedrig | —          |
+| **F40 ** | eine Spool-Datei ohne Ledger-Eintrag belegt keinen Absturz, und ihr Müll frisst die Kapazität…                                                        | mittel  | offen      |
+| **F41 ** | das Testnetz für „nach dem Ledger-Append passiert nichts mehr“ hat drei Löcher                                                                        | niedrig | offen      |
+| **F42 ** | tsconfig.build.json kennt weder packages/journaling noch apps/\* und wird von nichts benutzt                                                          | niedrig | offen      |
+| **F43 ** | der Heap-Nachweis misst am Speicher vorbei, in dem die Nachricht liegt                                                                                | mittel  | offen      |
+| **F44 ** | nach einem 552 im DATA-Pfad liest der Server den Nachrichtenrumpf als SMTP-Kommandos                                                                  | hoch    | behoben    |
+| **F45 ** | ein verworfener Iterator verließ den Durable Write als nackter Error, nicht als DurableWriteE…                                                        | mittel  | behoben    |
+| **F46 ** | zwei Ports mit gleichem Methodennamen, und der Empfängerpfad prüft in Produktion die falsche …                                                        | hoch    | behoben    |
+| **F47 ** | der Typcheck für packages/journaling läuft in der CI nicht, und ist deshalb rot                                                                       | mittel  | behoben    |
+| **F48 ** | jeder CI-Lauf des E4-Branches ist fehlgeschlagen, vierzehn Scheiben lang unbemerkt                                                                    | hoch    | behoben    |
+| **F49**  | Der Reihenfolgetest „Scan vor listen()" ist flaky — bei identischem Code grün und rot                                                                 | mittel  | behoben    |
+| **F50**  | Der DATA-Pfad schreibt einmal pro SMTP-Zeile auf die Platte statt gepuffert — Durchsatz hängt an der Zeilenlänge, nicht an der Nachrichtengröße       | mittel  | behoben    |
+| **F51**  | `smtp-ingress-ledger-recovery.int.test.ts` zählte eine Logzeile, bevor die gepipte stdout sie geliefert hatte — Beobachtung am Log statt am Verhalten | niedrig | behoben    |
+| **F52**  | `MAX_COMMAND_LINE_BYTES` greift nur bei einer nie terminierten Zeile, nicht bei einer überlangen, aber in einem Stück CRLF-terminierten               | mittel  | behoben    |
+| **F53**  | `commandCarry` wächst während eines suspendierten Fensters (AUTH, settling accept()) völlig ungeprüft                                                 | mittel  | behoben    |
+| **F54**  | behoben in `JR-4-21` — der `500`-Abbruchpfad ist jetzt idempotent (`oversizedLineRejected`-Latch)                                                     | mittel  | behoben    |
+| **F55**  | kein Limit für angenommene `RCPT TO` je Transaktion, Speicherverstärkung ~13× gemessen                                                                | mittel  | behoben    |
+| **F56**  | kein Cipher-Suite-Filter, Server verhandelt `AES128-SHA` (kein Forward Secrecy) unter TLS 1.2                                                         | mittel  | behoben    |
+| **F57**  | `pnpm test` war nicht in `dotenv --` gewickelt — ohne exportiertes `DATABASE_URL` übersprang die ganze `integration`-Suite, der Lauf sah grün aus     | mittel  | behoben    |
+| **F58**  | Whitespace in einer konfigurierten Domain landete unverändert in der Eigentümeradresse (`alice@ company.com`)                                         | mittel  | behoben    |
+| **F59**  | latenter Defekt beim `journal-inbound`-Worker-Boot, nie ein beobachteter Fehlschlag zugeordnet                                                        | niedrig | behoben    |
+| **F60**  | `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht                                            | mittel  | offen (E7) |
+| **F61**  | zurückgesetzter Socket reißt den SMTP-Empfänger ab — Ablehnungspfade ohne `error`-Handler                                                             | mittel  | behoben    |
+| **F62**  | `IJournalInboundJob` ist totes Gerüst, in der Architektur-Doku noch als künftiger Payload beworben                                                    | niedrig | offen      |
+| **F63**  | `journal-inbound`-Worker zieht Storage/DB in den Modulscope, CI-Umgebung war darauf nicht vorbereitet                                                 | mittel  | behoben    |
+| **F64**  | Worker beendet sich nach `worker.close()` nicht selbst — ein offenes Handle hält den Prozess am Leben                                                 | mittel  | offen      |
+| **F65**  | Pre-Push-Gate behandelte eigene Infrastruktur-Vorbedingungen (`DATABASE_URL`/`REDIS_PASSWORD`) asymmetrisch                                           | niedrig | behoben    |
+| **F66**  | `checkSpoolHighWaterMark()` läuft bei jeder SMTP-Annahme über den gesamten Spool — O(n²) Gesamtkosten bei wachsendem Rückstand                        | hoch    | offen      |
 
 ---
 
@@ -3305,3 +3313,478 @@ ein Test hält `' Company.COM '` ⇒ `alice@Company.COM` fest). Und ein `main`, 
 (`'admin@company.com'` ⇒ `default_fallback@admin@company.com`), wird **nicht** repariert: zu raten,
 welche Hälfte der Betreiber meinte, hieße aus einer kaputten Eingabe einen Wert zu erfinden. Ein Test
 hält diese Grenze fest. Sie gehört in die Konfigurationsprüfung im Backend.
+
+## F59 — `shutting down` kann verlorengehen: `console.log` und direkt danach `process.exit(0)` auf einem Pipe-stdout
+
+**Schwere:** niedrig (Diagnostik, kein Datenverlust) · **Kategorie:** Neuer Code ·
+**Ort:** `apps/smtp-ingress/src/index.ts` `shutdown()` (Zeilen 332 und 349–352) ·
+**Gefunden:** 2026-08-05 in `JR-6-01`, durch einen roten CI-Lauf (`30999645177`) an einem Test, den
+diese Scheibe nicht angefasst hat · **Status:** **behoben, aber er war nie die Ursache der roten
+CI-Läufe.** Die Ursache ist **F61** (ein zurückgesetzter Socket riss den Prozess ab, bevor er seinen
+`SIGTERM`-Handler erreichte). F59 selbst ist ein **echter, aber latenter** Defekt: `process.exit()` leert
+keinen Pipe-stdout, und der Fix dafür (`writeLineThenFlush()`) bleibt richtig und ist behalten. **Was an
+F59 falsch war, ist die Zuschreibung** — zweimal wurde ein Fehlschlag mit ihm erklärt, den er nicht
+verursacht hat. Siehe „Erster Fix — was er war und was er nicht war"
+
+Der Shutdown-Pfad schreibt seine einzige Bestätigungszeile mit `console.log` und ruft danach in
+beiden Zweigen von `server.close()` `process.exit(0)`:
+
+```ts
+console.log(`smtp-ingress: received ${signal}, shutting down`); // Zeile 332
+// …
+server.close().then(
+	() => closeConnections().finally(() => process.exit(0)),
+	() => closeConnections().finally(() => process.exit(0))
+);
+```
+
+**`process.exit()` leert keine noch anstehenden asynchronen `stdout`-Schreibvorgänge.** Wenn `stdout`
+ein **Pipe** ist — genau der Fall, sobald ein Elternprozess die Ausgabe mitliest, also in jedem Test
+und unter jedem Prozess-Supervisor —, sind Schreibvorgänge auf Linux asynchron. Zwischen Zeile 332 und
+dem `exit` liegt normalerweise genug Zeit; unter CPU-Konkurrenz nicht zwangsläufig.
+
+**Wie es aufgefallen ist, und warum das die interessantere Hälfte ist.** `JR-6-01` hat 33 Tests
+hinzugefügt, davon fünf, die Prozesse starten und wieder abräumen. Auf dem CI-Runner ist damit
+`packages/journaling/tests/unit/ingress-process-boot.test.ts` rot geworden —
+`expected '[dotenv@17.2.0] injecting env (0) fro…' to contain 'shutting down'` —, ein Test aus
+`JR-4-01`, den diese Scheibe nicht berührt. Der Prozess **war** beendet (`waitUntil(() => exited)`
+lief durch), nur seine letzte Zeile fehlte. Der Befund ist damit **nicht** durch neue Last entstanden,
+sondern von ihr **sichtbar gemacht**: die Zusage „ein SIGTERM erzeugt eine Shutdown-Meldung" war schon
+vorher nur wahrscheinlich, nicht sicher.
+
+**Zwei Wege, und sie sind nicht gleichwertig:**
+
+1. **Im Produktionscode.** Auf das `exit` verzichten, wenn der Ereignis-Loop von allein leerläuft, oder
+   vor dem `exit` auf das `drain` von `process.stdout` warten. Das behebt die Ursache — eine
+   Betriebsmeldung, die ein Supervisor-Log erreichen soll, darf nicht davon abhängen, wie schnell die
+   Maschine gerade ist.
+2. **Im Test.** Auf die Zeile nicht mehr prüfen. Das macht den Lauf grün und die Zusage unprüfbar; die
+   Meldung bleibt verlierbar. **Nicht empfohlen.**
+
+**Nicht mitentschieden:** derselbe Prozess loggt über `pino` **und** `console.log` auf denselben
+Dateideskriptor (in **F49** ausdrücklich offen gelassen). Der Fix für (1) sollte diese Stelle nicht
+stillschweigend mitumbauen — das ist eine eigene Entscheidung.
+
+### Erster Fix — was er war und was er nicht war
+
+**Der unten beschriebene Fix ist richtig und bleibt — er hat nur den beobachteten Fehlschlag nicht
+behoben, weil dieser eine andere Ursache hatte.** CI `31005188529` ist danach mit **genau derselben**
+Meldung rot geworden (`expected … to contain 'shutting down'`). Die Ursache steht als **F61** weiter
+unten: der Prozess stürzte mit einem unbehandelten `ECONNRESET` ab und erreichte seinen `SIGTERM`-Handler
+**nie**, also konnte keine Flush-Verbesserung etwas ändern.
+
+**Wie es zu der falschen Entwarnung kam, und das ist der eigentliche Lehrsatz.** Nach dem Fix liefen
+vier Versuche derselben Revision grün (CI `31003830220`), und daraus wurde geschlossen, der Fix wirke —
+mit derselben Rate-Argumentation, die `JR-4-21` für **F54** verlangt hatte. Der Schluss war falsch, und
+zwar auf eine Weise, die es wert ist, hier zu stehen: **eine Vorher/Nachher-Rate belegt einen Fix nur
+dann, wenn die Stichprobe groß genug für die Grundrate ist.** Bei „2 von 3 rot" liegt die Ausfallrate
+grob bei 50–65 %; vier grüne Läufe in Folge sind darunter zwar unwahrscheinlich (≈ 2–6 %), aber **die
+vier Läufe waren Wiederholungen ein und derselben Revision auf demselben Runner-Typ** und damit keine
+unabhängigen Ziehungen im Sinne der Annahme. Vier Läufe sind schlicht zu wenig; F54 verlangte
+ausdrücklich **mindestens zehn**, und diese Zahl wurde hier nicht eingehalten.
+
+**Was jetzt zuerst passiert, statt eines zweiten Rateversuchs:** die Fehlermeldung des Tests trug
+**nur `stdout`**. Damit war aus dem Log nicht unterscheidbar, ob (a) der Handler lief und seine Zeile
+verlor, oder (b) der Prozess aus einem anderen Grund starb, ohne den Handler zu erreichen. Genau diese
+Unterscheidung entscheidet, welcher Fix richtig ist. `ingress-process-boot.test.ts` meldet deshalb ab
+jetzt **Exit-Code, terminierendes Signal und `stderr`** mit — eine Diagnose, keine
+Verhaltensänderung. Erst mit diesen drei Werten wird der zweite Fix bestimmt.
+
+**Die Diagnose hat (b) ergeben, nicht (a)** — Exit-Code 1, kein Signal,
+`node:events:497 throw er; // Unhandled 'error' event`, `Error: read ECONNRESET`. Der Handler lief nie.
+Der bereitgehaltene Kandidat (synchrones `fs.writeSync` auf Deskriptor 1) wurde deshalb **nicht**
+ausgeliefert: er hätte nichts geändert, und ihn trotzdem einzubauen wäre der dritte Rateversuch gewesen.
+**F59 bleibt damit als latenter Defekt behoben, ohne dass ihm je ein beobachteter Fehlschlag zugeordnet
+werden kann.** Ob `process.exit()` hier je eine Zeile verloren hat, ist unbewiesen — der Fix ist trotzdem
+richtig, weil die Zusage („eine Betriebsmeldung erreicht das Log") sonst von der Maschinengeschwindigkeit
+abhängt.
+
+### Behebung, erster Versuch (2026-08-05, Variante 1 — Entscheidung des Auftraggebers)
+
+Auslöser war der **zweite** Treffer: zwei von drei Pushes des E6-Zweigs endeten rot, jedes Mal an
+demselben Test, jedes Mal an derselben Ursache. Damit war der Befund kein Randfall mehr, sondern hat die
+CI als Beleg entwertet — genau das, was **F48** dieses Projekt schon einmal gekostet hat. Ein roter Lauf,
+der immer dieselbe bekannte Ursache hat, ist schlimmer als ein flackernder Test.
+
+**Was geändert wurde.** `writeLineThenFlush()` in
+`packages/journaling/src/ingress/graceful-exit.ts`: schreibt eine Zeile und löst erst auf, wenn der Stream
+den Schreibvorgang quittiert hat. `apps/smtp-ingress`s `shutdown()` **wartet** darauf, und zwar **nach**
+dem Drain — vorher zu warten würde das Schließen der Verbindungen einer Logzeile unterordnen, nachher
+kostet es im Normalfall nichts und greift nur in dem Fall, der kaputt war: ein Drain, der schneller fertig
+ist als die Pipe.
+
+**Drei Eigenschaften, die zur Entscheidung gehören:**
+
+- **Die Wartezeit ist begrenzt** (2 s) und das Promise **lehnt nie ab**. Ein unbegrenztes Warten würde
+  eine verlorene Logzeile gegen einen **hängenden Shutdown** tauschen, und das ist der schlechtere
+  Tausch: ein Supervisor `SIGKILL`t einen Prozess, der nicht aufhört, und ein `SIGKILL` während Phase B
+  ist genau das, was Spool und Reconciler danach aufräumen müssen. Ein `stdout`, dessen Leser weg ist
+  (`EPIPE`), ist ein realer Zustand.
+- **Der Helfer liegt in `packages/journaling`, nicht in `apps/smtp-ingress`** — aus einem
+  Harness-Grund, der es wert ist, gemerkt zu werden: **kein Projekt-Glob erfasst `apps/`**, eine
+  Testdatei dort würde von niemandem gesammelt und der Unclassified-Check würde den Lauf zu Recht rot
+  melden. Prüfbares Verhalten gehört dorthin, wo Tests hinreichen, statt einen Glob für einen Helfer zu
+  verbreitern.
+- **F49 bleibt unberührt.** Der Helfer nimmt den Stream als Parameter und hat keine Meinung darüber, dass
+  `pino` und `console.log` auf denselben Deskriptor schreiben.
+
+**Wie der Fix belegt ist — und wie ausdrücklich nicht.** Der Regressionstest prüft **nicht** noch einmal,
+dass ein gestarteter Ingress „shutting down" ausgibt: das ist die Zusicherung, die geflackert hat (einer
+von drei CI-Läufen), und sie ein weiteres Mal zu behaupten würde die Laune des Runners messen. Geprüft
+wird der **Mechanismus**, gegen einen Stream, dessen Callback der Test selbst auslöst: das Promise löst
+nicht auf, bevor der Stream quittiert hat, und es löst trotzdem auf, wenn der Stream nie quittiert. Eine
+der neun Fälle ist eine **Gegenprobe**, die die unbehobene Form nachbaut (schreiben, dann ohne Warten
+„beenden") und zeigt, dass der Schreibvorgang in dem Moment noch unterwegs war, in dem der Prozess
+gestorben wäre.
+
+**Auf diesem Windows-Host ist die Wirkung nicht messbar** — die Zusicherung in
+`ingress-process-boot.test.ts` steht hinter `process.platform !== 'win32'`, weil Windows kein
+catchbares `SIGTERM` an ein Kind liefert. Der Beleg für die Wirkung ist deshalb dieselbe Form, die
+`JR-4-21` für **F54** verlangt hat: eine **Rate vorher gegen nachher**, nicht ein einzelner grüner Lauf.
+Vorher: **2 von 3 Läufen rot** (`30999645177`, `31002635354`; grün war nur der Wiederholungslauf von
+`30999645177`). Nach dem ersten Fix: vier Versuche grün (`31003830220`) — **und danach wieder rot**
+(`31005188529`). Die vier grünen Läufe haben den Fix **nicht** belegt; siehe „Erster Fix —
+unzureichend" oben. Der Mechanismus-Test (`graceful-exit.test.ts`) bleibt gültig und deterministisch: er
+prüft, dass `writeLineThenFlush()` tut, was es zusagt. Was er nicht prüfen kann, ist, ob **dieses**
+Versprechen die Ursache des Befunds trifft.
+
+## F60 — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur Streams verspricht
+
+**Schwere:** mittel · **Kategorie:** Bestandscode ·
+**Ort:** `packages/backend/src/services/StorageService.ts` `put()` (Zeilen 68–72),
+Signatur in `packages/types/src/storage.types.ts` `IStorageProvider.put()` ·
+**Gefunden:** 2026-08-05 bei der Entscheidung zu **ADR-010** (`JR-6-02a`) ·
+**Status:** **offen — vorgeschlagene Zuordnung: E7** (WORM-Storage, wo `S3StorageProvider` ohnehin
+angefasst wird). Entscheidung des Auftraggebers ausstehend
+
+Die Schnittstelle verspricht Streaming:
+
+```ts
+put(path: string, content: Buffer | NodeJS.ReadableStream): Promise<void>;
+```
+
+Die Implementierung löst es sofort auf:
+
+```ts
+async put(path: string, content: Buffer | NodeJS.ReadableStream): Promise<void> {
+	const buffer = Buffer.isBuffer(content) ? content : await streamToBuffer(content);
+	// … verschlüsselt und schreibt den ganzen Buffer
+}
+```
+
+Der Grund ist nachvollziehbar und kein Versehen: die transparente Verschlüsselung (AES-256-CBC, Magic
+`oa_enc_idf_v1::` + IV) läuft über einen ganzen Buffer. **Der Effekt ist aber, dass es im ganzen
+Repository keinen streamenden Schreibpfad gibt** — ein Aufrufer, der sorgfältig streamt, um Heap zu
+sparen, verliert diese Eigenschaft an der Storage-Grenze, ohne dass irgendetwas es ihm sagt.
+
+**Warum das hier auffiel, und warum es dort nicht hingehört, wo es aufgefallen ist.** ADR-010 hatte als
+ernstesten Einwand gegen die Wiederverwendung von `processEmail()`, dass es mit `readFile()` die ganze
+Nachricht in den Heap liest — während E3 (`JR-3-02`) ausdrücklich streamt, um genau das zu vermeiden,
+und diese Zusage abgenommen ist. Die Messung hat den Einwand **aufgelöst statt bestätigt**: ein eigener
+Pfad hätte an `storage.put()` genauso gepuffert. Damit war die Vollpufferung kein
+Unterscheidungsmerkmal mehr zwischen den ADR-Optionen — aber sie ist nicht verschwunden, sondern nur an
+ihren tatsächlichen Ort gewandert.
+
+**Was es für Phase B konkret bedeutet:** bei `SMTP_SIZE_LIMIT_BYTES` von 50 MB und der Concurrency 3
+des `journal-inbound`-Workers liegen im schlechtesten Fall drei Nachrichten **doppelt** im Heap (roher
+Buffer plus verschlüsseltes Ergebnis). Das ist beherrschbar und wird hier bewusst hingenommen; es ist
+kein Grund, `JR-6-02` anders zu bauen.
+
+**Nicht mitentschieden, gehört aber zusammen:** ob die Verschlüsselung auf einen Stream-Cipher
+umgestellt wird (`createCipheriv` kann streamen — die Magic-und-IV-Präambel ließe sich vorschalten) oder
+ob die Signatur ehrlich auf `Buffer` verengt wird. **Die zweite Variante ist die kleinere Änderung und
+die schlechtere:** sie macht die Grenze sichtbar, hebt sie aber nicht auf, und E7 will für Object Lock
+ohnehin an denselben Code. Wichtig ist nur, dass die Signatur und das Verhalten aufhören, sich zu
+widersprechen — **eine Schnittstelle, die Streaming verspricht und puffert, lädt jeden künftigen
+Aufrufer dazu ein, eine Speicherzusage zu geben, die sie nicht hält.**
+
+## F61 — ein zurückgesetzter Socket reißt den ganzen SMTP-Empfänger ab: die Ablehnungspfade hängen keinen `error`-Handler an
+
+**Schwere:** **hoch** (fernauslösbarer Absturz des Empfängers, trivialer Denial of Service) ·
+**Kategorie:** Neuer Code ·
+**Ort:** `packages/journaling/src/ingress/smtp-server.ts` `EsmtpServer.handleConnection()` — die drei
+Ablehnungspfade (`denied`, `unavailable`, Verbindungsgrenze) ·
+**Gefunden:** 2026-08-05 in E6, als Nebenprodukt der Diagnose zu **F59** ·
+**Status:** **behoben am 2026-08-05**, mit kalibriertem Regressionstest
+(`tests/unit/smtp-connection-reset-crash.test.ts`, 5 Fälle)
+
+> **Der Beleg ist diesmal der Test, nicht die Lauf-Rate — und das ist der Unterschied zu F59.** Der
+> Regressionstest ist **deterministisch und kalibriert**: mit zurückgenommenem Fix meldet der Lauf
+> `Unhandled Errors: Error: read ECONNRESET`, auf **jeder** Plattform. Die CI-Rate bestätigt nur:
+> **4 von 4 Läufen grün** nach dem Fix (CI `31008541750`, ein Push plus drei Wiederholungen), vorher
+> 3 von 9 rot. Vier Läufe wären für sich genommen **kein** Beleg — genau dieser Fehlschluss ist bei F59
+> passiert. Sie sind hier nur die Gegenprobe zu einer Aussage, die schon anders bewiesen ist.
+
+`handleConnection()` beantwortet drei Fälle mit `socket.end(text)` und kehrt **zurück, ohne je eine
+`SmtpConnection` zu bauen** — und der einzige `'error'`-Listener des ganzen Verbindungspfads lag in
+deren Konstruktor (`attachSocketHandlers`). Ein `net.Socket` **ohne** `'error'`-Listener verschluckt den
+Fehler nicht: `EventEmitter` **wirft** ihn, und eine unbehandelte Ausnahme im Accept-Pfad beendet den
+Prozess.
+
+Gemessen, nicht geschlossen — so sah es aus:
+
+```
+exit code 1, terminating signal null
+node:events:497
+      throw er; // Unhandled 'error' event
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+```
+
+**Warum das schwer wiegt.** Der `denied`-Pfad ist der Pfad **jeder** IP, die nicht auf der ACL steht.
+Wer den Port erreichen kann und nicht zugelassen ist, kann den Empfänger mit einer
+Connect-dann-Reset-Schleife anhalten. Ein abgestürzter Empfänger nimmt keine Post an — Absender
+warten und wiederholen, es ist also Verfügbarkeit und kein Datenverlust, aber es ist der billigste
+denkbare Denial of Service gegen einen Compliance-Empfänger. Und es braucht keine Absicht: ein
+Load-Balancer-Healthcheck, ein Portscanner oder ein MTA, der aufgibt, erzeugt dasselbe RST.
+
+**Behebung:** ein `'error'`-Listener **als Erstes** in `handleConnection()`, vor jedem Zweig, der
+zurückkehren kann. Er loggt nur, solange keine `SmtpConnection` den Socket besitzt — danach loggt diese
+selbst, und eine zweite Zeile wäre nur eine Dopplung.
+
+### Wie er gefunden wurde, und warum das die lehrreichere Hälfte ist
+
+**F61 ist die tatsächliche Ursache der roten CI-Läufe, die zweimal F59 zugeschrieben wurden.** Der
+Ablauf ist es wert, festgehalten zu werden:
+
+1. `ingress-process-boot.test.ts` wurde rot mit `expected … to contain 'shutting down'`. Das sah aus wie
+   eine verlorene Logzeile.
+2. Daraus wurde **F59**, mit einer plausiblen und sogar zutreffenden Ursachenbeschreibung
+   (`process.exit()` leert keinen Pipe-stdout) — nur war sie **nicht die Ursache dieses Fehlschlags**.
+3. Der Fix für F59 wurde gebaut, ausgeliefert, und vier grüne Läufe wurden als Beleg gemeldet. Beides
+   war falsch: der Beleg (zu wenige, abhängige Läufe) und die Diagnose.
+4. Erst als die Zusicherung **Exit-Code, Signal und `stderr`** mitmeldete, war die Antwort eindeutig —
+   und eine andere: Exit-Code 1, kein Signal, `Unhandled 'error' event`. Der Prozess hat seinen
+   `SIGTERM`-Handler **nie erreicht**; die fehlende Zeile war ein **Symptom**.
+
+**Der Lehrsatz ist der Diagnosewert einer Zusicherung, nicht der Bug.** Der Test hatte drei
+Beobachtungen zur Hand — Ausgabe, Exit-Code, Signal — und meldete eine. Das hat zwei Runden Fixarbeit
+in die falsche Richtung geschickt. Eine Zusicherung, die nur einen Teil des Beobachtbaren berichtet, ist
+kein halber Beleg, sondern ein **Hinweisgeber auf die falsche Ursache**.
+
+**Und ein zweiter, angenehmerer Befund:** die Ursache ist **plattformunabhängig** reproduzierbar. Das
+Symptom war Linux-only (auf Windows steht die Zusicherung hinter `platform !== 'win32'`), der Absturz
+nicht — mit zurückgenommenem Fix meldet der Lauf **auf diesem Windows-Host**
+`Unhandled Errors: Error: read ECONNRESET`. `socket.resetAndDestroy()` erzeugt ein echtes RST, deshalb
+schlägt der nächste Lesevorgang der Gegenseite **jedes Mal** fehl statt manchmal: aus einem Wettlauf ist
+ein deterministischer Test geworden.
+
+## F62 — `IJournalInboundJob` ist totes, aus der Zeit vor `JR-6-01` stammendes Gerüst und wird in der Architektur-Doku noch als künftiger Payload beworben
+
+**Gefunden:** `JR-6-02b` (2026-08-05), beim Verdrahten des Phase-B-Prozessors gegen die tatsächliche
+`JournalInboundJobData`-Payload.
+
+**Der Fund.** `packages/types/src/journaling.types.ts` definiert `IJournalInboundJob`
+(`journalingSourceId`, `tempFilePath`, `remoteAddress`, `receivedAt`) — eine Payload-Form, die
+**vollständig durch den Ledger nachschlagbar** wäre, statt kopiert zu werden. Eine Suche über das
+gesamte Repository (`grep -rl IJournalInboundJob`) findet **keinen einzigen Aufrufer, keinen
+Konstruktor, keine Verwendung** außerhalb der eigenen Definition. `docs/dev/journaling/02-architektur.md`
+§3 beschrieb bis zu diesem Fund sogar ausdrücklich, dieser Typ bleibe „als Payload nutzbar" und sein
+`tempFilePath`-Feld werde „künftig" auf den Spool-Pfad zeigen — eine Beschreibung, die der tatsächlich
+getroffenen und umgesetzten `JR-6-01`-Entscheidung direkt widerspricht.
+
+**Warum das mehr als Aufräumen ist.** `JR-6-01` hat, mit ausführlicher, gemessener Begründung
+(`06-status.md`), genau **gegen** diese Form entschieden: eine Payload mit `journalingSourceId` und
+`tempFilePath` kopiert Werte, die der Ledger schon hält, und eine solche Kopie kann **unentdeckbar**
+von ihrer Ledger-Zeile abweichen (dieselbe Klasse Fehler wie F46). Die tatsächliche Payload
+(`JournalInboundJobData`, `packages/journaling/src/phase-b/queue-contract.ts`) trägt genau ein Feld,
+`spoolTxId`. Dass der ältere Typ weiterhin exportiert und in der Architektur-Doku als Zielzustand
+beschrieben stand, ist ein Fund derselben Art, die dieses Register schon mehrfach verzeichnet hat: eine
+Doku-Aussage, die stillschweigend hinter der tatsächlich getroffenen Entscheidung zurückblieb, statt
+sie zu korrigieren, sobald sie getroffen war.
+
+**Behoben, teilweise:** `02-architektur.md` §3 trägt jetzt eine Korrektur mit Verweis auf diesen Befund
+und auf `JR-6-01`s tatsächliche Entscheidung. **Nicht behoben:** `IJournalInboundJob` selbst ist noch
+nicht aus `packages/types` entfernt — das ist eine eigenständige Aufräumarbeit mit eigenem Review
+(ein exportierter Typ ohne Aufrufer könnte von einem externen Konsumenten des Pakets importiert sein,
+auch wenn nichts im Repository selbst ihn nutzt), und liegt außerhalb des Umfangs von `JR-6-02b`.
+
+**Schwere:** niedrig — der Typ wird nirgends konstruiert, richtet also keinen Schaden an. Der Wert des
+Fundes liegt in der korrigierten Doku-Aussage, nicht in einer Verhaltensänderung.
+
+## F63 — der `journal-inbound`-Worker bekam mit `JR-6-02b` seine ersten echten, dauerhaften Postgres-Verbindungen, und die CI-Umgebung war darauf nicht vorbereitet
+
+**Gefunden:** `JR-6-02b` (2026-08-05), fünf rote CI-Läufe in Folge nach dem ersten grünen lokalen
+Volllauf, bevor der sechste grün wurde (`31054880932`).
+
+**Der Fund, in zwei Teilen — jeder für sich unauffällig, zusammen vier CI-Iterationen teuer.**
+`JR-6-01`s Prozessor war ein reiner Platzhalter (kein DB-Zugriff, kein Storage-Zugriff); `JR-6-02b`
+verdrahtet ihn gegen `IngestionService`/`StorageService`/`PostgresLedgerLookup`, und zwei
+Eigenschaften dieser Verdrahtung, die lokal (mit vollständig gesetzten Umgebungsvariablen und einer
+migrierten Datenbank) unsichtbar bleiben, waren in der CI-Umgebung sofort sichtbar. **Ein dritter,
+zunächst hier mitgeführter Punkt (ein hängender Shutdown) ist kein CI-Umgebungsproblem und steht
+jetzt richtig gerahmt als eigener Befund: F64.**
+
+1. **`config/storage.ts` wirft beim Import, nicht bei der ersten Benutzung.** Ein bloßes
+   `import { StorageService } from '...'` am Kopf einer Datei reicht, um `Invalid STORAGE_TYPE:
+undefined` auszulösen, wenn `STORAGE_TYPE` nicht gesetzt ist — unabhängig davon, ob und wann
+   `new StorageService()` tatsächlich aufgerufen wird. Die CI hatte `STORAGE_TYPE`/
+   `STORAGE_LOCAL_ROOT_PATH`/`ENCRYPTION_KEY` nie gesetzt, weil `.github/workflows/ci.yml`s eigener
+   Kommentar bis dahin zutraf: „the integration suite never touches `config/storage.ts`". Der erste
+   rote Lauf riss dabei **23 von 106 Testdateien** mit, nicht nur die eine, die den Worker spawnt —
+   ein einzelner Import-Fehlschlag in einem Kindprozess genügte, um den ganzen Vitest-Lauf als
+   Fehlschlag zu melden.
+2. **`process.env.DATABASE_URL` in der CI ist absichtlich die unmigrierte Wartungsdatenbank.**
+   `acquireTestDatabase()` erzeugt daraus je Testdatei eine eigene, migrierte Datenbank — aber ein
+   Test, der einen **Kindprozess spawnt** statt die Harness direkt zu benutzen, muss die
+   Verbindungszeichenkette dieser isolierten Datenbank **explizit** an den Kindprozess weiterreichen.
+   `journal-inbound-worker.int.test.ts` tat das nie, weil der Platzhalter-Prozessor nie eine
+   Datenbankabfrage brauchte. Der Fehlschlag war `relation "journal_ledger" does not exist`.
+
+**Warum das kein Einzelfall bleiben muss.** Jeder künftige Worker-Prozess, der zum ersten Mal echten
+DB-/Storage-Zugriff bekommt (etwa `JR-6-04`s Reconciler), trifft auf dieselben zwei Fallen, wenn er
+gegen die CI läuft, ohne dass jemand sie vorher kennt: die CI setzt nur, was der jeweils letzte
+Prozess brauchte, nicht was ein neuer Prozess braucht. Wer den nächsten Worker gegen echte Services
+verdrahtet, sollte **vorher** `corepack pnpm --filter @open-archiver/backend test:types` **beider**
+betroffenen Pakete laufen lassen (nicht nur eines, siehe auch die separate Lehre in `JR-6-02b`s
+Statuseintrag) und den CI-Job-`env:`-Block auf fehlende Variablen prüfen, statt es dem ersten
+CI-Lauf zu überlassen, es zu melden. Der Reconciler wird außerdem in den Bestand treffen, den F64
+beschreibt, wenn er als eigener Prozess läuft.
+
+**Schwere:** mittel — kein Datenverlust, keine Sicherheitsfrage, aber vier CI-Iterationen für eine
+einzige Scheibe sind genau die Art Kosten, die eine Lehre rechtfertigt, nicht nur einen Fix.
+
+## F64 — der `journal-inbound`-Worker beendet sich nach `worker.close()` nicht selbst; ein offenes Handle irgendwo im `IngestionService`/`StorageService`/DB-Singleton-Graphen hält den Prozess am Leben
+
+**Gefunden:** `JR-6-02b` (2026-08-05), beim CI-Lauf, der zum ersten Mal die SIGTERM-Zusicherung von
+`JR-6-01` tatsächlich erreichte (die vorherigen roten Läufe — F63 — endeten vorher).
+
+**Was gemessen ist, nicht vermutet:** nach einem `worker.close()`, der laut BullMQ erfolgreich
+aufgelöst hat (kein Job mehr aktiv), blieb der Prozess **mindestens 20 Sekunden** am Leben, statt sich
+von selbst zu beenden. Schließen der einen bekannten neuen Verbindung dieser Scheibe (`ledgerSql`,
+der bare Postgres-Client aus `journal-ledger-query-adapter.ts`) behob es **nicht** — der Prozess
+hing weiterhin.
+
+**Was nicht gemessen ist:** welches Handle genau. Der Verdachtsraum ist eingegrenzt (`IngestionService`,
+`StorageService`, oder der `packages/backend/src/database`-Singleton, alle drei zum ersten Mal in
+diesem Prozess importiert), aber nicht weiter isoliert — auf ausdrückliche Anweisung nicht, siehe
+unten.
+
+**Das ist kein Befund über die CI-Umgebung, im Unterschied zu F63.** Ein Worker, der sich nach
+abgeschlossenem Drain nicht selbst beenden kann, verhält sich in Produktion identisch: dort holt ihn
+ein Supervisor mit `SIGKILL`, und genau das soll ein graceful Shutdown verhindern. Der
+20-Sekunden-Fehlschlag im Test war der **Melder**, nicht der Defekt — er wäre in jeder Umgebung
+aufgetreten, die tatsächlich bis zum Ende der Wartezeit misst.
+
+**Behoben, ohne die Ursache zu identifizieren:** `journal-inbound.worker.ts`s `shutdown()` ruft nach
+`worker.close()` einen bestmöglichen `ledgerSql.end()` und danach **`process.exit(0)`** explizit auf.
+Das ist ein bewusster Kompromiss, keine Reparatur: ein erzwungener Exit nach einem bestätigt
+abgeschlossenen Drain ist derselbe Tausch, den diese Datei an anderer Stelle schon eingeht (ein
+hängender Prozess ist der schlechtere Ausgang, weil ein Supervisor ihn ohnehin `SIGKILL`t). **Auf
+ausdrückliche Anweisung nicht weiter untersucht** — das Ziel dieser Scheibe war die korrekte
+Verbuchung, nicht die Ursachenfindung.
+
+**Nebenbefund, im selben `shutdown()`:** die Fehlerbehandlung von `ledgerSql.end()` protokolliert mit
+`logger.warn(...)` **unmittelbar vor** `process.exit(0)`. Das ist exakt die Reihenfolge, die **F59**
+war (`console.log` gefolgt von `process.exit()`, ohne dass der Aufrufer weiß, ob der Log-Schreibvorgang
+auf einem Pipe-stdout abgeschlossen ist, bevor der Prozess endet). Hier ist die Schwere niedrig, weil
+diese Zeile **keine Zusicherung** trägt, die ein Test prüft (anders als F59s „shutting down"-Zeile) —
+aber das Muster ist dasselbe, in einer neuen Datei, und ist billig zu benennen, solange es auffällt.
+Kein Fix in dieser Scheibe; für ein tatsächliches Auftreten wäre `writeLineThenFlush()`
+(`apps/smtp-ingress`) die bereits vorhandene Lösung.
+
+**Schwere:** mittel — kein Datenverlust, aber eine offene Frage über den Ressourcen-Umgang der drei
+neu importierten Services, die jeder künftige Worker-Prozess mit denselben Abhängigkeiten wieder
+treffen wird (siehe F63s Verweis für `JR-6-04`).
+
+## F65 — das lokale Pre-Push-Gate behandelte seine eigenen Infrastruktur-Vorbedingungen asymmetrisch
+
+**Gefunden:** Rolle TEST, unabhängig, durch drei tatsächliche Läufe auf dem sauberen Kopf-Commit
+`d96bd26` von `scripts/pre-push-gate.mjs` (2026-08-06, kein Backlog-Task — Werkzeug-Infrastruktur nach
+`JR-6-02b`s Kostenanalyse) · **Status:** **behoben** (`1611434`), dreifach nachkalibriert
+
+`DATABASE_URL` und `REDIS_PASSWORD` sind Host-Infrastruktur für Schritt 4/4 des Gates, kein
+Prüfgegenstand — anders als `STORAGE_TYPE`/`ENCRYPTION_KEY`/etc. (deren Fehlen in `ci.yml` genau das
+ist, was geprüft werden soll) sagt ihr Fehlen nichts über `ci.yml`, sondern nur, dass diese Shell noch
+nicht eingerichtet ist. Die Behandlung war asymmetrisch:
+
+1. **Fehlendes `DATABASE_URL`** überspringt Schritt 4/4 handwerklich korrekt, nannte aber nie, welche
+   Fehlschlagklassen dadurch ungeprüft bleiben — und da kein `.env` im Repository liegt, ist das der
+   **Normalfall** auf einem frischen Checkout, nicht der Randfall. Die alte Schlusszeile „All checks
+   passed or were skipped with a stated reason" hätte das verdeckt (Form von F48/`JR-4-10`).
+2. **Fehlendes/falsches `REDIS_PASSWORD` wurde gar nicht geprüft.** Ein reiner TCP-Connect (die einzige
+   Prüfung, die es vorher gab) gelingt gegen Valkey mit `--requirepass` unabhängig vom Passwort, weil
+   Auth oberhalb der TCP-Ebene passiert. Die Folge: Build und `vitest` liefen an und scheiterten mitten
+   im Testlauf mit vier `ReplyError: NOAUTH Authentication required`-Stacktraces, ohne genannte Ursache
+   — **Exit 1 auf sauberem Baum**, die F35-Form.
+
+**Behoben:** `probeRedisRequiresAuth()` spricht `PING`, und nur bei einer `-NOAUTH`-Antwort zusätzlich
+`AUTH <password>` + erneutes `PING` — beantwortet „kommt Schritt 4/4 überhaupt durch" **vor** jedem
+Build/Spawn. Beide Vorbedingungen benennen beim Überspringen jetzt explizit, welche Klassen ungeprüft
+bleiben (`9af1492`, `41c407e`) und das lokale Rezept. Die Summary-Zeile unterscheidet „All checks
+passed" von „All runnable checks passed. Step 4/4 … was SKIPPED".
+
+**Kalibriert, alle drei vom Prüfer gemessenen Zustände nachgefahren:** nichts gesetzt → Exit 0 mit
+Namensnennung; nur `DATABASE_URL` → Exit 0 (vorher Exit 1 mit `NOAUTH`); beide korrekt gesetzt →
+Exit 0, alle vier Schritte `PASS`. Gegenprobe: `41c407e`s ursprüngliche Kalibrierung (Test auf
+`41c407e~1` zurückgesetzt) meldet danach weiterhin exakt dieselbe `AssertionError`, unverändert von
+diesem Umbau — zurückgesetzt, `git diff --cached --stat` danach leer.
+
+**Schwere:** niedrig — kein Produktionscode betroffen, aber ein Gate, das auf sauberem Baum rot wird,
+verliert das Vertrauen, von dem seine Wirkung abhängt (dieselbe Lehre wie F35).
+
+## F66 — `checkSpoolHighWaterMark()` durchläuft bei jeder SMTP-Annahme den gesamten Spool-Baum: O(n²) Gesamtkosten bei wachsendem Rückstand
+
+**Gefunden:** PO, während der `JR-6-07`-Nachverifikation auf echtem Linux (WSL2/Ubuntu 24.04, natives
+ext4, nicht über `/mnt/*`) · **Status:** **offen, Zuordnung E7 entschieden** (Auftraggeber,
+2026-08-07) · Schwere **hoch** — Ursache bereits in `layout.ts`s eigenem Kommentar seit
+`JR-3-01`/`JR-3-04` als „links open" benannt, aber nie behoben, und diese Scheibe ist der erste
+**empirische** Beleg, dass es kein theoretisches Randproblem ist.
+
+**Fundort:** `packages/journaling/src/spool/layout.ts` — `checkSpoolHighWaterMark()` ruft
+`computeDirectoryUsageBytes()` auf, das den kompletten Spool-Baum (`incoming/` **und**
+`quarantine/`, alle 256 Shard-Verzeichnisse) durchläuft und **jede einzelne Datei** `stat()`-t.
+Aufgerufen von `packages/journaling/src/spool/acceptance.ts:290`, **vor jeder einzelnen
+SMTP-Annahme** („reject before a single byte is written"). Der Kommentar in `layout.ts` (Zeilen
+44–52) benennt das Problem selbst wörtlich: „doing it once per SMTP transaction at meaningful spool
+depth is `O(entries)` work on the hot path the acceptance contract is supposed to keep fast. A
+maintained running counter [...] is the likely production shape; this module deliberately does not
+decide that."
+
+**Nicht das Sharding.** 256 Shard-Verzeichnisse (Git-Style, erstes Byte von `SHA-256(txid)`) sind bei
+10.000–100.000 Nachrichten mit ~39–390 Dateien pro Shard trivial für jedes Dateisystem. Der Fehler
+liegt allein darin, dass der **gesamte** Baum bei **jeder** Annahme neu durchlaufen wird, egal wie
+groß er schon ist.
+
+**Gemessen, nicht vermutet.** Ein diagnostischer Soak-Lauf (`JR-6-07`s Testdatei, temporär auf 10.000
+Nachrichten/20-Minuten-Budget reduziert und mit Fortschrittsprotokollierung alle 500 Nachrichten
+versehen — nicht committet, reine Diagnose) auf echtem Linux ergab eine klar monotone,
+nicht-plateauende Verlangsamung der **Momentanrate**:
+
+| Nachrichten-Fenster | Momentanrate |
+| ------------------- | ------------ |
+| 0–500               | ~33/s        |
+| 500–1.000           | ~15,5/s      |
+| 1.000–1.500         | ~10,6/s      |
+| 1.500–2.000         | ~7,2/s       |
+| 2.000–2.500         | ~5,9/s       |
+| 3.000–3.500         | ~4,3/s       |
+| 4.000–4.500         | ~2,3/s       |
+
+Der Lauf erreichte 5.000 von 10.000 Nachrichten nach ~1.011.000ms und lief danach in das
+20-Minuten-Diagnose-Timeout. Ein vorheriger, unveränderter Lauf mit den committeten 100.000
+Nachrichten scheiterte bereits am eigenen 3-Stunden-Budget (`NIGHTLY_SOAK_BUDGET_MS`) — nicht an
+einer Assertion, sondern an `Error: Test timed out in 10800000ms`. Beide Zahlen sind konsistent mit
+O(n²): die kumulierte Zeit bis N Nachrichten wächst quadratisch, nicht linear.
+
+**Warum das über `JR-6-07`s Testrahmen hinausgeht:** Der Soak-Test lässt den Spool bewusst
+unabgeräumt (Phase A only, siehe `journal-soak.adv.test.ts`s eigene Scope-Begründung), was diesen
+Effekt künstlich verstärkt gegenüber normalem Betrieb, in dem Phase B kontinuierlich abräumt. Aber
+genau dieselbe Bedingung — ein wachsender, unabgeräumter Spool — entsteht bei jedem **echten**,
+länger andauernden Phase-B-Ausfall (`JR-6-06`s Szenario, nur bei realistisch viel größerem
+Rückstand als den 1–2 Nachrichten, die dort getestet wurden). Jede neu ankommende Nachricht während
+eines solchen Ausfalls würde messbar langsamer akzeptiert als die vorherige. Das bedroht nicht die
+**Korrektheit** der zentralen Randbedingung aus `CLAUDE.md` („`250 OK` erst nach fsync von Spool und
+Ledger") — die bleibt erfüllt — aber ihre **Latenzgarantie** wächst unbegrenzt mit dem Rückstand, und
+bei genug Rückstand drohen SMTP-client-seitige Timeouts, die den Sender zu Wiederholungsversuchen
+oder im Extremfall zu einem NDR zwingen könnten.
+
+**Naheliegender Fix** (nicht umgesetzt, da außerhalb des Scopes dieser Verifikationssitzung): der im
+Code selbst vorgeschlagene „maintained running counter" — bei jedem Schreiben inkrementiert, bei
+jeder Freigabe durch Phase B oder den Reconciler (`JR-6-04`) dekrementiert, gegen einen vollen
+Verzeichnis-Walk beim Crash-Recovery-Scan (`JR-3-05`) abgeglichen, der ohnehin beim Start läuft.
+
+**Zuordnung: E7** (WORM-Storage), wo `S3StorageProvider`/Spool-Layout ohnehin angefasst werden —
+analog zu F60. **Entschieden vom Auftraggeber am 2026-08-07: nach E7 verschoben, blockiert `JR-6-08`
+nicht.** Die Acceptance-Contract-Korrektheit ist unberührt; die O(n²)-Latenz unter Rückstand wird mit
+F60 zusammen in E7 behoben, nicht vorher.

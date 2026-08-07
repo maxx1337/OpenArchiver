@@ -89,6 +89,11 @@ function loggingLedgerLookup(inner: LedgerLookup, log: string[]): LedgerLookup {
 			log.push('ledger-lookup');
 			return inner.findBySpoolTxIds(ids);
 		},
+		// JR-6-03: this suite's scans never call this method -- delegated only so the wrapper still
+		// satisfies `LedgerLookup`, not because any test here exercises it.
+		findOriginalReceiptSeq(chainScopeId, contentSha256) {
+			return inner.findOriginalReceiptSeq(chainScopeId, contentSha256);
+		},
 	};
 }
 
@@ -176,6 +181,10 @@ suite('ci', 'runExclusiveCrashRecoveryScan() (JR-4-18)', () => {
 			async findBySpoolTxIds() {
 				throw new Error('boom: ledger unreachable mid-scan');
 			},
+			// JR-6-03: not exercised by this scan; present only to satisfy `LedgerLookup`.
+			async findOriginalReceiptSeq() {
+				throw new Error('not used in this test');
+			},
 		};
 		const { sink } = fakeAlertSink();
 
@@ -247,6 +256,10 @@ suite('ci', 'runExclusiveCrashRecoveryScan() (JR-4-18)', () => {
 					// it were (wrongly) allowed to run concurrently.
 					await new Promise((resolve) => setTimeout(resolve, 5));
 					return new Map();
+				},
+				// JR-6-03: not exercised by this concurrency test; present only to satisfy `LedgerLookup`.
+				async findOriginalReceiptSeq() {
+					throw new Error('not used in this test');
 				},
 			};
 		}

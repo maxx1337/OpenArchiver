@@ -59,7 +59,27 @@ export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
  *
  * Postgres cannot drop enum values — a new event type is an `ALTER TYPE … ADD VALUE`, and removing
  * one is not possible. Keep this list in sync with `JournalEventType` in
- * `packages/types/src/journal-ledger.types.ts`; that type is what the canonical encoding hashes.
+ * `packages/types/src/journal-ledger.types.ts` and `LedgerAppendRequest['eventType']` in
+ * `packages/journaling/src/ledger/ledger-port.ts`; the first is what the canonical encoding hashes,
+ * the second is the write port's own copy of the same union (ADR-037's F46 point: two places agreeing
+ * by convention, not by a shared type, is exactly what let the missing `duplicate_marker` value go
+ * unnoticed).
+ *
+ * `duplicate_marker` (ADR-037, `JR-6-03` follow-up): the `duplicate_of` marker `runPhaseBPipeline()`
+ * appends for a genuinely redelivered message was, until this migration, written as `'receipt'` —
+ * there was no other value for it. That overcounted every query that holds `receipt` rows against
+ * accepted messages (`verify`, E9, will do exactly this): three ledger rows for two deliveries read as
+ * three receipts, not two. The discriminator existed (`spool_txid is null`) but only in a doc comment,
+ * never enforced. This value makes it a first-class, queryable fact instead.
+ *
+ * **Existing rows are untouched, and that is correct, not a gap.** `event_type` is hashed into
+ * `chain_hash` (see `packages/types/src/journal-ledger.types.ts`'s `JournalLedgerRecord` doc comment),
+ * and the ledger is append-only (ADR-009) — a marker row written before this migration already has
+ * its `chain_hash` computed over `event_type = 'receipt'`, and that hash is exactly as correct as the
+ * byte that produced it. Widening the enum does not retroactively relabel anything; it only changes
+ * what `runPhaseBPipeline()` writes for the *next* marker. No `FORMAT_VERSION` bump: the canonical
+ * encoder (`stringField(record.eventType, 'eventType')`) hashes whatever string is present, generically
+ * — it has no fixed mapping from event type to byte code that this value would need to join.
  */
 export const journalEventTypeEnum = pgEnum('journal_event_type', [
 	'receipt',
@@ -68,6 +88,7 @@ export const journalEventTypeEnum = pgEnum('journal_event_type', [
 	'retention_expiry',
 	'object_erased',
 	'legal_hold_set',
+	'duplicate_marker',
 ]);
 
 export const journalLedger = pgTable(

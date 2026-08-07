@@ -45,16 +45,108 @@ jobs:
                     --health-timeout 5s
                     --health-retries 5
 
+            # JR-6-01. The `journal-inbound` worker is a BullMQ consumer, and proving that the process
+            # starts means starting it -- which needs a broker. Until E6 every suite got by with
+            # Postgres alone, which is why this service is new here.
+            #
+            # `OA_TEST_REQUIRE_INFRA: '1'` below is what makes it mandatory rather than nice to have: a
+            # `suiteRequiring(probeRedis())` suite would *fail* this job if nothing were listening,
+            # instead of skipping quietly. Adding the service and setting the variable are therefore one
+            # change, not two.
+            #
+            # Same image as docker-compose.yml, but **without** its `--requirepass`, and that difference
+            # is a limitation rather than a simplification. A GitHub Actions service container takes
+            # `image`, `env`, `ports`, `volumes` and `options` (docker *create* flags) -- there is no way
+            # to append a server argument, and `valkey-server --requirepass …` is exactly that. So this
+            # broker is password-less and `REDIS_PASSWORD` stays unset in this job's env.
+            #
+            # What that costs: the AUTH path is not exercised here. It is exercised locally, where
+            # docker-compose.yml does set `--requirepass` -- and `probeRedis()` is deliberately a plain
+            # TCP connect so a wrong password arrives as a connection error rather than as a skip. If the
+            # AUTH path ever needs to be covered in CI, the way to do it is a `docker run` step instead of
+            # a service container, not a change to the code under test.
+            valkey:
+                image: valkey/valkey:8-alpine
+                ports:
+                    - 6379:6379
+                options: >-
+                    --health-cmd "valkey-cli ping"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+            # JR-6-02b / ADR-035. The Phase-B end-to-end test needs a real search index to prove
+            # "spool file to searchable hit" as an assertion, not a manual, once-off demonstration.
+            #
+            # Unlike `valkey` above, `MEILI_MASTER_KEY` is a documented environment variable
+            # (`https://www.meilisearch.com/docs/learn/security/basic_security`), not a CLI flag --
+            # measured directly against this image rather than assumed, because the `valkey` service's
+            # own limitation is exactly the mistake "surely env works the same way here" would repeat.
+            # A container started the same way this service starts (`docker run -e MEILI_MASTER_KEY=... -p
+            # 7700:7700 getmeili/meilisearch:v1.38`, no `command`) answers `/health` without a key,
+            # `/indexes` with `401` without one, `403` with a wrong one, and `200` with the right one --
+            # so authentication is fully exercised here, with no equivalent to the `valkey` gap.
+            meilisearch:
+                image: getmeili/meilisearch:v1.38
+                env:
+                    MEILI_MASTER_KEY: ci-test-only-meili-master-key-not-a-secret
+                    MEILI_ENV: development
+                    MEILI_NO_ANALYTICS: 'true'
+                ports:
+                    - 7700:7700
+                # `curl` is present in this image (measured: `docker run --rm getmeili/meilisearch:v1.38
+                # which curl`) -- the image ships no Docker `HEALTHCHECK` of its own, so without this
+                # GitHub Actions would consider the container "started" as soon as the process forks,
+                # not once its HTTP server actually accepts connections.
+                options: >-
+                    --health-cmd "curl -f http://localhost:7700/health"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
         env:
-            # Server *and* credentials for the test harness. No `STORAGE_*` variables: the
-            # integration suite never touches `config/storage.ts`.
+            # Server *and* credentials for the test harness.
             DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
             PGPASSWORD: postgres
+            # JR-6-01: the same variables `packages/backend/src/config/redis.ts` reads, so the spawned
+            # `journal-inbound` worker and `probeRedis()` in the harness point at the service container
+            # above. `REDIS_PASSWORD` is deliberately absent -- see the note on that service.
+            REDIS_HOST: localhost
+            REDIS_PORT: '6379'
             # JR-1-05b. This job *provisions* Postgres, so a suite skipping because Postgres is
             # unreachable is a broken job, not a legitimate skip. With this set, `suiteRequiring()`
             # emits a failing test instead of a visible skip. Positive expectation, in the suite --
             # it replaces the log grep that used to look for the absence of a skip notice.
             OA_TEST_REQUIRE_INFRA: '1'
+            # JR-6-02b: `journal-inbound.worker.ts` now imports the real Phase-B processor, which
+            # imports `IngestionService`/`StorageService` at module scope -- and `config/storage.ts`
+            # throws **at import**, not at first use, if `STORAGE_TYPE` is unset. Before this slice
+            # the comment here correctly said the integration suite never touched `config/storage.ts`
+            # at all; that stopped being true the moment the worker's own module graph reached it.
+            # `STORAGE_LOCAL_ROOT_PATH` only needs to exist as a path -- `journal-inbound-worker.int.test.ts`
+            # fails its one job at the gate (no ledger receipt), before any file is ever written. A
+            # plain literal, not a `${{ runner.temp }}` expression: this is job-level `env:`, and the
+            # existing use of that expression in this file is step-level -- kept simple rather than
+            # relying on an untested combination.
+            STORAGE_TYPE: local
+            STORAGE_LOCAL_ROOT_PATH: /tmp/oa-storage
+            # JR-6-05: with this set, `StorageService` encrypts at rest, and
+            # `journal-hash-before-encryption.int.test.ts` can actually verify what the backlog asks
+            # of it -- that `content_sha256` is taken over the PLAINTEXT wire bytes. Without a key,
+            # stored bytes and plaintext are the same bytes, "re-hash equals the ledger value" holds
+            # whatever the ordering is, and the test says so in a `coverageNotice` instead of
+            # reporting the same green as a run that proved it. 64 hex chars = the 32 bytes
+            # `config/storage.ts` validates eagerly. Test-only, never a secret.
+            STORAGE_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+            # `CryptoService` throws at import without this (`decryptSource()`/`seedIngestionSource()`
+            # now always populate `credentials`, JR-6-02b's F-caught gap in the shared seed helper).
+            # A fixed test-only value, never a secret.
+            ENCRYPTION_KEY: ci-test-only-encryption-key-not-a-secret
+            # ADR-035: same variables `packages/backend/src/config/search.ts` reads, pointed at the
+            # `meilisearch` service above. Unlike `valkey`, the key here is real and checked -- see
+            # that service's own comment.
+            MEILI_HOST: http://localhost:7700
+            MEILI_MASTER_KEY: ci-test-only-meili-master-key-not-a-secret
 
         steps:
             - name: Checkout repository

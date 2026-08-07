@@ -347,6 +347,9 @@ suiteRequiring('ci', 'journal_ledger schema (JR-2-04)', postgresProbe, () => {
 			'retention_expiry',
 			'object_erased',
 			'legal_hold_set',
+			// ADR-037 (JR-6-03 follow-up): the duplicate_of marker's own event type, added last by
+			// migration 0043 -- ALTER TYPE ... ADD VALUE always appends, never reorders.
+			'duplicate_marker',
 		]);
 	});
 });

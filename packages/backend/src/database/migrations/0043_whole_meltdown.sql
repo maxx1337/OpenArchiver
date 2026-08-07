@@ -1,0 +1,1 @@
+ALTER TYPE "public"."journal_event_type" ADD VALUE 'duplicate_marker';

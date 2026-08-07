@@ -3241,6 +3241,33 @@ export class EsmtpServer {
 	 * is"), never as an implicit allow.
 	 */
 	private handleConnection(socket: net.Socket): void {
+		// F61: attached FIRST, before any branch below can `return`.
+		//
+		// The three rejection paths that follow answer with `socket.end(text)` and return without ever
+		// constructing a `SmtpConnection` -- which is where the only other `'error'` listener lives
+		// (`SmtpConnection.attachSocketHandlers`). A `net.Socket` with no `'error'` listener does not
+		// swallow the error: `EventEmitter` **throws** it, and an uncaught exception in the accept path
+		// takes the whole receiver down. Measured, not reasoned: a client that connects and immediately
+		// resets while being rejected killed the process with
+		// `Error: read ECONNRESET / throw er; // Unhandled 'error' event`, exit code 1.
+		//
+		// It is reachable on the `denied` path too, so anything that can reach the port and is **not** on
+		// the ACL can stop the receiver with a connect-then-reset loop. A crashed receiver stops accepting
+		// mail -- senders queue and retry, so this is availability, not data loss, but it is the cheapest
+		// possible denial of service against a compliance-grade journaling endpoint.
+		//
+		// Logged only while no `SmtpConnection` owns the socket; once one does, it logs the error itself
+		// and a second line here would only duplicate it.
+		socket.on('error', (err) => {
+			if (this.connections.has(socket)) {
+				return;
+			}
+			this.logger.warn(
+				{ err, remoteAddress: socket.remoteAddress },
+				'smtp-ingress: socket error before a connection was established'
+			);
+		});
+
 		let limiterSourceId: string | null = null;
 		if (this.sourceAclEvaluator) {
 			const remoteIp = socket.remoteAddress;
