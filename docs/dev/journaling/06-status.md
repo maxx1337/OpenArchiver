@@ -443,6 +443,6 @@ Gesamtkosten führt (Diagnoselauf: Momentanrate fällt von ~33/s auf ~2,3/s inne
 von 10.000 Nachrichten). Volle Analyse in `09-befunde-bestandscode.md` unter F66. **Damit ist
 `JR-6-07`s Timeout kein WSL-/Antivirus-Artefakt, sondern ein reproduzierter, echter
 Performance-Befund** — betrifft potenziell auch reale, länger andauernde Phase-B-Ausfälle
-(`JR-6-06`-Szenario bei größerem Rückstand). Blockiert `JR-6-08` nach Einschätzung des PO nicht
-zwingend (Acceptance-Contract-Korrektheit unberührt, nur die Latenzgarantie unter Rückstand), sollte
-aber vor Produktionsfreigabe adressiert werden. Zur Entscheidung beim Auftraggeber vorgelegt.
+(`JR-6-06`-Szenario bei größerem Rückstand). **Entschieden vom Auftraggeber (2026-08-07): F66 wird
+nach E7 verschoben** (analog F60), blockiert `JR-6-08` nicht — die Acceptance-Contract-Korrektheit
+ist unberührt, nur die Latenzgarantie unter Rückstand.

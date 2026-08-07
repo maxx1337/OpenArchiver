@@ -173,10 +173,8 @@ in `10eec78`
 > sauber: 56,9/s, `seq` lückenlos, `verifyChain()` 0 Findings. **Aber:** der volle `nightly`-Lauf
 > (100.000) scheitert auch auf Linux am eigenen 3h-Budget — kein Plattformartefakt, sondern ein
 > reproduzierter, echter Befund: **F66**, `checkSpoolHighWaterMark()` durchläuft bei jeder Annahme den
-> gesamten Spool, O(n²) bei wachsendem Rückstand (Details: `09-befunde-bestandscode.md`). **Für
-> `JR-6-08` zu klären:** blockiert F66 die Abnahme, oder wird es wie F60 nach E7 verschoben? Der PO
-> tendiert zu Letzterem (Acceptance-Contract-Korrektheit ist unberührt, nur die Latenz unter
-> Rückstand) — Entscheidung liegt beim Auftraggeber.
+> gesamten Spool, O(n²) bei wachsendem Rückstand (Details: `09-befunde-bestandscode.md`).
+> **Entschieden (2026-08-07): F66 wird nach E7 verschoben** (analog F60), blockiert `JR-6-08` nicht.
 
 > **Vor der ersten Scheibe sind nach ADR-032 die Nummernkreise reserviert worden** (`fc15edc`, auf dem
 > **Integrationszweig**): **ADR-033–036** und **F59–F70**. `ADR-010` ist ausdrücklich **nicht** Teil
@@ -400,11 +398,9 @@ projektweit als „Fallstrick N" referenziert), die offenen Fragen an den Auftra
 
 **Stand 2026-08-07 — was wirklich offen ist, in dieser Reihenfolge:**
 
-0. **`F66` (neu, Schwere hoch): `checkSpoolHighWaterMark()` ist O(n²) bei wachsendem Spool-Rückstand**
-   — gemessen auf echtem Linux (WSL2), nicht nur vermutet. Blockiert `JR-6-08` oder wird wie `F60`
-   nach E7 verschoben? PO-Empfehlung: E7, aus demselben Grund wie F60 (Storage/Spool-Layout wird dort
-   ohnehin angefasst) — Acceptance-Contract-Korrektheit ist unberührt, nur die Latenz unter Rückstand.
-   Volle Analyse: `09-befunde-bestandscode.md`.
+0. ~~**`F66`: `checkSpoolHighWaterMark()` ist O(n²) bei wachsendem Spool-Rückstand**~~ — **entschieden
+   2026-08-07: nach E7 verschoben** (analog F60), blockiert `JR-6-08` nicht. Gemessen auf echtem
+   Linux (WSL2), nicht nur vermutet. Volle Analyse: `09-befunde-bestandscode.md`.
 1. **`F60`: `StorageService.put()` puffert Streams, obwohl die Signatur Streams verspricht** — jetzt
    beheben oder E7 zuordnen? **Empfehlung: E7**, wo `S3StorageProvider` für Object Lock ohnehin
    angefasst wird. Zu entscheiden ist dort auch, **wie**: die Verschlüsselung auf einen Stream-Cipher

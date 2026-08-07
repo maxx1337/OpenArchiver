@@ -3726,9 +3726,10 @@ verliert das Vertrauen, von dem seine Wirkung abhängt (dieselbe Lehre wie F35).
 ## F66 — `checkSpoolHighWaterMark()` durchläuft bei jeder SMTP-Annahme den gesamten Spool-Baum: O(n²) Gesamtkosten bei wachsendem Rückstand
 
 **Gefunden:** PO, während der `JR-6-07`-Nachverifikation auf echtem Linux (WSL2/Ubuntu 24.04, natives
-ext4, nicht über `/mnt/*`) · **Status:** **offen**, Schwere **hoch** — Ursache bereits in
-`layout.ts`s eigenem Kommentar seit `JR-3-01`/`JR-3-04` als „links open" benannt, aber nie behoben,
-und diese Scheibe ist der erste **empirische** Beleg, dass es kein theoretisches Randproblem ist.
+ext4, nicht über `/mnt/*`) · **Status:** **offen, Zuordnung E7 entschieden** (Auftraggeber,
+2026-08-07) · Schwere **hoch** — Ursache bereits in `layout.ts`s eigenem Kommentar seit
+`JR-3-01`/`JR-3-04` als „links open" benannt, aber nie behoben, und diese Scheibe ist der erste
+**empirische** Beleg, dass es kein theoretisches Randproblem ist.
 
 **Fundort:** `packages/journaling/src/spool/layout.ts` — `checkSpoolHighWaterMark()` ruft
 `computeDirectoryUsageBytes()` auf, das den kompletten Spool-Baum (`incoming/` **und**
@@ -3783,8 +3784,7 @@ Code selbst vorgeschlagene „maintained running counter" — bei jedem Schreibe
 jeder Freigabe durch Phase B oder den Reconciler (`JR-6-04`) dekrementiert, gegen einen vollen
 Verzeichnis-Walk beim Crash-Recovery-Scan (`JR-3-05`) abgeglichen, der ohnehin beim Start läuft.
 
-**Vorgeschlagene Zuordnung:** E7 (WORM-Storage), wo `S3StorageProvider`/Spool-Layout ohnehin
-angefasst werden — analog zu F60. **Blockiert `JR-6-08` nach Einschätzung des PO nicht zwingend**
-(die Acceptance-Contract-Korrektheit ist unberührt), sollte aber vor einer Produktionsfreigabe mit
-realistischen Backlog-Größen behoben oder zumindest mit einer dokumentierten Grenze versehen werden.
-Zur Entscheidung beim Auftraggeber vorgelegt.
+**Zuordnung: E7** (WORM-Storage), wo `S3StorageProvider`/Spool-Layout ohnehin angefasst werden —
+analog zu F60. **Entschieden vom Auftraggeber am 2026-08-07: nach E7 verschoben, blockiert `JR-6-08`
+nicht.** Die Acceptance-Contract-Korrektheit ist unberührt; die O(n²)-Latenz unter Rückstand wird mit
+F60 zusammen in E7 behoben, nicht vorher.
