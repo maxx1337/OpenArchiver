@@ -66,22 +66,22 @@ nicht.
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                   | Fertig / Gesamt                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                               | 6 / 6                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                 | 10 / 10                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                      | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                              | 11 / 11                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
-| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)              | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
-| 8           | E7   | WORM-Storage                       | offen                                                                                                    | 0 / 6                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                    | 0 / 8                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                    | 0 / 10                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                    | 0 / 9                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                          | Fertig / Gesamt                                                                                                                 |
+| ----------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                      | 6 / 6                                                                                                                           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                        | 10 / 10                                                                                                                         |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                             | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                     | 11 / 11                                                                                                                         |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                         | 9 / 9                                                                                                                           |
+| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)        | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
+| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                        | 9 / 9                                                                                                                           |
+| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)                     | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
+| 8           | E7   | WORM-Storage                       | **in Arbeit** — `JR-7-01`–`JR-7-04` (DEV) erledigt, `JR-7-05` (TEST, gegen MinIO) und `JR-7-06` (Abnahme) offen | 4 / 6                                                                                                                           |
+| 9           | E8   | Anchoring                          | offen                                                                                                           | 0 / 6                                                                                                                           |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                           | 0 / 8                                                                                                                           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                           | 0 / 8                                                                                                                           |
+| 12          | E11  | Compliance-Features                | offen                                                                                                           | 0 / 10                                                                                                                          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                           | 0 / 9                                                                                                                           |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-029**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-030**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -240,9 +240,7 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
 
 ## Sessionprotokoll
 
-> **Kein Epic läuft gerade — E6 ist abgenommen und zurückgemergt, E7 hat noch nicht begonnen.** Diese
-> Sektion ist deshalb aktuell leer; das nächste Epic füllt sie neu. Alle bisherigen Protokolle liegen
-> im Archiv:
+> Alle bisherigen (zurückgemergten) Epic-Protokolle liegen im Archiv:
 >
 > | Zeitraum                               | liegt in                               |
 > | -------------------------------------- | -------------------------------------- |
@@ -255,3 +253,48 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
 > Epics wandert ins Archiv, **sobald** es zurückgemergt ist — sonst wird diese Datei bei jeder Sitzung
 > erneut zur vollen Pflichtlektüre. **Neue Einträge kurz und in Feldform** (Task, Commit, Testzahl,
 > CI-Lauf, Entscheidungen, offen), kein Tabellenformat (Prettier-Padding-Kosten, siehe Archiv).
+
+**E7, `JR-7-01`–`JR-7-04` (DEV), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`.
+
+- **`JR-7-01`** — `S3StorageConfig` (`packages/types/src/storage.types.ts`) um `objectLockMode?:
+'COMPLIANCE'` und `objectLockRetainUntilDays?: number` erweitert. `S3StorageProvider.put()` hängt
+  `ObjectLockMode`/`ObjectLockRetainUntilDate` (berechnet als Schreibzeitpunkt + Tage) nur an, wenn
+  beide Werte gesetzt sind — unkonfiguriert identischer `Upload`-Aufruf wie vorher, bestehende
+  Aufrufer unverändert. Config-Wiring in `config/storage.ts` (`STORAGE_S3_OBJECT_LOCK_MODE`,
+  `STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS`, wirft beim Import bei unvollständiger/ungültiger Kombination,
+  passend zum bestehenden Stil dieser Datei) und `.env.example`.
+- **`JR-7-02`** — Least-Privilege-IAM-Policy (JSON) im Deployment-Guide
+  (`docs/enterprise/journaling/guide.md`, Abschnitt „Least-privilege credentials for the S3
+  backend"): kein `s3:DeleteObject`/`s3:DeleteObjectVersion`/`s3:BypassGovernanceRetention`, `Deny` auf
+  `s3:PutObjectRetention` unterhalb eines konfigurierbaren `s3:object-lock-remaining-retention-days`-
+  Floors (AWS-Standardmuster „nur verlängern"). Der MinIO-Verifikationstest ist `JR-7-05` (TEST, nicht
+  hier) — hier nur Dokumentation plus Policy-Artefakt.
+- **`JR-7-03`** — Guide-Abschnitt „Local filesystem storage is not WORM" benennt die Schwäche
+  unmissverständlich und dokumentiert Härtung (dediziertes Mount, restriktive Unix-Rechte,
+  `chattr +i`). Zusätzlich Code-Hook in `LocalFileSystemProvider.put()`: best-effort `chattr +i` nach
+  jedem Schreiben, nur wenn `STORAGE_LOCAL_HARDEN_IMMUTABLE=true` gesetzt ist, no-op außerhalb Linux,
+  Fehler geloggt und nicht fatal. Dokumentiert und bewusst in Kauf genommen: das blockiert auch die
+  eigene spätere Löschung derselben Datei (z.B. Retention-Ablauf), bis ein Operator `chattr -i` manuell
+  ausführt — das ist das Abschreckungsmodell, kein Fehler.
+- **`JR-7-04`** — Reihenfolge im Guide wie gefordert: „Retention under COMPLIANCE mode is
+  irreversible — read this before choosing a period" steht **vor** „Choosing a retention period and
+  enabling Object Lock" (beide im neuen Abschnitt „WORM Storage (Object Lock)", zwischen den
+  bestehenden Abschnitten „Security Considerations" und „Health Check").
+
+Nicht hier gemacht (bewusst, siehe Auftrag): `JR-7-05` (Tests gegen MinIO) und `JR-7-06` (Abnahme) —
+andere Rolle, danach.
+
+**Nachweise:** `corepack pnpm --filter @open-archiver/types build` grün; `corepack pnpm exec tsc
+--noEmit` in `packages/backend` grün (keine Ausgabe); `corepack pnpm exec prettier --check` auf allen
+geänderten `.ts`-Dateien und (nach `--write` nur dieser einen Datei) auf `guide.md` grün. **Kein**
+voller Testlauf durchgeführt — es wurde keine neue Testdatei angelegt (die Tests dafür sind
+`JR-7-05`), `suite-inventory.ts` also unverändert und nicht fällig. Migration nicht nötig (reine
+Konfiguration, keine Schemaänderung). i18n nicht nötig (technischer Guide, kein UI-Text).
+
+**Offene Annahmen für die Abnahme/TEST-Rolle:** (1) Namensgebung `objectLockMode`/
+`objectLockRetainUntilDays` und die ENV-Var-Namen sind neu gewählt, nicht durch ADR vorgegeben — falls
+`JR-7-05` andere Namen erwartet, ist das ein Diskussionspunkt, keine Bugmeldung. (2) Der numerische
+Floor `365` im Beispiel-Policy-JSON ist ein Platzhalter, kein empfohlener Wert — er muss auf
+`STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS` abgestimmt sein. (3) `chattr +i` wurde nicht gegen ein echtes
+Linux-Zielsystem verifiziert (dieser Host ist Windows) — nur `process.platform !== 'linux'`-Zweig und
+Kompilierung geprüft.
