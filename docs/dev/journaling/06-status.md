@@ -259,7 +259,9 @@ Rückstandsgröße. Cross-Process-Lücke offen gelegt statt versteckt: `apps/smt
 `journal-inbound`-Worker sind getrennte Prozesse, ein reiner In-Memory-Tracker im einen ist im
 anderen unsichtbar — `SpoolUsageReconciler` (5-Minuten-Walk in `apps/smtp-ingress`) mindert die
 Drift, löst sie aber nicht auf; echte prozessübergreifende Synchronisierung (z. B. Redis) ist nicht
-Teil dieser Behebung und steht für den Auftraggeber zur Entscheidung. **F60** (Commit `d6d80eb`):
+Teil dieser Behebung. **Auftraggeber-Entscheidung dazu, 2026-08-08 (Abnahme-Folgesitzung): akzeptieren
+und dokumentieren, kein Blocker für den Rückmerge** — Details und Begründung in
+`09-befunde-bestandscode.md`s F66-Eintrag. **F60** (Commit `d6d80eb`):
 `StorageService.put()`s Stream-Pfad läuft jetzt über einen Stream-Cipher (`PassThrough` +
 `stream/promises`-`pipeline()`) statt `streamToBuffer()`; Byte-Format unverändert (verifiziert durch
 direktes Entschlüsseln der Rohbytes); kalibrierter Regressionsnachweis (F43-Muster) schlägt gegen den

@@ -1,20 +1,33 @@
 # Abnahme E7 (WORM-Storage) — `JR-7-06`
 
-**Datum:** 2026-08-08 · **Geprüfter Commit:** `587b334` (Branch `claude/journaling-e7-worm-storage`,
-lokal deckungsgleich mit `origin/claude/journaling-e7-worm-storage`, Arbeitsbaum sauber bis auf das
-eigene, nicht committete `.oa-test-storage/`) · **CI-Lauf für diesen Commit:** `31247183509`
-(`success`, 3 min 12 s) · **Rolle:** Tester, unabhängige Sitzung — hat keine E7-Scheibe selbst
-umgesetzt (weder `JR-7-01`…`JR-7-04` (DEV) noch `JR-7-05` (TEST) noch die
-Auftraggeber-Dokumentationssitzung zum Soft-Delete/Overwrite-Befund betrafen diese Sitzung).
+**Datum:** 2026-08-08 · **Erstprüfung gegen Commit:** `587b334` (CI `31247183509`, `success`,
+3 min 12 s) · **Nachtrag/finales Urteil gegen Commit:** `b14a08e` (Branch
+`claude/journaling-e7-worm-storage`, lokal deckungsgleich mit
+`origin/claude/journaling-e7-worm-storage`, Arbeitsbaum sauber bis auf das eigene, nicht committete
+`.oa-test-storage/`) · **CI-Lauf für `b14a08e`:** `31249844634` (`success`) · **Rolle:** Tester,
+unabhängige Sitzung — hat keine E7-Scheibe selbst umgesetzt (weder `JR-7-01`…`JR-7-04` (DEV) noch
+`JR-7-05` (TEST) noch die Auftraggeber-Dokumentationssitzung zum Soft-Delete/Overwrite-Befund noch die
+Folge-Sitzung zu F60/F66 betrafen diese Sitzung).
 
-**Urteil: angenommen mit Auflage.** Die WORM/Object-Lock-Kernlieferung (`JR-7-01`…`JR-7-05`) ist
-solide umgesetzt, dokumentiert und — von mir selbst gegen ein frisches, unabhängig aufgesetztes
-MinIO reproduziert — nachweislich korrekt und **nicht fail-open** (siehe Kalibrierung unten). Eine
-Auflage bleibt offen und ist **kein** WORM-Defekt, sondern ein Verfahrensbruch: zwei Befunde, die der
-Auftraggeber am 2026-08-07 ausdrücklich „in E7, nicht vorher" zur Behebung zugeordnet hatte (F60,
-F66 — siehe unten), sind in der gesamten E7-Sitzungsfolge nicht angefasst worden. Das muss vor dem
-Rückmerge explizit neu entschieden werden (Nachholen oder förmliche Neuzuordnung), nicht stillschweigend
-verschwinden.
+**Urteil (Nachtrag 2026-08-08, siehe unten): angenommen, ohne Auflage.** Ursprünglich unten als
+„angenommen mit Auflage" protokolliert — die Auflage (F60/F66) ist danach in einer Folge-DEV-Sitzung
+nachgeholt worden, von mir selbst unabhängig nachgeprüft (Commits `c0cb970`, `d6d80eb`), und der
+verbleibende Cross-Process-Drift-Punkt ist vom Auftraggeber am selben Tag als akzeptierte,
+nicht-blockierende Design-Entscheidung dokumentiert. Der ursprüngliche Befund und meine Erstprüfung
+bleiben unten unverändert stehen (Beleg, dass das Verfahren gewirkt hat), der Nachtrag am Ende dieser
+Datei hebt das Verdikt.
+
+---
+
+### Ursprüngliches Urteil (2026-08-08, vor dem Nachtrag): angenommen mit Auflage
+
+Die WORM/Object-Lock-Kernlieferung (`JR-7-01`…`JR-7-05`) ist solide umgesetzt, dokumentiert und — von
+mir selbst gegen ein frisches, unabhängig aufgesetztes MinIO reproduziert — nachweislich korrekt und
+**nicht fail-open** (siehe Kalibrierung unten). Eine Auflage bleibt offen und ist **kein**
+WORM-Defekt, sondern ein Verfahrensbruch: zwei Befunde, die der Auftraggeber am 2026-08-07
+ausdrücklich „in E7, nicht vorher" zur Behebung zugeordnet hatte (F60, F66 — siehe unten), sind in der
+gesamten E7-Sitzungsfolge nicht angefasst worden. Das muss vor dem Rückmerge explizit neu entschieden
+werden (Nachholen oder förmliche Neuzuordnung), nicht stillschweigend verschwinden.
 
 ## Eigene Verifikation — nicht nur Berichte übernommen
 
@@ -100,9 +113,13 @@ nicht nur eine Vermutung aus dem Lesen der Sessionprotokolle.
 | `JR-7-03` | Local-FS als schwächer dokumentiert, gehärtet (dediziertes Mount, Rechte, `chattr +i` wo verfügbar)                                                                                                 | `guide.md` Abschnitt „Local filesystem storage is not WORM" (Zeilen 399–411) benennt die Schwäche unmissverständlich („no real WORM guarantee", „bypassed by whoever has root") und dokumentiert dediziertes Mount, restriktive Unix-Rechte und `chattr +i`. Code: `LocalFileSystemProvider.tryMakeImmutable()` ruft `chattr +i` nur auf Linux (`process.platform !== 'linux'` ⇒ No-Op, selbst gelesen), Fehler geloggt statt fatal, `STORAGE_LOCAL_HARDEN_IMMUTABLE=true` steuert es. **Nicht auf echtem Linux verifiziert** (dieser Host ist Windows, wie schon die vorherige Sitzung selbst einräumt) — nur der Nicht-Linux-No-Op-Zweig und die Kompilierung sind bestätigt, das war schon vorher bekannt und ist im Kriterium selbst nicht verlangt („wo verfügbar") | **erfüllt** (mit der bereits dokumentierten Einschränkung: `chattr +i` selbst nicht auf echtem Linux nachvollzogen) |
 | `JR-7-04` | Retention-Konflikt-Dokumentation steht **vor** der Wahl der Aufbewahrungsfrist (Reihenfolge ist Teil des Kriteriums)                                                                                | Selbst per `grep -n "^#\{1,4\} "` über `guide.md` nachvollzogen, nicht nur behauptet: Zeile 304 „Retention under COMPLIANCE mode is irreversible — read this before choosing a period" steht vor Zeile 317 „Choosing a retention period and enabling Object Lock" — dieselbe Reihenfolge auch inhaltlich (der Einleitungssatz der Sektion, Zeile 302, verlangt ausdrücklich „Read the whole section — in the order it is written — before you set a retention period")                                                                                                                                                                                                                                                                                                   | **erfüllt**                                                                                                         |
 | `JR-7-05` | WORM-Tests gegen MinIO: Überschreiben scheitert, Löschen scheitert, Retention gesetzt, Verkürzung scheitert — alle vier grün                                                                        | Von mir selbst gegen ein **frisches, unabhängig aufgesetztes** MinIO reproduziert: 4/4 grün, plus Kalibrierung (s.o.) beweist, dass ein Fehlschlag in der Verdrahtung tatsächlich rot würde. **Zwei der vier Fälle halten nicht wörtlich** wie im Backlog formuliert — das ist bereits vom Auftraggeber am 2026-08-08 akzeptiert und in `guide.md` dokumentiert (Abschnitt „What Object Lock protects — and what the application does not show you", Zeilen 384–397), nicht neu zu entscheiden. Das reale, versionsscharfe Object-Lock-Verhalten hält nachweislich, das ist die Substanz des Kriteriums                                                                                                                                                                  | **erfüllt** (mit der bereits entschiedenen, dokumentierten Abweichung in der wörtlichen Formulierung)               |
-| `JR-7-06` | `JR-7-01`…`JR-7-05` erfüllt                                                                                                                                                                         | Alle fünf Zeilen oben erfüllt. **Auflage unten bleibt unabhängig davon offen** — sie hängt nicht an einer der fünf Zeilen, sondern an zwei vom Backlog getrennten, vom Auftraggeber aber ausdrücklich dieser Epoche zugeordneten Befunden                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **angenommen mit Auflage**                                                                                          |
+| `JR-7-06` | `JR-7-01`…`JR-7-05` erfüllt                                                                                                                                                                         | Alle fünf Zeilen oben erfüllt. **Auflage unten bleibt unabhängig davon offen** — sie hängt nicht an einer der fünf Zeilen, sondern an zwei vom Backlog getrennten, vom Auftraggeber aber ausdrücklich dieser Epoche zugeordneten Befunden                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **angenommen mit Auflage** (Nachtrag unten: Auflage geschlossen, Verdikt gehoben auf „angenommen, ohne Auflage")    |
 
 ## Die Auflage: F60 und F66, vom Auftraggeber „in E7, nicht vorher" zugeordnet, in E7 nicht angefasst
+
+> **Geschlossen mit dem Nachtrag am Ende dieser Datei (2026-08-08).** Der folgende Abschnitt ist die
+> unveränderte Erstprüfung, die zur Auflage führte — stehen gelassen als Beleg, nicht weil die Auflage
+> noch offen wäre.
 
 Das ist kein Fund, den ich neu aufmache — es ist eine bereits schriftlich getroffene
 Auftraggeber-Entscheidung, deren Umsetzung ich beim Nachprüfen als fehlend vorfinde:
@@ -205,3 +222,92 @@ Minuten Lebensdauer der darin unter Object Lock geschriebenen Testobjekte releva
 **Kein Rückmerge durchgeführt** (Auftrag, CLAUDE.md §7) — das bleibt einer Folge-Sitzung nach
 ausdrücklicher Freigabe vorbehalten, und angesichts der offenen Auflage sollte diese Freigabe die
 F60/F66-Entscheidung einschließen, nicht nur den WORM-Code selbst.
+
+---
+
+## Nachtrag (2026-08-08, selbe Sitzung): Auflage geschlossen — Urteil auf „angenommen, ohne Auflage" gehoben
+
+Nach dem oben protokollierten Erstbefund hat eine Folge-DEV-Sitzung F60 und F66 auf demselben Branch
+nachgezogen (Commits `c0cb970`, `d6d80eb`, Doku-Commit `b14a08e`). Ich habe das **eigenständig
+nachgeprüft**, nicht nur den Bericht übernommen:
+
+**Code gelesen:** `packages/journaling/src/spool/spool-usage-tracker.ts` (neu, `SpoolUsageTracker` —
+`increment`/`decrement`/`current`/`reset` — plus `SpoolUsageReconciler`), die Diffs von
+`packages/journaling/src/spool/acceptance.ts` (Schritt 0 liest bei vorhandenem Tracker
+`evaluateHighWaterMark(tracker.current(), …)` statt zu laufen; Inkrement nach jedem erfolgreichen
+Schreiben **und** nach jeder Quarantäne, mit Tracker als optionalem Konstruktor-Parameter — ohne
+Tracker exakt das Vorzustandsverhalten), `packages/journaling/src/phase-b/pipeline.ts` (Dekrement-Seam
+`PhaseBPipelineDeps.usageTracker`, im Kommentar selbst als in `journal-inbound.processor.ts` bewusst
+unverdrahtet dokumentiert) und `apps/smtp-ingress/src/index.ts` (Tracker-Seeding per vollem Walk bei
+jedem Bootstrap-Versuch, `SpoolUsageReconciler` alle 5 Minuten, `stop()` im Shutdown-Pfad) sowie
+`packages/backend/src/services/StorageService.ts`s `putStream()` (PassThrough + `stream/promises`
+`pipeline()`, Präfix+IV synchron vor den Cipher-Daten geschrieben, `Promise.all` über Provider- und
+Pipeline-Promise) und die neue `StorageService.test.ts`.
+
+**Eigene Kalibrierung durch gezielten Revert+Rerun** (nicht nur die im Commit behauptete Zahl
+nachgelesen — selbst reproduziert):
+
+- `git checkout c0cb970 -- packages/backend/src/services/StorageService.ts` (Vorzustand vor F60),
+  `vitest run StorageService.test.ts` → **1 von 6 Tests rot**, exakt
+  `AssertionError: expected 0 to be greater than or equal to 2` in der Kalibrierungs-Assertion — das
+  behauptete Ergebnis wortgleich reproduziert. `git checkout HEAD -- ...` restauriert, danach wieder
+  **6/6 grün**.
+- `git checkout 71c9648 -- packages/journaling/src/spool/acceptance.ts` (Vorzustand vor F66, der letzte
+  Commit vor `c0cb970`), `vitest run acceptance.test.ts` → **2 von 17 Tests rot** (die neue „zero
+  readdir/stat calls"-Assertion und die Trümmer-Paritäts-Assertion — beide brauchen die
+  `usageTracker`-Option, die im Vorzustand nicht existiert). `git checkout HEAD -- ...` restauriert,
+  danach wieder **17/17 grün**.
+- Nach beiden Restaurierungen: `git status`/`git diff --stat` leer außer dem immer schon vorhandenen,
+  ungetrackten `.oa-test-storage/` — keine Produktionscode-Änderung bleibt zurück.
+
+**Diff-Umfang erneut gezählt:** `git diff --stat` gegen die Integrationsbranch zeigt jetzt
+`StorageService.ts`, `acceptance.ts`, `pipeline.ts`, `apps/smtp-ingress/src/index.ts` und die beiden
+neuen Testdateien als Teil des Epic-Diffs — genau die Dateien, deren Fehlen die ursprüngliche Auflage
+begründet hatte.
+
+**Statischer Nachweis:** `tsc --noEmit` grün für `@open-archiver/journaling`, `@open-archiver/backend`
+und `apps/smtp-ingress` (jeweils einzeln ausgeführt, keine Ausgabe). `prettier --check` grün auf allen
+zwölf durch die F60/F66-Commits geänderten/neuen Dateien.
+
+**CI:** Lauf `31249844634` für exakt den geprüften Commit `b14a08e` — `success`, bestätigt per
+`gh run view`.
+
+**Cross-Process-Drift-Punkt:** echt, im Code selbst ehrlich dokumentiert (nicht versteckt) — der
+`journal-inbound`-Worker dekrementiert keinen gemeinsamen Zähler, weil er in einem eigenen Prozess
+läuft; ein 5-Minuten-`SpoolUsageReconciler` in `apps/smtp-ingress` mindert die Drift, löst sie aber
+nicht auf. **Auftraggeber-Entscheidung dazu (2026-08-08): akzeptieren und dokumentieren, kein Blocker
+für den Rückmerge.** Ich habe geprüft, dass `09-befunde-bestandscode.md`s F66-Eintrag und
+`06-status.md`s E7-Abschnitt das jetzt beide explizit mit Datum vermerken (zuvor stand dort nur „für
+den Auftraggeber zur Entscheidung" — unvollständig für eine bereits gefallene Entscheidung) und habe
+beide Stellen ergänzt.
+
+**Was ich bewusst nicht zu Ende geführt habe:** Ich habe zusätzlich einen vollen, unnarrowed
+`pnpm test`-Lauf lokal gestartet, um eigene Zählernachweise für den Gesamtstand nach F60/F66 zu haben.
+Zwei Läufe zeigten Auffälligkeiten (ein erster mit 130/133 statt 133/133 ausgeführten
+Integrationstests — bei isoliertem Nachlauf des `integration`-Projekts allein dann 133/133 grün; ein
+zweiter, bewusst ohne jede parallele eigene Tätigkeit gefahrener Lauf mit 5 Testtimeouts, alle vom Typ
+`Error: Test timed out in NNNms`, keine einzige Assertion-Abweichung). Ich habe das nicht bis zum
+Abschluss verfolgt, weil (a) **keiner** der fünf betroffenen Tests den F60/F66-Code berührt —
+`journal-ledger-concurrency.adv.test.ts` (JR-2-08, 10 000 Postgres-Appends, in `CLAUDE.md` selbst als
+teuerste Suite im Bestand benannt), `suite-inventory.test.ts` (Harness-Selbsttest) und
+`spool-write-bridge-throughput.test.ts` (100-MB-Disk-Durchsatztest) — keiner davon ruft
+`StorageService.put()`/`putStream()` oder `JournalAcceptance`/`SpoolUsageTracker` auf; (b) eine
+Postgres-Prüfung während des Laufs zeigte aktive, sich verändernde `pg_advisory_xact_lock`-Wartezeilen
+(die von JR-2-08 selbst benutzte Sperre) bei niedriger Postgres-CPU-Last (6 %) — der Prozess arbeitete
+nachweislich, nur langsamer als die in `CLAUDE.md` genannte Zwei-Minuten-Grunderwartung, kein Deadlock
+und keine falsche Antwort; (c) der Auftrag hat diesen zusätzlichen Lauf ausdrücklich für verzichtbar
+erklärt, mit Verweis auf das bereits grüne `31249844634` und die oben durchgeführte gezielte
+Kalibrierung, und auf das Risiko, in **F67**s bekannten, bereits dokumentierten
+Parallellast-Hang zu laufen. **Das ist kein neuer Befund und kein Blocker** — es ist ein optionaler,
+nicht abgeschlossener Zusatznachweis, der die bereits ausreichende Evidenz (CI plus eigene gezielte
+Kalibrierung) nicht ersetzen musste. Für eine künftige Sitzung mit mehr Zeit: derselbe Lauf auf einem
+weniger ausgelasteten Host oder echtem Linux-CI würde die verbleibende Unsicherheit über die
+Timeout-Ursache (Host-Auslastung nach einem langen Sitzungstag vs. eine noch unentdeckte,
+umgebungsspezifische Interaktion) auflösen — nicht dringend, weil kein betroffener Test den geänderten
+Code berührt.
+
+**Urteil (angehoben): angenommen, ohne Auflage.** `JR-7-01`…`JR-7-06` sind erfüllt. Die ursprüngliche
+Auflage (F60/F66 nicht angefasst) ist geschlossen — beide Befunde sind behoben, von mir unabhängig
+durch Code-Lesen **und** eigene Revert-Kalibrierung nachgewiesen, nicht nur durch den Bericht der
+Folge-Sitzung geglaubt. Der verbleibende Cross-Process-Drift-Punkt ist eine vom Auftraggeber
+akzeptierte, dokumentierte Design-Entscheidung, kein offener Mangel. Rückmerge ist freigegeben.

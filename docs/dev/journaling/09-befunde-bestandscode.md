@@ -3832,9 +3832,14 @@ die niemandes High-Water-Mark-Prüfung je liest, würde nach einem Fix aussehen 
 die F41/F43/F44-Form, vor der `CLAUDE.md` warnt. Mitigation: `SpoolUsageReconciler`
 (`start`/`stop`/`reconcileNow()`, gleiche Form wie `JournalAcceptanceBootstrap`/`SourceAclCache`) läuft
 in `apps/smtp-ingress` alle 5 Minuten und resettet den Tracker auf einen frischen Walk — der O(n)-Walk
-bleibt also bestehen, nur nicht mehr auf dem Hot Path. **Für den Auftraggeber zu entscheiden:** ob eine
-echte prozessübergreifend geteilte Zähler-Implementierung (Redis o. ä.) für eine spätere Epic
-angesetzt werden soll, statt sich auf die 5-Minuten-Reconciliation zu verlassen.
+bleibt also bestehen, nur nicht mehr auf dem Hot Path.
+
+**Auftraggeber-Entscheidung dazu, 2026-08-08:** akzeptieren und dokumentieren, **kein Blocker für den
+Rückmerge**. Die Acceptance-Contract-Korrektheit ist unberührt (unverändert seit der ursprünglichen
+F66-Zuordnung); die Drift ist durch den 5-Minuten-`SpoolUsageReconciler` beschränkt, nicht beseitigt.
+Eine echte prozessübergreifend geteilte Zähler-Implementierung (Redis o. ä.) bleibt eine mögliche
+spätere Verbesserung, ist aber **keine** Bedingung für die E7-Abnahme oder den Rückmerge — festgehalten
+hier, damit ein künftiger Prüfer den Punkt wiederfindet, statt ihn erneut aufzurollen.
 
 ## F67 — `journal-soak.adv.test.ts`s `ci`-Smoke-Fall hängt 600s unter voller Suite-Parallellast, obwohl er isoliert in ~1s durchläuft
 
