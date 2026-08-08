@@ -6,14 +6,22 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-08 — **Details im Archiv, siehe unten.** Kurz: **E6 ist fertig,
-abgenommen mit `JR-6-08` und zurückgemergt** (`b5b7c8a`, `--no-ff`, kein Squash, auf
-`claude/enterprise-product-implementation-cxmmqe`). Damit sind **E1, E13, E2, E3, E4, E5 und E6**
-zurückgemergt; nur E7–E12 sind noch offen. Diese Datei ist am 2026-08-08 erneut auf Diät gesetzt
-worden (das vollständige E6-Sessionprotokoll liegt jetzt in `23-archiv-e6.md`, fortsetzend zu
-`21-archiv-e6-jr601-jr602a-notizen.md`). Nummernkreise nach **ADR-032**: ADR-033–038 sind vergeben,
-**039–040 sind mit dem Rückmerge an den allgemeinen Vorrat zurückgefallen** (nie gebraucht), F59–F70
-(F59, F61, F65, F66 vergeben, F60/F62/F64/F66 offen und E6 nicht mehr blockierend).
+**Letzte Aktualisierung:** 2026-08-08 (Abnahmesitzung `JR-7-06`) — **Details im Archiv bzw. in
+`24-abnahme-e7.md`, siehe unten.** Kurz: **E7 (WORM-Storage) ist mit `JR-7-06` angenommen — mit
+Auflage, noch nicht zurückgemergt.** Die WORM/Object-Lock-Kriterien (`JR-7-01`…`JR-7-05`) sind
+unabhängig gegen ein frisches MinIO nachgeprüft und erfüllt (Protokoll: `24-abnahme-e7.md`). Die
+Auflage: **F60 und F66**, vom Auftraggeber am 2026-08-07 ausdrücklich „in E7, nicht vorher"
+zugeordnet, sind während `JR-7-01`…`JR-7-05` nicht angefasst worden (per `git diff --stat` gegen den
+Integrationsbranch selbst nachgezählt: kein Commit berührt `StorageService.ts` oder die
+Spool-Hochwassermarken-Prüfung) — das braucht vor dem Rückmerge eine explizite, neue
+Auftraggeber-Entscheidung (nachholen oder datiert/begründet auf E8+ verschieben), nicht ein
+stillschweigendes Fallenlassen. **E6 bleibt fertig, abgenommen mit `JR-6-08` und zurückgemergt**
+(`b5b7c8a`, `--no-ff`, kein Squash, auf `claude/enterprise-product-implementation-cxmmqe`). Damit
+sind **E1, E13, E2, E3, E4, E5 und E6** zurückgemergt; **E7 ist angenommen, aber sein Rückmerge steht
+noch aus** (siehe Auflage), E8–E12 sind offen. Nummernkreise nach **ADR-032**: ADR-033–038 sind
+vergeben, **039–040 sind mit dem Rückmerge an den allgemeinen Vorrat zurückgefallen** (nie gebraucht),
+F59–F70 (F59, F61, F65, F66 vergeben; F60/F66 **weiterhin offen, jetzt E7 statt E6 verfehlt** — siehe
+Auflage oben; F62/F64 unzugeordnet, nicht blockierend).
 
 > **CI-Lücke — korrigiert 2026-08-07 (Fund der `JR-6-08`-Abnahmesitzung):** Der Satz „GitHub Actions
 > erzeugt seit `37b471d` keine zuverlässigen Läufe mehr" **stimmt seit `JR-6-06`s Commit
@@ -66,22 +74,22 @@ nicht.
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                   | Fertig / Gesamt                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                               | 6 / 6                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                 | 10 / 10                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                      | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                              | 11 / 11                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
-| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)              | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
-| 8           | E7   | WORM-Storage                       | **in Arbeit** — `JR-7-01`–`JR-7-05` erledigt, `JR-7-06` (Abnahme) offen                                  | 5 / 6                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                    | 0 / 8                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                    | 0 / 10                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                    | 0 / 9                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                          | Fertig / Gesamt                                                                                                                 |
+| ----------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                      | 6 / 6                                                                                                                           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                        | 10 / 10                                                                                                                         |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                             | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                     | 11 / 11                                                                                                                         |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                         | 9 / 9                                                                                                                           |
+| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)        | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
+| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                        | 9 / 9                                                                                                                           |
+| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)                     | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
+| 8           | E7   | WORM-Storage                       | **angenommen mit Auflage** (`JR-7-06`), **noch nicht zurückgemergt** — F60/F66 offen (siehe `24-abnahme-e7.md`) | 6 / 6                                                                                                                           |
+| 9           | E8   | Anchoring                          | offen                                                                                                           | 0 / 6                                                                                                                           |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                           | 0 / 8                                                                                                                           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                           | 0 / 8                                                                                                                           |
+| 12          | E11  | Compliance-Features                | offen                                                                                                           | 0 / 10                                                                                                                          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                           | 0 / 9                                                                                                                           |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-029**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-030**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -218,12 +226,44 @@ Offene, nicht blockierende Befunde **F60** und **F66** (beide E7 zugeordnet), **
 
 ---
 
-## E7 – E12 (offen)
+## E7 — WORM-Storage (**angenommen mit Auflage 2026-08-08 mit `JR-7-06`, noch nicht zurückgemergt**)
+
+6 / 6 Tasks. `S3StorageProvider` schreibt unter aktivierter Konfiguration
+(`STORAGE_S3_OBJECT_LOCK_MODE=COMPLIANCE`, `STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS`) jedes Objekt mit
+Object Lock, ohne bestehende Aufrufer zu verändern (`JR-7-01`); die Least-Privilege-IAM-Policy steht
+im Deployment-Guide, mit einem gegen echtes MinIO belegten Löschversuch (`JR-7-02`); der Local-FS-Pfad
+ist als substanziell schwächer dokumentiert und mit optionalem `chattr +i` gehärtet (`JR-7-03`); der
+Retention-Konflikt steht im Guide **vor** der Wahl der Aufbewahrungsfrist (`JR-7-04`); alle vier
+WORM-Testfälle laufen grün gegen echtes MinIO, mit zwei bereits vom Auftraggeber akzeptierten,
+dokumentierten Abweichungen von der wörtlichen Kriterienformulierung (`JR-7-05`).
+
+Abnahme `JR-7-06`: unabhängige TEST-Sitzung, gegen ein **frisches, selbst aufgesetztes** MinIO
+reproduziert (nicht die Infrastruktur der `JR-7-05`-Sitzung wiederverwendet), inklusive einer
+Kalibrierung, die die Object-Lock-Verdrahtung absichtlich deaktiviert und zeigt, dass die Suite dann
+zu 3/4 rot wird (Beleg gegen Fail-Open). Voller, unnarrowed Basislauf selbst gefahren: 113 Dateien,
+1322 passed, 13 skipped, exakte Zählerübereinstimmung, exit 0.
+
+**Auflage, nicht geschlossen:** **F60** und **F66** waren vom Auftraggeber am 2026-08-07 ausdrücklich
+„in E7, nicht vorher" zur Behebung zugeordnet (`07-session-handover.md`, „Zwei Startpunkte") — keine
+der `JR-7-01`…`JR-7-05`-Sitzungen hat sie angefasst (per Diff-Zählung gegen den Integrationsbranch
+bestätigt: `StorageService.ts` und die Spool-Hochwassermarken-Prüfung sind nicht Teil des
+Epic-Diffs). Das braucht vor dem Rückmerge eine explizite neue Auftraggeber-Entscheidung.
+
+> **Das Abnahmeprotokoll (Kriterium → Beleg → Urteil, inklusive der Auflage) steht in
+> [`24-abnahme-e7.md`](24-abnahme-e7.md).** Die Sessionprotokolle zu `JR-7-01`…`JR-7-05` und der
+> Auftraggeber-Entscheidung zum Soft-Delete/Overwrite-Befund stehen unverändert unten unter
+> „Sessionprotokoll". Befunde F60/F66 in `09-befunde-bestandscode.md`.
+
+---
+
+## E8 – E12 (offen)
 
 **Überschrift am 2026-08-06 korrigiert** (Doku-Diät, gefundener Nebenfund): sie hieß noch „E3 – E12",
-ein Überbleibsel aus der Zeit, bevor E3 begonnen hatte. E3–E6 haben inzwischen eigene Abschnitte oben;
-diese Überschrift betrifft nur, was noch offen ist. Tasklisten stehen in `03-backlog.md`. Sie werden
-hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu halten.
+ein Überbleibsel aus der Zeit, bevor E3 begonnen hatte, und bis zum 2026-08-08 „E7 – E12" (E7 ist jetzt
+angenommen, siehe Abschnitt oben, auch wenn der Rückmerge wegen der Auflage noch aussteht). E3–E7 haben
+inzwischen eigene Abschnitte oben; diese Überschrift betrifft nur, was noch offen ist. Tasklisten
+stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese
+Datei lesbar zu halten.
 
 **Wirklich noch offene ADRs** (die bereits entschiedenen — ADR-006/007/022/023/024/029/030 und
 **ADR-010** — sind am 2026-08-06 aus dieser Tabelle entfernt, Doku-Diät: sie stehen vollständig in
@@ -396,3 +436,28 @@ reine Dokumentationssitzung, kein Code, keine Tests, keine Migration.
   offen für `JR-7-06`.
 - **Nicht Teil dieser Sitzung:** `JR-7-06` (Abnahme E7) selbst — das bleibt Aufgabe einer
   unabhängigen Rolle.
+
+**E7, `JR-7-06` (TEST, Abnahme), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`, unabhängige
+TEST-Sitzung, keine E7-Scheibe vorher selbst umgesetzt.
+
+- **Urteil: angenommen mit Auflage.** `JR-7-01`…`JR-7-05` unabhängig nachgeprüft und erfüllt — MinIO
+  frisch selbst aufgesetzt (nicht die Infrastruktur der `JR-7-05`-Sitzung wiederverwendet), 4/4 WORM-
+  Fälle grün reproduziert, **Kalibrierung durchgeführt** (Object-Lock-Verdrahtung absichtlich
+  deaktiviert ⇒ 3/4 rot, Änderung vollständig zurückgenommen, danach wieder 4/4 grün) — die Suite ist
+  nicht fail-open. Voller unnarrowed Basislauf selbst gefahren: 113 Dateien, 1322 passed, 13 skipped,
+  exit 0, exakte Zählerübereinstimmung mit `suite-inventory.ts`. `guide.md`s Abschnittsreihenfolge
+  (`JR-7-04`) per `grep` über die echten Zeilennummern nachvollzogen. CI-Lauf für den geprüften Commit
+  `587b334` selbst abgerufen (`31247183509`, `success`, 3 min 12 s).
+- **Auflage, nicht geschlossen:** **F60**/**F66**, vom Auftraggeber am 2026-08-07 ausdrücklich „in E7,
+  nicht vorher" zugeordnet (`07-session-handover.md`), sind in keiner `JR-7-01`…`JR-7-05`-Sitzung
+  angefasst worden — per `git diff --stat` gegen den Integrationsbranch bestätigt (`StorageService.ts`
+  und die Spool-Hochwassermarken-Prüfung sind nicht Teil des Epic-Diffs). Braucht vor dem Rückmerge
+  eine explizite neue Auftraggeber-Entscheidung.
+- **Nebenfund, nicht blockierend:** `04-testplan.md` §4 listet `JR-7-05` noch als „`ci` (MinIO)" —
+  die tatsächliche, im Testfile begründete Klassifizierung ist `nightly` (kein Standard-Endpoint,
+  analog zur TSA-Regel beim Anchoring). Planungstabelle nicht nachgezogen, kosmetisch.
+- **Kein Rückmerge durchgeführt** (Auftrag, CLAUDE.md §7) — bleibt einer Folge-Sitzung nach
+  ausdrücklicher Freigabe vorbehalten; die Freigabe sollte die F60/F66-Entscheidung einschließen.
+- **Volles Protokoll:** [`24-abnahme-e7.md`](24-abnahme-e7.md). Keine Produktionscode-Änderung außer
+  der einen, deklarierten, vollständig zurückgenommenen Kalibrierungsinjektion in
+  `S3StorageProvider.ts`.
