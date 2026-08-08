@@ -155,44 +155,52 @@ aus F64 (per Definition nur in CI beobachtbar).
 
 ## Aktueller Eintrag
 
-**Stand:** 2026-08-08 — **E6 ist abgenommen und zurückgemergt.** `JR-6-08` (unabhängige TEST-Sitzung,
-Protokoll `22-abnahme-e6.md`, Commit `eba887a`) hat E6 ohne Auflagen angenommen; der Rückmerge nach
-`claude/enterprise-product-implementation-cxmmqe` ist vollzogen (`b5b7c8a`, `--no-ff`, kein Squash).
-Damit sind **E1, E13, E2, E3, E4, E5 und E6** zurückgemergt — **E7 (WORM-Storage) ist das nächste
-offene Epic.** Diese Datei und `06-status.md` sind am selben Tag erneut auf Diät gesetzt worden: das
-vollständige E6-Sessionprotokoll (`JR-6-04`–`JR-6-08`, Rückmerge) liegt jetzt in
-[`23-archiv-e6.md`](23-archiv-e6.md), fortsetzend zu
-[`21-archiv-e6-jr601-jr602a-notizen.md`](21-archiv-e6-jr601-jr602a-notizen.md).
-
-> **Zwei Befunde sind bereits E7 zugeordnet, nicht neu zu entscheiden:** **F60**
-> (`StorageService.put()` puffert Streams) und **F66** (`checkSpoolHighWaterMark()` ist O(n²) bei
-> wachsendem Spool-Rückstand, gemessen auf echtem Linux während der `JR-6-07`-Verifikation). Beide in
-> `09-befunde-bestandscode.md`.
+**Stand:** 2026-08-08 — **E7 (WORM-Storage) ist mit `JR-7-06` angenommen — mit Auflage, noch nicht
+zurückgemergt.** Unabhängige TEST-Sitzung, Protokoll [`24-abnahme-e7.md`](24-abnahme-e7.md): die
+WORM/Object-Lock-Kriterien `JR-7-01`…`JR-7-05` sind gegen ein frisches, selbst aufgesetztes MinIO
+nachgeprüft und erfüllt (inklusive einer Kalibrierung, die zeigt, dass die Suite bei absichtlich
+deaktivierter Object-Lock-Verdrahtung zu 3/4 rot wird — kein Fail-Open-Test). **Die Auflage ist noch
+offen: F60 und F66**, vom Auftraggeber am 2026-08-07 ausdrücklich „in E7, nicht vorher" zugeordnet,
+sind in keiner der `JR-7-01`…`JR-7-05`-Sitzungen angefasst worden (Diff-Zählung gegen den
+Integrationsbranch bestätigt: `StorageService.ts` und die Spool-Hochwassermarken-Prüfung sind nicht
+Teil des Epic-Diffs). **Solange diese Auflage nicht explizit neu entschieden ist, sollte E7 nicht
+zurückgemergt werden.** E6 bleibt fertig, abgenommen und zurückgemergt (`b5b7c8a`).
 
 ### Der Stand in einem Satz
 
-**E1–E6 stehen vollständig und sind zurückgemergt.** Der Empfangspfad (`apps/smtp-ingress`, ESMTP,
-Quell-/Empfänger-ACL, Crash-Recovery-Scan, `250 … queued as <seq>` erst nach Spool-fsync **und**
-Ledger-Append) und der Journal-Report-Parser stehen seit E4/E5. Seit E6 gibt es die vollständige
-Phase-B-Pipeline (`runPhaseBPipeline()`: eigener `journal-inbound`-Worker, Owner-Auflösung,
-Archivierung über `processEmail()`, Indexierung, Spool-Freigabe), Idempotenz mit eigenem
-Ledger-Event-Typ (`duplicate_marker`, ADR-037), einen Spool-Reconciler (ADR-038), die
-Hash-vor-Verschlüsselung-Garantie, einen Object-Store-Ausfalltest und einen Soak-Test über echtes
-SMTP (`nightly` 100.000 / `ci` 100 Nachrichten). Volles Detail: `06-status.md` und `23-archiv-e6.md`.
+**E1–E6 stehen vollständig und sind zurückgemergt; E7 ist angenommen, aber sein Rückmerge steht wegen
+der Auflage noch aus.** Der Empfangspfad, der Journal-Report-Parser und die vollständige
+Phase-B-Pipeline stehen seit E4/E5/E6 (Details: `06-status.md`, `23-archiv-e6.md`). Seit E7 kann
+`S3StorageProvider` Objekte mit S3 Object Lock (COMPLIANCE) schreiben, es gibt eine dokumentierte
+Least-Privilege-IAM-Policy mit einem gegen echtes MinIO belegten Löschversuch, eine dokumentierte und
+optional gehärtete Local-FS-Schwäche, und vier gegen echtes MinIO grüne WORM-Testfälle (Details:
+`24-abnahme-e7.md`).
 
-### Nächster konkreter Schritt — **E7 beginnen (WORM-Storage)**
+### Nächster konkreter Schritt — **die E7-Auflage klären, dann Rückmerge, dann E8 (Anchoring) beginnen**
 
-Kriterien in `03-backlog.md`, Abschnitt E7. Neuen Epic-Zweig von der Integrationsbranch abzweigen —
-**sofort den Upstream setzen**, das ist die Falle aus `CLAUDE.md` §7:
+**Vor allem anderen:** die Auflage aus `24-abnahme-e7.md` braucht eine explizite Auftraggeber-
+Entscheidung — entweder F60 und F66 werden in einer kurzen Nachfolge-Sitzung auf dem Epic-Zweig
+`claude/journaling-e7-worm-storage` nachgeholt (Lösungsskizzen stehen unten, unverändert aus der
+vorherigen Fassung dieser Datei übernommen), oder der Auftraggeber verschiebt sie **datiert und
+begründet** auf ein späteres Epic (z. B. E8) — nicht durch stillschweigendes Auslassen in der nächsten
+Statusaktualisierung. Erst danach der Rückmerge nach `claude/enterprise-product-implementation-cxmmqe`
+(ADR-014: `--no-ff`, kein Squash, wie bei den vorherigen Epics).
+
+**Danach ist E8 (Anchoring) das nächste offene Epic.** Kriterien in `03-backlog.md`, Abschnitt E8 —
+ADR-022/ADR-023 lesen, bevor die Tasks dort angefasst werden (die Merkle-Kodierung selbst ist laut
+Backlog-Kopfnotiz schon vorgezogen und Teil von E2/ADR-006). Neuen Epic-Zweig **erst nach dem
+Rückmerge von E7** von der Integrationsbranch abzweigen — **sofort den Upstream setzen**, das ist die
+Falle aus `CLAUDE.md` §7:
 
 ```bash
 git fetch origin claude/enterprise-product-implementation-cxmmqe
-git checkout -b claude/journaling-e7-worm-storage \
+git checkout -b claude/journaling-e8-anchoring \
     origin/claude/enterprise-product-implementation-cxmmqe
-git push -u origin claude/journaling-e7-worm-storage
+git push -u origin claude/journaling-e8-anchoring
 ```
 
-**Zwei Startpunkte liegen schon bereit, beide bereits E7 zugeordnet, nicht neu zu entscheiden:**
+**Falls F60/F66 stattdessen (oder zusätzlich) explizit auf E8 verschoben werden, hier die
+Lösungsskizzen, unverändert aus der vorherigen Handover-Fassung:**
 
 - **F60** — `StorageService.put()` puffert einen Stream sofort zu einem Buffer, obwohl die Signatur
   Streams verspricht. Zu entscheiden dort: Verschlüsselung auf einen Stream-Cipher umstellen
@@ -201,21 +209,22 @@ git push -u origin claude/journaling-e7-worm-storage
   O(n²) bei wachsendem Rückstand. Naheliegender Fix (im Code selbst vorgeschlagen): ein mitgeführter
   Zähler statt eines vollen Verzeichnis-Walks pro Nachricht.
 
-Beide betreffen `S3StorageProvider`/Spool-Layout, die E7 ohnehin für Object Lock anfasst — daher die
-Zuordnung.
-
 ### Was ein neuer Agent zuerst lesen muss
 
 1. `docs/dev/journaling/README.md` — Einstieg und Lesereihenfolge
 2. `docs/dev/journaling/06-status.md` — verbindlicher Stand
 3. diese Datei
 4. `CLAUDE.md` — Repo-Konventionen und Fallstricke
-5. Für die eigentliche Task: `03-backlog.md` (Akzeptanzkriterien E7) und `02-architektur.md`
+5. Für die eigentliche Task: `24-abnahme-e7.md` (Auflage) bzw. `03-backlog.md` (Akzeptanzkriterien E8)
+   und `02-architektur.md`
 
 ### Offene Fragen an den Auftraggeber
 
-**Stand 2026-08-08 — was wirklich offen ist:**
+**Stand 2026-08-08 (`JR-7-06`) — was wirklich offen ist:**
 
+0. **Die Auflage aus `JR-7-06` (siehe `24-abnahme-e7.md`): F60 und F66 nachholen oder neu verschieben?**
+   Beide waren am 2026-08-07 ausdrücklich „in E7, nicht vorher" zugeordnet und sind in E7 nicht
+   angefasst worden. Blockiert den Rückmerge von E7, bis entschieden.
 1. **`F43`: soll `JR-3-02`s Speichernachweis nachgemessen werden?** Die einzige Frage, die ein
    **abgenommenes** Epic (E3) berührt. `heapUsed` kann Vollpufferung in Node-`Buffer`n nicht sehen —
    gemessen, mit absichtlich eingebauter Regression kalibriert. Der **Code** ist mit hoher

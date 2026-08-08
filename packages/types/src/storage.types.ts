@@ -46,6 +46,14 @@ export interface LocalStorageConfig {
 	rootPath: string;
 	openArchiverFolderName: string;
 	encryptionKey?: string;
+	// Best-effort hardening (JR-7-03): after each successful `put()`, attempt to set the
+	// Linux `chattr +i` (immutable) flag on the written file. This is deterrence, not real
+	// WORM/Object Lock -- it only works on Linux with an ext-family filesystem, root can
+	// clear it (`chattr -i`) at any time, and it also blocks this application's own later
+	// deletions (e.g. retention-policy expiry) until an operator manually clears the flag.
+	// No-op and non-fatal on any other platform or on failure. See
+	// docs/enterprise/journaling/guide.md for the full tradeoff.
+	hardenImmutable?: boolean;
 }
 
 /**
@@ -68,6 +76,18 @@ export interface S3StorageConfig {
 	forcePathStyle?: boolean;
 	openArchiverFolderName: string;
 	encryptionKey?: string;
+	// Object Lock mode applied to every object written via `put()`. The bucket must have
+	// S3 Object Lock enabled at creation time (it cannot be enabled on an existing bucket).
+	// Only 'COMPLIANCE' is supported: it is the mode that makes deletion or shortening of
+	// the retention period impossible for every principal, including the bucket owner and
+	// AWS account root — the property WORM storage exists for. Irreversible once objects are
+	// written under it; see docs/dev/journaling/05-entscheidungen.md and
+	// docs/dev/journaling/02-architektur.md §7. Omit to leave existing callers unaffected.
+	objectLockMode?: 'COMPLIANCE';
+	// Retention period, in days from the moment of write, used to compute the AWS SDK's
+	// `ObjectLockRetainUntilDate` for each object. Only used when `objectLockMode` is set;
+	// required together with it.
+	objectLockRetainUntilDays?: number;
 }
 
 export type StorageConfig = LocalStorageConfig | S3StorageConfig;

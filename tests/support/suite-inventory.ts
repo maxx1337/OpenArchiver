@@ -238,7 +238,13 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 77 after JR-6-02b's second slice added packages/journaling/src/phase-b/pipeline.test.ts (the
 		// orchestration: gate -> parse -> resolve -> archive -> index -> release, ADR-034) and
 		// packages/journaling/src/phase-b/spool-entry-releaser.test.ts (spool-file deletion, ADR-034).
-		expectedFiles: 78,
+		// 79 after E7's F66 catch-up added packages/journaling/src/spool/spool-usage-tracker.test.ts
+		// (SpoolUsageTracker's own arithmetic and SpoolUsageReconciler's timer lifecycle). 80 after
+		// E7's F60 catch-up added packages/backend/src/services/StorageService.test.ts (first-ever
+		// test file for this class -- byte-format compatibility between the Buffer and stream put()
+		// paths, and F60's own calibration proof that the stream path no longer buffers the whole
+		// message first).
+		expectedFiles: 80,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -793,7 +799,20 @@ export const SUITES: readonly SuiteSpec[] = [
 		// original's seq via LedgerLookup.findOriginalReceiptSeq()'s MIN(seq)), and a same-job retry
 		// (the outcome's own receipt is the only match) writes none. No new file -- ledger-lookup.ts,
 		// ledger-lookup-port.ts and pipeline.ts changed without adding one.
-		expectedTests: { ci: 1119, nightly: 3, manual: 0 },
+		// 1131 after E7's F66 catch-up: +3 in the existing acceptance.test.ts (a supplied
+		// SpoolUsageTracker makes accept() perform zero readdir/stat calls regardless of backlog
+		// size; the pre-F66 fallback's readdir count still grows with backlog size when no tracker is
+		// supplied; quarantined debris erodes the tracker-driven budget exactly like a real walk) + 9
+		// in the new spool-usage-tracker.test.ts (SpoolUsageTracker: seeded value, increment/decrement,
+		// zero-arg no-ops, floor-at-zero, reset; SpoolUsageReconciler: reconcileNow() walks and resets,
+		// start()/stop() arm/clear an unref()-able interval idempotently, defaults to
+		// DEFAULT_SPOOL_USAGE_RECONCILE_INTERVAL_MS, a fired interval updates the tracker under fake
+		// timers). 1137 after E7's F60 catch-up added +6 in the new StorageService.test.ts (Buffer and
+		// stream put() round-trip through get(), both paths produce byte-identical framing, no-
+		// encryption-key passthrough is byte-for-byte, F60's calibration proof that ciphertext reaches
+		// the provider before the source stream ends, and a source-stream error rejects put() rather
+		// than hanging).
+		expectedTests: { ci: 1137, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
@@ -925,8 +944,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
 		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
 		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts. 8 after JR-6-07 added
-		// journal-soak.adv.test.ts.
-		expectedFiles: 8,
+		// journal-soak.adv.test.ts. 9 after JR-7-05 added journal-worm-object-lock.adv.test.ts.
+		expectedFiles: 9,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -980,7 +999,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// directory-fsync platform gap (fs-port.ts) that makes every message on this host fail at
 		// 451 before reaching the ledger, and how both variants assert that failure mode explicitly
 		// instead of silently skipping.
-		expectedTests: { ci: 70, nightly: 3, manual: 1 },
+		// 70 ci / 7 nightly / 1 manual after JR-7-05 added journal-worm-object-lock.adv.test.ts: 4
+		// `nightly`-only cases (overwrite, delete, retention-set, retention-shorten) against a real
+		// MinIO with Object Lock, gated on `OA_TEST_MINIO_ENDPOINT` (no default -- see probeMinio()'s
+		// own doc comment) -- 0 of these run under the default `ci`-only class selection, so
+		// `expectedTests.ci` is unchanged. See that file's own doc comment for two findings (cases 1
+		// and 2 do not hold literally against S3StorageProvider's version-unaware put()/delete(),
+		// though the underlying per-version Object Lock guarantee genuinely does).
+		expectedTests: { ci: 70, nightly: 7, manual: 1 },
 	},
 ];
 

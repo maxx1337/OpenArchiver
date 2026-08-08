@@ -137,6 +137,7 @@ findet es hier.
 | **F64**  | Worker beendet sich nach `worker.close()` nicht selbst — ein offenes Handle hält den Prozess am Leben                                                 | mittel  | offen      |
 | **F65**  | Pre-Push-Gate behandelte eigene Infrastruktur-Vorbedingungen (`DATABASE_URL`/`REDIS_PASSWORD`) asymmetrisch                                           | niedrig | behoben    |
 | **F66**  | `checkSpoolHighWaterMark()` läuft bei jeder SMTP-Annahme über den gesamten Spool — O(n²) Gesamtkosten bei wachsendem Rückstand                        | hoch    | offen      |
+| **F67**  | `journal-soak.adv.test.ts`s `ci`-Smoke-Fall (100 Nachrichten) hängt reproduzierbar 600s unter voller Suite-Parallellast, läuft isoliert in ~1s durch  | hoch    | offen      |
 
 ---
 
@@ -3454,8 +3455,20 @@ Versprechen die Ursache des Befunds trifft.
 **Ort:** `packages/backend/src/services/StorageService.ts` `put()` (Zeilen 68–72),
 Signatur in `packages/types/src/storage.types.ts` `IStorageProvider.put()` ·
 **Gefunden:** 2026-08-05 bei der Entscheidung zu **ADR-010** (`JR-6-02a`) ·
-**Status:** **offen — vorgeschlagene Zuordnung: E7** (WORM-Storage, wo `S3StorageProvider` ohnehin
-angefasst wird). Entscheidung des Auftraggebers ausstehend
+**Status:** **behoben in E7**, Commit `d6d80eb`. `put()` unterscheidet jetzt `Buffer` (kurzer,
+bereits gepufferter Pfad, unverändert) von einem Stream: letzterer läuft durch einen neuen
+`putStream()`, der Präfix+IV direkt in einen `PassThrough` schreibt und `content -> cipher ->
+PassThrough` per `stream/promises`' `pipeline()` **gleichzeitig** mit `this.provider.put()`
+laufen lässt (keiner der beiden wird vorher vollständig abgewartet) — das Byte-Format
+(`ENCRYPTION_PREFIX` + 16-Byte-IV + Ciphertext) bleibt unverändert, verifiziert durch direktes
+Entschlüsseln der Rohbytes beider Pfade. Kalibrierter Nachweis (F43-Muster): ein Fake-`IStorageProvider`
+zählt, wie viele Chunks ankommen, bevor die Quelle endet — gegen den Vorzustand (Commit vor `d6d80eb`
+zurückgesetzt) schlägt genau diese Assertion mit `expected 0 to be greater than or equal to 2` fehl,
+weil der alte Code `provider.put()` erst nach `streamToBuffer()`s `'end'` überhaupt aufruft. Erster
+Testfall überhaupt für diese Klasse: `packages/backend/src/services/StorageService.test.ts` (6 Tests).
+Geprüfte Aufrufer: `upload.controller.ts`s Busboy-Filestream ist der einzige produktive
+Stream-Aufrufer und hängt seinen eigenen `'error'`-Listener bereits vor dem `put()`-Aufruf an — das
+verträgt sich mit `pipeline()`s eigenen Listenern, kein Aufrufer liest den Content-Stream doppelt.
 
 Die Schnittstelle verspricht Streaming:
 
@@ -3788,3 +3801,107 @@ Verzeichnis-Walk beim Crash-Recovery-Scan (`JR-3-05`) abgeglichen, der ohnehin b
 analog zu F60. **Entschieden vom Auftraggeber am 2026-08-07: nach E7 verschoben, blockiert `JR-6-08`
 nicht.** Die Acceptance-Contract-Korrektheit ist unberührt; die O(n²)-Latenz unter Rückstand wird mit
 F60 zusammen in E7 behoben, nicht vorher.
+
+**Status:** **behoben in E7**, Commit `c0cb970`. Genau der im Kommentar vorgeschlagene Zähler: neue
+Klasse `SpoolUsageTracker` (`packages/journaling/src/spool/spool-usage-tracker.ts`,
+`increment`/`decrement`/`current`/`reset`), als **optionaler** DI-Kollaborator an
+`JournalAcceptance` übergeben — Schritt 0 von `accept()` liest bei vorhandenem Tracker
+`evaluateHighWaterMark(tracker.current(), ...)` (`O(1)`, kein I/O) statt `checkSpoolHighWaterMark()`
+zu rufen; fehlt der Tracker, bleibt exakt das Vorzustands-Verhalten (voller Walk pro Aufruf) erhalten
+— keiner der ~40 bestehenden `JournalAcceptance`-Konstruktionsaufrufe musste geändert werden.
+Inkrementiert nach jedem erfolgreichen durablen Schreiben **und** nach jeder Quarantäne von
+Schreibfehler-Trümmern (per `fs.stat()` auf die tatsächlich verschobene Datei) — die in
+`spool-fsync-fault-injection.adv.test.ts` bereits abgenommene "Quarantäne-Trümmer erodieren das
+Budget" (F40 Hälfte 2) bleibt dadurch mit Tracker exakt gleich, nicht vereinfacht.
+
+**Gemessener Beleg (`acceptance.test.ts`s neue "F66"-Suite):** mit Tracker macht `accept()` bei einem
+mit 200 Quarantäne-Dateien vorbefüllten Spool **null** `readdir`/`stat`-Aufrufe (Timeline-Assertion);
+ohne Tracker steigt die Anzahl der `readdir`-Aufrufe messbar mit der Rückstandsgröße (4 vs. 200
+Dateien, `large > small`, beide `> 0`). Das ist der Vorher/Nachher-Vergleich, den F66 selbst mit der
+Momentanraten-Tabelle gefordert hat, hier als Aufruf-Zähler statt Wanduhrzeit — reicht laut Auftrag,
+ein voller 100.000er-Soak musste nicht wiederholt werden.
+
+**Nicht geschlossen, bewusst offengelegt statt versteckt — der Cross-Process-Punkt:** `apps/smtp-ingress`
+(inkrementiert) und der `journal-inbound`-Worker (`runPhaseBPipeline()`, dekrementiert bei
+`release()`) sind zwei getrennte OS-Prozesse über demselben Spool-Verzeichnis, kein gemeinsamer
+Prozess. Ein reiner In-Memory-`SpoolUsageTracker` in einem Prozess ist für den anderen unsichtbar —
+`PhaseBPipelineDeps.usageTracker` existiert als Schnittstelle (für eine künftige, wirklich
+prozessübergreifend geteilte Implementierung, z. B. Redis-gestützt), wird aber in
+`journal-inbound.processor.ts` bewusst **nicht** verdrahtet: ein Dekrement auf eine Instanz zu rufen,
+die niemandes High-Water-Mark-Prüfung je liest, würde nach einem Fix aussehen und nichts messen — genau
+die F41/F43/F44-Form, vor der `CLAUDE.md` warnt. Mitigation: `SpoolUsageReconciler`
+(`start`/`stop`/`reconcileNow()`, gleiche Form wie `JournalAcceptanceBootstrap`/`SourceAclCache`) läuft
+in `apps/smtp-ingress` alle 5 Minuten und resettet den Tracker auf einen frischen Walk — der O(n)-Walk
+bleibt also bestehen, nur nicht mehr auf dem Hot Path.
+
+**Auftraggeber-Entscheidung dazu, 2026-08-08:** akzeptieren und dokumentieren, **kein Blocker für den
+Rückmerge**. Die Acceptance-Contract-Korrektheit ist unberührt (unverändert seit der ursprünglichen
+F66-Zuordnung); die Drift ist durch den 5-Minuten-`SpoolUsageReconciler` beschränkt, nicht beseitigt.
+Eine echte prozessübergreifend geteilte Zähler-Implementierung (Redis o. ä.) bleibt eine mögliche
+spätere Verbesserung, ist aber **keine** Bedingung für die E7-Abnahme oder den Rückmerge — festgehalten
+hier, damit ein künftiger Prüfer den Punkt wiederfindet, statt ihn erneut aufzurollen.
+
+## F67 — `journal-soak.adv.test.ts`s `ci`-Smoke-Fall hängt 600s unter voller Suite-Parallellast, obwohl er isoliert in ~1s durchläuft
+
+**Gefunden:** TEST, während der `JR-7-05`-Verifikationssitzung (E7, WORM-Storage) auf Windows, beim
+Versuch, einen echten Volllauf (`pnpm test` bzw. `pnpm run test:nightly`-Äquivalent) als Beleg für die
+vier neuen WORM-Testfälle zu erzeugen · **Status:** **offen** · Schwere **hoch** — ein `ci`-Test hängt,
+statt schnell fehlzuschlagen, unter gewöhnlicher Parallellast für volle 10 Minuten.
+
+**Nicht F66.** F66 ist eine graduelle O(n²)-Verlangsamung mit wachsendem, unabgeräumtem Spool-Rückstand
+(bei 4.000–4.500 Nachrichten noch ~2,3/s, kein Hang). Der hier beschriebene Fall betrifft den
+`ci`-Smoke-Fall mit nur **100** Nachrichten — dafür ist F66s Kurve bei weitem nicht groß genug, um
+einen zehnminütigen Stillstand zu erklären. Zwei verschiedene Mechanismen, zufällig im selben Testfile.
+
+**Beobachtung:** Ein voller `pnpm run test:nightly`-Lauf (`OA_TEST_CLASSES=ci,nightly`,
+`OA_TEST_REQUIRE_INFRA=1`, echtes Postgres/Valkey/Meilisearch/Tika **und** ein für `JR-7-05` extra
+gestartetes MinIO) blieb nach dem Fehlschlag des `nightly`-Soak-Falls (100.000 Nachrichten,
+`no SMTP reply within 600000ms`) über 20 Minuten ohne jede neue Log-Zeile stehen; ein verwaister
+`apps/smtp-ingress/dist/index.js`-Prozess (aus `smtp-ingress-kill-during-data.adv.test.ts`) war noch
+aktiv, der übergeordnete `pnpm`/`vitest`-Baum reagierte nicht mehr auf normales Fortschreiten und wurde
+per `taskkill /F /T` beendet. Ein zweiter, unabhängiger Versuch — dieses Mal nur `ci`-Klasse
+(`pnpm exec dotenv -- vitest run`, kein `OA_TEST_CLASSES`-Override) — lief 677,65s und endete mit
+demselben Fehlerbild, dieses Mal im **`ci`-Smoke-Fall selbst** (100 Nachrichten, nicht dem
+100.000er-`nightly`-Fall):
+
+```
+FAIL adversarial journal-soak.adv.test.ts > [ci] soak smoke (JR-6-07) -- 100 messages over 10 connections
+  > accepts 100 mixed-size messages gaplessly (or fails safe on this platform)
+Error: no SMTP reply within 600000ms
+```
+
+**Kalibriert — nicht durch `JR-7-05`s Änderungen verursacht.** `git stash` auf die drei durch `JR-7-05`
+geänderten/neuen Dateien (`tests/support/infra.ts`, `tests/support/suite-inventory.ts`,
+`packages/backend/tests/adversarial/journal-worm-object-lock.adv.test.ts`) angewendet, derselbe
+`ci`-Smoke-Fall **isoliert** erneut ausgeführt (`vitest run --project adversarial -t "soak smoke"`):
+lief in **1133ms** durch, exakt im dokumentierten, erwarteten Windows-Pfad (`directory-fsync` ist
+POSIX-only, also 106 abgelehnte Antworten/s statt 250er). Der Hang tritt also **nur unter voller
+Parallellast des restlichen Suite-Laufs** auf, nicht am unveränderten Code selbst und nicht an
+`JR-7-05`s eigenen vier neuen Testfällen (die liefen in derselben Sitzung isoliert viermal grün in
+554ms gegen echtes MinIO).
+
+**Wahrscheinliche Ursache (nicht abschließend isoliert):** Ressourcenkonkurrenz unter voller
+Parallellast auf diesem konkreten Windows-Host — mehrere `tinypool`-Worker-Prozesse,
+`smtp-ingress-kill-during-data.adv.test.ts` (echte Prozess-Spawns/-Kills) und
+`journal-ledger-concurrency.adv.test.ts` (20×500 nebenläufige DB-Appends) liefen im selben Fenster,
+zusätzlich diese Sitzung eigene Docker-Last (MinIO für `JR-7-05`, plus die ohnehin laufenden
+Postgres/Valkey/Meilisearch/Tika-Container). Nicht geprüft: ob dasselbe auf einem weniger
+ausgelasteten Host oder auf echtem Linux-CI reproduziert — `06-status.md`s eigene CI-Historie nennt
+durchgehend grüne Läufe, was nahelegt, dass es sich um eine host-/lastspezifische Eigenschaft dieser
+Sitzung handelt, nicht um einen deterministischen Code-Defekt. Nicht widerlegt: eine Wechselwirkung
+mit F66 (ein wachsender, unabgeräumter Spool aus einem vorherigen Testlauf im selben Prozessbaum
+würde `checkSpoolHighWaterMark()` zusätzlich verlangsamen) — dafür reicht die Beobachtung hier aber
+nicht aus, um mehr als eine Vermutung zu formulieren.
+
+**Warum das trotzdem ein Befund ist, nicht nur eine Umgebungsnotiz:** Ein `ci`-klassifizierter Test
+soll bei jedem PR laufen. Ein Test, der unter gewöhnlicher Parallellast (kein synthetischer Extremfall
+— genau das, was ein voller `pnpm test` immer erzeugt) zehn Minuten hängt statt schnell durchzulaufen
+oder schnell fehlzuschlagen, ist ein CI-Zuverlässigkeitsrisiko, unabhängig davon, ob die zugrunde
+liegende Acceptance-Contract-Korrektheit verletzt ist (sie ist es nicht — der Client sah nie `250`,
+das ist der dokumentierte fail-safe Pfad, nur eben nicht _schnell_).
+
+**Nicht behoben hier** (TEST-Rolle, `packages/backend/src/**`/Testcode-Untersuchung wäre Sache von
+DEV). **Zuordnung:** offen, Entscheidung beim Auftraggeber — Vorschlag: auf einem weniger ausgelasteten
+Host oder echtem Linux-CI reproduzieren, bevor eine Ursache (Ressourcenkonkurrenz vs. F66-Wechselwirkung
+vs. etwas Drittes) angenommen wird. Blockiert `JR-7-05`/`JR-7-06` nicht — die vier WORM-Fälle selbst sind
+unabhängig davon grün belegt (siehe `06-status.md`, Abschnitt E7).

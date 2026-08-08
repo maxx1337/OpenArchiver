@@ -6,14 +6,22 @@ keiner, weil er Fortschritt behauptet, der nicht existiert.
 
 Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und abgenommen · `[!]` blockiert
 
-**Letzte Aktualisierung:** 2026-08-08 — **Details im Archiv, siehe unten.** Kurz: **E6 ist fertig,
-abgenommen mit `JR-6-08` und zurückgemergt** (`b5b7c8a`, `--no-ff`, kein Squash, auf
-`claude/enterprise-product-implementation-cxmmqe`). Damit sind **E1, E13, E2, E3, E4, E5 und E6**
-zurückgemergt; nur E7–E12 sind noch offen. Diese Datei ist am 2026-08-08 erneut auf Diät gesetzt
-worden (das vollständige E6-Sessionprotokoll liegt jetzt in `23-archiv-e6.md`, fortsetzend zu
-`21-archiv-e6-jr601-jr602a-notizen.md`). Nummernkreise nach **ADR-032**: ADR-033–038 sind vergeben,
-**039–040 sind mit dem Rückmerge an den allgemeinen Vorrat zurückgefallen** (nie gebraucht), F59–F70
-(F59, F61, F65, F66 vergeben, F60/F62/F64/F66 offen und E6 nicht mehr blockierend).
+**Letzte Aktualisierung:** 2026-08-08 (Abnahmesitzung `JR-7-06`) — **Details im Archiv bzw. in
+`24-abnahme-e7.md`, siehe unten.** Kurz: **E7 (WORM-Storage) ist mit `JR-7-06` angenommen — mit
+Auflage, noch nicht zurückgemergt.** Die WORM/Object-Lock-Kriterien (`JR-7-01`…`JR-7-05`) sind
+unabhängig gegen ein frisches MinIO nachgeprüft und erfüllt (Protokoll: `24-abnahme-e7.md`). Die
+Auflage: **F60 und F66**, vom Auftraggeber am 2026-08-07 ausdrücklich „in E7, nicht vorher"
+zugeordnet, sind während `JR-7-01`…`JR-7-05` nicht angefasst worden (per `git diff --stat` gegen den
+Integrationsbranch selbst nachgezählt: kein Commit berührt `StorageService.ts` oder die
+Spool-Hochwassermarken-Prüfung) — das braucht vor dem Rückmerge eine explizite, neue
+Auftraggeber-Entscheidung (nachholen oder datiert/begründet auf E8+ verschieben), nicht ein
+stillschweigendes Fallenlassen. **E6 bleibt fertig, abgenommen mit `JR-6-08` und zurückgemergt**
+(`b5b7c8a`, `--no-ff`, kein Squash, auf `claude/enterprise-product-implementation-cxmmqe`). Damit
+sind **E1, E13, E2, E3, E4, E5 und E6** zurückgemergt; **E7 ist angenommen, aber sein Rückmerge steht
+noch aus** (siehe Auflage), E8–E12 sind offen. Nummernkreise nach **ADR-032**: ADR-033–038 sind
+vergeben, **039–040 sind mit dem Rückmerge an den allgemeinen Vorrat zurückgefallen** (nie gebraucht),
+F59–F70 (F59, F61, F65, F66 vergeben; F60/F66 **weiterhin offen, jetzt E7 statt E6 verfehlt** — siehe
+Auflage oben; F62/F64 unzugeordnet, nicht blockierend).
 
 > **CI-Lücke — korrigiert 2026-08-07 (Fund der `JR-6-08`-Abnahmesitzung):** Der Satz „GitHub Actions
 > erzeugt seit `37b471d` keine zuverlässigen Läufe mehr" **stimmt seit `JR-6-06`s Commit
@@ -66,22 +74,22 @@ nicht.
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                   | Fertig / Gesamt                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                               | 6 / 6                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                 | 10 / 10                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                      | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                              | 11 / 11                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
-| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)              | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
-| 8           | E7   | WORM-Storage                       | offen                                                                                                    | 0 / 6                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                    | 0 / 8                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                    | 0 / 10                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                    | 0 / 9                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                          | Fertig / Gesamt                                                                                                                 |
+| ----------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                      | 6 / 6                                                                                                                           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                        | 10 / 10                                                                                                                         |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                             | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                     | 11 / 11                                                                                                                         |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                         | 9 / 9                                                                                                                           |
+| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)        | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
+| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                        | 9 / 9                                                                                                                           |
+| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)                     | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
+| 8           | E7   | WORM-Storage                       | **angenommen mit Auflage** (`JR-7-06`), **noch nicht zurückgemergt** — F60/F66 offen (siehe `24-abnahme-e7.md`) | 6 / 6                                                                                                                           |
+| 9           | E8   | Anchoring                          | offen                                                                                                           | 0 / 6                                                                                                                           |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                           | 0 / 8                                                                                                                           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                           | 0 / 8                                                                                                                           |
+| 12          | E11  | Compliance-Features                | offen                                                                                                           | 0 / 10                                                                                                                          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                           | 0 / 9                                                                                                                           |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-029**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-030**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -218,12 +226,69 @@ Offene, nicht blockierende Befunde **F60** und **F66** (beide E7 zugeordnet), **
 
 ---
 
-## E7 – E12 (offen)
+## E7 — WORM-Storage (**angenommen mit Auflage 2026-08-08 mit `JR-7-06`, noch nicht zurückgemergt**)
+
+6 / 6 Tasks. `S3StorageProvider` schreibt unter aktivierter Konfiguration
+(`STORAGE_S3_OBJECT_LOCK_MODE=COMPLIANCE`, `STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS`) jedes Objekt mit
+Object Lock, ohne bestehende Aufrufer zu verändern (`JR-7-01`); die Least-Privilege-IAM-Policy steht
+im Deployment-Guide, mit einem gegen echtes MinIO belegten Löschversuch (`JR-7-02`); der Local-FS-Pfad
+ist als substanziell schwächer dokumentiert und mit optionalem `chattr +i` gehärtet (`JR-7-03`); der
+Retention-Konflikt steht im Guide **vor** der Wahl der Aufbewahrungsfrist (`JR-7-04`); alle vier
+WORM-Testfälle laufen grün gegen echtes MinIO, mit zwei bereits vom Auftraggeber akzeptierten,
+dokumentierten Abweichungen von der wörtlichen Kriterienformulierung (`JR-7-05`).
+
+Abnahme `JR-7-06`: unabhängige TEST-Sitzung, gegen ein **frisches, selbst aufgesetztes** MinIO
+reproduziert (nicht die Infrastruktur der `JR-7-05`-Sitzung wiederverwendet), inklusive einer
+Kalibrierung, die die Object-Lock-Verdrahtung absichtlich deaktiviert und zeigt, dass die Suite dann
+zu 3/4 rot wird (Beleg gegen Fail-Open). Voller, unnarrowed Basislauf selbst gefahren: 113 Dateien,
+1322 passed, 13 skipped, exakte Zählerübereinstimmung, exit 0.
+
+**Auflage, nicht geschlossen:** **F60** und **F66** waren vom Auftraggeber am 2026-08-07 ausdrücklich
+„in E7, nicht vorher" zur Behebung zugeordnet (`07-session-handover.md`, „Zwei Startpunkte") — keine
+der `JR-7-01`…`JR-7-05`-Sitzungen hat sie angefasst (per Diff-Zählung gegen den Integrationsbranch
+bestätigt: `StorageService.ts` und die Spool-Hochwassermarken-Prüfung sind nicht Teil des
+Epic-Diffs). Das braucht vor dem Rückmerge eine explizite neue Auftraggeber-Entscheidung.
+
+**Auflage nachgezogen, 2026-08-08 (DEV-Sitzung).** Auftraggeber-Entscheidung: beide jetzt in E7
+nachziehen, vor dem Rückmerge. **F66** (Commit `c0cb970`): `SpoolUsageTracker`, optionaler DI-Zähler
+an `JournalAcceptance` — Schritt 0 wird `O(1)` statt `O(entries)` pro Transaktion, wenn ein Tracker
+übergeben wird; ohne Tracker bleibt exakt das Vorzustands-Verhalten, kein bestehender Aufrufer musste
+sich ändern. Gemessen (`acceptance.test.ts`s neue Suite): mit Tracker null `readdir`/`stat`-Aufrufe
+bei 200 vorbefüllten Quarantäne-Dateien; ohne Tracker steigt die `readdir`-Anzahl mit der
+Rückstandsgröße. Cross-Process-Lücke offen gelegt statt versteckt: `apps/smtp-ingress` und der
+`journal-inbound`-Worker sind getrennte Prozesse, ein reiner In-Memory-Tracker im einen ist im
+anderen unsichtbar — `SpoolUsageReconciler` (5-Minuten-Walk in `apps/smtp-ingress`) mindert die
+Drift, löst sie aber nicht auf; echte prozessübergreifende Synchronisierung (z. B. Redis) ist nicht
+Teil dieser Behebung. **Auftraggeber-Entscheidung dazu, 2026-08-08 (Abnahme-Folgesitzung): akzeptieren
+und dokumentieren, kein Blocker für den Rückmerge** — Details und Begründung in
+`09-befunde-bestandscode.md`s F66-Eintrag. **F60** (Commit `d6d80eb`):
+`StorageService.put()`s Stream-Pfad läuft jetzt über einen Stream-Cipher (`PassThrough` +
+`stream/promises`-`pipeline()`) statt `streamToBuffer()`; Byte-Format unverändert (verifiziert durch
+direktes Entschlüsseln der Rohbytes); kalibrierter Regressionsnachweis (F43-Muster) schlägt gegen den
+Vorzustand nachweislich fehl (`expected 0 to be greater than or equal to 2`). Erster Testfall
+überhaupt für `StorageService`. Beide Commits einzeln: `unit`-Projekt lief nach jedem Commit exakt mit
+den in `tests/support/suite-inventory.ts` deklarierten Zahlen (79/1131 nach F66, 80/1137 nach F60);
+ein voller `pnpm test`-Lauf über alle drei Projekte war einmal komplett grün außer der bereits
+dokumentierten, unabhängigen **F67**-Flakigkeit (`journal-soak.adv.test.ts`s `ci`-Smoke-Fall unter
+voller Parallellast) — nicht durch diese Sitzung verursacht, siehe F67-Eintrag. **Kein Rückmerge, kein
+neuer Session-Handover-Eintrag, keine `JR-7-06`-Neubewertung** — das bleibt einer Folgesitzung
+vorbehalten, siehe `09-befunde-bestandscode.md` für die vollständigen Statuseinträge.
+
+> **Das Abnahmeprotokoll (Kriterium → Beleg → Urteil, inklusive der Auflage) steht in
+> [`24-abnahme-e7.md`](24-abnahme-e7.md).** Die Sessionprotokolle zu `JR-7-01`…`JR-7-05` und der
+> Auftraggeber-Entscheidung zum Soft-Delete/Overwrite-Befund stehen unverändert unten unter
+> „Sessionprotokoll". Befunde F60/F66 in `09-befunde-bestandscode.md`.
+
+---
+
+## E8 – E12 (offen)
 
 **Überschrift am 2026-08-06 korrigiert** (Doku-Diät, gefundener Nebenfund): sie hieß noch „E3 – E12",
-ein Überbleibsel aus der Zeit, bevor E3 begonnen hatte. E3–E6 haben inzwischen eigene Abschnitte oben;
-diese Überschrift betrifft nur, was noch offen ist. Tasklisten stehen in `03-backlog.md`. Sie werden
-hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu halten.
+ein Überbleibsel aus der Zeit, bevor E3 begonnen hatte, und bis zum 2026-08-08 „E7 – E12" (E7 ist jetzt
+angenommen, siehe Abschnitt oben, auch wenn der Rückmerge wegen der Auflage noch aussteht). E3–E7 haben
+inzwischen eigene Abschnitte oben; diese Überschrift betrifft nur, was noch offen ist. Tasklisten
+stehen in `03-backlog.md`. Sie werden hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese
+Datei lesbar zu halten.
 
 **Wirklich noch offene ADRs** (die bereits entschiedenen — ADR-006/007/022/023/024/029/030 und
 **ADR-010** — sind am 2026-08-06 aus dieser Tabelle entfernt, Doku-Diät: sie stehen vollständig in
@@ -240,9 +305,7 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
 
 ## Sessionprotokoll
 
-> **Kein Epic läuft gerade — E6 ist abgenommen und zurückgemergt, E7 hat noch nicht begonnen.** Diese
-> Sektion ist deshalb aktuell leer; das nächste Epic füllt sie neu. Alle bisherigen Protokolle liegen
-> im Archiv:
+> Alle bisherigen (zurückgemergten) Epic-Protokolle liegen im Archiv:
 >
 > | Zeitraum                               | liegt in                               |
 > | -------------------------------------- | -------------------------------------- |
@@ -255,3 +318,171 @@ hier erst beim Beginn des jeweiligen Epics ausgerollt, um diese Datei lesbar zu 
 > Epics wandert ins Archiv, **sobald** es zurückgemergt ist — sonst wird diese Datei bei jeder Sitzung
 > erneut zur vollen Pflichtlektüre. **Neue Einträge kurz und in Feldform** (Task, Commit, Testzahl,
 > CI-Lauf, Entscheidungen, offen), kein Tabellenformat (Prettier-Padding-Kosten, siehe Archiv).
+
+**E7, `JR-7-01`–`JR-7-04` (DEV), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`.
+
+- **`JR-7-01`** — `S3StorageConfig` (`packages/types/src/storage.types.ts`) um `objectLockMode?:
+'COMPLIANCE'` und `objectLockRetainUntilDays?: number` erweitert. `S3StorageProvider.put()` hängt
+  `ObjectLockMode`/`ObjectLockRetainUntilDate` (berechnet als Schreibzeitpunkt + Tage) nur an, wenn
+  beide Werte gesetzt sind — unkonfiguriert identischer `Upload`-Aufruf wie vorher, bestehende
+  Aufrufer unverändert. Config-Wiring in `config/storage.ts` (`STORAGE_S3_OBJECT_LOCK_MODE`,
+  `STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS`, wirft beim Import bei unvollständiger/ungültiger Kombination,
+  passend zum bestehenden Stil dieser Datei) und `.env.example`.
+- **`JR-7-02`** — Least-Privilege-IAM-Policy (JSON) im Deployment-Guide
+  (`docs/enterprise/journaling/guide.md`, Abschnitt „Least-privilege credentials for the S3
+  backend"): kein `s3:DeleteObject`/`s3:DeleteObjectVersion`/`s3:BypassGovernanceRetention`, `Deny` auf
+  `s3:PutObjectRetention` unterhalb eines konfigurierbaren `s3:object-lock-remaining-retention-days`-
+  Floors (AWS-Standardmuster „nur verlängern"). Der MinIO-Verifikationstest ist `JR-7-05` (TEST, nicht
+  hier) — hier nur Dokumentation plus Policy-Artefakt.
+- **`JR-7-03`** — Guide-Abschnitt „Local filesystem storage is not WORM" benennt die Schwäche
+  unmissverständlich und dokumentiert Härtung (dediziertes Mount, restriktive Unix-Rechte,
+  `chattr +i`). Zusätzlich Code-Hook in `LocalFileSystemProvider.put()`: best-effort `chattr +i` nach
+  jedem Schreiben, nur wenn `STORAGE_LOCAL_HARDEN_IMMUTABLE=true` gesetzt ist, no-op außerhalb Linux,
+  Fehler geloggt und nicht fatal. Dokumentiert und bewusst in Kauf genommen: das blockiert auch die
+  eigene spätere Löschung derselben Datei (z.B. Retention-Ablauf), bis ein Operator `chattr -i` manuell
+  ausführt — das ist das Abschreckungsmodell, kein Fehler.
+- **`JR-7-04`** — Reihenfolge im Guide wie gefordert: „Retention under COMPLIANCE mode is
+  irreversible — read this before choosing a period" steht **vor** „Choosing a retention period and
+  enabling Object Lock" (beide im neuen Abschnitt „WORM Storage (Object Lock)", zwischen den
+  bestehenden Abschnitten „Security Considerations" und „Health Check").
+
+Nicht hier gemacht (bewusst, siehe Auftrag): `JR-7-05` (Tests gegen MinIO) und `JR-7-06` (Abnahme) —
+andere Rolle, danach.
+
+**Nachweise:** `corepack pnpm --filter @open-archiver/types build` grün; `corepack pnpm exec tsc
+--noEmit` in `packages/backend` grün (keine Ausgabe); `corepack pnpm exec prettier --check` auf allen
+geänderten `.ts`-Dateien und (nach `--write` nur dieser einen Datei) auf `guide.md` grün. **Kein**
+voller Testlauf durchgeführt — es wurde keine neue Testdatei angelegt (die Tests dafür sind
+`JR-7-05`), `suite-inventory.ts` also unverändert und nicht fällig. Migration nicht nötig (reine
+Konfiguration, keine Schemaänderung). i18n nicht nötig (technischer Guide, kein UI-Text).
+
+**Offene Annahmen für die Abnahme/TEST-Rolle:** (1) Namensgebung `objectLockMode`/
+`objectLockRetainUntilDays` und die ENV-Var-Namen sind neu gewählt, nicht durch ADR vorgegeben — falls
+`JR-7-05` andere Namen erwartet, ist das ein Diskussionspunkt, keine Bugmeldung. (2) Der numerische
+Floor `365` im Beispiel-Policy-JSON ist ein Platzhalter, kein empfohlener Wert — er muss auf
+`STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS` abgestimmt sein. (3) `chattr +i` wurde nicht gegen ein echtes
+Linux-Zielsystem verifiziert (dieser Host ist Windows) — nur `process.platform !== 'linux'`-Zweig und
+Kompilierung geprüft.
+
+**E7, `JR-7-05` (TEST), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`, unabhängige
+TEST-Sitzung nach `JR-7-01`–`JR-7-04`.
+
+- **Testdatei:** `packages/backend/tests/adversarial/journal-worm-object-lock.adv.test.ts`.
+  Klassifikation **`nightly`**, nicht `ci`: `docker-compose.yml` und `.github/workflows/ci.yml` haben
+  kein MinIO (vor dem Schreiben geprüft, wie schon bei `JR-6-06`), also gate über
+  `probeMinio()`/`OA_TEST_MINIO_ENDPOINT` **ohne Default** (anders als bei Postgres/Redis/Meilisearch
+  — Begründung im Funktionskommentar: eine Suite, die irreversible Object-Lock-Objekte schreibt, darf
+  nicht versehentlich gegen einen echten/produktionsnahen Endpoint laufen, nur weil `localhost`
+  zufällig auflöst). `tests/support/infra.ts` bekommt dafür `probeMinio()` (gleiches Muster wie
+  `probeRedis`/`probeMeilisearch`). MinIO für diese Sitzung selbst bereitgestellt: Docker-Container
+  `oa-test-minio` (`minio/minio:latest`, kein persistentes Volume, Ports 9010/9011), Object-Lock-Bucket
+  pro Testlauf frisch angelegt (`CreateBucketCommand` mit `ObjectLockEnabledForBucket: true`).
+- **Alle vier Fälle grün gegen echtes MinIO** — gemessener Lauf (narrowed, `-t "JR-7-05"`, siehe
+  Zählervorbehalt unten): `4 passed (554ms)`. Zwei davon halten aber **nicht wörtlich**, wie der
+  Backlog-Satz sie formuliert, und das ist im Testfile selbst als Befund dokumentiert, nicht
+  verschwiegen:
+    - Fall 1 ("Überschreiben scheitert"): ein zweiter `S3StorageProvider.put()` auf denselben Key
+      **schlägt nicht fehl** — er erzeugt eine neue, ebenfalls gesperrte Version (korrektes
+      S3-Verhalten, Object Lock gilt pro Version). Die alte Version ist beweisbar unverändert
+      (per `VersionId` abrufbar), aber `get()`/`IStorageProvider.get()` kennen keine `VersionId` — ein
+      gewöhnlicher Lesezugriff nach einem solchen Überschreiben liefert stillschweigend die **neuen**
+      Bytes, nicht das Original, ohne jeden Fehler.
+    - Fall 2 ("Löschen scheitert, auch mit gewöhnlichen Credentials"): ein versionsspezifisches
+      `DeleteObject` auf die gesperrte Version schlägt genuin fehl (die reale Garantie, kalibriert
+      gegen ein ungesperrtes Kontrollobjekt mit denselben Credentials). Aber
+      `S3StorageProvider.delete()` — was die Anwendung tatsächlich aufruft — übergibt keine
+      `VersionId`; `DeleteObject` ohne Version erzeugt auf einem versionierten Bucket einen
+      Delete-Marker, unabhängig von Object Lock. Der Aufruf **gelingt**, `exists()`/`get()` melden das
+      Objekt danach als weg, die gesperrten Bytes bleiben aber physisch erhalten — verwaist, nur noch
+      über die konkrete `VersionId` erreichbar, nicht über die normale Anwendungs-API.
+    - Beide Funde betreffen die **Anwendungsseite** (`S3StorageProvider`s versionsunabhängige
+      `get()`/`delete()`-Signatur), nicht MinIO/S3s Durchsetzung selbst — die versionsscharfe
+      Object-Lock-Garantie hält nachweislich (Fälle 3+4 unten, plus die kalibrierten Teilschritte in
+      Fall 1+2). **Relevant für `JR-7-06`/E8**, nicht hier behoben (TEST-Rolle).
+    - Fall 3 (Retention wird gesetzt) und Fall 4 (Verkürzung scheitert, Verlängerung als Kalibrierung
+      gelingt) halten **wörtlich wie im Backlog formuliert** — echtes `GetObjectRetentionCommand`/
+      `PutObjectRetentionCommand` gegen echtes MinIO.
+- **`tests/support/suite-inventory.ts`** aktualisiert: `adversarial` `expectedFiles` 8→9,
+  `expectedTests.nightly` 3→7 (`ci`/`manual` unverändert — die neue Suite trägt 0 zu `ci` bei, weil sie
+  unter der Standardklassenauswahl nicht läuft).
+- **Volllauf-Nachweis (`ci`-Klasse, echt, unnarrowed):** `corepack pnpm exec dotenv -- vitest run`
+  (kein `OA_TEST_CLASSES`-Override, also Standardauswahl `ci`) — **1320 passed | 2 failed | 13
+  skipped**, 113 Dateien, 677,65s. `[TEST-EXECUTED] unit: ci 1119/1119 · integration: ci 133/133 ·
+adversarial: ci 70/70` — exakt wie in `suite-inventory.ts` erwartet, kein Zähler durch diese Sitzung
+  verändert (die neue Suite ist `nightly`-only). Die 2 Fehlschläge, beide **nicht** durch `JR-7-05`
+  verursacht: 1. `m365-range-refresh-cli.int.test.ts` — Artefakt der eigenen Testumgebung dieser Sitzung: eine
+  für diesen Lauf neu angelegte Root-`.env` (gitignored, nicht committet) enthält
+  `SMTP_INGRESS_DATABASE_URL`; das CLI-Skript lädt `dotenv/config` selbst neu und überschreibt
+  damit den vom Test bewusst auf `PATH`/`SystemRoot` geleerten Kind-Prozess-Environment. Kein
+  Produktionscode-Defekt, verifiziert durch Lesen von `runCli()`s `baseEnv`. 2. `journal-soak.adv.test.ts`s `ci`-Smoke-Fall hängt 600s unter voller Suite-Parallellast — **neuer
+  Befund F67** (siehe `09-befunde-bestandscode.md`), per `git stash` kalibriert als **nicht**
+  durch `JR-7-05` verursacht: derselbe Test isoliert (ohne die drei geänderten/neuen Dateien)
+  lief in 1133ms grün.
+- **Ein echter Volllauf mit `OA_TEST_CLASSES=ci,nightly`** (für die zählerverifizierte
+  `nightly`-Bestätigung der neuen Suite, `7` erwartet: `4` neu + `3` bestehend) wurde **zweimal**
+  versucht und beide Male durch denselben Mechanismus wie F67 blockiert (dort im 100.000er-`nightly`-
+  Fall von `journal-soak.adv.test.ts`, `no SMTP reply within 600000ms`) — nach >20 bzw. >30 Minuten
+  ohne neue Log-Zeile per `taskkill /F /T` abgebrochen. **Die exakte `nightly`-`TEST-EXECUTED`-Zählung
+  ist daher in dieser Sitzung nicht über den vollen, zählerverifizierten Pfad bestätigt** — nur über
+  den oben genannten narrowed run (`-t "JR-7-05"`), der laut Harness-Konvention "verified NOTHING"
+  bezüglich der Zähler ist, die vier Testkörper selbst aber echt und beobachtet beweist. Wer
+  `JR-7-06` abnimmt und einen zählerverifizierten `nightly`-Lauf braucht, sollte ihn auf einem weniger
+  ausgelasteten Host oder echtem Linux-CI wiederholen (F67 nennt den vermuteten Zusammenhang).
+- **Commits:** `85f7bae` (Testdatei, `probeMinio()`, `suite-inventory.ts`), plus diese
+  Doku-Aktualisierung.
+
+**Nachweise:** siehe Zahlen oben, wörtlich aus den jeweiligen Läufen zitiert, nicht geschätzt. Kein
+`--silent` verwendet. `.oa-test-storage/` (bereits vor dieser Sitzung im Arbeitsbaum, unverändert) und
+die neu angelegte Root-`.env` sind beide gitignored und nicht Teil der Commits.
+
+**Offene Punkte für `JR-7-06`:** (1) die beiden Lese-/Löschpfad-Funde aus Fall 1+2 oben (Entscheidung:
+akzeptieren mit Dokumentation, oder `S3StorageProvider`/`IStorageProvider` um `VersionId`-Unterstützung
+erweitern — letzteres wäre auch für E8s Anchoring-Bucket relevant). (2) F67 (Soak-Hang) ist unabhängig
+von `JR-7-05`s Korrektheit, aber ein CI-Zuverlässigkeitsrisiko, das vor einer Aussage über die
+`nightly`-Klasse insgesamt geklärt werden sollte. (3) Namens-/Floor-Annahmen aus der `JR-7-01`–`JR-7-04`-
+Sitzung (oben) bleiben offen, unverändert durch diese Sitzung.
+
+**E7, Auftraggeber-Entscheidung zu Punkt (1), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`,
+reine Dokumentationssitzung, kein Code, keine Tests, keine Migration.
+
+- **Entscheidung:** akzeptieren, nur dokumentieren — kein Code-Fix in E7. Die beiden oben
+  beschriebenen Abweichungen vom wörtlichen Akzeptanzkriterium ("Überschreiben scheitert" /
+  "Löschen scheitert") bleiben bestehen: tatsächliches Verhalten ist S3-Versionierung (eine neue
+  gesperrte Version bzw. ein Delete-Marker; die physischen Bytes/alten Versionen bleiben nachweislich
+  erhalten und durch Object Lock geschützt), aber die normale Anwendungsansicht (`get()`/`exists()`
+  ohne `VersionId`) zeigt das nicht an — sie meldet schlicht "weg" bzw. "neuer Inhalt".
+- **Dokumentiert in `docs/enterprise/journaling/guide.md`**, neuer Abschnitt „What Object Lock
+  protects — and what the application does not show you" zwischen „Least-privilege credentials for
+  the S3 backend" und „Local filesystem storage is not WORM". Kernaussage für den Betreiber ohne
+  Codekenntnis: die Daten sind physisch sicher, aber die App zeigt das nicht direkt an; eine echte
+  Prüfung der Garantie muss über S3-Versionierung (`ListObjectVersions`/`VersionId`-scharfes
+  `GetObject`/`GetObjectRetention`) laufen, nicht über die normale Anwendungsansicht.
+- Damit ist Punkt (1) der offenen Punkte oben geklärt. (2) F67 und (3) Namens-/Floor-Annahmen bleiben
+  offen für `JR-7-06`.
+- **Nicht Teil dieser Sitzung:** `JR-7-06` (Abnahme E7) selbst — das bleibt Aufgabe einer
+  unabhängigen Rolle.
+
+**E7, `JR-7-06` (TEST, Abnahme), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`, unabhängige
+TEST-Sitzung, keine E7-Scheibe vorher selbst umgesetzt.
+
+- **Urteil: angenommen mit Auflage.** `JR-7-01`…`JR-7-05` unabhängig nachgeprüft und erfüllt — MinIO
+  frisch selbst aufgesetzt (nicht die Infrastruktur der `JR-7-05`-Sitzung wiederverwendet), 4/4 WORM-
+  Fälle grün reproduziert, **Kalibrierung durchgeführt** (Object-Lock-Verdrahtung absichtlich
+  deaktiviert ⇒ 3/4 rot, Änderung vollständig zurückgenommen, danach wieder 4/4 grün) — die Suite ist
+  nicht fail-open. Voller unnarrowed Basislauf selbst gefahren: 113 Dateien, 1322 passed, 13 skipped,
+  exit 0, exakte Zählerübereinstimmung mit `suite-inventory.ts`. `guide.md`s Abschnittsreihenfolge
+  (`JR-7-04`) per `grep` über die echten Zeilennummern nachvollzogen. CI-Lauf für den geprüften Commit
+  `587b334` selbst abgerufen (`31247183509`, `success`, 3 min 12 s).
+- **Auflage, nicht geschlossen:** **F60**/**F66**, vom Auftraggeber am 2026-08-07 ausdrücklich „in E7,
+  nicht vorher" zugeordnet (`07-session-handover.md`), sind in keiner `JR-7-01`…`JR-7-05`-Sitzung
+  angefasst worden — per `git diff --stat` gegen den Integrationsbranch bestätigt (`StorageService.ts`
+  und die Spool-Hochwassermarken-Prüfung sind nicht Teil des Epic-Diffs). Braucht vor dem Rückmerge
+  eine explizite neue Auftraggeber-Entscheidung.
+- **Nebenfund, nicht blockierend:** `04-testplan.md` §4 listet `JR-7-05` noch als „`ci` (MinIO)" —
+  die tatsächliche, im Testfile begründete Klassifizierung ist `nightly` (kein Standard-Endpoint,
+  analog zur TSA-Regel beim Anchoring). Planungstabelle nicht nachgezogen, kosmetisch.
+- **Kein Rückmerge durchgeführt** (Auftrag, CLAUDE.md §7) — bleibt einer Folge-Sitzung nach
+  ausdrücklicher Freigabe vorbehalten; die Freigabe sollte die F60/F66-Entscheidung einschließen.
+- **Volles Protokoll:** [`24-abnahme-e7.md`](24-abnahme-e7.md). Keine Produktionscode-Änderung außer
+  der einen, deklarierten, vollständig zurückgenommenen Kalibrierungsinjektion in
+  `S3StorageProvider.ts`.

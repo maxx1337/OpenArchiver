@@ -19,6 +19,9 @@ if (storageType === 'local') {
 		rootPath: process.env.STORAGE_LOCAL_ROOT_PATH,
 		openArchiverFolderName: openArchiverFolderName,
 		encryptionKey: encryptionKey,
+		// Best-effort deterrence hardening (JR-7-03), not real WORM. See
+		// docs/enterprise/journaling/guide.md before enabling in production.
+		hardenImmutable: process.env.STORAGE_LOCAL_HARDEN_IMMUTABLE === 'true',
 	};
 } else if (storageType === 's3') {
 	if (
@@ -29,6 +32,31 @@ if (storageType === 'local') {
 	) {
 		throw new Error('One or more S3 storage environment variables are not defined');
 	}
+
+	// Object Lock (WORM, JR-7-01): optional, and only 'COMPLIANCE' is supported -- the mode
+	// that makes early deletion technically impossible, including for us. Requires a bucket
+	// created with Object Lock enabled; see docs/enterprise/journaling/guide.md.
+	const objectLockModeRaw = process.env.STORAGE_S3_OBJECT_LOCK_MODE;
+	const objectLockRetainDaysRaw = process.env.STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS;
+	let objectLockMode: 'COMPLIANCE' | undefined;
+	let objectLockRetainUntilDays: number | undefined;
+
+	if (objectLockModeRaw) {
+		if (objectLockModeRaw !== 'COMPLIANCE') {
+			throw new Error(
+				`Invalid STORAGE_S3_OBJECT_LOCK_MODE: '${objectLockModeRaw}'. Only 'COMPLIANCE' is supported.`
+			);
+		}
+		const parsedDays = Number(objectLockRetainDaysRaw);
+		if (!objectLockRetainDaysRaw || !Number.isInteger(parsedDays) || parsedDays <= 0) {
+			throw new Error(
+				'STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS must be set to a positive integer (days) when STORAGE_S3_OBJECT_LOCK_MODE is set'
+			);
+		}
+		objectLockMode = 'COMPLIANCE';
+		objectLockRetainUntilDays = parsedDays;
+	}
+
 	storageConfig = {
 		type: 's3',
 		endpoint: process.env.STORAGE_S3_ENDPOINT,
@@ -39,6 +67,8 @@ if (storageType === 'local') {
 		forcePathStyle: process.env.STORAGE_S3_FORCE_PATH_STYLE === 'true',
 		openArchiverFolderName: openArchiverFolderName,
 		encryptionKey: encryptionKey,
+		objectLockMode: objectLockMode,
+		objectLockRetainUntilDays: objectLockRetainUntilDays,
 	};
 } else {
 	throw new Error(`Invalid STORAGE_TYPE: ${storageType}`);

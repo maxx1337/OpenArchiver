@@ -77,6 +77,13 @@ export {
 export { parseSpoolConfig, spoolConfigSchema, type SpoolConfig } from './spool/config';
 
 export {
+	DEFAULT_SPOOL_USAGE_RECONCILE_INTERVAL_MS,
+	SpoolUsageReconciler,
+	SpoolUsageTracker,
+	type SpoolUsageReconcilerOptions,
+} from './spool/spool-usage-tracker';
+
+export {
 	DurableWriteError,
 	writeDurableSpoolFile,
 	type DurableWriteRequest,

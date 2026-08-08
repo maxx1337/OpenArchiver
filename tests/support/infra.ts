@@ -150,6 +150,81 @@ export function probeRedis(timeoutMs = 1500): Promise<Probe> {
  * connection failure -- so a misconfigured `MEILI_MASTER_KEY` reaches the test that actually calls
  * `SearchService` as a real assertion failure, never disguised as "Meilisearch is not running".
  */
+/**
+ * Is there a reachable MinIO/S3-compatible endpoint with Object Lock support for the WORM suite
+ * (`JR-7-05`, Testplan section 12.x)?
+ *
+ * Unlike `probePostgres()`/`probeRedis()`/`probeMeilisearch()`, there is **no default** for the host
+ * or port, and no fallback to `localhost` on a well-known port: this probe gates a suite that, once
+ * it runs, writes objects under S3 Object Lock COMPLIANCE mode -- irreversible for the configured
+ * retention period against whatever endpoint it is pointed at (see `05-entscheidungen.md`,
+ * "Object Lock COMPLIANCE ist irreversibel"). A default that happened to resolve to a real bucket on
+ * a shared or production-adjacent host would create real, undeletable objects with no way to recover
+ * from a copy-pasted `.env`. Requiring `OA_TEST_MINIO_ENDPOINT` to be set *explicitly*, with no
+ * fallback, means the suite only ever runs against an endpoint someone deliberately configured for
+ * this purpose -- exactly the "no default TSA URL" instinct the RFC already applies to anchoring
+ * (skill `journal-ledger` section 8), applied here to the other irreversible external dependency this
+ * project has.
+ *
+ * `docker-compose.yml` has no MinIO service (confirmed by grep before writing this) and neither does
+ * `.github/workflows/ci.yml` -- adding either is an infrastructure decision for DEV/PO, not something
+ * this probe should force by defaulting to "on". A host that sets the three `OA_TEST_MINIO_*`
+ * variables (endpoint, access key, secret key) opts in; everything else skips, visibly, with a named
+ * reason.
+ */
+export function probeMinio(timeoutMs = 1500): Promise<Probe> {
+	const raw = process.env.OA_TEST_MINIO_ENDPOINT;
+	const key = `minio:${raw ?? ''}`;
+	const cached = cache.get(key);
+	if (cached) {
+		return cached;
+	}
+	const result = (async (): Promise<Probe> => {
+		if (!raw) {
+			return {
+				available: false,
+				reason:
+					'OA_TEST_MINIO_ENDPOINT is not set -- WORM/Object-Lock suite needs a MinIO (or ' +
+					'S3-compatible) endpoint with Object Lock support, deliberately opted in (no default, ' +
+					"see this function's doc comment) -- suite skipped",
+				target: '(none)',
+			};
+		}
+		if (!process.env.OA_TEST_MINIO_ACCESS_KEY || !process.env.OA_TEST_MINIO_SECRET_KEY) {
+			return {
+				available: false,
+				reason:
+					'OA_TEST_MINIO_ENDPOINT is set but OA_TEST_MINIO_ACCESS_KEY/OA_TEST_MINIO_SECRET_KEY ' +
+					'are not -- suite skipped rather than attempting anonymous access',
+				target: raw,
+			};
+		}
+		let url: URL;
+		try {
+			url = new URL(raw);
+		} catch {
+			return {
+				available: false,
+				reason: `OA_TEST_MINIO_ENDPOINT is not a parseable URL (${JSON.stringify(raw)})`,
+				target: '(unparseable)',
+			};
+		}
+		const host = url.hostname;
+		const port = Number(url.port || (url.protocol === 'https:' ? '443' : '80'));
+		const target = `${host}:${port}`;
+		const reachable = await probeTcp(host, port, timeoutMs);
+		return reachable
+			? { available: true, reason: `MinIO/S3 reachable at ${target}`, target }
+			: {
+					available: false,
+					reason: `no MinIO/S3 listening at ${target} (OA_TEST_MINIO_ENDPOINT=${raw}) -- suite skipped`,
+					target,
+				};
+	})();
+	cache.set(key, result);
+	return result;
+}
+
 export function probeMeilisearch(timeoutMs = 1500): Promise<Probe> {
 	const raw = process.env.MEILI_HOST || 'http://127.0.0.1:7700';
 	const key = `meilisearch:${raw}`;
