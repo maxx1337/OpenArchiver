@@ -925,8 +925,8 @@ export const SUITES: readonly SuiteSpec[] = [
 		// added packages/journaling/tests/adversarial/spool-fsync-fault-injection.adv.test.ts and
 		// spool-disk-full.adv.test.ts. 6 after JR-4-10 added smtp-ingress-kill-during-data.adv.test.ts.
 		// 7 after JR-4-14 added smtp-protocol-robustness.adv.test.ts. 8 after JR-6-07 added
-		// journal-soak.adv.test.ts.
-		expectedFiles: 8,
+		// journal-soak.adv.test.ts. 9 after JR-7-05 added journal-worm-object-lock.adv.test.ts.
+		expectedFiles: 9,
 		// The one `nightly` and one `manual` suite in the repository are both in
 		// mongo-to-drizzle.adv.test.ts. They are the two skips a default `pnpm test` reports.
 		// ci: 3 before E2; 7 with the 4 concurrency cases of JR-2-08 (load, rollback-under-load,
@@ -980,7 +980,14 @@ export const SUITES: readonly SuiteSpec[] = [
 		// directory-fsync platform gap (fs-port.ts) that makes every message on this host fail at
 		// 451 before reaching the ledger, and how both variants assert that failure mode explicitly
 		// instead of silently skipping.
-		expectedTests: { ci: 70, nightly: 3, manual: 1 },
+		// 70 ci / 7 nightly / 1 manual after JR-7-05 added journal-worm-object-lock.adv.test.ts: 4
+		// `nightly`-only cases (overwrite, delete, retention-set, retention-shorten) against a real
+		// MinIO with Object Lock, gated on `OA_TEST_MINIO_ENDPOINT` (no default -- see probeMinio()'s
+		// own doc comment) -- 0 of these run under the default `ci`-only class selection, so
+		// `expectedTests.ci` is unchanged. See that file's own doc comment for two findings (cases 1
+		// and 2 do not hold literally against S3StorageProvider's version-unaware put()/delete(),
+		// though the underlying per-version Object Lock guarantee genuinely does).
+		expectedTests: { ci: 70, nightly: 7, manual: 1 },
 	},
 ];
 
