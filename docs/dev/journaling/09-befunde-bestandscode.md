@@ -3455,8 +3455,20 @@ Versprechen die Ursache des Befunds trifft.
 **Ort:** `packages/backend/src/services/StorageService.ts` `put()` (Zeilen 68–72),
 Signatur in `packages/types/src/storage.types.ts` `IStorageProvider.put()` ·
 **Gefunden:** 2026-08-05 bei der Entscheidung zu **ADR-010** (`JR-6-02a`) ·
-**Status:** **offen — vorgeschlagene Zuordnung: E7** (WORM-Storage, wo `S3StorageProvider` ohnehin
-angefasst wird). Entscheidung des Auftraggebers ausstehend
+**Status:** **behoben in E7**, Commit `d6d80eb`. `put()` unterscheidet jetzt `Buffer` (kurzer,
+bereits gepufferter Pfad, unverändert) von einem Stream: letzterer läuft durch einen neuen
+`putStream()`, der Präfix+IV direkt in einen `PassThrough` schreibt und `content -> cipher ->
+PassThrough` per `stream/promises`' `pipeline()` **gleichzeitig** mit `this.provider.put()`
+laufen lässt (keiner der beiden wird vorher vollständig abgewartet) — das Byte-Format
+(`ENCRYPTION_PREFIX` + 16-Byte-IV + Ciphertext) bleibt unverändert, verifiziert durch direktes
+Entschlüsseln der Rohbytes beider Pfade. Kalibrierter Nachweis (F43-Muster): ein Fake-`IStorageProvider`
+zählt, wie viele Chunks ankommen, bevor die Quelle endet — gegen den Vorzustand (Commit vor `d6d80eb`
+zurückgesetzt) schlägt genau diese Assertion mit `expected 0 to be greater than or equal to 2` fehl,
+weil der alte Code `provider.put()` erst nach `streamToBuffer()`s `'end'` überhaupt aufruft. Erster
+Testfall überhaupt für diese Klasse: `packages/backend/src/services/StorageService.test.ts` (6 Tests).
+Geprüfte Aufrufer: `upload.controller.ts`s Busboy-Filestream ist der einzige produktive
+Stream-Aufrufer und hängt seinen eigenen `'error'`-Listener bereits vor dem `put()`-Aufruf an — das
+verträgt sich mit `pipeline()`s eigenen Listenern, kein Aufrufer liest den Content-Stream doppelt.
 
 Die Schnittstelle verspricht Streaming:
 
@@ -3789,6 +3801,40 @@ Verzeichnis-Walk beim Crash-Recovery-Scan (`JR-3-05`) abgeglichen, der ohnehin b
 analog zu F60. **Entschieden vom Auftraggeber am 2026-08-07: nach E7 verschoben, blockiert `JR-6-08`
 nicht.** Die Acceptance-Contract-Korrektheit ist unberührt; die O(n²)-Latenz unter Rückstand wird mit
 F60 zusammen in E7 behoben, nicht vorher.
+
+**Status:** **behoben in E7**, Commit `c0cb970`. Genau der im Kommentar vorgeschlagene Zähler: neue
+Klasse `SpoolUsageTracker` (`packages/journaling/src/spool/spool-usage-tracker.ts`,
+`increment`/`decrement`/`current`/`reset`), als **optionaler** DI-Kollaborator an
+`JournalAcceptance` übergeben — Schritt 0 von `accept()` liest bei vorhandenem Tracker
+`evaluateHighWaterMark(tracker.current(), ...)` (`O(1)`, kein I/O) statt `checkSpoolHighWaterMark()`
+zu rufen; fehlt der Tracker, bleibt exakt das Vorzustands-Verhalten (voller Walk pro Aufruf) erhalten
+— keiner der ~40 bestehenden `JournalAcceptance`-Konstruktionsaufrufe musste geändert werden.
+Inkrementiert nach jedem erfolgreichen durablen Schreiben **und** nach jeder Quarantäne von
+Schreibfehler-Trümmern (per `fs.stat()` auf die tatsächlich verschobene Datei) — die in
+`spool-fsync-fault-injection.adv.test.ts` bereits abgenommene "Quarantäne-Trümmer erodieren das
+Budget" (F40 Hälfte 2) bleibt dadurch mit Tracker exakt gleich, nicht vereinfacht.
+
+**Gemessener Beleg (`acceptance.test.ts`s neue "F66"-Suite):** mit Tracker macht `accept()` bei einem
+mit 200 Quarantäne-Dateien vorbefüllten Spool **null** `readdir`/`stat`-Aufrufe (Timeline-Assertion);
+ohne Tracker steigt die Anzahl der `readdir`-Aufrufe messbar mit der Rückstandsgröße (4 vs. 200
+Dateien, `large > small`, beide `> 0`). Das ist der Vorher/Nachher-Vergleich, den F66 selbst mit der
+Momentanraten-Tabelle gefordert hat, hier als Aufruf-Zähler statt Wanduhrzeit — reicht laut Auftrag,
+ein voller 100.000er-Soak musste nicht wiederholt werden.
+
+**Nicht geschlossen, bewusst offengelegt statt versteckt — der Cross-Process-Punkt:** `apps/smtp-ingress`
+(inkrementiert) und der `journal-inbound`-Worker (`runPhaseBPipeline()`, dekrementiert bei
+`release()`) sind zwei getrennte OS-Prozesse über demselben Spool-Verzeichnis, kein gemeinsamer
+Prozess. Ein reiner In-Memory-`SpoolUsageTracker` in einem Prozess ist für den anderen unsichtbar —
+`PhaseBPipelineDeps.usageTracker` existiert als Schnittstelle (für eine künftige, wirklich
+prozessübergreifend geteilte Implementierung, z. B. Redis-gestützt), wird aber in
+`journal-inbound.processor.ts` bewusst **nicht** verdrahtet: ein Dekrement auf eine Instanz zu rufen,
+die niemandes High-Water-Mark-Prüfung je liest, würde nach einem Fix aussehen und nichts messen — genau
+die F41/F43/F44-Form, vor der `CLAUDE.md` warnt. Mitigation: `SpoolUsageReconciler`
+(`start`/`stop`/`reconcileNow()`, gleiche Form wie `JournalAcceptanceBootstrap`/`SourceAclCache`) läuft
+in `apps/smtp-ingress` alle 5 Minuten und resettet den Tracker auf einen frischen Walk — der O(n)-Walk
+bleibt also bestehen, nur nicht mehr auf dem Hot Path. **Für den Auftraggeber zu entscheiden:** ob eine
+echte prozessübergreifend geteilte Zähler-Implementierung (Redis o. ä.) für eine spätere Epic
+angesetzt werden soll, statt sich auf die 5-Minuten-Reconciliation zu verlassen.
 
 ## F67 — `journal-soak.adv.test.ts`s `ci`-Smoke-Fall hängt 600s unter voller Suite-Parallellast, obwohl er isoliert in ~1s durchläuft
 

@@ -249,6 +249,29 @@ der `JR-7-01`…`JR-7-05`-Sitzungen hat sie angefasst (per Diff-Zählung gegen d
 bestätigt: `StorageService.ts` und die Spool-Hochwassermarken-Prüfung sind nicht Teil des
 Epic-Diffs). Das braucht vor dem Rückmerge eine explizite neue Auftraggeber-Entscheidung.
 
+**Auflage nachgezogen, 2026-08-08 (DEV-Sitzung).** Auftraggeber-Entscheidung: beide jetzt in E7
+nachziehen, vor dem Rückmerge. **F66** (Commit `c0cb970`): `SpoolUsageTracker`, optionaler DI-Zähler
+an `JournalAcceptance` — Schritt 0 wird `O(1)` statt `O(entries)` pro Transaktion, wenn ein Tracker
+übergeben wird; ohne Tracker bleibt exakt das Vorzustands-Verhalten, kein bestehender Aufrufer musste
+sich ändern. Gemessen (`acceptance.test.ts`s neue Suite): mit Tracker null `readdir`/`stat`-Aufrufe
+bei 200 vorbefüllten Quarantäne-Dateien; ohne Tracker steigt die `readdir`-Anzahl mit der
+Rückstandsgröße. Cross-Process-Lücke offen gelegt statt versteckt: `apps/smtp-ingress` und der
+`journal-inbound`-Worker sind getrennte Prozesse, ein reiner In-Memory-Tracker im einen ist im
+anderen unsichtbar — `SpoolUsageReconciler` (5-Minuten-Walk in `apps/smtp-ingress`) mindert die
+Drift, löst sie aber nicht auf; echte prozessübergreifende Synchronisierung (z. B. Redis) ist nicht
+Teil dieser Behebung und steht für den Auftraggeber zur Entscheidung. **F60** (Commit `d6d80eb`):
+`StorageService.put()`s Stream-Pfad läuft jetzt über einen Stream-Cipher (`PassThrough` +
+`stream/promises`-`pipeline()`) statt `streamToBuffer()`; Byte-Format unverändert (verifiziert durch
+direktes Entschlüsseln der Rohbytes); kalibrierter Regressionsnachweis (F43-Muster) schlägt gegen den
+Vorzustand nachweislich fehl (`expected 0 to be greater than or equal to 2`). Erster Testfall
+überhaupt für `StorageService`. Beide Commits einzeln: `unit`-Projekt lief nach jedem Commit exakt mit
+den in `tests/support/suite-inventory.ts` deklarierten Zahlen (79/1131 nach F66, 80/1137 nach F60);
+ein voller `pnpm test`-Lauf über alle drei Projekte war einmal komplett grün außer der bereits
+dokumentierten, unabhängigen **F67**-Flakigkeit (`journal-soak.adv.test.ts`s `ci`-Smoke-Fall unter
+voller Parallellast) — nicht durch diese Sitzung verursacht, siehe F67-Eintrag. **Kein Rückmerge, kein
+neuer Session-Handover-Eintrag, keine `JR-7-06`-Neubewertung** — das bleibt einer Folgesitzung
+vorbehalten, siehe `09-befunde-bestandscode.md` für die vollständigen Statuseinträge.
+
 > **Das Abnahmeprotokoll (Kriterium → Beleg → Urteil, inklusive der Auflage) steht in
 > [`24-abnahme-e7.md`](24-abnahme-e7.md).** Die Sessionprotokolle zu `JR-7-01`…`JR-7-05` und der
 > Auftraggeber-Entscheidung zum Soft-Delete/Overwrite-Befund stehen unverändert unten unter
