@@ -238,7 +238,9 @@ export const SUITES: readonly SuiteSpec[] = [
 		// 77 after JR-6-02b's second slice added packages/journaling/src/phase-b/pipeline.test.ts (the
 		// orchestration: gate -> parse -> resolve -> archive -> index -> release, ADR-034) and
 		// packages/journaling/src/phase-b/spool-entry-releaser.test.ts (spool-file deletion, ADR-034).
-		expectedFiles: 78,
+		// 79 after E7's F66 catch-up added packages/journaling/src/spool/spool-usage-tracker.test.ts
+		// (SpoolUsageTracker's own arithmetic and SpoolUsageReconciler's timer lifecycle).
+		expectedFiles: 79,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -793,7 +795,17 @@ export const SUITES: readonly SuiteSpec[] = [
 		// original's seq via LedgerLookup.findOriginalReceiptSeq()'s MIN(seq)), and a same-job retry
 		// (the outcome's own receipt is the only match) writes none. No new file -- ledger-lookup.ts,
 		// ledger-lookup-port.ts and pipeline.ts changed without adding one.
-		expectedTests: { ci: 1119, nightly: 3, manual: 0 },
+		// 1131 after E7's F66 catch-up: +3 in the existing acceptance.test.ts (a supplied
+		// SpoolUsageTracker makes accept() perform zero readdir/stat calls regardless of backlog
+		// size; the pre-F66 fallback's readdir count still grows with backlog size when no tracker is
+		// supplied; quarantined debris erodes the tracker-driven budget exactly like a real walk) + 9
+		// in the new spool-usage-tracker.test.ts (SpoolUsageTracker: seeded value, increment/decrement,
+		// zero-arg no-ops, floor-at-zero, reset; SpoolUsageReconciler: reconcileNow() walks and resets,
+		// start()/stop() arm/clear an unref()-able interval idempotently, defaults to
+		// DEFAULT_SPOOL_USAGE_RECONCILE_INTERVAL_MS, a fired interval updates the tracker under fake
+		// timers). A separate commit (F60) adds StorageService.test.ts and raises both numbers again --
+		// see that commit's own diff to this file.
+		expectedTests: { ci: 1131, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',

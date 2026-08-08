@@ -3,9 +3,16 @@ import { suite } from '@oa-test/classification';
 import { FakeSpoolFileSystem } from '../../tests/support/fake-spool-fs';
 import type { LedgerAppendRequest, LedgerAppendResult, LedgerBackend } from '../ledger/ledger-port';
 import type { SpoolFileSystem } from './fs-port';
-import { incomingFilePath } from './layout';
+import {
+	computeDirectoryUsageBytes,
+	ensureQuarantineShardDir,
+	incomingFilePath,
+	quarantineFilePath,
+} from './layout';
 import type { SpoolConfig } from './config';
 import type { QuarantineAlertSink } from './quarantine';
+import { generateTxId } from './txid';
+import { SpoolUsageTracker } from './spool-usage-tracker';
 import { JournalAcceptance, isAccepted, type JournalTransactionInput } from './acceptance';
 
 /**
@@ -477,3 +484,120 @@ suite('ci', 'JournalAcceptance.accept(): success', () => {
 		expect(requests[0]!.eventPayload).toBeNull();
 	});
 });
+
+/** Fill `quarantine/` with `count` unrelated debris files of `bytesEach` bytes each, spread across
+ * shards by construction (`shardOf()` hashes each freshly generated txid) -- simulating the kind of
+ * unabsorbed backlog `09-befunde-bestandscode.md`'s F66 measured against a growing `incoming/`. */
+async function populateQuarantineDebris(
+	fake: FakeSpoolFileSystem,
+	count: number,
+	bytesEach: number
+): Promise<void> {
+	for (let i = 0; i < count; i += 1) {
+		const txid = generateTxId();
+		await ensureQuarantineShardDir(fake, SPOOL_ROOT, txid);
+		const handle = await fake.createFile(quarantineFilePath(SPOOL_ROOT, txid));
+		await handle.write(Buffer.alloc(bytesEach, 1));
+		await handle.close();
+	}
+}
+
+/**
+ * F66 (`09-befunde-bestandscode.md`, `./spool-usage-tracker.ts`): `checkSpoolHighWaterMark()` used to
+ * walk the entire spool tree on every single `accept()` call. These tests are the calibrated proof
+ * that a supplied {@link SpoolUsageTracker} removes that walk from the hot path -- by call count, not
+ * by inference -- and that the tracker-driven check still agrees with a real walk on the one case that
+ * makes this subtle: quarantined debris from a failed write eroding the budget
+ * (`spool-fsync-fault-injection.adv.test.ts`'s "F40 half 2" case).
+ */
+suite(
+	'ci',
+	'JournalAcceptance.accept(): F66 -- a supplied usage tracker replaces the per-transaction spool walk',
+	() => {
+		it('with a tracker supplied, accept() performs zero readdir/stat calls for the high-water-mark check, regardless of backlog size', async () => {
+			const fake = new FakeSpoolFileSystem();
+			await populateQuarantineDebris(fake, 200, 500);
+
+			const seeded = await computeDirectoryUsageBytes(fake, SPOOL_ROOT);
+			const tracker = new SpoolUsageTracker(seeded);
+
+			const timeline: string[] = [];
+			const tracked = timelineFileSystem(fake, timeline);
+			const { backend, requests } = fakeBackend(SUCCESS_RESULT);
+			const acceptance = new JournalAcceptance({
+				fs: tracked,
+				backend,
+				spoolConfig: spoolConfig(1_000_000_000n),
+				alertSink: noopAlertSink(),
+				usageTracker: tracker,
+			});
+
+			const result = await acceptance.accept(baseInput());
+
+			expect(result.kind).toBe('accepted');
+			expect(requests).toHaveLength(1);
+			const walkCalls = timeline.filter(
+				(entry) => entry === 'fs:readdir' || entry === 'fs:stat'
+			);
+			expect(walkCalls).toHaveLength(0);
+		});
+
+		it('without a tracker (the pre-F66 fallback), the number of readdir calls for the same check grows with backlog size', async () => {
+			async function readdirCallsFor(debrisCount: number): Promise<number> {
+				const fake = new FakeSpoolFileSystem();
+				await populateQuarantineDebris(fake, debrisCount, 10);
+				const timeline: string[] = [];
+				const tracked = timelineFileSystem(fake, timeline);
+				const { backend } = fakeBackend(SUCCESS_RESULT);
+				const acceptance = new JournalAcceptance({
+					fs: tracked,
+					backend,
+					spoolConfig: spoolConfig(1_000_000_000n),
+					alertSink: noopAlertSink(),
+					// usageTracker omitted deliberately: this is the walk this fix makes optional, not
+					// mandatory -- see JournalAcceptanceOptions.usageTracker's doc comment.
+				});
+				await acceptance.accept(baseInput());
+				return timeline.filter((entry) => entry === 'fs:readdir').length;
+			}
+
+			const small = await readdirCallsFor(4);
+			const large = await readdirCallsFor(200);
+
+			expect(small).toBeGreaterThan(0);
+			expect(large).toBeGreaterThan(small);
+		});
+
+		it('quarantined debris from a failed write erodes the tracked budget exactly like it erodes a real walk (parity with the fsync-fault-injection suite)', async () => {
+			const fake = new FakeSpoolFileSystem();
+			const { backend, requests } = fakeBackend(SUCCESS_RESULT);
+			const tracker = new SpoolUsageTracker(0n);
+			const acceptance = new JournalAcceptance({
+				fs: fake,
+				backend,
+				spoolConfig: spoolConfig(100n),
+				alertSink: noopAlertSink(),
+				usageTracker: tracker,
+			});
+
+			// Five transactions, each fully written (20 bytes) but never file-synced -- quarantined
+			// immediately (JR-3-09), same as spool-fsync-fault-injection.adv.test.ts's own case.
+			for (let i = 0; i < 5; i += 1) {
+				const txid = generateTxId();
+				fake.failNextFileFsync(incomingFilePath(SPOOL_ROOT, txid));
+				const failed = await acceptance.accept(
+					baseInput({ txid, chunks: chunksOf('x'.repeat(20)) })
+				);
+				expect(failed.kind).toBe('spool-write-failed');
+			}
+
+			const result = await acceptance.accept(baseInput());
+			expect(result.kind).toBe('high-water-mark-exceeded');
+			if (result.kind === 'high-water-mark-exceeded') {
+				expect(result.status.usageBytes).toBe(100n);
+			}
+			expect(requests).toHaveLength(0);
+			expect(tracker.current()).toBe(100n);
+		});
+	}
+);

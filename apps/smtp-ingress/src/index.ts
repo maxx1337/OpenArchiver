@@ -3,6 +3,7 @@ import pino from 'pino';
 import postgres from 'postgres';
 import {
 	bindSourceAclCache,
+	computeDirectoryUsageBytes,
 	createSourceAclRequireTlsResolver,
 	ensureSpoolLayout,
 	EsmtpServer,
@@ -18,6 +19,8 @@ import {
 	PostgresSourceAclLookup,
 	runExclusiveCrashRecoveryScan,
 	SourceAclCache,
+	SpoolUsageReconciler,
+	SpoolUsageTracker,
 	writeLineThenFlush,
 	type JournalAcceptancePort,
 	type QuarantineAlertSink,
@@ -180,7 +183,8 @@ function pinoAlertSink(logger: import('pino').Logger): QuarantineAlertSink {
 async function buildJournalAcceptance(
 	config: ReturnType<typeof parseIngressConfig>,
 	logger: import('pino').Logger,
-	ledgerSql: postgres.Sql
+	ledgerSql: postgres.Sql,
+	usageTracker: SpoolUsageTracker
 ): Promise<JournalAcceptancePort> {
 	// Read once per attempt, never per append -- PostgresLedgerWriterOptions.deploymentId's own doc
 	// comment. A bare, unpatched client (F38) -- see ./postgres-transactor.ts's doc comment.
@@ -217,12 +221,21 @@ async function buildJournalAcceptance(
 		'smtp-ingress: crash-recovery scan complete'
 	);
 
+	// F66: seed (or re-seed, on a retry) the running counter from one full walk here -- the same walk
+	// checkSpoolHighWaterMark() used to pay on every single transaction -- so JournalAcceptance below
+	// never has to. Safe to redo on every retry for the same reason the crash-recovery scan above is:
+	// nothing is accepted yet.
+	usageTracker.reset(
+		await computeDirectoryUsageBytes(new NodeSpoolFileSystem(), config.spool.rootPath)
+	);
+
 	const backend = new PostgresLedgerWriter({ deploymentId, transactor });
 	return new JournalAcceptance({
 		fs: new NodeSpoolFileSystem(),
 		backend,
 		spoolConfig: config.spool,
 		alertSink: pinoAlertSink(logger),
+		usageTracker,
 	});
 }
 
@@ -262,11 +275,16 @@ async function main(): Promise<void> {
 		config.ledger.databaseUrl === undefined
 			? null
 			: postgres(config.ledger.databaseUrl, { onnotice: () => {} });
+	// F66: one tracker for this process's whole lifetime, seeded (and re-seeded on every bootstrap
+	// retry) inside buildJournalAcceptance() -- see that function and spool-usage-tracker.ts's module
+	// doc comment. Starts at 0 here; nothing reads it before the first successful build sets it from a
+	// real walk.
+	const usageTracker = new SpoolUsageTracker(0n);
 	const acceptanceBootstrap =
 		ledgerSql === null
 			? undefined
 			: new JournalAcceptanceBootstrap({
-					build: () => buildJournalAcceptance(config, logger, ledgerSql),
+					build: () => buildJournalAcceptance(config, logger, ledgerSql, usageTracker),
 					retryIntervalMs: config.ledger.retryIntervalMs,
 					logger,
 				});
@@ -275,6 +293,22 @@ async function main(): Promise<void> {
 	// F49 rebuilt measures exactly that). On the failure path this resolves too -- the process binds
 	// and answers 451 while the bootstrap keeps trying in the background.
 	await acceptanceBootstrap?.start();
+
+	// F66: the journal-inbound worker frees spool capacity (Phase B's release()) in a separate OS
+	// process this tracker cannot see into (spool-usage-tracker.ts's module doc comment, "The
+	// cross-process gap this does not close") -- without this, a long-lived ingress process would only
+	// ever see usageTracker grow and eventually reject everything as high-water-mark-exceeded even
+	// while the spool is mostly empty. Re-walking every few minutes is the same O(n) cost the hot-path
+	// fix just removed, just paid at a harmless frequency instead of once per SMTP transaction.
+	const usageReconciler =
+		ledgerSql === null
+			? undefined
+			: new SpoolUsageReconciler({
+					fs: new NodeSpoolFileSystem(),
+					spoolRoot: config.spool.rootPath,
+					tracker: usageTracker,
+				});
+	usageReconciler?.start();
 
 	// JR-4-08: one limiter instance each, process-lifetime, shared by every connection --
 	// per-source bookkeeping lives inside them (see @open-archiver/journaling's
@@ -345,6 +379,8 @@ async function main(): Promise<void> {
 		// but a retry firing during the drain would open a database transaction and take the
 		// crash-recovery advisory lock while connections are being closed.
 		acceptanceBootstrap?.stop();
+		// F66: also unref()'d, but stopped for the same reason -- no value in a usage walk racing shutdown.
+		usageReconciler?.stop();
 		const closeConnections = (): Promise<void> =>
 			Promise.all([
 				sourceAclSql.end({ timeout: 5 }),

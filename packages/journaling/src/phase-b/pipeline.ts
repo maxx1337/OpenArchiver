@@ -22,6 +22,7 @@ import type {
 	ArchiveObjectRecipient,
 } from './archive-object-port';
 import type { SpoolEntryReleaser } from './spool-entry-releaser';
+import type { SpoolUsageTracker } from '../spool/spool-usage-tracker';
 
 /**
  * The Phase-B pipeline (`JR-6-02b`): spool entry → parsed → owner(s) resolved → archived → indexed →
@@ -94,6 +95,18 @@ export interface PhaseBPipelineDeps {
 	 * transaction itself.
 	 */
 	readonly ledgerAppend: LedgerBackend['append'];
+	/**
+	 * F66 (`../spool/spool-usage-tracker.ts`): decremented by the released file's size once
+	 * `releaseSpoolEntry.release()` below actually deletes it. Optional and, in the current wiring
+	 * (`journal-inbound.processor.ts`), deliberately never supplied: `apps/smtp-ingress` (the acceptor
+	 * and incrementer) and this pipeline (the releaser and decrementer) run as two separate OS
+	 * processes sharing one spool directory, not one process -- a plain in-memory tracker instance
+	 * constructed here would be invisible to the instance the ingress process actually checks, so
+	 * decrementing it would look like a fix while measuring nothing. The parameter exists as the seam
+	 * for a future cross-process-shared implementation of the same interface (e.g. Redis-backed); see
+	 * that module's doc comment, "The cross-process gap this does not close", and `06-status.md`.
+	 */
+	readonly usageTracker?: SpoolUsageTracker;
 }
 
 /** The gate refused to archive. Carries the verdict a caller may want to log alongside the alert. */
@@ -383,6 +396,9 @@ export async function runPhaseBPipeline(
 
 	await deps.indexBatch(toIndex);
 	await deps.releaseSpoolEntry.release(spoolPath);
+	// F66: the file is actually gone now -- see PhaseBPipelineDeps.usageTracker's doc comment for why
+	// this is a no-op in the current production wiring and what would have to be true for it not to be.
+	deps.usageTracker?.decrement(BigInt(archived.sizeBytes));
 
 	return {
 		spoolTxId,

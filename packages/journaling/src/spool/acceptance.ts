@@ -1,4 +1,9 @@
-import { checkSpoolHighWaterMark, incomingFilePath, type HighWaterMarkStatus } from './layout';
+import {
+	checkSpoolHighWaterMark,
+	evaluateHighWaterMark,
+	incomingFilePath,
+	type HighWaterMarkStatus,
+} from './layout';
 import { DurableWriteError, writeDurableSpoolFile, type DurableWriteStage } from './durable-write';
 import { generateTxId } from './txid';
 import {
@@ -9,6 +14,7 @@ import {
 } from './quarantine';
 import type { SpoolConfig } from './config';
 import type { SpoolFileSystem } from './fs-port';
+import type { SpoolUsageTracker } from './spool-usage-tracker';
 import { normalizeRemoteIp } from '../ledger/canonical-encoding';
 import type { LedgerAppendRequest, LedgerAppendResult, LedgerBackend } from '../ledger/ledger-port';
 
@@ -260,6 +266,17 @@ export interface JournalAcceptanceOptions {
 	 * a masked original cause -- see {@link JournalAcceptance.quarantineFailedWrite}.
 	 */
 	readonly alertSink: QuarantineAlertSink;
+	/**
+	 * F66 (`./spool-usage-tracker.ts`): when supplied, step 0 below reads `usageTracker.current()`
+	 * instead of walking the whole spool tree, and successful writes (including quarantined debris
+	 * from a failed one) increment it -- turning the high-water-mark check from `O(entries)` per
+	 * transaction into `O(1)`. Optional, and omitting it is not a mistake: {@link accept} falls back
+	 * to exactly the pre-F66 `checkSpoolHighWaterMark()` walk, correct but `O(n)`, which is what every
+	 * existing caller of this constructor that does not care about spool-capacity accounting keeps
+	 * getting, unchanged. See `./spool-usage-tracker.ts`'s module doc comment for the full rationale,
+	 * including the cross-process gap it does not close.
+	 */
+	readonly usageTracker?: SpoolUsageTracker;
 }
 
 export class JournalAcceptance {
@@ -268,6 +285,7 @@ export class JournalAcceptance {
 	private readonly spoolConfig: SpoolConfig;
 	private readonly now: () => number;
 	private readonly alertSink: QuarantineAlertSink;
+	private readonly usageTracker: SpoolUsageTracker | undefined;
 
 	constructor(options: JournalAcceptanceOptions) {
 		this.fs = options.fs;
@@ -275,6 +293,7 @@ export class JournalAcceptance {
 		this.spoolConfig = options.spoolConfig;
 		this.now = options.now ?? Date.now;
 		this.alertSink = options.alertSink;
+		this.usageTracker = options.usageTracker;
 	}
 
 	/**
@@ -287,11 +306,21 @@ export class JournalAcceptance {
 		// Step 0: reject before a single byte is written. Included in the budget: `quarantine/`, which
 		// is never auto-emptied (layout.ts) -- a spool that is full of quarantined evidence is still a
 		// full spool.
-		const highWaterMark = await checkSpoolHighWaterMark(
-			this.fs,
-			this.spoolConfig.rootPath,
-			this.spoolConfig.highWaterBytes
-		);
+		//
+		// F66 (./spool-usage-tracker.ts): with a tracker supplied, this is O(1) -- evaluateHighWaterMark()
+		// over usageTracker.current(), no I/O. Without one, exactly the pre-F66 behaviour: a fresh
+		// checkSpoolHighWaterMark() walk of the whole spool tree, every call.
+		const highWaterMark =
+			this.usageTracker !== undefined
+				? evaluateHighWaterMark(
+						this.usageTracker.current(),
+						this.spoolConfig.highWaterBytes
+					)
+				: await checkSpoolHighWaterMark(
+						this.fs,
+						this.spoolConfig.rootPath,
+						this.spoolConfig.highWaterBytes
+					);
 		if (highWaterMark.exceeded) {
 			return { kind: 'high-water-mark-exceeded', spoolTxId: txid, status: highWaterMark };
 		}
@@ -341,6 +370,12 @@ export class JournalAcceptance {
 				cause: cause.cause,
 			};
 		}
+
+		// F66: the durable write is real and on disk now, regardless of what the ledger append below
+		// does -- a failed append never deletes it (module doc comment, "A failed ledger append never
+		// deletes the spool file"), so the tracker must count it now, unconditionally, not only on the
+		// eventual 'accepted' path.
+		this.usageTracker?.increment(durable.sizeBytes);
 
 		// Step 5: ledger append, synchronous_commit = on, inside the per-chain advisory lock
 		// (PostgresLedgerWriter, JR-2-06). Step 6 (the success value) is fused to this same await --
@@ -403,11 +438,20 @@ export class JournalAcceptance {
 	 * `reason` (`JR-4-06b`) is `'oversize-rejected'` when the failed write's `DurableWriteError` wraps
 	 * a `ProtocolRejectionAbort` (the SMTP layer's own oversize abort, see the call site), `'write-failed'`
 	 * otherwise -- see `quarantine.ts`'s module doc comment for why this distinction exists.
+	 *
+	 * F66: when a {@link SpoolUsageTracker} is in use, whatever this actually moved into `quarantine/`
+	 * still counts toward the spool budget (`spool-fsync-fault-injection.adv.test.ts`'s "quarantined
+	 * debris still silently erodes the high-water-mark budget" case, F40 half 2) -- so this `stat()`s
+	 * the quarantined file for its real size (not the size the caller *tried* to write; a failure can
+	 * land after only some chunks did) and increments the tracker by that. Skipped entirely when there
+	 * is nothing to quarantine (`quarantineSpoolFile` returned `null` -- nothing was ever written) or
+	 * when no tracker was supplied, so a caller on the unconditionally-correct walk path never pays for
+	 * a `stat()` it does not need.
 	 */
 	private async quarantineFailedWrite(txid: string, reason: QuarantineReason): Promise<void> {
 		const filePath = incomingFilePath(this.spoolConfig.rootPath, txid);
 		try {
-			await quarantineSpoolFile(
+			const quarantined = await quarantineSpoolFile(
 				this.fs,
 				this.spoolConfig.rootPath,
 				txid,
@@ -415,6 +459,10 @@ export class JournalAcceptance {
 				reason,
 				this.alertSink
 			);
+			if (quarantined !== null && this.usageTracker !== undefined) {
+				const info = await this.fs.stat(quarantined.quarantineFilePath);
+				this.usageTracker.increment(BigInt(info.size));
+			}
 		} catch {
 			// Swallowed deliberately -- see this method's doc comment.
 		}
