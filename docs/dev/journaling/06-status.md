@@ -376,3 +376,23 @@ erweitern — letzteres wäre auch für E8s Anchoring-Bucket relevant). (2) F67 
 von `JR-7-05`s Korrektheit, aber ein CI-Zuverlässigkeitsrisiko, das vor einer Aussage über die
 `nightly`-Klasse insgesamt geklärt werden sollte. (3) Namens-/Floor-Annahmen aus der `JR-7-01`–`JR-7-04`-
 Sitzung (oben) bleiben offen, unverändert durch diese Sitzung.
+
+**E7, Auftraggeber-Entscheidung zu Punkt (1), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`,
+reine Dokumentationssitzung, kein Code, keine Tests, keine Migration.
+
+- **Entscheidung:** akzeptieren, nur dokumentieren — kein Code-Fix in E7. Die beiden oben
+  beschriebenen Abweichungen vom wörtlichen Akzeptanzkriterium ("Überschreiben scheitert" /
+  "Löschen scheitert") bleiben bestehen: tatsächliches Verhalten ist S3-Versionierung (eine neue
+  gesperrte Version bzw. ein Delete-Marker; die physischen Bytes/alten Versionen bleiben nachweislich
+  erhalten und durch Object Lock geschützt), aber die normale Anwendungsansicht (`get()`/`exists()`
+  ohne `VersionId`) zeigt das nicht an — sie meldet schlicht "weg" bzw. "neuer Inhalt".
+- **Dokumentiert in `docs/enterprise/journaling/guide.md`**, neuer Abschnitt „What Object Lock
+  protects — and what the application does not show you" zwischen „Least-privilege credentials for
+  the S3 backend" und „Local filesystem storage is not WORM". Kernaussage für den Betreiber ohne
+  Codekenntnis: die Daten sind physisch sicher, aber die App zeigt das nicht direkt an; eine echte
+  Prüfung der Garantie muss über S3-Versionierung (`ListObjectVersions`/`VersionId`-scharfes
+  `GetObject`/`GetObjectRetention`) laufen, nicht über die normale Anwendungsansicht.
+- Damit ist Punkt (1) der offenen Punkte oben geklärt. (2) F67 und (3) Namens-/Floor-Annahmen bleiben
+  offen für `JR-7-06`.
+- **Nicht Teil dieser Sitzung:** `JR-7-06` (Abnahme E7) selbst — das bleibt Aufgabe einer
+  unabhängigen Rolle.
