@@ -184,7 +184,9 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 }
 
 async function latestVersionId(key: string): Promise<string> {
-	const listed = await client!.send(new ListObjectVersionsCommand({ Bucket: bucketName, Prefix: key }));
+	const listed = await client!.send(
+		new ListObjectVersionsCommand({ Bucket: bucketName, Prefix: key })
+	);
 	const versions = (listed.Versions ?? []).filter((v) => v.Key === key);
 	if (versions.length === 0) {
 		throw new Error(`no versions found for ${key} while probing test state`);
@@ -194,7 +196,9 @@ async function latestVersionId(key: string): Promise<string> {
 }
 
 async function allVersionIds(key: string): Promise<string[]> {
-	const listed = await client!.send(new ListObjectVersionsCommand({ Bucket: bucketName, Prefix: key }));
+	const listed = await client!.send(
+		new ListObjectVersionsCommand({ Bucket: bucketName, Prefix: key })
+	);
 	return (listed.Versions ?? []).filter((v) => v.Key === key).map((v) => v.VersionId!);
 }
 
@@ -235,7 +239,9 @@ suiteRequiring(
 			const originalStillThere = await client!.send(
 				new GetObjectCommand({ Bucket: bucketName, Key: key, VersionId: originalVersionId })
 			);
-			const originalBytes = await streamToBuffer(originalStillThere.Body as NodeJS.ReadableStream);
+			const originalBytes = await streamToBuffer(
+				originalStillThere.Body as NodeJS.ReadableStream
+			);
 			expect(originalBytes.equals(original)).toBe(true);
 
 			// Finding: a plain, version-unaware read (what the application actually does everywhere)
@@ -255,7 +261,7 @@ suiteRequiring(
 			);
 		});
 
-		it('case 2: delete of a locked object with ordinary credentials -- a version-targeted delete genuinely fails (the real guarantee), but the application\'s own delete() succeeds by creating a delete marker while the locked bytes remain, orphaned and inaccessible via the normal API', async () => {
+		it("case 2: delete of a locked object with ordinary credentials -- a version-targeted delete genuinely fails (the real guarantee), but the application's own delete() succeeds by creating a delete marker while the locked bytes remain, orphaned and inaccessible via the normal API", async () => {
 			const key = `case2/${randomBytes(6).toString('hex')}.eml`;
 			const content = Buffer.from(`locked-${randomBytes(16).toString('hex')}`, 'utf8');
 			await provider!.put(key, content);
@@ -309,8 +315,8 @@ suiteRequiring(
 					'passes no VersionId, so DeleteObject on a versioned bucket creates a delete marker ' +
 					'regardless of Object Lock: the call succeeds, exists()/get() report the object gone, ' +
 					'and the locked data version is left orphaned -- present but unreachable through the ' +
-					'normal API. An operator or attacker with the application\'s ordinary credentials can ' +
-					'therefore make an archived object disappear from the application\'s own view without ' +
+					"normal API. An operator or attacker with the application's ordinary credentials can " +
+					"therefore make an archived object disappear from the application's own view without " +
 					'any special permission and without any error. Reported for JR-7-06/E8, not fixed here.'
 			);
 		});
@@ -323,7 +329,11 @@ suiteRequiring(
 			const versionId = await latestVersionId(key);
 
 			const retention = await client!.send(
-				new GetObjectRetentionCommand({ Bucket: bucketName, Key: key, VersionId: versionId })
+				new GetObjectRetentionCommand({
+					Bucket: bucketName,
+					Key: key,
+					VersionId: versionId,
+				})
 			);
 			expect(retention.Retention?.Mode).toBe('COMPLIANCE');
 			const retainUntil = retention.Retention?.RetainUntilDate;
@@ -348,7 +358,11 @@ suiteRequiring(
 			const versionId = await latestVersionId(key);
 
 			const current = await client!.send(
-				new GetObjectRetentionCommand({ Bucket: bucketName, Key: key, VersionId: versionId })
+				new GetObjectRetentionCommand({
+					Bucket: bucketName,
+					Key: key,
+					VersionId: versionId,
+				})
 			);
 			const currentUntil = current.Retention!.RetainUntilDate!;
 
@@ -384,7 +398,11 @@ suiteRequiring(
 			// The extension from the calibration step actually stuck -- shortening did not silently
 			// "succeed" by leaving the pre-extension value in place, it was genuinely rejected.
 			const after = await client!.send(
-				new GetObjectRetentionCommand({ Bucket: bucketName, Key: key, VersionId: versionId })
+				new GetObjectRetentionCommand({
+					Bucket: bucketName,
+					Key: key,
+					VersionId: versionId,
+				})
 			);
 			expect(after.Retention!.RetainUntilDate!.getTime()).toBe(extended.getTime());
 

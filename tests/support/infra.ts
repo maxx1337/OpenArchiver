@@ -186,7 +186,7 @@ export function probeMinio(timeoutMs = 1500): Promise<Probe> {
 				reason:
 					'OA_TEST_MINIO_ENDPOINT is not set -- WORM/Object-Lock suite needs a MinIO (or ' +
 					'S3-compatible) endpoint with Object Lock support, deliberately opted in (no default, ' +
-					'see this function\'s doc comment) -- suite skipped',
+					"see this function's doc comment) -- suite skipped",
 				target: '(none)',
 			};
 		}

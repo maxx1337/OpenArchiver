@@ -66,22 +66,22 @@ nicht.
 Sortiert nach **Abarbeitungsreihenfolge**, nicht nach Epic-Nummer — E13 wurde nachträglich vor E2
 eingeschoben (siehe `03-backlog.md`).
 
-| Reihenfolge | Epic | Titel                              | Status                                                                                                          | Fertig / Gesamt                                                                                                                 |
-| ----------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                                      | 6 / 6                                                                                                                           |
-| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                        | 10 / 10                                                                                                                         |
-| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                             | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
-| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                                     | 11 / 11                                                                                                                         |
-| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                         | 9 / 9                                                                                                                           |
-| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`)        | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
-| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                        | 9 / 9                                                                                                                           |
-| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)                     | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
-| 8           | E7   | WORM-Storage                       | **in Arbeit** — `JR-7-01`–`JR-7-04` (DEV) erledigt, `JR-7-05` (TEST, gegen MinIO) und `JR-7-06` (Abnahme) offen | 4 / 6                                                                                                                           |
-| 9           | E8   | Anchoring                          | offen                                                                                                           | 0 / 6                                                                                                                           |
-| 10          | E9   | `verify`-CLI                       | offen                                                                                                           | 0 / 8                                                                                                                           |
-| 11          | E10  | Completeness-Monitoring            | offen                                                                                                           | 0 / 8                                                                                                                           |
-| 12          | E11  | Compliance-Features                | offen                                                                                                           | 0 / 10                                                                                                                          |
-| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                           | 0 / 9                                                                                                                           |
+| Reihenfolge | Epic | Titel                              | Status                                                                                                   | Fertig / Gesamt                                                                                                                 |
+| ----------- | ---- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| —           | E0   | Planung, Doku, Agent-Infrastruktur | **fertig**                                                                                               | 6 / 6                                                                                                                           |
+| 1           | E1   | Test- und CI-Fundament             | **abgenommen + gemergt**, Nacharbeit `JR-1-05c` erledigt                                                 | 10 / 10                                                                                                                         |
+| 2           | E13  | IAM-Autorisierung härten           | **abgenommen + gemergt** (`JR-13-09c`, 4. Runde), Folge-Tasks offen                                      | 9 / 9 + 8 / 8 Nacharbeit                                                                                                        |
+| 3           | E2   | Ledger und Hash-Chain              | **abgenommen + gemergt** (`JR-2-10a`, 2. Runde, unabhängig)                                              | 11 / 11                                                                                                                         |
+| 4           | E3   | Spool und Acceptance-Contract      | **abgenommen + gemergt** (`JR-3-08`, 21/21, unabhängig)                                                  | 9 / 9                                                                                                                           |
+| 5           | E4   | `smtp-ingress`-Service             | **abgenommen + gemergt** (`JR-4-13`, 2026-08-04, unabhängige TEST-Sitzung, Protokoll `16-abnahme-e4.md`) | 21 / 21 + Abnahme. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-4-05` gilt mit `a`–`c` als erledigt, `JR-4-06` mit `a`/`b` |
+| 6           | E5   | Journal-Report-Parser              | **abgenommen + gemergt** (`JR-5-09`, Parallelsession B, Merge `107346d`)                                 | 9 / 9                                                                                                                           |
+| 7           | E6   | Phase-B-Worker                     | **abgenommen + gemergt** (`JR-6-08`, 2026-08-07, unabhängige TEST-Sitzung, Merge `b5b7c8a`)              | 8 / 8. Gezählt werden die **Backlog-IDs** (ADR-021): `JR-6-02` zählt mit `a`+`b` und Abnahme                                    |
+| 8           | E7   | WORM-Storage                       | **in Arbeit** — `JR-7-01`–`JR-7-05` erledigt, `JR-7-06` (Abnahme) offen                                  | 5 / 6                                                                                                                           |
+| 9           | E8   | Anchoring                          | offen                                                                                                    | 0 / 6                                                                                                                           |
+| 10          | E9   | `verify`-CLI                       | offen                                                                                                    | 0 / 8                                                                                                                           |
+| 11          | E10  | Completeness-Monitoring            | offen                                                                                                    | 0 / 8                                                                                                                           |
+| 12          | E11  | Compliance-Features                | offen                                                                                                    | 0 / 10                                                                                                                          |
+| 13          | E12  | Rollout und Dokumentation          | offen                                                                                                    | 0 / 9                                                                                                                           |
 
 117 Tasks in den Epics (E0 lieferte 102; E13 kam mit 9 hinzu, E4 mit 6: `JR-4-14` und `JR-4-15` als
 Auflagen aus **ADR-029**, `JR-4-16` für **F44**, `JR-4-17` für **ADR-030**, `JR-4-18` für den nie verdrahteten Crash-Recovery-Scan, `JR-4-19` für die Ledger-Verbindung, die sich
@@ -298,3 +298,81 @@ Floor `365` im Beispiel-Policy-JSON ist ein Platzhalter, kein empfohlener Wert �
 `STORAGE_S3_OBJECT_LOCK_RETAIN_DAYS` abgestimmt sein. (3) `chattr +i` wurde nicht gegen ein echtes
 Linux-Zielsystem verifiziert (dieser Host ist Windows) — nur `process.platform !== 'linux'`-Zweig und
 Kompilierung geprüft.
+
+**E7, `JR-7-05` (TEST), 2026-08-08.** Branch `claude/journaling-e7-worm-storage`, unabhängige
+TEST-Sitzung nach `JR-7-01`–`JR-7-04`.
+
+- **Testdatei:** `packages/backend/tests/adversarial/journal-worm-object-lock.adv.test.ts`.
+  Klassifikation **`nightly`**, nicht `ci`: `docker-compose.yml` und `.github/workflows/ci.yml` haben
+  kein MinIO (vor dem Schreiben geprüft, wie schon bei `JR-6-06`), also gate über
+  `probeMinio()`/`OA_TEST_MINIO_ENDPOINT` **ohne Default** (anders als bei Postgres/Redis/Meilisearch
+  — Begründung im Funktionskommentar: eine Suite, die irreversible Object-Lock-Objekte schreibt, darf
+  nicht versehentlich gegen einen echten/produktionsnahen Endpoint laufen, nur weil `localhost`
+  zufällig auflöst). `tests/support/infra.ts` bekommt dafür `probeMinio()` (gleiches Muster wie
+  `probeRedis`/`probeMeilisearch`). MinIO für diese Sitzung selbst bereitgestellt: Docker-Container
+  `oa-test-minio` (`minio/minio:latest`, kein persistentes Volume, Ports 9010/9011), Object-Lock-Bucket
+  pro Testlauf frisch angelegt (`CreateBucketCommand` mit `ObjectLockEnabledForBucket: true`).
+- **Alle vier Fälle grün gegen echtes MinIO** — gemessener Lauf (narrowed, `-t "JR-7-05"`, siehe
+  Zählervorbehalt unten): `4 passed (554ms)`. Zwei davon halten aber **nicht wörtlich**, wie der
+  Backlog-Satz sie formuliert, und das ist im Testfile selbst als Befund dokumentiert, nicht
+  verschwiegen:
+    - Fall 1 ("Überschreiben scheitert"): ein zweiter `S3StorageProvider.put()` auf denselben Key
+      **schlägt nicht fehl** — er erzeugt eine neue, ebenfalls gesperrte Version (korrektes
+      S3-Verhalten, Object Lock gilt pro Version). Die alte Version ist beweisbar unverändert
+      (per `VersionId` abrufbar), aber `get()`/`IStorageProvider.get()` kennen keine `VersionId` — ein
+      gewöhnlicher Lesezugriff nach einem solchen Überschreiben liefert stillschweigend die **neuen**
+      Bytes, nicht das Original, ohne jeden Fehler.
+    - Fall 2 ("Löschen scheitert, auch mit gewöhnlichen Credentials"): ein versionsspezifisches
+      `DeleteObject` auf die gesperrte Version schlägt genuin fehl (die reale Garantie, kalibriert
+      gegen ein ungesperrtes Kontrollobjekt mit denselben Credentials). Aber
+      `S3StorageProvider.delete()` — was die Anwendung tatsächlich aufruft — übergibt keine
+      `VersionId`; `DeleteObject` ohne Version erzeugt auf einem versionierten Bucket einen
+      Delete-Marker, unabhängig von Object Lock. Der Aufruf **gelingt**, `exists()`/`get()` melden das
+      Objekt danach als weg, die gesperrten Bytes bleiben aber physisch erhalten — verwaist, nur noch
+      über die konkrete `VersionId` erreichbar, nicht über die normale Anwendungs-API.
+    - Beide Funde betreffen die **Anwendungsseite** (`S3StorageProvider`s versionsunabhängige
+      `get()`/`delete()`-Signatur), nicht MinIO/S3s Durchsetzung selbst — die versionsscharfe
+      Object-Lock-Garantie hält nachweislich (Fälle 3+4 unten, plus die kalibrierten Teilschritte in
+      Fall 1+2). **Relevant für `JR-7-06`/E8**, nicht hier behoben (TEST-Rolle).
+    - Fall 3 (Retention wird gesetzt) und Fall 4 (Verkürzung scheitert, Verlängerung als Kalibrierung
+      gelingt) halten **wörtlich wie im Backlog formuliert** — echtes `GetObjectRetentionCommand`/
+      `PutObjectRetentionCommand` gegen echtes MinIO.
+- **`tests/support/suite-inventory.ts`** aktualisiert: `adversarial` `expectedFiles` 8→9,
+  `expectedTests.nightly` 3→7 (`ci`/`manual` unverändert — die neue Suite trägt 0 zu `ci` bei, weil sie
+  unter der Standardklassenauswahl nicht läuft).
+- **Volllauf-Nachweis (`ci`-Klasse, echt, unnarrowed):** `corepack pnpm exec dotenv -- vitest run`
+  (kein `OA_TEST_CLASSES`-Override, also Standardauswahl `ci`) — **1320 passed | 2 failed | 13
+  skipped**, 113 Dateien, 677,65s. `[TEST-EXECUTED] unit: ci 1119/1119 · integration: ci 133/133 ·
+adversarial: ci 70/70` — exakt wie in `suite-inventory.ts` erwartet, kein Zähler durch diese Sitzung
+  verändert (die neue Suite ist `nightly`-only). Die 2 Fehlschläge, beide **nicht** durch `JR-7-05`
+  verursacht: 1. `m365-range-refresh-cli.int.test.ts` — Artefakt der eigenen Testumgebung dieser Sitzung: eine
+  für diesen Lauf neu angelegte Root-`.env` (gitignored, nicht committet) enthält
+  `SMTP_INGRESS_DATABASE_URL`; das CLI-Skript lädt `dotenv/config` selbst neu und überschreibt
+  damit den vom Test bewusst auf `PATH`/`SystemRoot` geleerten Kind-Prozess-Environment. Kein
+  Produktionscode-Defekt, verifiziert durch Lesen von `runCli()`s `baseEnv`. 2. `journal-soak.adv.test.ts`s `ci`-Smoke-Fall hängt 600s unter voller Suite-Parallellast — **neuer
+  Befund F67** (siehe `09-befunde-bestandscode.md`), per `git stash` kalibriert als **nicht**
+  durch `JR-7-05` verursacht: derselbe Test isoliert (ohne die drei geänderten/neuen Dateien)
+  lief in 1133ms grün.
+- **Ein echter Volllauf mit `OA_TEST_CLASSES=ci,nightly`** (für die zählerverifizierte
+  `nightly`-Bestätigung der neuen Suite, `7` erwartet: `4` neu + `3` bestehend) wurde **zweimal**
+  versucht und beide Male durch denselben Mechanismus wie F67 blockiert (dort im 100.000er-`nightly`-
+  Fall von `journal-soak.adv.test.ts`, `no SMTP reply within 600000ms`) — nach >20 bzw. >30 Minuten
+  ohne neue Log-Zeile per `taskkill /F /T` abgebrochen. **Die exakte `nightly`-`TEST-EXECUTED`-Zählung
+  ist daher in dieser Sitzung nicht über den vollen, zählerverifizierten Pfad bestätigt** — nur über
+  den oben genannten narrowed run (`-t "JR-7-05"`), der laut Harness-Konvention "verified NOTHING"
+  bezüglich der Zähler ist, die vier Testkörper selbst aber echt und beobachtet beweist. Wer
+  `JR-7-06` abnimmt und einen zählerverifizierten `nightly`-Lauf braucht, sollte ihn auf einem weniger
+  ausgelasteten Host oder echtem Linux-CI wiederholen (F67 nennt den vermuteten Zusammenhang).
+- **Commits:** `85f7bae` (Testdatei, `probeMinio()`, `suite-inventory.ts`), plus diese
+  Doku-Aktualisierung.
+
+**Nachweise:** siehe Zahlen oben, wörtlich aus den jeweiligen Läufen zitiert, nicht geschätzt. Kein
+`--silent` verwendet. `.oa-test-storage/` (bereits vor dieser Sitzung im Arbeitsbaum, unverändert) und
+die neu angelegte Root-`.env` sind beide gitignored und nicht Teil der Commits.
+
+**Offene Punkte für `JR-7-06`:** (1) die beiden Lese-/Löschpfad-Funde aus Fall 1+2 oben (Entscheidung:
+akzeptieren mit Dokumentation, oder `S3StorageProvider`/`IStorageProvider` um `VersionId`-Unterstützung
+erweitern — letzteres wäre auch für E8s Anchoring-Bucket relevant). (2) F67 (Soak-Hang) ist unabhängig
+von `JR-7-05`s Korrektheit, aber ein CI-Zuverlässigkeitsrisiko, das vor einer Aussage über die
+`nightly`-Klasse insgesamt geklärt werden sollte. (3) Namens-/Floor-Annahmen aus der `JR-7-01`–`JR-7-04`-
+Sitzung (oben) bleiben offen, unverändert durch diese Sitzung.
