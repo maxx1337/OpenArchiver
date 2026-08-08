@@ -239,8 +239,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// orchestration: gate -> parse -> resolve -> archive -> index -> release, ADR-034) and
 		// packages/journaling/src/phase-b/spool-entry-releaser.test.ts (spool-file deletion, ADR-034).
 		// 79 after E7's F66 catch-up added packages/journaling/src/spool/spool-usage-tracker.test.ts
-		// (SpoolUsageTracker's own arithmetic and SpoolUsageReconciler's timer lifecycle).
-		expectedFiles: 79,
+		// (SpoolUsageTracker's own arithmetic and SpoolUsageReconciler's timer lifecycle). 80 after
+		// E7's F60 catch-up added packages/backend/src/services/StorageService.test.ts (first-ever
+		// test file for this class -- byte-format compatibility between the Buffer and stream put()
+		// paths, and F60's own calibration proof that the stream path no longer buffers the whole
+		// message first).
+		expectedFiles: 80,
 		// 216 before JR-2-02; 266 with the 50 tests of the canonical encoding and the Merkle encoding;
 		// 280 with the 14 statement-order tests of the ledger writer (JR-2-06).
 		// 288 after JR-2-07: the 5 shared contract cases, plus 3 that show the contract's concurrency
@@ -803,9 +807,12 @@ export const SUITES: readonly SuiteSpec[] = [
 		// zero-arg no-ops, floor-at-zero, reset; SpoolUsageReconciler: reconcileNow() walks and resets,
 		// start()/stop() arm/clear an unref()-able interval idempotently, defaults to
 		// DEFAULT_SPOOL_USAGE_RECONCILE_INTERVAL_MS, a fired interval updates the tracker under fake
-		// timers). A separate commit (F60) adds StorageService.test.ts and raises both numbers again --
-		// see that commit's own diff to this file.
-		expectedTests: { ci: 1131, nightly: 3, manual: 0 },
+		// timers). 1137 after E7's F60 catch-up added +6 in the new StorageService.test.ts (Buffer and
+		// stream put() round-trip through get(), both paths produce byte-identical framing, no-
+		// encryption-key passthrough is byte-for-byte, F60's calibration proof that ciphertext reaches
+		// the provider before the source stream ends, and a source-stream error rejects put() rather
+		// than hanging).
+		expectedTests: { ci: 1137, nightly: 3, manual: 0 },
 	},
 	{
 		name: 'integration',
